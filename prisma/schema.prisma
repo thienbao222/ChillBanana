@@ -1,0 +1,125 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 7 Trạng thái đơn hàng chuẩn mua hộ Nhật - Việt
+// PENDING_DEPOSIT: Chờ cọc (50% hoặc 100%)
+// PURCHASING_JP: Đã nhận cọc - Nhân viên tại Nhật đang mua hàng
+// WAREHOUSE_JP: Đã nhập kho Tokyo/Osaka (Kiểm tra & Cân đo)
+// IN_TRANSIT_AIR: Đang bay quốc tế Nhật -> Việt Nam (Narita -> Nội Bài/Tân Sơn Nhất)
+// WAREHOUSE_VN: Đã cập cảng / nhập kho phân loại tại Việt Nam
+// LOCAL_DELIVERY: Đang giao hàng chặng cuối (GHTK/GHN/ViettelPost)
+// COMPLETED: Giao hàng thành công
+
+model Order {
+  id               String        @id @default(cuid())
+  orderCode        String        @unique // Ví dụ: KZN-2026-8921
+  customerName     String
+  customerEmail    String
+  customerPhone    String
+  customerAddress  String
+  
+  // Thông tin sản phẩm mua hộ
+  originalUrl      String?       // Link từ Amazon JP, Mercari, Rakuten...
+  productName      String
+  category         String        // cosmetics, health, gadgets, anime, other
+  priceJpy         Int           // Giá gốc bằng Yên Nhật
+  weightKg         Float         // Trọng lượng ước tính/thực tế (kg)
+  
+  // Chi phí chi tiết (VND)
+  exchangeRate     Int           @default(172) // 1 JPY = X VND
+  productPriceVnd  Int           // Giá hàng quy đổi VND
+  serviceFeeVnd    Int           // Phí mua hộ (3% - 5%)
+  shippingFeeVnd   Int           // Cước bay quốc tế (185.000đ/kg)
+  totalVnd         Int           // Tổng giá trị đơn hàng
+  depositAmountVnd Int           // Số tiền đã thanh toán/đặt cọc
+  paymentStatus    String        @default("UNPAID") // UNPAID, DEPOSITED_50, PAID_100
+  paymentMethod    String        @default("VIETQR") // VIETQR, VNPAY, MOMO, COD
+  
+  // Tùy chọn gộp đơn
+  isGroupBuy       Boolean       @default(false)
+  groupBuyCode     String?       // Mã gom đơn chung
+  
+  // Trạng thái & Tracking
+  status           String        @default("PENDING_DEPOSIT")
+  jpDomesticTrack  String?       // Mã vận đơn nội địa Nhật (Sagawa/Yamato)
+  vnDomesticTrack  String?       // Mã vận đơn nội địa VN (GHTK/GHN)
+  adminNote        String?
+  customerNote     String?
+
+  trackingLogs     TrackingLog[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+model TrackingLog {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status      String   // Mã trạng thái tại thời điểm log
+  title       String   // Tiêu đề ngắn gọn (VD: Đã nhập kho Tokyo)
+  description String   // Chi tiết (VD: Kiện hàng đã được cân đo 0.85kg và đóng gói chuẩn bay)
+  location    String   // Tokyo, Osaka, Narita Airport, Hà Nội, TP.HCM...
+  createdAt   DateTime @default(now())
+}
+
+// 4 Danh mục chủ lực tinh gọn
+model Product {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  category       String   // cosmetics, health, gadgets, anime
+  categoryName   String   // Mỹ phẩm, Thực phẩm chức năng, Đồ gia dụng mini, Anime Figure
+  priceJpy       Int      // Giá gốc JPY
+  priceVnd       Int      // Giá ước tính VND
+  weightKg       Float    // Cân nặng ước tính (kg)
+  imageUrl       String
+  description    String
+  originalStore  String   // Amazon JP, Mercari JP, Rakuten, Surugaya, Uniqlo JP
+  stockSlots     Int      @default(10) // Số lượng suất mua hộ / slot còn lại
+  isHot          Boolean  @default(false)
+  featuredNote   String?  // Ghi chú đặc biệt (VD: Bán chạy số 1 tại Cosme Nhật)
+  voltageNote    String?  // Cảnh báo điện áp nếu là đồ điện tử (VD: "Điện áp 100V - Cần dùng biến áp")
+  createdAt      DateTime @default(now())
+}
+
+// Góc Bản tin & Văn hóa Kizuna (Kizuna News Corner)
+model News {
+  id          String   @id @default(cuid())
+  title       String
+  slug        String   @unique
+  category    String   // MeoSangSale, LichBay, KienThucNhat, Review
+  categoryName String
+  excerpt     String   // Tóm tắt ngắn
+  content     String   // Nội dung bài viết
+  coverImage  String
+  readTime    String   @default("3 phút đọc")
+  publishedAt DateTime @default(now())
+}
+
+// Lịch sử Chat AI Consultant
+model ChatSession {
+  id          String        @id @default(cuid())
+  sessionId   String        @unique
+  personality String        @default("omotenashi") // omotenashi (Nhật) hoặc vietnamese (Thân thiện)
+  messages    ChatMessage[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+model ChatMessage {
+  id            String      @id @default(cuid())
+  sessionId     String
+  chatSession   ChatSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
+  role          String      // "user" | "assistant" | "system"
+  content       String
+  createdAt     DateTime    @default(now())
+}
