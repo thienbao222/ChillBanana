@@ -71,6 +71,7 @@ export default function OrderCalculator() {
         if (data.data.priceJpy && data.data.priceJpy > 0) setPriceJpy(data.data.priceJpy);
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
+        if (data.data.category) setCategory(data.data.category);
         setScrapeSuccess(true);
       } else {
         alert("Không thể bóc tách tự động link này. Bạn có thể tự nhập tên và giá Yên thủ công nhé!");
