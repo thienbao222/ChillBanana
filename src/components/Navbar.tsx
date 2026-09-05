@@ -18,9 +18,9 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      {/* Top Banner: Tỷ Giá Live & Hotline (Đã bỏ hoàn toàn thông tin chuyến bay) */}
+      {/* Top Banner: Tỷ Giá Live & Hotline */}
       <div className="bg-navy-900 text-white text-xs py-1.5 px-4">
-        <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
+        <div className="w-full px-2 sm:px-6 lg:px-8 mx-auto flex flex-wrap justify-between items-center gap-2">
           <div className="flex items-center space-x-3">
             {/* Live Exchange Rate Widget Compact */}
             <LiveRateWidget compact={true} />
@@ -46,7 +46,7 @@ export default function Navbar() {
       </div>
 
       {/* Main Navbar */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-8 lg:px-12">
         <div className="flex items-center justify-between h-20">
           {/* Logo Brand: ChillBanana */}
           <Link href="/" className="flex items-center space-x-3 group">

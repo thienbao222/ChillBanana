@@ -27,7 +27,7 @@ export default function WhyChooseUs() {
 
   return (
     <section className="py-14 bg-white border-y border-slate-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="w-full px-4 sm:px-8 lg:px-12">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider border border-banana-200">
             Giá Trị Khác Biệt

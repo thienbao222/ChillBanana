@@ -176,7 +176,7 @@ export default function OrderCalculator() {
   };
 
   return (
-    <section id="calculator" className="relative py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
+    <section id="calculator" className="relative py-12 px-4 sm:px-8 lg:px-12 w-full">
       {/* Background Decor */}
       <div className="absolute inset-0 bg-gradient-to-b from-banana-50/50 to-white -z-10 rounded-3xl border border-banana-200 shadow-sm" />
 

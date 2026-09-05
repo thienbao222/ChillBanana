@@ -50,7 +50,7 @@ export default function CuratedProducts() {
   };
 
   return (
-    <section className="py-12 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section className="py-12 w-full px-4 sm:px-8 lg:px-12">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <div>
           <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-banana-200">

@@ -136,11 +136,74 @@ export default function AIChatBot() {
     }
   };
 
+  // Helper parse markdown ảnh và link thành giao diện trực quan
+  const renderFormattedMessage = (content: string) => {
+    // Tách dòng
+    const lines = content.split("\n");
+    return lines.map((line, lIdx) => {
+      // 1. Kiểm tra ảnh markdown ![alt](url)
+      const imgMatch = line.match(/!\[(.*?)\]\((https?:\/\/.*?)\)/);
+      if (imgMatch) {
+        return (
+          <div key={lIdx} className="my-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 inline-block max-w-full">
+            <img
+              src={imgMatch[2]}
+              alt={imgMatch[1] || "Hình ảnh sản phẩm"}
+              className="max-h-48 max-w-full rounded-lg object-contain bg-white mx-auto shadow-sm"
+              loading="lazy"
+              onError={(e) => {
+                (e.target as HTMLElement).style.display = "none";
+              }}
+            />
+            {imgMatch[1] && <p className="text-[10px] text-slate-500 text-center mt-1 font-semibold">{imgMatch[1]}</p>}
+          </div>
+        );
+      }
+
+      // 2. Kiểm tra link markdown [text](url)
+      const parts = [];
+      let lastIdx = 0;
+      const linkRegex = /\[(.*?)\]\((https?:\/\/.*?)\)/g;
+      let match;
+
+      while ((match = linkRegex.exec(line)) !== null) {
+        if (match.index > lastIdx) {
+          parts.push(line.substring(lastIdx, match.index));
+        }
+        const linkText = match[1];
+        const linkUrl = match[2];
+        parts.push(
+          <a
+            key={match.index}
+            href={linkUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center text-banana-700 hover:text-banana-800 underline font-bold mx-0.5"
+          >
+            <span>{linkText}</span>
+            <span className="text-[10px] ml-0.5">↗</span>
+          </a>
+        );
+        lastIdx = match.index + match[0].length;
+      }
+
+      if (lastIdx < line.length) {
+        parts.push(line.substring(lastIdx));
+      }
+
+      return (
+        <span key={lIdx} className="block">
+          {parts.length > 0 ? parts : line}
+        </span>
+      );
+    });
+  };
+
   const quickPrompts = [
+    { label: "🎮 Máy chơi game Nhật 3tr", query: "Cho tôi xem link và hình tham khảo các dòng máy chơi game nội địa Nhật trong tầm giá 3 triệu" },
     { label: "👔 Hướng dẫn chọn Size", query: "Tư vấn cách chọn size quần áo Uniqlo và giày dép Nhật Bản" },
     { label: "⚡ Đồ điện 100V dùng sao?", query: "Đồ điện nội địa Nhật 100V dùng ở Việt Nam cần mua biến áp loại nào?" },
     { label: "✈ Tiết kiệm cước Gộp Đơn", query: "Tính năng gộp đơn Group Buy tiết kiệm 25% cước bay thế nào?" },
-    { label: "🌸 Mỹ phẩm & Hàng Hot", query: "Gợi ý các mặt hàng mỹ phẩm và thực phẩm chức năng hot đang có slot gom" },
   ];
 
   return (
@@ -168,7 +231,7 @@ export default function AIChatBot() {
 
       {/* Chat Window Panel */}
       {isOpen && (
-        <div className="fixed bottom-20 right-4 sm:right-6 z-50 w-[92vw] sm:w-[420px] h-[590px] max-h-[82vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-20 right-2 sm:right-6 z-50 w-[96vw] sm:w-[500px] h-[640px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
           
           {/* Header */}
           <div className="bg-navy-900 text-white p-4 border-b border-slate-800">
@@ -241,7 +304,7 @@ export default function AIChatBot() {
 
                 {/* Bubble */}
                 <div
-                  className={`max-w-[82%] p-3.5 rounded-2xl shadow-sm text-xs leading-relaxed ${
+                  className={`max-w-[88%] p-3.5 rounded-2xl shadow-sm text-xs leading-relaxed ${
                     msg.sender === "user"
                       ? "bg-navy-900 text-white rounded-tr-none"
                       : msg.isGuardrail
@@ -255,7 +318,9 @@ export default function AIChatBot() {
                       <span>Thông Báo Phạm Vi Tư Vấn</span>
                     </div>
                   )}
-                  <p className="whitespace-pre-line">{msg.text}</p>
+                  <div className="whitespace-pre-line space-y-2 leading-relaxed">
+                    {renderFormattedMessage(msg.text)}
+                  </div>
                   <span
                     className={`block text-[9px] mt-1 text-right ${
                       msg.sender === "user" ? "text-slate-400" : "text-slate-400"

@@ -32,26 +32,25 @@ export function buildSystemInstruction(products: CuratedProduct[]): string {
   return `
 Bạn là "ChillBanana AI Agent" - Trợ lý thông minh cao cấp được vận hành bởi mô hình Google Gemini 2.5 cho nền tảng thương mại điện tử mua hộ hàng Nhật ChillBanana (chillbanana.vn).
 
-CHUYÊN MÔN CHÍNH & NHIỆM VỤ NÒNG CỐT:
-1. TÌM KIẾM SẢN PHẨM & TƯ VẤN SĂN HÀNG NHẬT:
-   - Hỗ trợ tìm kiếm các dòng sản phẩm: Mỹ phẩm (DHC, Anessa, SK-II), Thực phẩm chức năng (Tảo xoắn Spirulina, Nattokinase), Gia dụng & Đồ công nghệ Nhật (Nồi cơm điện Zojirushi/Tiger, bàn phím, chuột máy tính), Mô hình & Sưu tầm (Gundam Bandai RG/MG/HG/PG, Anime Figure chính hãng, Nendoroid).
-   - Khi giới thiệu sản phẩm có trong danh mục hoặc sản phẩm cụ thể, HÃY CUNG CẤP TÊN SẢN PHẨM, MÔ TẢ ĐẶC ĐIỂM, GIÁ DỰ KIẾN (Yên và VNĐ), HÌNH ẢNH (sử dụng cú pháp Markdown ![Tên ảnh](URL_Ảnh) nếu có URL hoặc lấy từ danh mục bên dưới), và ĐƯỜNG LINK / NƠI MUA (Amazon JP, Mercari JP, Rakuten, Surugaya).
-   - Hướng dẫn khách hàng copy link dán vào thanh "Dán Link Tính Giá" ở đầu trang để hệ thống tự động bóc tách thông số.
-
-2. KIẾN THỨC BÁN HÀNG, SALE, VẬN CHUYỂN & TÍNH BILL:
+QUY TẮC PHẢN HỒI BẮT BUỘC - TRẢ LỜI ĐẦY ĐỦ 100%:
+1. TUYỆT ĐỐI KHÔNG CHỈ HỨA HẸN HAY TRẢ LỜI LƯNG CHỪNG: Khi khách hàng yêu cầu xem sản phẩm, hỏi link, hình ảnh hoặc tư vấn tầm giá, BẠN PHẢI LIỆT KÊ NGAY LẬP TỨC 2-4 SẢN PHẨM CỤ THỂ TRONG PHẢN HỒI ĐÓ. Tuyệt đối không được nói: "Em xin phép gửi một vài gợi ý..." rồi dừng lại mà KHÔNG đưa ra sản phẩm!
+2. MỖI SẢN PHẨM BẮT BUỘC CUNG CẤP ĐỦ 5 MỤC:
+   - 🏷️ **Tên sản phẩm đầy đủ**: (Ví dụ: Máy Nintendo Switch Lite Nhật, PlayStation 4 Slim, Nồi cơm Zojirushi IH, Gunpla RG 1/144,...)
+   - 💰 **Giá bán & Chi phí**: Giá Yên (JPY) và giá quy đổi VNĐ theo tỷ giá 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} đ + cước bay dự tính (${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg).
+   - 🔗 **Đường link mua hàng**: Đưa ra link tìm kiếm / mua trực tiếp từ sàn Nhật (Ví dụ: [Link Amazon Japan](https://www.amazon.co.jp/s?k=...), [Link Mercari JP](https://jp.mercari.com/search?keyword=...), [Link Surugaya](https://www.suruga-ya.jp/search?search_word=...)).
+   - 🖼️ **Hình ảnh minh họa trực quan**: Sử dụng link ảnh Unsplash hoặc CDN chuẩn e-commerce, hiển thị cả cú pháp Markdown: \`![Tên](URL_Ảnh)\`
+   - 📝 **Đặc điểm & Lưu ý kỹ thuật**: Nguồn điện (100V hay pin sạc Type-C), tình trạng máy, mẹo chọn hàng nguyên bản đẹp.
+3. HƯỚNG DẪN ĐẶT HÀNG TRÊN WEB: Nhắc khách copy link bất kỳ từ Amazon JP / Mercari dán vào công cụ "Dán Link Tính Giá" ở đầu trang web để nhận bảng tính cước tự động trong 3 giây.
+4. TỶ GIÁ & CHÍNH SÁCH VẬN CHUYỂN CHUẨN:
    - Tỷ giá JPY -> VND: 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} VND.
-   - Cước bay quốc tế Tokyo ⇄ Việt Nam: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (bay hỏa tốc 3-5 ngày về kho VN).
-   - Hạn mức đơn tối thiểu: ${MIN_ORDER_THRESHOLD_VND.toLocaleString()} đ.
-   - Chương trình Gộp Đơn (Group Buy): Tiết kiệm 25% cước bay quốc tế cho kiện hàng nhẹ (dưới 0.5kg) khi gom cùng đợt.
-   - Chính sách đặt cọc: Đặt cọc trước 50% giá trị đơn để nhân viên Tokyo tiến hành mua ngay lập tức, 50% còn lại thanh toán khi nhận hàng.
-   - Cảnh báo điện áp đồ gia dụng Nhật: Chuẩn điện nội địa Nhật là 100V. Khi sử dụng tại Việt Nam (220V), KHÁCH HÀNG BẮT BUỘC DÙNG BIẾN ÁP ĐỔI NGUỒN (Lioa/Standa 1500W-2000W). Thiết bị sạc cổng USB/Type-C có thể cắm trực tiếp.
+   - Cước bay hỏa tốc Narita ⇄ Việt Nam: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (3-5 ngày về kho).
+   - Đặt cọc 50% là mua ngay, bảo hiểm đền bù 100% khi mất mát, gãy vỡ.
+   - Gộp đơn (Group Buy) tiết kiệm 25% cước bay cho kiện hàng < 0.5kg.
+5. NGUYÊN TẮC AN TOÀN & TỪ CHỐI LỊCH SỰ:
+   - Lịch sự từ chối các câu hỏi về: chính trị, tôn giáo cực đoan, nội dung người lớn 18+, đồi trụy, vũ khí, ma túy/chất cấm.
+   - Lời từ chối nhã nhặn: "Dạ, em xin phép lịch sự từ chối phản hồi về chủ đề này do tính chất nhạy cảm ạ. Em luôn sẵn sàng hỗ trợ Quý khách về sản phẩm nội địa Nhật, tra cứu link, hình ảnh và kinh nghiệm săn sale. Kính mong Quý khách thông cảm ạ! 🌸🍌"
 
-3. NGUYÊN TẮC BẢO MẬT & TỪ CHỐI LỊCH SỰ CÁC VẤN ĐỀ NHẠY CẢM:
-   - Nếu người dùng hỏi các vấn đề nhạy cảm (chính trị, bạo lực, khiêu dâm/người lớn, chất cấm, vũ khí, thông tin xuyên tạc hoặc kích động phản cảm):
-   - Bạn PHẢI LỊCH SỰ TỪ CHỐI với lời lẽ nhã nhặn, chuẩn mực, ví dụ:
-     "Dạ, em xin phép từ chối phản hồi về chủ đề này do tính chất nhạy cảm ạ. ChillBanana AI luôn sẵn sàng hỗ trợ Quý khách về mua sắm hàng Nhật, tìm kiếm sản phẩm, tính giá cước và kinh nghiệm săn sale. Rất mong Quý khách thông cảm ạ! 🍌"
-
-DANH MỤC SẢN PHẨM ĐANG CÓ TRÊN HỆ THỐNG:
+DANH MỤC SẢN PHẨM MẪU SẴN CÓ:
 ${catalogSummary}
 `;
 }
@@ -108,7 +107,7 @@ export async function askGeminiAgent(
             contents,
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: 1200,
+              maxOutputTokens: 2048,
             },
           }),
         }
@@ -177,6 +176,55 @@ Quý khách có thể copy link từ sàn mua sắm hoặc liên hệ ChillBanan
 ${item.voltageNote ? `- ⚡ **Lưu ý:** ${item.voltageNote}\n` : ""}- 📝 **Chi tiết:** ${item.description}
 
 👉 Anh/chị chỉ cần dán link sản phẩm vào thanh công cụ ở trên hoặc bấm đặt hàng để nhân viên Tokyo tiến hành mua ngay nhé! 🍌`;
+  }
+
+  // 1.5. Tư vấn Máy chơi game nội địa Nhật (Nintendo Switch, PS4, PS Vita, 3DS) trong tầm giá 2-4 triệu
+  if (
+    q.includes("game") ||
+    q.includes("chơi game") ||
+    q.includes("nintendo") ||
+    q.includes("switch") ||
+    q.includes("playstation") ||
+    q.includes("ps4") ||
+    q.includes("3 triệu") ||
+    q.includes("3tr")
+  ) {
+    return isOmo
+      ? `Kính chào Quý khách! Trong tầm giá khoảng 3 triệu đồng (~18.000 ¥), em xin phép gửi đến Quý khách các dòng máy chơi game nội địa Nhật Bản siêu hot, bền đẹp và rất được ưa chuộng:
+
+🎮 **1. Nintendo Switch Lite (Nội Địa Nhật Bản)**
+- **Giá tham khảo:** ~15.000 ¥ - 17.500 ¥ (~2.600.000 đ - 3.000.000 đ)
+- **Tình trạng:** Máy used likenew 95-98% đầy đủ phụ kiện sạc Type-C (cắm sạc trực tiếp tại VN).
+- 🔗 **Link tham khảo:** [Xem máy trên Mercari JP](https://jp.mercari.com/search?keyword=nintendo%20switch%20lite) | [Xem trên Amazon JP](https://www.amazon.co.jp/s?k=nintendo+switch+lite)
+- ![Nintendo Switch Lite](https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=500&q=80)
+
+🎮 **2. Sony PlayStation 4 Slim (PS4 500GB / CUH-2000 Series)**
+- **Giá tham khảo:** ~16.000 ¥ - 18.500 ¥ (~2.800.000 đ - 3.200.000 đ)
+- **Tình trạng:** Máy nội địa Nhật nguyên tem void, kèm tay cầm DualShock 4 không dây.
+- 🔗 **Link tham khảo:** [Xem máy trên Mercari JP](https://jp.mercari.com/search?keyword=ps4%20slim) | [Xem trên Surugaya JP](https://www.suruga-ya.jp/search?search_word=ps4)
+- ![PlayStation 4](https://images.unsplash.com/photo-1507457379470-08b800bebc67?auto=format&fit=crop&w=500&q=80)
+
+🎮 **3. New Nintendo 3DS LL / PS Vita 2000 (Dành cho sưu tầm)**
+- **Giá tham khảo:** ~12.000 ¥ - 15.000 ¥ (~2.100.000 đ - 2.600.000 đ)
+- **Tình trạng:** Bản tiếng Nhật có thể chơi game mượt mà, màn hình sáng đẹp.
+- 🔗 **Link tham khảo:** [Xem trên Surugaya JP](https://www.suruga-ya.jp/search?search_word=new%203ds%20ll)
+
+👉 **Cách đặt hàng:** Quý khách chọn chiếc máy ưng ý trên Mercari hoặc Amazon Nhật, copy link dán vào công cụ **"Dán Link Tính Giá"** ở trên trang web để ChillBanana hỗ trợ bóc tách giá Yên và mua hộ an toàn về Việt Nam ạ! 🍌`
+      : `Dạ em gửi anh/chị danh sách máy chơi game nội địa Nhật cực ngon trong tầm giá 3 triệu nè! 🎉
+
+🎮 **1. Nintendo Switch Lite (Bản Nhật nguyên zin)**
+- 🏷️ **Giá:** 15.000 ¥ - 17.500 ¥ (~2.600.000 đ - 3.000.000 đ)
+- ⚡ Sạc chuẩn Type-C cắm thẳng ổ điện VN vô tư không cần biến áp!
+- 🔗 [Bấm vào đây để xem máy trên Mercari JP](https://jp.mercari.com/search?keyword=nintendo%20switch%20lite)
+- ![Nintendo Switch Lite](https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=500&q=80)
+
+🎮 **2. Sony PlayStation 4 Slim (PS4 500GB)**
+- 🏷️ **Giá:** ~16.500 ¥ - 18.000 ¥ (~2.850.000 đ - 3.100.000 đ)
+- 🎮 Kèm tay cầm zin, chơi các tựa game đình đám FIFA, GTA V, God of War cực đã!
+- 🔗 [Bấm vào đây để xem máy trên Mercari JP](https://jp.mercari.com/search?keyword=ps4%20slim)
+- ![Sony PS4](https://images.unsplash.com/photo-1507457379470-08b800bebc67?auto=format&fit=crop&w=500&q=80)
+
+👉 Anh/chị ưng mẫu nào cứ copy link trên sàn dán vào ô **"Dán Link Tính Giá"** ở trên web là có ngay bảng tính cước trọn gói về tận tay chỉ sau 3-5 ngày nhé! 🍌`;
   }
 
   // 2. Tư vấn Gundam / Figure / Anime

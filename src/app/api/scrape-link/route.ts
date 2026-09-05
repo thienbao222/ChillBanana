@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     let imageUrl = "";
     let category = "other";
 
-    // 1. Thử cào dữ liệu qua Jina AI Reader chuyên dụng cho E-commerce (Không bị chặn bởi Bot Protection)
+    // 1. Thử cào dữ liệu qua Jina AI Reader chuyên dụng cho E-commerce
     try {
       const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
         headers: {
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
         // Trích xuất Title từ dòng đầu của Jina
         const titleMatch = text.match(/Title:\s*(.+)/i) || text.match(/^#\s*(.+)/m);
         if (titleMatch && titleMatch[1]) {
-          title = titleMatch[1].trim();
+          title = titleMatch[1].replace(/\s*by\s*メルカリ/i, "").replace(/\s*\|\s*Amazon/i, "").trim();
         }
 
         // Trích xuất ảnh
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
           imageUrl = imageMatch[1];
         }
 
-        // Trích xuất giá tiền JPY hoặc USD
+        // Trích xuất giá tiền JPY
         const jpyMatch = text.match(/[¥￥]\s*([0-9,]+)/) || 
                          text.match(/([0-9,]+)\s*(?:円|JPY|jpy)/i) ||
                          text.match(/Price:\s*[¥￥]?\s*([0-9,]+)/i);
@@ -65,66 +65,95 @@ export async function POST(req: NextRequest) {
             priceJpy = raw;
           }
         }
-
-        // Nếu là USD ($) từ Amazon quốc tế -> quy đổi sang Yên (1 USD ≈ 155 JPY)
-        if (!priceJpy) {
-          const usdMatch = text.match(/\$\s*([0-9.]+)/) || text.match(/Price:\s*\$\s*([0-9.]+)/i);
-          if (usdMatch && usdMatch[1]) {
-            const usd = parseFloat(usdMatch[1]);
-            if (usd > 0) {
-              priceJpy = Math.round(usd * 155);
-            }
-          }
-        }
       }
     } catch (jinaErr) {
       console.warn("Jina AI scrape attempt fallback:", jinaErr);
     }
 
-    // 2. Nếu Jina chưa lấy đủ, fetch trực tiếp HTML với Browser Header
-    if (!title || !priceJpy || !imageUrl) {
-      try {
-        const directRes = await fetch(url, {
-          headers: {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,vi;q=0.7",
-          },
-        });
+    // 2. Fetch trực tiếp HTML với Browser Header chuẩn Nhật để bóc tách triệt để
+    try {
+      const directRes = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+          "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,vi;q=0.7",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        },
+      });
 
-        if (directRes.ok) {
-          const html = await directRes.text();
+      if (directRes.ok) {
+        const html = await directRes.text();
 
-          if (!title) {
-            const ogTitle = html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i);
-            const tagTitle = html.match(/<title>(.*?)<\/title>/i);
-            if (ogTitle && ogTitle[1]) title = ogTitle[1].trim();
-            else if (tagTitle && tagTitle[1]) title = tagTitle[1].trim();
-          }
-
-          if (!imageUrl) {
-            const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i);
-            if (ogImage && ogImage[1]) imageUrl = ogImage[1].trim();
-          }
-
-          if (!priceJpy) {
-            const amazonWhole = html.match(/class=["']a-price-whole["']>([0-9,]+)/i);
-            const offscreen = html.match(/class=["']a-offscreen["']>[¥￥$]?([0-9,.]+)/i);
-            const jsonPrice = html.match(/"price"\s*:\s*"?([0-9.]+)"?/i);
-
-            if (amazonWhole && amazonWhole[1]) {
-              priceJpy = parseInt(amazonWhole[1].replace(/,/g, ""), 10);
-            } else if (offscreen && offscreen[1]) {
-              const val = parseFloat(offscreen[1].replace(/,/g, ""));
-              priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
-            } else if (jsonPrice && jsonPrice[1]) {
-              const val = parseFloat(jsonPrice[1]);
-              priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
-            }
+        // Bóc tách Tiêu đề sản phẩm
+        if (!title || title.includes("Sản phẩm nội địa")) {
+          const ogTitle = html.match(/<meta\s+property=["']og:title["']\s+content=["'](.*?)["']/i);
+          const twitterTitle = html.match(/<meta\s+name=["']twitter:title["']\s+content=["'](.*?)["']/i);
+          const tagTitle = html.match(/<title>(.*?)<\/title>/i);
+          const rawT = (ogTitle && ogTitle[1]) || (twitterTitle && twitterTitle[1]) || (tagTitle && tagTitle[1]) || "";
+          if (rawT) {
+            title = rawT.replace(/\s*by\s*メルカリ/i, "").replace(/\s*\|\s*Amazon/i, "").trim();
           }
         }
-      } catch (directErr) {
-        console.warn("Direct fetch error:", directErr);
+
+        // Bóc tách Hình ảnh sản phẩm chất lượng cao
+        if (!imageUrl || imageUrl.includes("unsplash")) {
+          const ogImage = html.match(/<meta\s+property=["']og:image["']\s+content=["'](.*?)["']/i);
+          const twitterImage = html.match(/<meta\s+name=["']twitter:image["']\s+content=["'](.*?)["']/i);
+          const mercariImage = html.match(/https:\/\/static\.mercdn\.net\/item\/detail\/orig\/photos\/[a-zA-Z0-9_]+\.(?:jpg|jpeg|png|webp)/i);
+          if (ogImage && ogImage[1]) imageUrl = ogImage[1].trim();
+          else if (twitterImage && twitterImage[1]) imageUrl = twitterImage[1].trim();
+          else if (mercariImage) imageUrl = mercariImage[0];
+        }
+
+        // Bóc tách Giá tiền thực tế theo sàn
+        // 2.1. Chuẩn Meta tag E-commerce: product:price:amount
+        const metaPrice = html.match(/<meta\s+name=["']product:price:amount["']\s+content=["']([0-9.]+)["']/i) ||
+                          html.match(/<meta\s+property=["']product:price:amount["']\s+content=["']([0-9.]+)["']/i);
+        if (metaPrice && metaPrice[1]) {
+          const p = parseInt(metaPrice[1], 10);
+          if (p > 50) priceJpy = p;
+        }
+
+        // 2.2. JSON-LD Schema (Amazon, Mercari, Rakuten)
+        if (!priceJpy || priceJpy === 4500) {
+          const ldRegex = /<script type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/gi;
+          let ldMatch;
+          while ((ldMatch = ldRegex.exec(html)) !== null) {
+            try {
+              const parsed = JSON.parse(ldMatch[1]);
+              const offers = parsed.offers || (parsed["@graph"] && parsed["@graph"].find((g: any) => g.offers)?.offers);
+              if (offers) {
+                const targetPrice = Array.isArray(offers) ? offers[0]?.price : offers?.price;
+                if (targetPrice) {
+                  const p = parseInt(targetPrice, 10);
+                  if (p > 50) {
+                    priceJpy = p;
+                    break;
+                  }
+                }
+              }
+            } catch {}
+          }
+        }
+
+        // 2.3. Amazon specific selectors
+        if (!priceJpy || priceJpy === 4500) {
+          const amazonWhole = html.match(/class=["']a-price-whole["']>([0-9,]+)/i);
+          const offscreen = html.match(/class=["']a-offscreen["']>[¥￥$]?([0-9,.]+)/i);
+          const jsonPrice = html.match(/"price"\s*:\s*"?([0-9.]+)"?/i);
+
+          if (amazonWhole && amazonWhole[1]) {
+            priceJpy = parseInt(amazonWhole[1].replace(/,/g, ""), 10);
+          } else if (offscreen && offscreen[1]) {
+            const val = parseFloat(offscreen[1].replace(/,/g, ""));
+            priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
+          } else if (jsonPrice && jsonPrice[1]) {
+            const val = parseFloat(jsonPrice[1]);
+            priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
+          }
+        }
       }
+    } catch (directErr) {
+      console.warn("Direct fetch error:", directErr);
     }
 
     // 3. Tự động nhận diện Danh Mục dựa trên Tiêu Đề sản phẩm
@@ -139,7 +168,16 @@ export async function POST(req: NextRequest) {
       titleLower.includes("nendoroid") ||
       titleLower.includes("gunpla") ||
       titleLower.includes("pokemon") ||
-      titleLower.includes("mô hình")
+      titleLower.includes("mô hình") ||
+      titleLower.includes("ステッカー") ||
+      titleLower.includes("sticker") ||
+      titleLower.includes("ホログラム") ||
+      titleLower.includes("チェンソーマン") ||
+      titleLower.includes("chainsaw") ||
+      titleLower.includes("レゼ") ||
+      titleLower.includes("card") ||
+      titleLower.includes("thẻ bài") ||
+      titleLower.includes("goods")
     ) {
       category = "anime";
     } else if (
