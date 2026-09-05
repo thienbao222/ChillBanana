@@ -30,7 +30,7 @@ export default function AIChatBot() {
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Kính chào Quý khách! Em là ChillBanana Gemini AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tư vấn sản phẩm nội địa Nhật, tra cứu thông tin sàn Amazon JP/Mercari, hướng dẫn chọn size, cảnh báo điện áp 100V, tính cước vận chuyển và mẹo gộp đơn giảm 25% cước ạ!",
+      text: "Kính chào Quý khách! Em là ChillBanana Gemini 2.5 AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tìm kiếm sản phẩm nội địa Nhật, tra cứu link & hình ảnh, tư vấn kỹ thuật điện 100V, mẹo săn sale, tính bill cước vận chuyển và giảm 25% cước gộp đơn ạ!",
       time: "Vừa xong",
     },
   ]);
@@ -182,7 +182,7 @@ export default function AIChatBot() {
                     ChillBanana Gemini AI
                     <span className="ml-1.5 w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                   </h3>
-                  <p className="text-[10px] text-banana-300">Trợ lý mua sắm Nhật Bản 24/7 (Google Studio)</p>
+                  <p className="text-[10px] text-banana-300">Trợ lý mua sắm Nhật Bản 24/7 (Gemini 2.5 Flash)</p>
                 </div>
               </div>
 
