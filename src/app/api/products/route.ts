@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/product-store";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,25 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
 
+    // 1. Lấy từ CSDL Prisma SQLite
+    try {
+      const dbProducts = await prisma.product.findMany({
+        where: category && category !== "all" ? { category } : undefined,
+        orderBy: { createdAt: "desc" },
+      });
+
+      if (dbProducts && dbProducts.length > 0) {
+        return NextResponse.json({
+          success: true,
+          count: dbProducts.length,
+          products: dbProducts,
+        });
+      }
+    } catch (dbErr) {
+      console.warn("Truy vấn sản phẩm từ Prisma thất bại:", dbErr);
+    }
+
+    // 2. Fallback
     let products = getAllProducts();
     if (category && category !== "all") {
       products = products.filter((p) => p.category === category);
@@ -53,6 +73,31 @@ export async function POST(req: NextRequest) {
       voltageNote: body.voltageNote || undefined,
     });
 
+    // Lưu vào CSDL Prisma SQLite
+    try {
+      await prisma.product.create({
+        data: {
+          id: newProd.id,
+          name: newProd.name,
+          slug: newProd.slug,
+          category: newProd.category,
+          categoryName: newProd.categoryName,
+          priceJpy: newProd.priceJpy,
+          priceVnd: newProd.priceVnd,
+          weightKg: newProd.weightKg,
+          imageUrl: newProd.imageUrl,
+          description: newProd.description,
+          originalStore: newProd.originalStore,
+          stockSlots: newProd.stockSlots,
+          isHot: newProd.isHot,
+          featuredNote: newProd.featuredNote,
+          voltageNote: newProd.voltageNote,
+        },
+      });
+    } catch (dbErr) {
+      console.warn("Lưu sản phẩm vào Prisma thất bại:", dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Thêm sản phẩm thành công!",
@@ -88,6 +133,30 @@ export async function PUT(req: NextRequest) {
       );
     }
 
+    // Cập nhật CSDL Prisma SQLite
+    try {
+      await prisma.product.update({
+        where: { id },
+        data: {
+          name: updated.name,
+          category: updated.category,
+          categoryName: updated.categoryName,
+          priceJpy: updated.priceJpy,
+          priceVnd: updated.priceVnd,
+          weightKg: updated.weightKg,
+          imageUrl: updated.imageUrl,
+          description: updated.description,
+          originalStore: updated.originalStore,
+          stockSlots: updated.stockSlots,
+          isHot: updated.isHot,
+          featuredNote: updated.featuredNote,
+          voltageNote: updated.voltageNote,
+        },
+      });
+    } catch (dbErr) {
+      console.warn("Cập nhật sản phẩm vào Prisma thất bại:", dbErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Cập nhật sản phẩm thành công!",
@@ -120,6 +189,13 @@ export async function DELETE(req: NextRequest) {
         { success: false, error: "Không tìm thấy sản phẩm cần xóa." },
         { status: 404 }
       );
+    }
+
+    // Xóa từ CSDL Prisma SQLite
+    try {
+      await prisma.product.delete({ where: { id } });
+    } catch (dbErr) {
+      console.warn("Xóa sản phẩm trong Prisma thất bại:", dbErr);
     }
 
     return NextResponse.json({

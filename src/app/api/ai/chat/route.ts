@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGeminiAgent } from "@/lib/gemini-agent";
 import { saveChatInteraction } from "@/lib/chat-store";
+import { prisma } from "@/lib/prisma";
 import { AIPersonality } from "@/types";
 
 export const dynamic = "force-dynamic";
@@ -19,14 +20,37 @@ export async function POST(req: NextRequest) {
 
     const selectedPersonality: AIPersonality = personality === "vietnamese" ? "vietnamese" : "omotenashi";
 
-    // 1. Gọi Gemini AI Agent đàm thoại trực tiếp
+    // 1. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
     const reply = await askGeminiAgent(message, selectedPersonality, history);
 
-    // 2. Lưu lại phiên hội thoại vào CSDL & Store để phục vụ thống kê xu hướng khách hàng
+    // 2. Lưu lại phiên hội thoại vào CSDL SQLite Prisma & Store để phục vụ thống kê xu hướng khách hàng
     try {
       saveChatInteraction(sessionId, message, reply, selectedPersonality);
+
+      await prisma.chatSession.upsert({
+        where: { sessionId },
+        update: {
+          personality: selectedPersonality,
+          messages: {
+            create: [
+              { role: "user", content: message },
+              { role: "assistant", content: reply },
+            ],
+          },
+        },
+        create: {
+          sessionId,
+          personality: selectedPersonality,
+          messages: {
+            create: [
+              { role: "user", content: message },
+              { role: "assistant", content: reply },
+            ],
+          },
+        },
+      });
     } catch (saveErr) {
-      console.warn("Could not save chat interaction:", saveErr);
+      console.warn("Could not save chat interaction to SQLite:", saveErr);
     }
 
     return NextResponse.json({

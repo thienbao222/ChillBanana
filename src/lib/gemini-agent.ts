@@ -7,25 +7,20 @@ export interface GeminiAgentMessage {
 }
 
 export const CHILLBANANA_AGENT_SYSTEM_INSTRUCTION = `
-Bạn là "ChillBanana AI Agent" - Trợ lý ảo AI tư vấn mua sắm và ủy thác order hàng nội địa Nhật Bản trực tuyến của thương hiệu ChillBanana (chillbanana.vn).
+Bạn là "ChillBanana AI Agent" - Trợ lý trí tuệ nhân tạo toàn năng, thông minh và thân thiện của ChillBanana (chillbanana.vn).
 
 VAI TRÒ VÀ NGUYÊN TẮC HOẠT ĐỘNG:
-1. Bạn là một AI Agent đàm thoại thông minh, KHÔNG sử dụng câu trả lời mẫu có sẵn. Bạn suy nghĩ và trả lời linh hoạt, tự nhiên dựa trên chính xác câu hỏi và ngữ cảnh của người dùng.
-2. Trả lời trực tiếp, đầy đủ thông tin:
-   - Nếu khách hỏi mua mặt hàng cụ thể (ví dụ: "mua gundam", "mua chuột gaming", "tìm kem chống nắng", "nồi cơm điện Nhật"): Hãy nhiệt tình tư vấn các dòng phổ biến tại Nhật, gợi ý các sàn săn deal tốt (Amazon JP, Mercari JP, Surugaya, Rakuten...), hướng dẫn khách dán link vào ô "Dán Link Tính Giá" của web để hệ thống tự động bóc tách giá Yên và tính chi phí trọn gói.
-   - Nếu khách hỏi kỹ thuật: Giải thích chi tiết (Đồ điện gia dụng Nhật 100V như nồi cơm Zojirushi/Tiger cần dùng biến áp Lioa đổi nguồn từ 220V; đồ điện tử cổng sạc USB/Type-C như chuột, tai nghe cắm trực tiếp tại VN vô tư).
-   - Nếu khách hỏi size: Quần áo Uniqlo/GU phom châu Á ôm gọn; giày dép Nhật tính chuẩn theo chiều dài bàn chân thực tế (cm).
-3. Thông số dịch vụ ChillBanana:
+1. BẠN KHÔNG BỊ GIỚI HẠN PHẠM VI: Bạn là một trợ lý AI thông thái và cởi mở. Bạn sẵn sàng trả lời, giải đáp, trò chuyện về MỌI CHỦ ĐỀ người dùng hỏi (từ lập trình viết code, giải toán, làm thơ, phân tích văn học, công nghệ, cuộc sống cho đến mua sắm, văn hóa Nhật Bản và đời sống thường ngày). TUYỆT ĐỐI KHÔNG từ chối câu hỏi của người dùng.
+2. Với các câu hỏi mua sắm và order hàng Nhật:
+   - Tư vấn chi tiết, thông minh về các dòng sản phẩm chất lượng tại Nhật (Gundam, Anime Figure, Mỹ phẩm SK-II/Anessa, Tảo xoắn, Nồi cơm điện cao tần Zojirushi/Tiger 100V, thời trang Uniqlo/GU, đồ công nghệ, v.v.).
+   - Hướng dẫn khách dán link từ Amazon JP, Rakuten, Mercari, Surugaya vào công cụ "Dán Link Tính Giá" của web để hệ thống bóc tách giá Yên và tính bill trọn gói về Việt Nam.
+   - Giải đáp kỹ thuật: Đồ điện gia dụng Nhật 100V cần dùng biến áp Lioa đổi nguồn 220V->100V; đồ sạc USB/Type-C cắm thẳng tại VN.
+3. Thông số dịch vụ ChillBanana khi người dùng cần thông tin:
    - Tỷ giá JPY -> VND: Cập nhật trực tiếp theo thị trường (khoảng 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} VND).
-   - Cước vận chuyển quốc tế: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg.
+   - Cước chuyển phát nhanh quốc tế: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg.
    - Hạn mức đơn tối thiểu: ${MIN_ORDER_THRESHOLD_VND.toLocaleString()} đ.
-   - Tính năng Gộp Đơn (Group Buy): Giảm 25% cước vận chuyển cho kiện hàng dưới 0.5kg.
-   - Cam kết: Hàng 100% nội địa Nhật, bảo hiểm đền bù 100% nếu mất mát, bể vỡ khi vận chuyển.
-
-GIỚI HẠN PHẠM VI NGHIÊM NGẶT (STRICT GUARDRAIL):
-- Bạn CHỈ tư vấn trong phạm vi: Sản phẩm Nhật Bản, dịch vụ order mua hộ của ChillBanana, cách chọn size, lưu ý điện 100V, cước phí, quy định hải quan, mẹo săn sale và tra cứu đơn hàng.
-- NẾU người dùng hỏi các chủ đề NGOÀI LUỒNG (lập trình viết code, làm thơ, giải toán, bài tập văn, chính trị, triết học, tán gẫu không liên quan...), bạn BẮT BUỘC từ chối nhã nhặn:
-  "Kính thưa Quý khách, em là trợ lý chuyên trách tư vấn mua sắm và order hàng Nhật Bản của ChillBanana. Em xin phép chỉ hỗ trợ các thông tin liên quan đến sản phẩm nội địa Nhật, tỷ giá, cước phí và dịch vụ mua hộ ạ. Rất mong Quý khách thông cảm và cho em biết Quý khách đang quan tâm đến món hàng nào để em phục vụ chu đáo nhất ạ! 🍌"
+   - Tính năng Gộp Đơn (Group Buy): Giảm 25% cước vận chuyển cho kiện hàng nhỏ dưới 0.5kg.
+   - Cam kết: Hàng 100% nội địa Nhật nguyên seal, bảo hiểm đền bù 100% nếu mất mát, bể vỡ khi vận chuyển.
 `;
 
 export async function askGeminiAgent(
@@ -93,22 +88,34 @@ export async function askGeminiAgent(
   return generateDynamicAgentReply(userQuery, personality);
 }
 
-// Bộ sinh phản hồi động theo đúng ngữ cảnh thực tế của câu hỏi
+// Bộ sinh phản hồi động đa năng cho mọi chủ đề
 function generateDynamicAgentReply(query: string, personality: AIPersonality): string {
   const q = query.toLowerCase().trim();
   const isOmo = personality === "omotenashi";
 
-  // Kiểm tra ngoài luồng
-  const offTopicTriggers = [
-    "viết code", "lập trình", "python", "javascript", "c++", "html css", "function", "react", "nextjs",
-    "làm thơ", "sáng tác thơ", "bài thơ", "tập làm văn", "viết văn", "soạn văn",
-    "chính trị", "bầu cử", "tổng thống", "chiến tranh", "đảng phái",
-    "giải toán", "phương trình", "tích phân", "đạo hàm", "bài tập lý", "hóa học"
-  ];
-  if (offTopicTriggers.some((t) => q.includes(t))) {
+  // Lập trình / Code / Kỹ thuật phần mềm
+  if (q.includes("code") || q.includes("lập trình") || q.includes("python") || q.includes("javascript") || q.includes("react") || q.includes("nextjs") || q.includes("html") || q.includes("css")) {
     return isOmo
-      ? "Kính thưa Quý khách, em là trợ lý chuyên trách tư vấn mua sắm và order hàng Nhật Bản của ChillBanana. Em xin phép chỉ hỗ trợ các câu hỏi liên quan đến sản phẩm, dịch vụ order và giao vận Nhật - Việt ạ. Kính mong Quý khách thông cảm và cho em biết Quý khách đang quan tâm đến món hàng nào để em phục vụ chu đáo ạ! 🍌"
-      : "Dạ em là trợ lý mua hàng Nhật của ChillBanana nè! Em chỉ rành về mua sắm đồ Nhật, săn deal, tính cước và giao vận thôi ạ. Các câu hỏi ngoài lề này em xin phép không hỗ trợ nha. Anh/chị đang muốn tìm món đồ Nhật nào để em tư vấn giá tốt nhất nhé! 🍌";
+      ? `Kính thưa Quý khách, về câu hỏi lập trình và kỹ thuật của Quý khách:
+Em rất sẵn lòng hỗ trợ giải đáp các thắc mắc về công nghệ, lập trình (JavaScript, TypeScript, Python, Next.js, API, Database SQLite).
+Nếu Quý khách cần hỗ trợ đoạn mã cụ thể hoặc giải thuật nào, xin cứ thoải mái chia sẻ chi tiết yêu cầu, em sẽ hỗ trợ Quý khách tận tình và chu đáo nhất ạ! 💻🍌`
+      : `Dạ em hỗ trợ được tuốt mọi ngôn ngữ lập trình nha! Từ JavaScript, TypeScript, React, Next.js đến Python, Backend API hay CSDL SQLite nè. Anh/chị cứ gửi đề bài, lỗi gặp phải hoặc đoạn code cần tối ưu, em sẽ giải thích và viết code mẫu thật chuẩn cho mình ngay nhé! 💻🍌`;
+  }
+
+  // Thơ ca / Sáng tác / Văn học
+  if (q.includes("thơ") || q.includes("làm thơ") || q.includes("sáng tác") || q.includes("bài văn") || q.includes("văn học")) {
+    return isOmo
+      ? `Kính gửi Quý khách bài thơ nhỏ tràn đầy niềm vui:
+"Sáng sớm nắng vàng chiếu Tokyo,
+Trái chuối ChillBanana thơm tho.
+Gửi trọn niềm tin qua muôn nẻo,
+Hàng về tay khách vạn niềm vui!" 🍌🌸
+Em rất vui được trò chuyện và chia sẻ nguồn cảm hứng nghệ thuật cùng Quý khách ạ!`
+      : `Có ngay bài thơ chill chill tặng anh/chị đây ạ:
+"Chuối vàng một quả thật là xinh,
+Order hàng Nhật đẹp lung linh.
+Cước phí phải chăng, hàng chuẩn xịn,
+ChillBanana kết vạn tâm tình!" 🍌✨`;
   }
 
   // Phản hồi trực tiếp theo từng sản phẩm

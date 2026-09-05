@@ -27,7 +27,11 @@ import {
   ShoppingBag,
   Plus,
   Trash2,
-  Tag
+  Tag,
+  Columns,
+  FileText,
+  Printer,
+  ChevronRight
 } from "lucide-react";
 import { StoredOrder } from "@/lib/order-store";
 import { OrderStatus, CuratedProduct } from "@/types";
@@ -35,11 +39,15 @@ import { OrderStatus, CuratedProduct } from "@/types";
 export default function AdminDashboardPage() {
   const router = useRouter();
 
+  // Chế độ giao diện Admin: "dashboard" (Bảng điều khiển tổng quan) | "operations" (Bàn tác nghiệp kho vận Kanban)
+  const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations">("dashboard");
+  const [packingSlipOrder, setPackingSlipOrder] = useState<StoredOrder | null>(null);
+
   // Trạng thái Auth
   const [authChecking, setAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
-  // Tab đang chọn: "orders" | "ai_trends" | "products"
+  // Tab đang chọn trong chế độ Dashboard: "orders" | "products" | "ai_trends"
   const [activeTab, setActiveTab] = useState<"orders" | "ai_trends" | "products">("orders");
 
   // Quản lý đơn hàng
@@ -268,6 +276,36 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // Thao tác 1-Click chuyển trạng thái trên Bàn Tác Nghiệp Kho Vận
+  const quickMoveStatus = async (
+    orderCode: string,
+    nextStatus: OrderStatus,
+    title: string,
+    desc: string,
+    loc: string
+  ) => {
+    try {
+      const res = await fetch(`/api/orders/${orderCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: nextStatus,
+          title,
+          description: desc,
+          location: loc,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchOrders();
+      } else {
+        alert("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ");
+    }
+  };
+
   // Đăng xuất
   const handleLogout = async () => {
     try {
@@ -393,37 +431,68 @@ export default function AdminDashboardPage() {
 
             <span className="text-slate-600 hidden sm:inline">|</span>
 
-            <nav className="hidden sm:flex items-center space-x-2 text-xs">
+            {/* Bộ Chuyển Đổi 2 Giao Diện Quản Trị */}
+            <div className="flex items-center bg-navy-950 p-1 rounded-xl border border-navy-800">
               <button
-                onClick={() => setActiveTab("orders")}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "orders" ? "bg-banana-500 text-navy-950 shadow" : "text-slate-300 hover:text-white"
+                onClick={() => setAdminViewMode("dashboard")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                  adminViewMode === "dashboard"
+                    ? "bg-banana-500 text-navy-950 shadow"
+                    : "text-slate-300 hover:text-white"
                 }`}
+                title="Giao diện 1: Bảng điều khiển phân tích & quản trị tổng quan"
               >
-                <Package className="w-3.5 h-3.5" />
-                <span>Quản Lý Đơn Hàng</span>
+                <LayoutDashboard className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Giao Diện Dashboard</span>
               </button>
 
               <button
-                onClick={() => setActiveTab("products")}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "products" ? "bg-banana-500 text-navy-950 shadow" : "text-slate-300 hover:text-white"
+                onClick={() => setAdminViewMode("operations")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
+                  adminViewMode === "operations"
+                    ? "bg-banana-500 text-navy-950 shadow"
+                    : "text-slate-300 hover:text-white"
                 }`}
+                title="Giao diện 2: Bàn tác nghiệp kho vận & xử lý đơn hàng chuyên sâu (Kanban)"
               >
-                <ShoppingBag className="w-3.5 h-3.5" />
-                <span>Quản Lý Sản Phẩm ({products.length})</span>
+                <Columns className="w-3.5 h-3.5" />
+                <span className="hidden md:inline">Bàn Tác Nghiệp Kho (Kanban)</span>
               </button>
+            </div>
 
-              <button
-                onClick={() => setActiveTab("ai_trends")}
-                className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
-                  activeTab === "ai_trends" ? "bg-banana-500 text-navy-950 shadow" : "text-slate-300 hover:text-white"
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" />
-                <span>Xu Hướng Khách Hàng (AI Chat)</span>
-              </button>
-            </nav>
+            {adminViewMode === "dashboard" && (
+              <nav className="hidden lg:flex items-center space-x-2 text-xs border-l border-navy-800 pl-3">
+                <button
+                  onClick={() => setActiveTab("orders")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                    activeTab === "orders" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  <span>Đơn Hàng ({orders.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("products")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                    activeTab === "products" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <ShoppingBag className="w-3.5 h-3.5" />
+                  <span>Sản Phẩm ({products.length})</span>
+                </button>
+
+                <button
+                  onClick={() => setActiveTab("ai_trends")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                    activeTab === "ai_trends" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Xu Hướng AI</span>
+                </button>
+              </nav>
+            )}
           </div>
 
           <div className="flex items-center space-x-4 text-xs">
@@ -487,10 +556,13 @@ export default function AdminDashboardPage() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         
         {/* ======================================================== */}
-        {/* TAB 1: QUẢN LÝ ĐƠN HÀNG */}
+        {/* GIAO DIỆN 1: BẢNG ĐIỀU KHIỂN DASHBOARD (TỔNG QUAN) */}
         {/* ======================================================== */}
-        {activeTab === "orders" && (
+        {adminViewMode === "dashboard" && (
           <div className="space-y-6">
+            {/* TAB 1: QUẢN LÝ ĐƠN HÀNG */}
+            {activeTab === "orders" && (
+              <div className="space-y-6">
             
             {/* Quick Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -583,8 +655,28 @@ export default function AdminDashboardPage() {
                   <tbody className="divide-y divide-slate-100">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-slate-400">
-                          Không tìm thấy đơn hàng nào phù hợp với bộ lọc.
+                        <td colSpan={7} className="p-12 text-center text-slate-500">
+                          <div className="max-w-md mx-auto space-y-3">
+                            <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-2xl mx-auto">
+                              📦
+                            </div>
+                            <div className="font-bold text-navy-900 text-sm">
+                              Chưa có đơn hàng nào trong CSDL SQLite
+                            </div>
+                            <p className="text-xs text-slate-400">
+                              Hệ thống đã dọn sạch toàn bộ dữ liệu mẫu. Khi có khách hàng thật đặt đơn trên trang chủ, thông tin đơn sẽ xuất hiện ngay tại đây!
+                            </p>
+                            <div className="pt-1">
+                              <Link
+                                href="/#calculator"
+                                target="_blank"
+                                className="inline-flex items-center space-x-1.5 px-4 py-2 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all"
+                              >
+                                <span>Mở Trang Chủ Đặt Hàng Thử Nghiệm</span>
+                                <ExternalLink className="w-3.5 h-3.5" />
+                              </Link>
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     ) : (
@@ -888,7 +980,7 @@ export default function AdminDashboardPage() {
                 <div>
                   <span className="text-xs text-slate-500 font-medium">Tỷ Lệ Hỏi Mua &amp; Tìm Kiếm</span>
                   <div className="text-2xl font-bold text-navy-900 font-mono">
-                    96%
+                    {aiStats?.totalSessions > 0 ? Math.round(((aiStats?.sentimentSummary?.inquiry || 0) / aiStats.totalSessions) * 100) : 0}%
                   </div>
                 </div>
               </div>
@@ -1041,7 +1133,404 @@ export default function AdminDashboardPage() {
           </div>
         )}
 
-      </main>
+        {/* Đóng GIAO DIỆN 1 (DASHBOARD) */}
+        </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* GIAO DIỆN 2: BÀN TÁC NGHIỆP KHO VẬN KANBAN (OPERATIONS) */}
+        {/* ======================================================== */}
+        {adminViewMode === "operations" && (
+          <div className="space-y-6">
+            {/* Header Toolbar */}
+            <div className="bg-gradient-to-r from-slate-900 via-navy-950 to-slate-900 text-white p-6 rounded-3xl shadow-xl border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center space-x-2 bg-banana-500/20 text-banana-300 text-xs font-bold px-3 py-1 rounded-full mb-2 border border-banana-500/30">
+                  <Columns className="w-3.5 h-3.5 text-banana-400" />
+                  <span>Giao Diện Tác Nghiệp Kho Vận Tokyo ⇄ Việt Nam</span>
+                </div>
+                <h2 className="text-2xl font-serif font-bold text-white">
+                  Bàn Điều Phối &amp; Xử Lý Đơn Hàng 1-Click
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 max-w-xl">
+                  Giao diện chuyên sâu dành cho nhân viên kho Nhật và điều phối giao hàng Việt Nam: chuyển trạng thái 1 chạm, in phiếu gửi và cập nhật mã vận đơn tức thì.
+                </p>
+              </div>
+
+              <div className="flex items-center space-x-3 shrink-0">
+                <div className="relative w-64">
+                  <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+                  <input
+                    type="text"
+                    placeholder="Tìm mã đơn, tên khách..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2 text-xs bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+                <button
+                  onClick={fetchOrders}
+                  className="p-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl transition-colors border border-slate-700"
+                  title="Làm mới dữ liệu"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingOrders ? "animate-spin" : ""}`} />
+                </button>
+              </div>
+            </div>
+
+            {/* Kanban Columns */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-start">
+              
+              {/* CỘT 1: CHỜ CỌC */}
+              <div className="bg-slate-100/90 rounded-2xl p-4 border border-slate-200 flex flex-col min-h-[400px]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-amber-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500"></span>
+                    <span>1. Chờ Cọc</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full">
+                    {orders.filter((o) => o.status === "PENDING_DEPOSIT").length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                  {orders
+                    .filter((o) => o.status === "PENDING_DEPOSIT")
+                    .map((ord) => (
+                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                          <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-200">
+                            Chưa Cọc
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
+                        <div className="text-[11px] text-slate-500">📞 {ord.customerPhone}</div>
+                        <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
+                          {ord.productName}
+                        </div>
+                        <div className="text-right font-mono font-bold text-banana-700">
+                          {ord.totalVnd?.toLocaleString()} đ
+                        </div>
+                        <div className="pt-2 border-t flex flex-col gap-1.5">
+                          <button
+                            onClick={() => quickMoveStatus(
+                              ord.orderCode,
+                              "PURCHASING_JP",
+                              "Đã nhận cọc - Đang mua hàng tại Tokyo",
+                              "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
+                              "Tokyo, Nhật Bản"
+                            )}
+                            className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>Xác nhận cọc &amp; Mua</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setPackingSlipOrder(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              In Phiếu
+                            </button>
+                            <button
+                              onClick={() => openUpdateModal(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              Chi Tiết
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {orders.filter((o) => o.status === "PENDING_DEPOSIT").length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                      Không có đơn chờ cọc
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CỘT 2: ĐANG MUA TẠI NHẬT */}
+              <div className="bg-slate-100/90 rounded-2xl p-4 border border-slate-200 flex flex-col min-h-[400px]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-blue-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500"></span>
+                    <span>2. Mua Tại Nhật</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-blue-200/80 text-blue-900 px-2 py-0.5 rounded-full">
+                    {orders.filter((o) => o.status === "PURCHASING_JP").length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                  {orders
+                    .filter((o) => o.status === "PURCHASING_JP")
+                    .map((ord) => (
+                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                          <span className="bg-blue-50 text-blue-700 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-200">
+                            Đang Mua
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
+                        <div className="text-[11px] text-slate-500">📞 {ord.customerPhone}</div>
+                        <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
+                          {ord.productName}
+                        </div>
+                        <div className="text-right font-mono font-bold text-banana-700">
+                          {ord.priceJpy?.toLocaleString()} ¥
+                        </div>
+                        <div className="pt-2 border-t flex flex-col gap-1.5">
+                          <button
+                            onClick={() => quickMoveStatus(
+                              ord.orderCode,
+                              "WAREHOUSE_JP",
+                              "Đã nhập kho Tokyo",
+                              "Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.",
+                              "Kho Tokyo (Edogawa-ku)"
+                            )}
+                            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>Đã Mua $\rightarrow$ Về Kho Tokyo</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setPackingSlipOrder(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              In Phiếu
+                            </button>
+                            <button
+                              onClick={() => openUpdateModal(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              Chi Tiết
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {orders.filter((o) => o.status === "PURCHASING_JP").length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                      Không có đơn đang mua
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CỘT 3: KHO TOKYO */}
+              <div className="bg-slate-100/90 rounded-2xl p-4 border border-slate-200 flex flex-col min-h-[400px]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-purple-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-purple-500"></span>
+                    <span>3. Kho Tokyo</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-purple-200/80 text-purple-900 px-2 py-0.5 rounded-full">
+                    {orders.filter((o) => o.status === "WAREHOUSE_JP").length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                  {orders
+                    .filter((o) => o.status === "WAREHOUSE_JP")
+                    .map((ord) => (
+                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                          <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200">
+                            Tại Kho Nhật
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
+                        <div className="text-[11px] text-slate-500">Trọng lượng: {ord.weightKg} kg</div>
+                        <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
+                          {ord.productName}
+                        </div>
+                        <div className="pt-2 border-t flex flex-col gap-1.5">
+                          <button
+                            onClick={() => quickMoveStatus(
+                              ord.orderCode,
+                              "IN_TRANSIT_AIR",
+                              "Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam",
+                              "Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.",
+                              "Tokyo, Nhật Bản"
+                            )}
+                            className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>Xuất Kho $\rightarrow$ Bay Về VN</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setPackingSlipOrder(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              In Phiếu
+                            </button>
+                            <button
+                              onClick={() => openUpdateModal(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              Chi Tiết
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {orders.filter((o) => o.status === "WAREHOUSE_JP").length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                      Kho Tokyo trống
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CỘT 4: VẬN CHUYỂN QUỐC TẾ & KHO VN */}
+              <div className="bg-slate-100/90 rounded-2xl p-4 border border-slate-200 flex flex-col min-h-[400px]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-orange-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-orange-500"></span>
+                    <span>4. Về Kho VN</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-orange-200/80 text-orange-900 px-2 py-0.5 rounded-full">
+                    {orders.filter((o) => o.status === "IN_TRANSIT_AIR" || o.status === "WAREHOUSE_VN").length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                  {orders
+                    .filter((o) => o.status === "IN_TRANSIT_AIR" || o.status === "WAREHOUSE_VN")
+                    .map((ord) => (
+                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                          <span className="bg-orange-50 text-orange-700 text-[10px] font-bold px-2 py-0.5 rounded border border-orange-200">
+                            {ord.status === "IN_TRANSIT_AIR" ? "Đang Vận Chuyển" : "Kho VN"}
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
+                        <div className="text-[11px] text-slate-500">📍 {ord.customerAddress}</div>
+                        <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
+                          {ord.productName}
+                        </div>
+                        <div className="pt-2 border-t flex flex-col gap-1.5">
+                          <button
+                            onClick={() => quickMoveStatus(
+                              ord.orderCode,
+                              "LOCAL_DELIVERY",
+                              "Đang giao hàng chặng cuối",
+                              "Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.",
+                              "Việt Nam"
+                            )}
+                            className="w-full py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>Bàn Giao Shipper</span>
+                            <ChevronRight className="w-3 h-3" />
+                          </button>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setPackingSlipOrder(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              In Phiếu
+                            </button>
+                            <button
+                              onClick={() => openUpdateModal(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              Chi Tiết
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {orders.filter((o) => o.status === "IN_TRANSIT_AIR" || o.status === "WAREHOUSE_VN").length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                      Không có đơn đang chuyển
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CỘT 5: GIAO HÀNG & HOÀN TẤT */}
+              <div className="bg-slate-100/90 rounded-2xl p-4 border border-slate-200 flex flex-col min-h-[400px]">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-3">
+                  <div className="flex items-center space-x-1.5 font-bold text-xs text-emerald-800">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+                    <span>5. Giao Hàng &amp; Xong</span>
+                  </div>
+                  <span className="text-[11px] font-mono font-bold bg-emerald-200/80 text-emerald-900 px-2 py-0.5 rounded-full">
+                    {orders.filter((o) => o.status === "LOCAL_DELIVERY" || o.status === "COMPLETED").length}
+                  </span>
+                </div>
+
+                <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
+                  {orders
+                    .filter((o) => o.status === "LOCAL_DELIVERY" || o.status === "COMPLETED")
+                    .map((ord) => (
+                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                        <div className="flex justify-between items-start">
+                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                            ord.status === "COMPLETED"
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                              : "bg-blue-50 text-blue-700 border-blue-200"
+                          }`}>
+                            {ord.status === "COMPLETED" ? "Đã Giao Xong" : "Đang Phát Hàng"}
+                          </span>
+                        </div>
+                        <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
+                        <div className="text-[11px] text-slate-500">Mã VN: {ord.vnDomesticTrack || "Chưa gán"}</div>
+                        <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
+                          {ord.productName}
+                        </div>
+                        <div className="pt-2 border-t flex flex-col gap-1.5">
+                          {ord.status !== "COMPLETED" && (
+                            <button
+                              onClick={() => quickMoveStatus(
+                                ord.orderCode,
+                                "COMPLETED",
+                                "Giao hàng thành công",
+                                "Khách hàng đã nhận đủ hàng và hoàn tất đơn hàng.",
+                                "Việt Nam"
+                              )}
+                              className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            >
+                              <span>Xác Nhận Đã Nhận</span>
+                              <CheckCircle2 className="w-3 h-3" />
+                            </button>
+                          )}
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => setPackingSlipOrder(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              In Phiếu
+                            </button>
+                            <button
+                              onClick={() => openUpdateModal(ord)}
+                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                            >
+                              Chi Tiết
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  {orders.filter((o) => o.status === "LOCAL_DELIVERY" || o.status === "COMPLETED").length === 0 && (
+                    <div className="text-center py-10 text-slate-400 text-xs">
+                      Chưa có đơn hoàn tất
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        )}
 
       {/* MODAL 1: CẬP NHẬT TRẠNG THÁI ĐƠN HÀNG (7 BƯỚC) */}
       {selectedOrder && (
@@ -1425,6 +1914,140 @@ export default function AdminDashboardPage() {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 4: PHIẾU GIAO HÀNG & ĐÓNG GÓI (PACKING SLIP PRINT) */}
+      {packingSlipOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-300 relative my-8 text-slate-900 font-sans">
+            <button
+              onClick={() => setPackingSlipOrder(null)}
+              className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 print:hidden"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            {/* Slip Header */}
+            <div className="border-b-2 border-slate-900 pb-4 mb-4 flex justify-between items-start">
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className="text-2xl">🍌</span>
+                  <span className="font-serif font-extrabold text-xl tracking-tight text-navy-950">
+                    Chill<span className="text-banana-600">Banana</span>
+                  </span>
+                </div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider font-bold mt-0.5">
+                  Phiếu Giao Hàng &amp; Vận Đơn Ủy Thác Nhật - Việt
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div className="font-mono text-base font-black bg-slate-100 px-3 py-1 rounded-lg border border-slate-300">
+                  #{packingSlipOrder.orderCode}
+                </div>
+                <div className="text-[10px] text-slate-400 font-mono mt-1">
+                  Ngày tạo: {new Date(packingSlipOrder.createdAt).toLocaleDateString("vi-VN")}
+                </div>
+              </div>
+            </div>
+
+            {/* Sender & Receiver Grid */}
+            <div className="grid grid-cols-2 gap-3 text-xs mb-4 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div>
+                <span className="font-bold text-[10px] uppercase text-slate-400 block mb-1">Người gửi / Đơn vị mua hộ:</span>
+                <p className="font-bold text-navy-950">Kho ChillBanana Express</p>
+                <p className="text-slate-600 text-[11px]">Tokyo Hub ⇄ Hà Nội / TP.HCM</p>
+                <p className="text-slate-600 text-[11px]">Hotline: 1900 8888</p>
+              </div>
+
+              <div>
+                <span className="font-bold text-[10px] uppercase text-slate-400 block mb-1">Người nhận:</span>
+                <p className="font-bold text-navy-950">{packingSlipOrder.customerName}</p>
+                <p className="font-mono text-slate-800 text-[11px]">📞 {packingSlipOrder.customerPhone}</p>
+                <p className="text-slate-600 text-[11px] leading-tight mt-0.5">{packingSlipOrder.customerAddress}</p>
+              </div>
+            </div>
+
+            {/* Product Table */}
+            <div className="border border-slate-200 rounded-xl overflow-hidden mb-4 text-xs">
+              <table className="w-full text-left">
+                <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="p-2.5">Sản Phẩm</th>
+                    <th className="p-2.5 text-center">Trọng Lượng</th>
+                    <th className="p-2.5 text-right">Tổng Tiền</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td className="p-2.5 font-medium max-w-[200px]">
+                      <div className="font-bold text-navy-950 line-clamp-2">{packingSlipOrder.productName}</div>
+                      <div className="text-[10px] text-slate-400 font-mono">Giá gốc: {packingSlipOrder.priceJpy?.toLocaleString()} ¥</div>
+                    </td>
+                    <td className="p-2.5 text-center font-mono">{packingSlipOrder.weightKg} kg</td>
+                    <td className="p-2.5 text-right font-mono font-bold text-navy-950">
+                      {packingSlipOrder.totalVnd?.toLocaleString()} đ
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Payment Summary */}
+            <div className="space-y-1.5 text-xs border-t pt-3 mb-4 font-medium">
+              <div className="flex justify-between text-slate-600">
+                <span>Số tiền đã đặt cọc:</span>
+                <span className="font-mono font-bold text-emerald-700">
+                  - {packingSlipOrder.depositAmountVnd?.toLocaleString()} đ ({packingSlipOrder.paymentStatus === "PAID_100" ? "Đã trả 100%" : "Đã cọc 50%"})
+                </span>
+              </div>
+              <div className="flex justify-between text-navy-950 font-bold text-sm pt-1 border-t">
+                <span>Thu hộ khi giao hàng (COD):</span>
+                <span className="font-mono text-banana-700">
+                  {(packingSlipOrder.totalVnd - packingSlipOrder.depositAmountVnd).toLocaleString()} đ
+                </span>
+              </div>
+            </div>
+
+            {/* Tracking Identifiers */}
+            <div className="p-3 bg-slate-100 rounded-xl font-mono text-[11px] text-slate-700 space-y-1 mb-4">
+              <div>🇯🇵 Mã vận đơn Nhật: <strong className="text-navy-900">{packingSlipOrder.jpDomesticTrack || "YAMATO-PENDING"}</strong></div>
+              <div>🇻🇳 Mã bưu cục Việt Nam: <strong className="text-navy-900">{packingSlipOrder.vnDomesticTrack || "GHTK-PENDING"}</strong></div>
+            </div>
+
+            {/* Signature Box */}
+            <div className="grid grid-cols-2 gap-4 text-center text-xs pt-2 border-t text-slate-600 mb-4">
+              <div>
+                <p className="font-bold text-[11px]">Người lập phiếu</p>
+                <div className="h-10"></div>
+                <p className="text-[10px] text-slate-400">(Ký &amp; ghi rõ họ tên)</p>
+              </div>
+              <div>
+                <p className="font-bold text-[11px]">Người nhận hàng</p>
+                <div className="h-10"></div>
+                <p className="text-[10px] text-slate-400">(Xác nhận hàng nguyên vẹn)</p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex justify-end space-x-2 pt-2 border-t print:hidden">
+              <button
+                onClick={() => setPackingSlipOrder(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs"
+              >
+                Đóng
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="px-5 py-2 bg-navy-900 hover:bg-slate-800 text-white rounded-xl font-bold text-xs shadow flex items-center space-x-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>In Phiếu Gửi Hàng</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

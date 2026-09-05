@@ -57,20 +57,18 @@ export async function GET(req: NextRequest) {
       .map(([name, count]) => ({ name, count }))
       .filter((t) => t.count > 0 || sessions.length === 0);
 
-    // Thêm dữ liệu mẫu minh họa sinh động nếu CSDL còn ít phiên
-    if (sessions.length === 0) {
-      topKeywords.push(
-        { keyword: "Gundam RG 1/144", count: 24 },
-        { keyword: "Tảo xoắn Spirulina", count: 19 },
-        { keyword: "Biến áp nồi cơm 100V", count: 15 },
-        { keyword: "Kem chống nắng Anessa", count: 12 },
-        { keyword: "Bảng size Uniqlo", count: 9 },
-        { keyword: "Gộp đơn giảm 25%", count: 8 }
-      );
-    }
+    const totalSessions = sessions.length;
+    const totalMessages = sessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0);
 
-    const totalSessions = Math.max(sessions.length, 42);
-    const totalMessages = sessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0) || 128;
+    const sentimentCounts = {
+      inquiry: 0,
+      positive: 0,
+      complaint: 0,
+    };
+    sessions.forEach((s) => {
+      const sent = (s.sentiment || "inquiry") as "inquiry" | "positive" | "complaint";
+      if (sentimentCounts[sent] !== undefined) sentimentCounts[sent]++;
+    });
 
     return NextResponse.json({
       success: true,
@@ -79,11 +77,7 @@ export async function GET(req: NextRequest) {
         totalMessages,
         topKeywords,
         topicsChart,
-        sentimentSummary: {
-          inquiry: 72,
-          positive: 24,
-          complaint: 4,
-        },
+        sentimentSummary: sentimentCounts,
       },
       sessions: sessions.map((s) => ({
         id: s.id,

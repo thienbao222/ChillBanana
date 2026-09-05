@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { 
   PackageSearch, 
   Search, 
@@ -54,10 +55,6 @@ function TrackingContent() {
     if (codeParam) {
       setSearchCode(codeParam);
       fetchOrder(codeParam);
-    } else {
-      // Tải đơn mẫu mặc định
-      fetchOrder("CB-2026-8921");
-      setSearchCode("CB-2026-8921");
     }
   }, [searchParams]);
 
@@ -90,30 +87,9 @@ function TrackingContent() {
           </button>
         </form>
 
-        {/* Quick Sample Order Chips */}
-        <div className="mt-3 flex items-center justify-center flex-wrap gap-2 text-xs text-slate-500">
-          <span>Thử nhanh mã mẫu:</span>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchCode("CB-2026-8921");
-              fetchOrder("CB-2026-8921");
-            }}
-            className="px-3 py-1 bg-banana-100 hover:bg-banana-200 text-banana-900 rounded-xl border border-banana-300 font-bold"
-          >
-            CB-2026-8921 (Đang bay quốc tế ✈)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSearchCode("CB-2026-5512");
-              fetchOrder("CB-2026-5512");
-            }}
-            className="px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-xl border border-emerald-300 font-bold"
-          >
-            CB-2026-5512 (Đang giao hàng 🚚)
-          </button>
-        </div>
+        <p className="text-[11px] text-slate-400 text-center mt-2">
+          Mã đơn hàng có dạng <strong className="font-mono text-navy-900">CB-2026-XXXX</strong> được tạo tự động khi bạn đặt hàng trên trang chủ.
+        </p>
       </div>
 
       {/* Error display */}
@@ -121,6 +97,30 @@ function TrackingContent() {
         <div className="max-w-2xl mx-auto p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs flex items-center space-x-2">
           <AlertCircle className="w-5 h-5 shrink-0" />
           <span>{error}</span>
+        </div>
+      )}
+
+      {/* Welcoming Guidance State */}
+      {!order && !loading && !error && (
+        <div className="max-w-2xl mx-auto text-center py-12 px-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4">
+          <div className="w-16 h-16 rounded-2xl bg-banana-100 text-banana-700 flex items-center justify-center mx-auto text-2xl font-bold">
+            📦
+          </div>
+          <h3 className="text-lg font-serif font-bold text-navy-900">
+            Hệ Thống Theo Dõi Vận Tải Thời Gian Thực
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            Vui lòng nhập mã đơn hàng thực tế của bạn (nhận được sau khi tạo đơn trên trang chủ) vào thanh tra cứu để theo dõi từng bước di chuyển của kiện hàng từ Nhật về Việt Nam.
+          </p>
+          <div className="pt-2">
+            <Link
+              href="/#calculator"
+              className="inline-flex items-center space-x-2 px-5 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all"
+            >
+              <span>Đặt Hàng Thực Tế Tại Trang Chủ</span>
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       )}
 
