@@ -5,36 +5,37 @@ import Link from "next/link";
 import { 
   PackageSearch, 
   Sparkles, 
-  TrendingUp,
-  LayoutDashboard,
-  SendHorizontal,
-  Menu,
-  X
+  LayoutDashboard, 
+  SendHorizontal, 
+  Menu, 
+  X,
+  ShieldCheck
 } from "lucide-react";
-import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
+import LiveRateWidget from "./LiveRateWidget";
 
 export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
-      {/* Top Banner Tỷ Giá & Hotline */}
+      {/* Top Banner: Tỷ Giá Live & Hotline (Đã bỏ hoàn toàn thông tin chuyến bay) */}
       <div className="bg-navy-900 text-white text-xs py-1.5 px-4">
         <div className="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-2">
           <div className="flex items-center space-x-3">
-            <span className="inline-flex items-center text-banana-400 font-medium">
-              <TrendingUp className="w-3.5 h-3.5 mr-1" />
-              Tỷ giá hôm nay: 1 JPY = {DEFAULT_EXCHANGE_RATE} VND
-            </span>
+            {/* Live Exchange Rate Widget Compact */}
+            <LiveRateWidget compact={true} />
             <span className="hidden md:inline text-slate-500">|</span>
-            <span className="hidden md:inline text-slate-300">
-              ✈ Chuyến bay cố định Narita ➔ Hà Nội & TP.HCM (3-5 ngày)
+            <span className="hidden md:inline text-slate-300 flex items-center">
+              <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+              Bảo hiểm hàng hóa 100% – Cam kết nội địa Nhật chính hãng
             </span>
           </div>
           <div className="flex items-center space-x-4">
-            <span className="text-slate-300">Hotline: <strong className="text-banana-400">1900 6868</strong> (8h-22h)</span>
+            <span className="text-slate-300">
+              Hotline: <strong className="text-banana-400">1900 6868</strong> (8h-22h)
+            </span>
             <Link 
-              href="/admin" 
+              href="/admin/login" 
               className="inline-flex items-center text-banana-300 hover:text-white transition-colors"
             >
               <LayoutDashboard className="w-3 h-3 mr-1" />
@@ -93,7 +94,7 @@ export default function Navbar() {
               href="/#news"
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors"
             >
-              Cẩm Nang & Lịch Bay
+              Cẩm Nang Hàng Nhật
             </Link>
           </nav>
 
@@ -107,7 +108,7 @@ export default function Navbar() {
               className="inline-flex items-center px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-banana-50 to-amber-100 text-banana-800 border border-banana-300/80 hover:shadow transition-all"
             >
               <Sparkles className="w-3.5 h-3.5 mr-1.5 text-banana-600 animate-pulse" />
-              Gemini AI Tư Vấn 24/7
+              Gemini AI Tư Vấn
             </button>
             <Link
               href="/#calculator"
@@ -161,15 +162,15 @@ export default function Navbar() {
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
-            Cẩm Nang Săn Deal & Lịch Bay
+            Cẩm Nang Hàng Nhật
           </Link>
           <Link
-            href="/admin"
+            href="/admin/login"
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-navy-900 bg-banana-50 font-bold"
           >
             <LayoutDashboard className="w-4 h-4 mr-2" />
-            Trang Quản Trị Đơn Hàng (Admin)
+            Đăng Nhập Admin
           </Link>
         </div>
       )}

@@ -1,18 +1,48 @@
 "use client";
 
-import React, { useState } from "react";
-import { Sparkles, Zap, Flame, ShoppingBag, ExternalLink } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Sparkles, Zap, Flame, ShoppingBag, ExternalLink, RefreshCw } from "lucide-react";
 import { CURATED_PRODUCTS } from "@/lib/data";
 import { CuratedProduct } from "@/types";
 
 export default function CuratedProducts() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [products, setProducts] = useState<CuratedProduct[]>(CURATED_PRODUCTS);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch("/api/products");
+        const data = await res.json();
+        if (res.ok && data.products && data.products.length > 0) {
+          setProducts(data.products);
+        }
+      } catch (err) {
+        // use fallback CURATED_PRODUCTS
+      }
+    };
+    fetchProducts();
+  }, []);
 
   const filteredProducts = selectedCategory === "all"
-    ? CURATED_PRODUCTS
-    : CURATED_PRODUCTS.filter((p) => p.category === selectedCategory);
+    ? products
+    : products.filter((p) => p.category === selectedCategory);
 
   const handleOrderThis = (product: CuratedProduct) => {
+    // Dispatch custom event to notify OrderCalculator if listening
+    window.dispatchEvent(
+      new CustomEvent("chillbanana:select_product", {
+        detail: {
+          name: product.name,
+          priceJpy: product.priceJpy,
+          weightKg: product.weightKg,
+          imageUrl: product.imageUrl,
+          originalStore: product.originalStore,
+        },
+      })
+    );
+
     const calcSection = document.getElementById("calculator");
     if (calcSection) {
       calcSection.scrollIntoView({ behavior: "smooth" });

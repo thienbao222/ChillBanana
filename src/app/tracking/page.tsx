@@ -329,7 +329,7 @@ export default function TrackingPage() {
           Tra Cứu Hành Trình Đơn Hàng (7 Bước)
         </h1>
         <p className="text-xs sm:text-sm text-slate-500 mt-1.5">
-          Nhập mã đơn hàng của bạn để kiểm tra vị trí thực tế của kiện hàng tại kho Tokyo, trên chuyến bay quốc tế hoặc đang giao tại Việt Nam.
+          Nhập mã đơn hàng của bạn để kiểm tra vị trí thực tế của kiện hàng tại kho Tokyo, đang vận chuyển quốc tế hoặc đang giao tại Việt Nam.
         </p>
       </div>
 

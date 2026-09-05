@@ -5,7 +5,7 @@ import {
   CreditCard, 
   ShoppingBag, 
   Warehouse, 
-  Plane, 
+  Globe, 
   Building2, 
   Truck, 
   CheckCircle,
@@ -38,9 +38,9 @@ const STEPS: { status: OrderStatus; label: string; subLabel: string; icon: React
   },
   {
     status: "IN_TRANSIT_AIR",
-    label: "4. Bay Quốc Tế",
-    subLabel: "Chuyến bay NRT ✈ HAN/SGN",
-    icon: <Plane className="w-5 h-5" />,
+    label: "4. Vận Chuyển Quốc Tế",
+    subLabel: "Chuyển tuyến Nhật ➔ VN",
+    icon: <Globe className="w-5 h-5" />,
   },
   {
     status: "WAREHOUSE_VN",

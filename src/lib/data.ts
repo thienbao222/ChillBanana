@@ -194,20 +194,20 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
 export const KIZUNA_NEWS: NewsItem[] = [
   {
     id: "news-01",
-    title: "Lịch Bay Hàng Tuần Tokyo ✈ Hà Nội & TP.HCM (Cập Nhật 2026)",
-    slug: "lich-bay-hang-tuan-tokyo-ha-noi-hcm-2026",
-    category: "LichBay",
-    categoryName: "Lịch Giao Vận",
-    excerpt: "Lịch cắt chuyến bay cố định vào Thứ 3, Thứ 5 và Chủ Nhật hàng tuần. Hàng về đến Việt Nam chỉ sau 3 - 5 ngày làm việc.",
-    coverImage: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=600&q=80",
-    readTime: "2 phút đọc",
-    publishedAt: "2026-09-01",
+    title: "Bí Quyết Săn Deal Giảm Giá Sâu Tới 50% Trên Amazon & Mercari Nhật Bản",
+    slug: "bi-quyet-san-deal-giam-gia-amazon-mercari-nhat",
+    category: "MeoSangSale",
+    categoryName: "Mẹo Săn Deal",
+    excerpt: "Cách săn coupon Prime Day, Black Friday Nhật và thương lượng giá với người bán trên Mercari JP để mua hàng chuẩn giá hời.",
+    coverImage: "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?auto=format&fit=crop&w=600&q=80",
+    readTime: "3 phút đọc",
+    publishedAt: "2026-09-02",
     content: `
-      Kizuna Order vận hành tuyến đường bay bay thẳng chuyên biệt kết hợp cùng Vietnam Airlines và ANA Cargo từ sân bay quốc tế Narita (NRT) & Haneda (HND) về sân bay Nội Bài (HAN) và Tân Sơn Nhất (SGN).
+      Săn hàng giảm giá nội địa Nhật Bản là cách tốt nhất để sở hữu sản phẩm cao cấp với chi phí tiết kiệm nhất.
       
-      - Thời gian cắt hàng tại kho Tokyo: 18:00 (Thứ Hai, Thứ Tư, Thứ Bảy).
-      - Thời gian bay & thông quan: 48 - 72 giờ.
-      - Cam kết đền bù 100% giá trị hàng hóa nếu xảy ra thất lạc hoặc hỏng hóc trong quá trình vận chuyển.
+      - Amazon Japan: Hãy theo dõi mục "Time Sale Festival" diễn ra hàng tháng và sử dụng extension Keepa để kiểm tra lịch sử biến động giá thực tế.
+      - Mercari JP: Thiên đường đồ second-hand và figure sưu tầm như mới (Like New). Khi mua qua ChillBanana, nhân viên tại Nhật sẽ hỗ trợ kiểm tra độ uy tín của người bán trước khi giao dịch.
+      - Mẹo gộp đơn: Gom các món phụ kiện nhỏ vào chung 1 kiện để tối ưu chi phí mở kiện và giảm 25% cước vận chuyển.
     `,
   },
   {
@@ -256,7 +256,7 @@ export const KIZUNA_NEWS: NewsItem[] = [
     publishedAt: "2026-08-15",
     content: `
       Khi mua những món hàng nhẹ dưới 300g như thỏi son, bút chì, hay 1 gói viên uống vitamin, chi phí vận chuyển tối thiểu có thể chiếm tỷ trọng lớn.
-      Với tính năng Gộp Đơn của Kizuna Order, các gói hàng nhỏ sẽ được đóng chung vào chuyến bay thứ 5 và chủ nhật, giúp bạn tiết kiệm cước đáng kể.
+      Với tính năng Gộp Đơn của ChillBanana, các gói hàng nhỏ sẽ được ghép chung kiện gửi định kỳ, giúp bạn tiết kiệm cước vận chuyển đáng kể.
     `,
   },
 ];

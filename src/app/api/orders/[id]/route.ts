@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { getOrderByCode, updateOrderStatus } from "@/lib/order-store";
 import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
@@ -8,8 +11,27 @@ export async function GET(
 ) {
   try {
     const orderCode = params.id;
-    const order = getOrderByCode(orderCode);
 
+    // 1. Kiểm tra CSDL Prisma
+    try {
+      const dbOrder = await prisma.order.findUnique({
+        where: { orderCode },
+        include: {
+          trackingLogs: {
+            orderBy: { createdAt: "desc" },
+          },
+        },
+      });
+
+      if (dbOrder) {
+        return NextResponse.json({ success: true, order: dbOrder });
+      }
+    } catch (dbErr) {
+      console.warn("Lỗi tra cứu Prisma Order:", dbErr);
+    }
+
+    // 2. Fallback sang store
+    const order = getOrderByCode(orderCode);
     if (!order) {
       return NextResponse.json(
         { error: "Không tìm thấy đơn hàng với mã này." },
@@ -35,6 +57,30 @@ export async function PATCH(
     const body = await req.json();
     const { status, title, description, location, jpTrack, vnTrack, weightKg } = body;
 
+    // 1. Cập nhật trong CSDL Prisma
+    try {
+      await prisma.order.update({
+        where: { orderCode },
+        data: {
+          status,
+          jpDomesticTrack: jpTrack !== undefined ? jpTrack : undefined,
+          vnDomesticTrack: vnTrack !== undefined ? vnTrack : undefined,
+          weightKg: weightKg !== undefined ? weightKg : undefined,
+          trackingLogs: {
+            create: {
+              status,
+              title: title || "Cập nhật tiến độ đơn hàng",
+              description: description || "Đơn hàng đã chuyển sang giai đoạn mới.",
+              location: location || "Việt Nam",
+            },
+          },
+        },
+      });
+    } catch (dbErr) {
+      console.warn("Lỗi cập nhật Prisma Order:", dbErr);
+    }
+
+    // 2. Cập nhật in-memory store
     const updated = updateOrderStatus(
       orderCode,
       status,

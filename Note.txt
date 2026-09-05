@@ -1,0 +1,6 @@
+1- Cập nhập Tỷ giá theo thời gian thực tế (Nhúng một đoạn mã JavaScript hoặc iFrame do trang gốc (như Vietcombank, giá vàng, thời tiết, ExchangeRate...) cung cấp sẵn.)
+2- Bỏ cập nhập chuyến bay
+3- Thiết kế FontEnd, BackEnd API, CSDL, Trang ADMin cần tính năng đăng nhập và 1 số tính năng quan trọng khác
+4- Bỏ AI chatbox theo dữ liệu sẵn, thay bằng Ai angent Gemini
+5- CSDL Cũng sẽ lưu và thống kê lịch sử trò chuyện để có thể nắm bắt được xu hướng khách hàng
+6- tối ưu lại thư mục

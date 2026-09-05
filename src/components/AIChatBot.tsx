@@ -23,16 +23,27 @@ interface Message {
 export default function AIChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [personality, setPersonality] = useState<AIPersonality>("omotenashi");
+  const [sessionId, setSessionId] = useState<string>("");
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Kính chào Quý khách! Em là ChillBanana AI - Trợ lý ảo tư vấn mua sắm và order hàng Nhật Bản kết nối Google Gemini 🍌. Em có thể hỗ trợ Quý khách: tra cứu thông tin sản phẩm từ link, tư vấn chọn size, lưu ý điện áp 100V, tính cước bay và mẹo gộp đơn tiết kiệm 25% cước ạ!",
+      text: "Kính chào Quý khách! Em là ChillBanana Gemini AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tư vấn sản phẩm nội địa Nhật, tra cứu thông tin sàn Amazon JP/Mercari, hướng dẫn chọn size, cảnh báo điện áp 100V, tính cước vận chuyển và mẹo gộp đơn giảm 25% cước ạ!",
       time: "Vừa xong",
     },
   ]);
+
+  useEffect(() => {
+    // Khởi tạo hoặc khôi phục sessionId
+    let sid = localStorage.getItem("chillbanana_chat_session_id");
+    if (!sid) {
+      sid = "session-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7);
+      localStorage.setItem("chillbanana_chat_session_id", sid);
+    }
+    setSessionId(sid);
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -92,6 +103,7 @@ export default function AIChatBot() {
         body: JSON.stringify({
           message: query,
           personality,
+          sessionId,
           history: conversationHistory,
         }),
       });

@@ -14,13 +14,13 @@ export default function NewsCorner() {
         <div>
           <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-banana-200">
             <Newspaper className="w-3.5 h-3.5 text-banana-600" />
-            <span>ChillBanana Cẩm Nang &amp; Lịch Bay</span>
+            <span>ChillBanana Cẩm Nang Mua Hàng Nhật</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-navy-900">
-            Kinh Nghiệm Săn Deal &amp; Lịch Vận Tải Hàng Tuần
+            Kinh Nghiệm Săn Deal &amp; Cẩm Nang Mua Sắm Nội Địa Nhật
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Cập nhật lịch bay cố định Narita ✈ Việt Nam, mẹo chọn size đồ Nhật và giải pháp biến áp cho đồ điện 100V.
+            Tổng hợp kinh nghiệm săn sale Amazon JP, mẹo chọn size đồ Uniqlo và giải pháp biến áp an toàn cho đồ điện 100V.
           </p>
         </div>
       </div>

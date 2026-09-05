@@ -105,14 +105,29 @@ model News {
   publishedAt DateTime @default(now())
 }
 
-// Lịch sử Chat AI Consultant
+// Quản trị viên hệ thống (Admin Authentication)
+model AdminUser {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String   @default("Quản Trị Viên ChillBanana")
+  role         String   @default("SUPER_ADMIN") // SUPER_ADMIN, OPERATOR
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// Lịch sử Chat AI Consultant & Phân tích xu hướng khách hàng
 model ChatSession {
-  id          String        @id @default(cuid())
-  sessionId   String        @unique
-  personality String        @default("omotenashi") // omotenashi (Nhật) hoặc vietnamese (Thân thiện)
-  messages    ChatMessage[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  id               String        @id @default(cuid())
+  sessionId        String        @unique
+  personality      String        @default("omotenashi") // omotenashi (Nhật) hoặc vietnamese (Thân thiện)
+  topic            String?       // Chủ đề chính (Mỹ phẩm, Thực phẩm chức năng, Gundam/Mô hình, Đồ điện tử, Vận chuyển...)
+  detectedKeywords String?       // Từ khóa khách hỏi: gundam, son dưỡng, nồi cơm 100V, cước bay...
+  sentiment        String?       // positive, inquiry, complaint
+  userIp           String?       // IP hoặc thiết bị khách hàng
+  messages         ChatMessage[]
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 }
 
 model ChatMessage {
@@ -121,5 +136,6 @@ model ChatMessage {
   chatSession   ChatSession @relation(fields: [sessionId], references: [sessionId], onDelete: Cascade)
   role          String      // "user" | "assistant" | "system"
   content       String
+  categoryTag   String?     // Tag phân loại sản phẩm / nhu cầu
   createdAt     DateTime    @default(now())
 }

@@ -5,20 +5,16 @@ import {
   Calculator, 
   ArrowRight, 
   ExternalLink, 
-  Package, 
   Sparkles, 
   AlertCircle, 
   CheckCircle2, 
   Users, 
-  Plane, 
-  ShieldCheck,
-  Zap,
-  Info,
+  ShieldCheck, 
+  Info, 
   RefreshCw,
-  Search
+  Activity
 } from "lucide-react";
 import { 
-  DEFAULT_EXCHANGE_RATE, 
   AIR_SHIPPING_PER_KG, 
   MIN_ORDER_THRESHOLD_VND, 
   calculateOrderPrice 
@@ -37,6 +33,11 @@ export default function OrderCalculator() {
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeSuccess, setScrapeSuccess] = useState(false);
   
+  // Tỷ giá thời gian thực tế
+  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [rateLoading, setRateLoading] = useState(false);
+  const [rateSource, setRateSource] = useState("Tỷ giá liên ngân hàng");
+
   // Trạng thái modal đặt hàng nhanh
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [customerName, setCustomerName] = useState("");
@@ -47,6 +48,43 @@ export default function OrderCalculator() {
   const [customerNote, setCustomerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
+
+  // Tải tỷ giá live từ API
+  const loadLiveRate = async () => {
+    setRateLoading(true);
+    try {
+      const res = await fetch("/api/exchange-rate");
+      const json = await res.json();
+      if (json.success && json.data?.roundedRate) {
+        setExchangeRate(json.data.roundedRate);
+        if (json.data.source) setRateSource(json.data.source);
+      }
+    } catch (err) {
+      console.warn("Could not fetch live rate:", err);
+    } finally {
+      setRateLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadLiveRate();
+
+    const handleSelectProduct = (e: any) => {
+      if (e.detail) {
+        if (e.detail.name) setProductName(e.detail.name);
+        if (e.detail.priceJpy) setPriceJpy(e.detail.priceJpy);
+        if (e.detail.weightKg) setWeightKg(e.detail.weightKg);
+        if (e.detail.imageUrl) setProductImage(e.detail.imageUrl);
+        if (e.detail.originalStore) setDetectedStore(e.detail.originalStore);
+        setScrapeSuccess(true);
+      }
+    };
+
+    window.addEventListener("chillbanana:select_product", handleSelectProduct);
+    return () => {
+      window.removeEventListener("chillbanana:select_product", handleSelectProduct);
+    };
+  }, []);
 
   // Hàm tự động cào dữ liệu từ URL thật
   const handleAutoScrape = async () => {
@@ -84,7 +122,7 @@ export default function OrderCalculator() {
     }
   };
 
-  const calc = calculateOrderPrice(priceJpy, weightKg, DEFAULT_EXCHANGE_RATE, isGroupBuy);
+  const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy);
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,11 +139,11 @@ export default function OrderCalculator() {
         customerPhone,
         customerAddress,
         originalUrl: productUrl || "https://amazon.co.jp",
-        productName: productName || "Đơn mua hộ tự do từ Nhật",
+        productName: productName || "Đơn mua hộ từ Nhật Bản",
         category,
         priceJpy,
         weightKg,
-        exchangeRate: DEFAULT_EXCHANGE_RATE,
+        exchangeRate,
         productPriceVnd: calc.productPriceVnd,
         serviceFeeVnd: calc.serviceFeeVnd,
         shippingFeeVnd: calc.shippingFeeVnd,
@@ -152,10 +190,10 @@ export default function OrderCalculator() {
           Dán Link Nhật - ChillBanana Báo Giá Trong 3 Giây
         </h2>
         <p className="mt-2 text-sm sm:text-base text-slate-600">
-          Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo Auctions... Tỷ giá Yên chuẩn xác, cước bay cố định, bảo hiểm 100%.
+          Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo Auctions... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
         </p>
 
-        {/* Chuyển đổi chiều mua: Nhật -> Việt hoặc Việt -> Nhật */}
+        {/* Chuyển đổi chiều mua */}
         <div className="mt-5 inline-flex p-1 bg-slate-200/80 rounded-2xl">
           <button
             onClick={() => setDirection("JP_TO_VN")}
@@ -236,7 +274,7 @@ export default function OrderCalculator() {
                     {productName}
                   </p>
                   <p className="text-[11px] text-emerald-700 font-semibold">
-                    ✓ Đã tự động cập nhật giá gốc: {priceJpy.toLocaleString()} ¥
+                    ✓ Đã cập nhật giá gốc: {priceJpy.toLocaleString()} ¥
                   </p>
                 </div>
               </div>
@@ -253,7 +291,7 @@ export default function OrderCalculator() {
                 type="text"
                 value={productName}
                 onChange={(e) => setProductName(e.target.value)}
-                placeholder="VD: Kem chống nắng Anessa / Nồi cơm Zojirushi"
+                placeholder="VD: Kem chống nắng Anessa / Mô hình Gundam"
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white"
               />
             </div>
@@ -283,7 +321,7 @@ export default function OrderCalculator() {
                   4. Giá Gốc Tại Nhật (¥ Yên)
                 </label>
                 <span className="text-xs text-banana-700 font-bold">
-                  ≈ {(priceJpy * DEFAULT_EXCHANGE_RATE).toLocaleString("vi-VN")} đ
+                  ≈ {(priceJpy * exchangeRate).toLocaleString("vi-VN")} đ
                 </span>
               </div>
               <div className="relative">
@@ -343,12 +381,12 @@ export default function OrderCalculator() {
                         Đơn hàng hiện tại ({calc.totalVnd.toLocaleString("vi-VN")} đ) chưa đạt hạn mức tối thiểu ({MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")} đ)
                       </p>
                       <p className="text-slate-600">
-                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến bay thứ 5 và chủ nhật, nhận ưu đãi giảm 25% cước bay!
+                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm 25% cước vận chuyển quốc tế!
                       </p>
                     </>
                   ) : (
                     <p className="font-bold text-emerald-900">
-                      Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện bay thẳng hỏa tốc!
+                      Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!
                     </p>
                   )}
 
@@ -362,7 +400,7 @@ export default function OrderCalculator() {
                     />
                     <span className="font-bold text-navy-900 flex items-center">
                       <Users className="w-3.5 h-3.5 mr-1 text-banana-600" />
-                      Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước bay cho kiện &lt; 0.5kg)
+                      Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước vận chuyển cho kiện &lt; 0.5kg)
                     </span>
                   </label>
                 </div>
@@ -371,17 +409,21 @@ export default function OrderCalculator() {
           </div>
         </div>
 
-        {/* Right Card: Realtime Price Breakdown & CTA (5 cols) */}
+        {/* Right Card: Realtime Price Breakdown with Live Rate */}
         <div className="lg:col-span-5 bg-navy-900 text-white p-6 sm:p-8 rounded-3xl shadow-xl relative overflow-hidden flex flex-col justify-between border border-slate-800">
           <div>
             <div className="flex justify-between items-center pb-4 border-b border-white/15">
               <span className="text-xs font-bold text-banana-400 uppercase tracking-wider flex items-center">
                 <ShieldCheck className="w-4 h-4 mr-1 text-banana-400" />
-                Chi Phí Trọn Gói ChillBanana
+                Bảng Kê Chi Phí Trọn Gói
               </span>
-              <span className="text-[11px] bg-white/10 px-2.5 py-0.5 rounded-full text-slate-300">
-                1 JPY = {DEFAULT_EXCHANGE_RATE} đ
-              </span>
+              <div className="flex items-center space-x-1.5 bg-white/10 px-2.5 py-1 rounded-full text-[11px] text-slate-300">
+                <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
+                <span>1 JPY = {exchangeRate} đ</span>
+                <button onClick={loadLiveRate} title="Cập nhật tỷ giá live">
+                  <RefreshCw className={`w-2.5 h-2.5 text-banana-300 ${rateLoading ? "animate-spin" : ""}`} />
+                </button>
+              </div>
             </div>
 
             {/* Chi tiết từng khoản phí */}
@@ -399,7 +441,7 @@ export default function OrderCalculator() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
-                  Cước bay JP ✈ VN ({weightKg} kg):
+                  Cước vận chuyển quốc tế ({weightKg} kg):
                   {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-25% Gộp</span>}
                 </span>
                 <span className="font-medium text-white">{calc.shippingFeeVnd.toLocaleString("vi-VN")} đ</span>

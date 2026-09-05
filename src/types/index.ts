@@ -2,7 +2,7 @@ export type OrderStatus =
   | "PENDING_DEPOSIT"  // Chờ đặt cọc
   | "PURCHASING_JP"    // Đang mua tại Nhật
   | "WAREHOUSE_JP"     // Đã về kho Tokyo/Osaka
-  | "IN_TRANSIT_AIR"   // Đang bay quốc tế JP -> VN
+  | "IN_TRANSIT_AIR"   // Đang vận chuyển quốc tế JP -> VN
   | "WAREHOUSE_VN"     // Đã về kho Hà Nội / TP.HCM
   | "LOCAL_DELIVERY"   // Đang giao hàng nội địa
   | "COMPLETED";       // Giao hàng thành công
@@ -72,4 +72,38 @@ export interface TrackingStep {
   date?: string;
   isDone: boolean;
   isCurrent: boolean;
+}
+
+export interface ChatSessionRecord {
+  id: string;
+  sessionId: string;
+  personality: AIPersonality;
+  topic?: string;
+  detectedKeywords?: string[];
+  sentiment?: string;
+  messageCount: number;
+  lastMessage: string;
+  createdAt: string;
+  updatedAt: string;
+  messages?: {
+    id: string;
+    role: "user" | "assistant";
+    content: string;
+    createdAt: string;
+  }[];
+}
+
+export interface TrendAnalytics {
+  totalChats: number;
+  totalMessages: number;
+  topKeywords: { keyword: string; count: number; category: string }[];
+  categoryBreakdown: { category: string; count: number; percentage: number }[];
+  recentSessions: ChatSessionRecord[];
+}
+
+export interface AdminAuthSession {
+  isAuthenticated: boolean;
+  username: string;
+  name: string;
+  role: string;
 }
