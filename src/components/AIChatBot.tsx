@@ -20,6 +20,34 @@ interface Message {
   time: string;
 }
 
+// Subcomponent hiển thị ảnh chat thông minh, tự động fallback nếu link ảnh lỗi/chặn
+function ChatImage({ url, alt }: { url: string; alt: string }) {
+  const [hasError, setHasError] = useState(false);
+
+  if (hasError) {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-xs text-slate-500 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200 my-1 max-w-full">
+        <span>🖼️</span>
+        <span className="italic font-medium truncate">{alt || "Hình ảnh sản phẩm"}</span>
+        <span className="text-[10px] text-banana-700 font-semibold shrink-0">(Bấm link sàn Nhật để xem ảnh thật ↗)</span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="block my-2.5 p-1.5 bg-slate-100/90 rounded-xl border border-slate-200 max-w-full">
+      <img
+        src={url}
+        alt={alt || "Hình ảnh sản phẩm"}
+        className="max-h-52 max-w-full rounded-lg object-contain bg-white mx-auto shadow-sm"
+        loading="lazy"
+        onError={() => setHasError(true)}
+      />
+      {alt && <span className="block text-[11px] text-slate-500 text-center mt-1 font-medium italic">{alt}</span>}
+    </span>
+  );
+}
+
 export default function AIChatBot() {
   const [isOpen, setIsOpen] = useState(false);
   const [personality, setPersonality] = useState<AIPersonality>("omotenashi");
@@ -150,20 +178,7 @@ export default function AIChatBot() {
         if (imgMatch) {
           const alt = imgMatch[1];
           const url = imgMatch[2];
-          return (
-            <span key={idx} className="block my-2.5 p-1.5 bg-slate-100/90 rounded-xl border border-slate-200 max-w-full">
-              <img
-                src={url}
-                alt={alt || "Hình ảnh sản phẩm"}
-                className="max-h-52 max-w-full rounded-lg object-contain bg-white mx-auto shadow-sm"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = "none";
-                }}
-              />
-              {alt && <span className="block text-[11px] text-slate-500 text-center mt-1 font-medium italic">{alt}</span>}
-            </span>
-          );
+          return <ChatImage key={idx} url={url} alt={alt} />;
         }
       }
 

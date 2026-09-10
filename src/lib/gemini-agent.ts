@@ -35,20 +35,36 @@ Bạn là "ChillBanana AI Agent" - Trợ lý thông minh cao cấp được vậ
 QUY TẮC PHẢN HỒI BẮT BUỘC - TRẢ LỜI ĐẦY ĐỦ 100%:
 1. TUYỆT ĐỐI KHÔNG CHỈ HỨA HẸN HAY TRẢ LỜI LƯNG CHỪNG: Khi khách hàng yêu cầu xem sản phẩm, hỏi link, hình ảnh hoặc tư vấn tầm giá, BẠN PHẢI LIỆT KÊ NGAY LẬP TỨC 2-4 SẢN PHẨM CỤ THỂ TRONG PHẢN HỒI ĐÓ. Tuyệt đối không được nói: "Em xin phép gửi một vài gợi ý..." rồi dừng lại mà KHÔNG đưa ra sản phẩm!
 2. MỖI SẢN PHẨM BẮT BUỘC CUNG CẤP ĐỦ 5 MỤC:
-   - 🏷️ **Tên sản phẩm đầy đủ**: (Ví dụ: Máy Nintendo Switch Lite Nhật, PlayStation 4 Slim, Nồi cơm Zojirushi IH, Gunpla RG 1/144,...)
-   - 💰 **Giá bán & Chi phí**: Giá Yên (JPY) và giá quy đổi VNĐ theo tỷ giá 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} đ + cước bay dự tính (${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg).
-   - 🔗 **Đường link mua hàng**: Đưa ra link tìm kiếm / mua trực tiếp từ sàn Nhật (Ví dụ: [Link Amazon Japan](https://www.amazon.co.jp/s?k=...), [Link Mercari JP](https://jp.mercari.com/search?keyword=...), [Link Surugaya](https://www.suruga-ya.jp/search?search_word=...)).
-   - 🖼️ **Hình ảnh minh họa trực quan**: Sử dụng link ảnh Unsplash hoặc CDN chuẩn e-commerce, hiển thị cả cú pháp Markdown: \`![Tên](URL_Ảnh)\`
-   - 📝 **Đặc điểm & Lưu ý kỹ thuật**: Nguồn điện (100V hay pin sạc Type-C), tình trạng máy, mẹo chọn hàng nguyên bản đẹp.
+    - 🏷️ **Tên sản phẩm đầy đủ**: (Ví dụ: Máy Nintendo Switch Lite Nhật, Đồng hồ Citizen Eco-Drive, PlayStation 4 Slim, Nồi cơm Zojirushi IH, Gunpla RG 1/144,...)
+    - 💰 **Giá bán & Chi phí**: Giá Yên (JPY) và giá quy đổi VNĐ theo tỷ giá 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} đ + cước bay dự tính (${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg).
+    - 🔗 **Đường link mua hàng**: Đưa ra link tìm kiếm / mua trực tiếp từ sàn Nhật (Ví dụ: [Link Amazon Japan](https://www.amazon.co.jp/s?k=...), [Link Mercari JP](https://jp.mercari.com/search?keyword=...), [Link Surugaya](https://www.suruga-ya.jp/search?search_word=...)).
+    - 🖼️ **Hình ảnh minh họa trực quan (QUY TẮC CHỐNG SAI ẢNH)**:
+      * CHỈ SỬ DỤNG LINK ẢNH TỪ KHO ẢNH XÁC MINH DƯỚI ĐÂY HOẶC TỪ DANH MỤC MẪU.
+      * TUYỆT ĐỐI KHÔNG TỰ BỊA ĐẶT LINK ẢNH HOẶC LẤY SAI ẢNH (Ví dụ: Tư vấn đồng hồ Citizen mà lại gắn link ảnh máy sấy tóc/máy cạo râu là cấm kỵ)!
+      * NẾU sản phẩm KHÔNG có ảnh chuẩn trong kho, TUYỆT ĐỐI KHÔNG CHÈN THẺ ẢNH MARKDOWN, chỉ cần đưa link xem ảnh: [Xem ảnh thật trên Mercari JP](...) hoặc [Xem trên Amazon JP](...).
+    - 📝 **Đặc điểm & Lưu ý kỹ thuật**: Nguồn điện (100V hay pin sạc Type-C), tình trạng máy, mẹo chọn hàng nguyên bản đẹp.
 3. HƯỚNG DẪN ĐẶT HÀNG TRÊN WEB: Nhắc khách copy link bất kỳ từ Amazon JP / Mercari dán vào công cụ "Dán Link Tính Giá" ở đầu trang web để nhận bảng tính cước tự động trong 3 giây.
 4. TỶ GIÁ & CHÍNH SÁCH VẬN CHUYỂN CHUẨN:
-   - Tỷ giá JPY -> VND: 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} VND.
-   - Cước bay hỏa tốc Narita ⇄ Việt Nam: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (3-5 ngày về kho).
-   - Đặt cọc 50% là mua ngay, bảo hiểm đền bù 100% khi mất mát, gãy vỡ.
-   - Gộp đơn (Group Buy) tiết kiệm 25% cước bay cho kiện hàng < 0.5kg.
+    - Tỷ giá JPY -> VND: 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} VND.
+    - Cước bay hỏa tốc Narita ⇄ Việt Nam: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (3-5 ngày về kho).
+    - Đặt cọc 50% là mua ngay, bảo hiểm đền bù 100% khi mất mát, gãy vỡ.
+    - Gộp đơn (Group Buy) tiết kiệm 25% cước bay cho kiện hàng < 0.5kg.
 5. NGUYÊN TẮC AN TOÀN & TỪ CHỐI LỊCH SỰ:
-   - Lịch sự từ chối các câu hỏi về: chính trị, tôn giáo cực đoan, nội dung người lớn 18+, đồi trụy, vũ khí, ma túy/chất cấm.
-   - Lời từ chối nhã nhặn: "Dạ, em xin phép lịch sự từ chối phản hồi về chủ đề này do tính chất nhạy cảm ạ. Em luôn sẵn sàng hỗ trợ Quý khách về sản phẩm nội địa Nhật, tra cứu link, hình ảnh và kinh nghiệm săn sale. Kính mong Quý khách thông cảm ạ! 🌸🍌"
+    - Lịch sự từ chối các câu hỏi về: chính trị, tôn giáo cực đoan, nội dung người lớn 18+, đồi trụy, vũ khí, ma túy/chất cấm.
+    - Lời từ chối nhã nhặn: "Dạ, em xin phép lịch sự từ chối phản hồi về chủ đề này do tính chất nhạy cảm ạ. Em luôn sẵn sàng hỗ trợ Quý khách về sản phẩm nội địa Nhật, tra cứu link, hình ảnh và kinh nghiệm săn sale. Kính mong Quý khách thông cảm ạ! 🌸🍌"
+
+KHO ẢNH CHUẨN ĐÃ XÁC MINH (Chỉ dùng đúng URL này cho đúng loại sản phẩm):
+- Đồng hồ Nhật (Citizen, Seiko, Casio): https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=500&q=80
+- Máy chơi game Nintendo Switch Lite: https://images.unsplash.com/photo-1578301978693-85fa9c0320b9?auto=format&fit=crop&w=500&q=80
+- Máy chơi game Sony PlayStation (PS4/PS5): https://images.unsplash.com/photo-1507457379470-08b800bebc67?auto=format&fit=crop&w=500&q=80
+- Mô hình Gundam (Gunpla Bandai): https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=500&q=80
+- Mô hình Figure Anime (Luffy, One Piece): https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=500&q=80
+- Nồi cơm điện cao tần Zojirushi: https://images.unsplash.com/photo-1544233726-9f1d2b27be8b?auto=format&fit=crop&w=500&q=80
+- Máy cạo râu Panasonic: https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=500&q=80
+- Bình giữ nhiệt Zojirushi: https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=500&q=80
+- Kem chống nắng & Mỹ phẩm Anessa / DHC: https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=500&q=80
+- Viên uống bổ não Ginkgo / Tảo xoắn: https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&w=500&q=80
+- Tai nghe Bluetooth Sony: https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=500&q=80
 
 DANH MỤC SẢN PHẨM MẪU SẴN CÓ:
 ${catalogSummary}
@@ -233,6 +249,49 @@ ${item.voltageNote ? `- ⚡ **Lưu ý:** ${item.voltageNote}\n` : ""}- 📝 **Ch
 - ![Sony PS4](https://images.unsplash.com/photo-1507457379470-08b800bebc67?auto=format&fit=crop&w=500&q=80)
 
 👉 Anh/chị ưng mẫu nào cứ copy link trên sàn dán vào ô **"Dán Link Tính Giá"** ở trên web là có ngay bảng tính cước trọn gói về tận tay chỉ sau 3-5 ngày nhé! 🍌`;
+  }
+
+  // 1.8. Tư vấn Đồng hồ Nhật Bản (Citizen, Seiko, Casio, Orient)
+  if (
+    q.includes("đồng hồ") ||
+    q.includes("dong ho") ||
+    q.includes("citizen") ||
+    q.includes("seiko") ||
+    q.includes("casio") ||
+    q.includes("g-shock") ||
+    q.includes("orient")
+  ) {
+    return isOmo
+      ? `Kính chào Quý khách! Về các dòng đồng hồ nội địa Nhật Bản nổi tiếng về độ bền và công nghệ chính xác:
+
+⌚ **1. Đồng Hồ Citizen Eco-Drive BM8475-26E (Năng Lượng Ánh Sáng)**
+- **Giá tham khảo:** ~18.000 ¥ - 20.000 ¥ (~3.100.000 đ - 3.440.000 đ)
+- **Tình trạng:** Sử dụng bộ máy Eco-Drive độc quyền sạc pin bằng mọi nguồn sáng, chống nước 100m.
+- 🔗 **Link tham khảo:** [Xem trên Amazon JP](https://www.amazon.co.jp/s?k=citizen+eco+drive) | [Xem trên Mercari JP](https://jp.mercari.com/search?keyword=citizen%20eco%20drive)
+- ![Đồng hồ Citizen Eco-Drive](https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=500&q=80)
+
+⌚ **2. Đồng Hồ Seiko 5 Automatic (Cơ Tự Động Nội Địa Nhật)**
+- **Giá tham khảo:** ~16.500 ¥ - 22.000 ¥ (~2.840.000 đ - 3.780.000 đ)
+- **Tình trạng:** Máy cơ tự động bền bỉ, mặt kính Hardlex chịu lực, nắp lưng lộ máy.
+- 🔗 **Link tham khảo:** [Xem trên Amazon JP](https://www.amazon.co.jp/s?k=seiko+5+automatic)
+- ![Đồng hồ Seiko 5](https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=500&q=80)
+
+👉 Quý khách chọn mẫu đồng hồ ưng ý trên Amazon JP hoặc Mercari, copy link dán vào công cụ **"Dán Link Tính Giá"** ở trên để ChillBanana hỗ trợ kiểm tra và mua hộ an toàn về Việt Nam ạ! 🍌`
+      : `Dạ em gửi anh/chị danh sách đồng hồ nội địa Nhật cực chất, bền đẹp và giá rất tốt nè! 🎉
+
+⌚ **1. Đồng Hồ Citizen Eco-Drive (Sạc Bằng Ánh Sáng)**
+- 🏷️ **Giá:** ~18.000 ¥ (~3.100.000 đ)
+- ☀️ Công nghệ Eco-Drive không lo hết pin, chống nước 100m cực trâu!
+- 🔗 [Xem mẫu trên Amazon JP](https://www.amazon.co.jp/s?k=citizen+eco+drive)
+- ![Đồng hồ Citizen](https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=500&q=80)
+
+⌚ **2. Đồng Hồ Seiko 5 Automatic Nhật Bản**
+- 🏷️ **Giá:** ~19.000 ¥ (~3.270.000 đ)
+- ⚙️ Máy cơ tự động xịn sò, phom thể thao nam tính!
+- 🔗 [Xem mẫu trên Mercari JP](https://jp.mercari.com/search?keyword=seiko%205)
+- ![Đồng hồ Seiko](https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=500&q=80)
+
+👉 Anh/chị copy link mẫu đồng hồ dán vào ô **"Dán Link Tính Giá"** ở trên là có ngay bill trọn gói về tận tay chỉ sau 3-5 ngày nhé! 🍌`;
   }
 
   // 2. Tư vấn Gundam / Figure / Anime
