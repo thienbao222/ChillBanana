@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, Zap, Flame, ShoppingBag, ExternalLink, RefreshCw } from "lucide-react";
+import { Sparkles, Zap, Flame, ShoppingBag, ExternalLink, RefreshCw, ShoppingCart, Plus } from "lucide-react";
 import { CURATED_PRODUCTS } from "@/lib/data";
 import { CuratedProduct } from "@/types";
+import { useCart } from "@/context/CartContext";
+
 
 export default function CuratedProducts() {
+  const { addToCart } = useCart();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+
   const [products, setProducts] = useState<CuratedProduct[]>(CURATED_PRODUCTS);
   const [loading, setLoading] = useState(false);
 
@@ -50,7 +54,7 @@ export default function CuratedProducts() {
   };
 
   return (
-    <section className="py-12 w-full px-4 sm:px-8 lg:px-12">
+    <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <div>
           <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-banana-200">
@@ -186,13 +190,35 @@ export default function CuratedProducts() {
                   </p>
                 </div>
 
-                <button
-                  onClick={() => handleOrderThis(product)}
-                  className="p-3 rounded-2xl bg-slate-100 hover:bg-banana-500 text-slate-700 hover:text-navy-950 transition-colors"
-                  title="Đặt mua sản phẩm này"
-                >
-                  <ShoppingBag className="w-4 h-4" />
-                </button>
+                <div className="flex items-center space-x-1.5">
+                  <button
+                    onClick={() =>
+                      addToCart({
+                        id: product.id,
+                        name: product.name,
+                        priceJpy: product.priceJpy,
+                        priceVnd: product.priceVnd,
+                        weightKg: product.weightKg,
+                        imageUrl: product.imageUrl,
+                        originalStore: product.originalStore,
+                        category: product.category,
+                      })
+                    }
+                    className="p-2.5 rounded-xl bg-banana-50 hover:bg-banana-500 text-banana-800 hover:text-navy-950 border border-banana-200 transition-colors"
+                    title="Thêm vào giỏ hàng"
+                  >
+                    <ShoppingCart className="w-4 h-4" />
+                  </button>
+
+                  <button
+                    onClick={() => handleOrderThis(product)}
+                    className="px-3 py-2 rounded-xl bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center gap-1"
+                    title="Tính giá và đặt ngay"
+                  >
+                    <ShoppingBag className="w-3.5 h-3.5" />
+                    <span>Mua ngay</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

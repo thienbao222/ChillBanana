@@ -51,7 +51,7 @@ function TrackingContent() {
   };
 
   useEffect(() => {
-    const codeParam = searchParams.get("code");
+    const codeParam = searchParams.get("code") || searchParams.get("orderCode");
     if (codeParam) {
       setSearchCode(codeParam);
       fetchOrder(codeParam);
@@ -318,7 +318,7 @@ function TrackingContent() {
 
 export default function TrackingPage() {
   return (
-    <div className="py-10 w-full px-4 sm:px-8 lg:px-12 space-y-8">
+    <div className="py-10 max-w-[1600px] w-[95%] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
       {/* Header */}
       <div className="text-center max-w-3xl mx-auto">
         <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-900 bg-banana-100 border border-banana-200 px-3 py-1 rounded-full uppercase tracking-wider mb-2">

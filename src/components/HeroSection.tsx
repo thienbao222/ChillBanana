@@ -11,7 +11,7 @@ export default function HeroSection() {
       <div className="absolute top-0 right-0 -mr-20 -mt-20 w-96 h-96 rounded-full bg-banana-200/40 blur-3xl pointer-events-none" />
       <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-96 h-96 rounded-full bg-amber-100/40 blur-3xl pointer-events-none" />
 
-      <div className="w-full px-4 sm:px-8 lg:px-12 relative z-10">
+      <div className="max-w-[1600px] w-[95%] mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
           
           {/* Left Hero Content (7 cols) */}
@@ -27,16 +27,16 @@ export default function HeroSection() {
             <h1 className="text-3xl sm:text-4xl lg:text-5xl font-serif font-extrabold text-navy-900 tracking-tight leading-[1.2]">
               Ủy Thác Mua Hộ Hàng Nhật <br className="hidden sm:inline" />
               <span className="bg-gradient-to-r from-banana-600 via-amber-500 to-banana-500 bg-clip-text text-transparent">
-                Tự Động Bóc Tách Link &amp; Gemini AI
+                Tự Động Bóc Tách Link &amp; ChillBanana AI
               </span>
             </h1>
 
             {/* Subtitle */}
             <p className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo Auctions</strong> — Hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <strong>tỷ giá ngân hàng trực tiếp</strong>, tích hợp <strong>Trợ lý Gemini AI Agent</strong> tư vấn 24/7 và giải pháp <strong>Gộp đơn tiết kiệm 25% cước</strong>.
+              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo Auctions</strong> — Hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <strong>tỷ giá ngân hàng trực tiếp</strong>, tích hợp <strong>Trợ lý ChillBanana AI Agent</strong> tư vấn 24/7 và giải pháp <strong>Gộp đơn tiết kiệm 25% cước</strong>.
             </p>
 
-            {/* Key Value Badges (Đã bỏ toàn bộ thông tin chuyến bay) */}
+            {/* Key Value Badges */}
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1 text-xs text-slate-700 font-medium">
               <span className="inline-flex items-center bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 mr-1.5" />
@@ -71,7 +71,7 @@ export default function HeroSection() {
                 className="w-full sm:w-auto px-6 py-3.5 bg-white hover:bg-slate-50 text-navy-900 border border-slate-200 font-bold text-sm rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2"
               >
                 <Bot className="w-4 h-4 text-banana-600" />
-                <span>Trò Chuyện Cùng Gemini AI</span>
+                <span>Trò Chuyện Cùng ChillBanana AI</span>
               </button>
             </div>
           </div>

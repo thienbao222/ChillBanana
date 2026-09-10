@@ -268,9 +268,9 @@ export default function AIChatBot() {
         {isOpen ? (
           <X className="w-6 h-6 text-white" />
         ) : (
-          <div className="flex items-center space-x-2 px-1">
+          <div className="flex items-center space-x-1.5 px-1">
             <span className="text-xl">🍌</span>
-            <span className="hidden sm:inline text-xs font-extrabold font-serif pr-1 text-navy-950">Gemini AI</span>
+            <span className="inline text-xs font-extrabold font-serif pr-1 text-navy-950 tracking-tight">ChillBanana AI</span>
           </div>
         )}
       </button>
@@ -288,10 +288,10 @@ export default function AIChatBot() {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold font-serif flex items-center">
-                    ChillBanana Gemini AI
+                    ChillBanana AI
                     <span className="ml-1.5 w-2 h-2 rounded-full bg-emerald-400 inline-block" />
                   </h3>
-                  <p className="text-[10px] text-banana-300">Trợ lý mua sắm Nhật Bản 24/7 (Gemini 2.5 Flash)</p>
+                  <p className="text-[10px] text-banana-300">Trợ lý mua sắm Nhật Bản 24/7 (AI Agent 2.5)</p>
                 </div>
               </div>
 

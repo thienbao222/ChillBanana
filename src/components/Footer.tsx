@@ -5,7 +5,7 @@ import { ShieldCheck, MapPin, Phone, Mail, Clock } from "lucide-react";
 export default function Footer() {
   return (
     <footer className="bg-navy-900 text-white pt-14 pb-8 border-t border-slate-800">
-      <div className="w-full px-4 sm:px-8 lg:px-12">
+      <div className="max-w-[1600px] w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pb-10 border-b border-white/10 text-xs text-slate-300">
           {/* Col 1: Brand & Intro */}
           <div className="space-y-4">
@@ -18,7 +18,7 @@ export default function Footer() {
               </span>
             </div>
             <p className="leading-relaxed text-slate-300">
-              Nền tảng thương mại điện tử mua hộ và ủy thác order hàng nội địa Nhật Bản tích hợp trợ lý Google Gemini AI tư vấn 24/7, bóc tách link tự động và thanh toán VietQR Napas 247.
+              Nền tảng thương mại điện tử mua hộ và ủy thác order hàng nội địa Nhật Bản tích hợp trợ lý ChillBanana AI tư vấn 24/7, bóc tách link tự động và thanh toán VietQR Napas 247.
             </p>
             <div className="pt-1">
               <span className="inline-block bg-white/10 text-banana-300 text-[11px] px-3 py-1 rounded-full font-bold">

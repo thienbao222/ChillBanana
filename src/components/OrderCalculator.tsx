@@ -19,8 +19,14 @@ import {
   MIN_ORDER_THRESHOLD_VND, 
   calculateOrderPrice 
 } from "@/lib/data";
+import { ShoppingCart } from "lucide-react";
+import { useCart } from "@/context/CartContext";
+import { useAuth } from "@/context/AuthContext";
 
 export default function OrderCalculator() {
+  const { addToCart } = useCart();
+  const { customer } = useAuth();
+
   const [direction, setDirection] = useState<"JP_TO_VN" | "VN_TO_JP">("JP_TO_VN");
   const [productUrl, setProductUrl] = useState("");
   const [productName, setProductName] = useState("");
@@ -48,6 +54,16 @@ export default function OrderCalculator() {
   const [customerNote, setCustomerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
+
+  // Auto-fill from customer account if logged in
+  useEffect(() => {
+    if (customer) {
+      if (customer.name && !customerName) setCustomerName(customer.name);
+      if (customer.email && !customerEmail) setCustomerEmail(customer.email);
+      if (customer.phone && !customerPhone) setCustomerPhone(customer.phone);
+      if (customer.address && !customerAddress) setCustomerAddress(customer.address);
+    }
+  }, [customer]);
 
   // Tải tỷ giá live từ API
   const loadLiveRate = async () => {
@@ -176,7 +192,7 @@ export default function OrderCalculator() {
   };
 
   return (
-    <section id="calculator" className="relative py-12 px-4 sm:px-8 lg:px-12 w-full">
+    <section id="calculator" className="relative py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
       {/* Background Decor */}
       <div className="absolute inset-0 bg-gradient-to-b from-banana-50/50 to-white -z-10 rounded-3xl border border-banana-200 shadow-sm" />
 
@@ -473,16 +489,41 @@ export default function OrderCalculator() {
           </div>
 
           {/* CTA Buttons */}
-          <div className="mt-8 space-y-3">
-            <button
-              onClick={() => setShowOrderModal(true)}
-              className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2 group"
-            >
-              <span>Tiến Hành Đặt Mua Hộ Ngay</span>
-              <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-            </button>
+          <div className="mt-8 space-y-2.5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  addToCart({
+                    id: "calc-" + Date.now(),
+                    name: productName || "Sản phẩm mua hộ Nhật Bản",
+                    priceJpy,
+                    priceVnd: calc.productPriceVnd,
+                    weightKg,
+                    imageUrl: productImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80",
+                    originalStore: detectedStore || "Sàn thương mại Nhật Bản",
+                    originalUrl: productUrl || undefined,
+                    category,
+                  });
+                }}
+                className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
+              >
+                <ShoppingCart className="w-4 h-4 text-banana-400" />
+                <span>Thêm Vào Giỏ Hàng</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowOrderModal(true)}
+                className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
+              >
+                <span>Đặt Cọc & Mua Ngay</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
 
             <button
+              type="button"
               onClick={() => {
                 const chatToggle = document.getElementById("ai-chat-toggle-btn");
                 if (chatToggle) chatToggle.click();
@@ -490,7 +531,7 @@ export default function OrderCalculator() {
               className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5"
             >
               <Sparkles className="w-3.5 h-3.5 text-banana-400" />
-              <span>Hỏi Gemini AI tư vấn về sản phẩm này</span>
+              <span>Hỏi ChillBanana AI tư vấn về sản phẩm này</span>
             </button>
           </div>
         </div>
