@@ -136,65 +136,111 @@ export default function AIChatBot() {
     }
   };
 
-  // Helper parse markdown ảnh và link thành giao diện trực quan
+  // Helper parse markdown inline (bold, links, images)
+  const parseInlineFormatting = (text: string) => {
+    const tokenRegex = /(!\[.*?\]\(https?:\/\/[^\s\)]+\)|\[.*?\]\(https?:\/\/[^\s\)]+\)|\*\*.*?\*\*)/g;
+    const parts = text.split(tokenRegex);
+
+    return parts.map((chunk, idx) => {
+      if (!chunk) return null;
+
+      // 1. Ảnh Markdown: ![alt](url)
+      if (chunk.startsWith("![") && chunk.endsWith(")")) {
+        const imgMatch = chunk.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/);
+        if (imgMatch) {
+          const alt = imgMatch[1];
+          const url = imgMatch[2];
+          return (
+            <span key={idx} className="block my-2.5 p-1.5 bg-slate-100/90 rounded-xl border border-slate-200 max-w-full">
+              <img
+                src={url}
+                alt={alt || "Hình ảnh sản phẩm"}
+                className="max-h-52 max-w-full rounded-lg object-contain bg-white mx-auto shadow-sm"
+                loading="lazy"
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+              {alt && <span className="block text-[11px] text-slate-500 text-center mt-1 font-medium italic">{alt}</span>}
+            </span>
+          );
+        }
+      }
+
+      // 2. Link Markdown: [text](url)
+      if (chunk.startsWith("[") && chunk.endsWith(")")) {
+        const linkMatch = chunk.match(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/);
+        if (linkMatch) {
+          const linkText = linkMatch[1];
+          const linkUrl = linkMatch[2];
+          return (
+            <a
+              key={idx}
+              href={linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center text-banana-700 hover:text-banana-800 underline font-semibold mx-1 bg-banana-50 px-1.5 py-0.5 rounded transition-colors"
+            >
+              <span>{linkText}</span>
+              <span className="text-[10px] ml-0.5">↗</span>
+            </a>
+          );
+        }
+      }
+
+      // 3. Bold text: **text**
+      if (chunk.startsWith("**") && chunk.endsWith("**") && chunk.length >= 4) {
+        return (
+          <strong key={idx} className="font-semibold text-navy-950">
+            {chunk.slice(2, -2)}
+          </strong>
+        );
+      }
+
+      // 4. Plain text
+      return <span key={idx}>{chunk}</span>;
+    });
+  };
+
+  // Helper parse markdown ảnh, link, tiêu đề thành giao diện trực quan hoàn chỉnh
   const renderFormattedMessage = (content: string) => {
-    // Tách dòng
     const lines = content.split("\n");
     return lines.map((line, lIdx) => {
-      // 1. Kiểm tra ảnh markdown ![alt](url)
-      const imgMatch = line.match(/!\[(.*?)\]\((https?:\/\/.*?)\)/);
-      if (imgMatch) {
+      const trimmed = line.trim();
+
+      // Dải phân cách ---
+      if (trimmed === "---" || trimmed === "***" || trimmed === "___") {
+        return <hr key={lIdx} className="my-2.5 border-slate-200" />;
+      }
+
+      // Tiêu đề ###
+      if (trimmed.startsWith("### ")) {
         return (
-          <div key={lIdx} className="my-2 p-1.5 bg-slate-100 rounded-xl border border-slate-200 inline-block max-w-full">
-            <img
-              src={imgMatch[2]}
-              alt={imgMatch[1] || "Hình ảnh sản phẩm"}
-              className="max-h-48 max-w-full rounded-lg object-contain bg-white mx-auto shadow-sm"
-              loading="lazy"
-              onError={(e) => {
-                (e.target as HTMLElement).style.display = "none";
-              }}
-            />
-            {imgMatch[1] && <p className="text-[10px] text-slate-500 text-center mt-1 font-semibold">{imgMatch[1]}</p>}
-          </div>
+          <h4 key={lIdx} className="font-bold text-sm text-navy-950 mt-3 mb-1 border-b border-banana-200 pb-1 flex items-center gap-1.5">
+            <span className="w-1.5 h-3.5 bg-banana-500 rounded-full inline-block"></span>
+            <span>{parseInlineFormatting(trimmed.substring(4))}</span>
+          </h4>
         );
       }
 
-      // 2. Kiểm tra link markdown [text](url)
-      const parts = [];
-      let lastIdx = 0;
-      const linkRegex = /\[(.*?)\]\((https?:\/\/.*?)\)/g;
-      let match;
-
-      while ((match = linkRegex.exec(line)) !== null) {
-        if (match.index > lastIdx) {
-          parts.push(line.substring(lastIdx, match.index));
-        }
-        const linkText = match[1];
-        const linkUrl = match[2];
-        parts.push(
-          <a
-            key={match.index}
-            href={linkUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center text-banana-700 hover:text-banana-800 underline font-bold mx-0.5"
-          >
-            <span>{linkText}</span>
-            <span className="text-[10px] ml-0.5">↗</span>
-          </a>
+      // Tiêu đề ##
+      if (trimmed.startsWith("## ")) {
+        return (
+          <h3 key={lIdx} className="font-bold text-base text-navy-950 mt-3.5 mb-1.5">
+            {parseInlineFormatting(trimmed.substring(3))}
+          </h3>
         );
-        lastIdx = match.index + match[0].length;
-      }
-
-      if (lastIdx < line.length) {
-        parts.push(line.substring(lastIdx));
       }
 
       return (
-        <span key={lIdx} className="block">
-          {parts.length > 0 ? parts : line}
-        </span>
+        <div
+          key={lIdx}
+          className={`min-h-[1.25rem] leading-relaxed ${
+            trimmed.startsWith("- ") || trimmed.startsWith("* ") ? "pl-2" : ""
+          }`}
+        >
+          {parseInlineFormatting(line)}
+        </div>
       );
     });
   };

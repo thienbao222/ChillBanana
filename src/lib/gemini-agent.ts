@@ -107,7 +107,10 @@ export async function askGeminiAgent(
             contents,
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: 2048,
+              maxOutputTokens: 8192,
+              thinkingConfig: {
+                thinkingBudget: 0,
+              },
             },
           }),
         }
@@ -115,7 +118,12 @@ export async function askGeminiAgent(
 
       if (response.ok) {
         const data = await response.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+        const candidate = data?.candidates?.[0];
+        const finishReason = candidate?.finishReason;
+        const text = candidate?.content?.parts?.[0]?.text;
+        
+        console.log(`[Gemini 2.5] FinishReason: ${finishReason}, token count: ${data?.usageMetadata?.candidatesTokenCount}`);
+        
         if (text && text.trim().length > 0) {
           return text.trim();
         }
@@ -230,14 +238,46 @@ ${item.voltageNote ? `- ⚡ **Lưu ý:** ${item.voltageNote}\n` : ""}- 📝 **Ch
   // 2. Tư vấn Gundam / Figure / Anime
   if (q.includes("gundam") || q.includes("gunpla") || q.includes("figure") || q.includes("anime") || q.includes("mô hình") || q.includes("bandai")) {
     return isOmo
-      ? `Kính chào Quý khách! Về mô hình Gundam Bandai và Anime Figure chính hãng tại Nhật:
-- **Nguồn hàng uy tín:** ChillBanana mua trực tiếp tại Amazon JP, Surugaya, AmiAmi, Premium Bandai.
-- **Bảo hiểm hàng hóa:** Các kiện mô hình luôn được bọc xốp bóng khí chống sốc 4 lớp, cam kết giữ nguyên seal hộp góc cạnh 100%.
-- **Chi phí & Vận chuyển:** Tỷ giá ưu đãi 1 JPY ≈ ${DEFAULT_EXCHANGE_RATE} đ, cước bay quốc tế Tokyo-VN ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg.
-Quý khách dán link mô hình vào thanh "Dán Link Tính Giá" ở đầu trang, hệ thống sẽ tự động bóc tách giá Yên và tính bill trọn gói ngay ạ! 🍌`
-      : `Chào bạn fan cứng Gundam & Figure nè! 🤖 ChillBanana chuyên săn các dòng Gunpla Bandai (RG, MG, HG, PG) và Figure chính hãng giá siêu mềm từ Amazon JP, AmiAmi và Surugaya nhé!
-- 🛡️ Đóng gói bọc bóng khí 4 lớp bảo vệ hộp zin góc cạnh, không lo móp méo!
-- ✈️ Cước bay chỉ ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg, hàng về cực nhanh 3-5 ngày.
+      ? `Kính chào Quý khách! Về thế giới mô hình Gundam Bandai và Figure chính hãng tại Nhật Bản, Em xin phép gửi đến Quý khách các mẫu Gunpla kinh điển rất được ưa chuộng kèm thông tin chi tiết:
+
+🤖 **1. Mô Hình Gunpla RG 1/144 Strike Freedom Gundam**
+- **Giá tham khảo:** ~3.000 ¥ - 3.800 ¥ (~516.000 đ - 653.000 đ)
+- **Tình trạng:** Khung xương Advanced MS Joint sắc nét, cánh Super Dragoon tháo rời cực đẹp.
+- 🔗 **Link tham khảo:** [Xem trên Surugaya JP](https://www.suruga-ya.jp/search?search_word=rg+strike+freedom) | [Xem trên Mercari JP](https://jp.mercari.com/search?keyword=rg%20strike%20freedom)
+- ![RG 1/144 Strike Freedom](https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=500&q=80)
+
+🤖 **2. Mô Hình Gunpla MG 1/100 RX-93 Nu Gundam Ver.Ka**
+- **Giá tham khảo:** ~7.500 ¥ - 8.500 ¥ (~1.290.000 đ - 1.462.000 đ)
+- **Tình trạng:** Bản Master Grade cao cấp do Hajime Katoki thiết kế, chi tiết giáp mở đỉnh cao.
+- 🔗 **Link tham khảo:** [Xem trên Amazon JP](https://www.amazon.co.jp/s?k=mg+nu+gundam+ver+ka) | [Xem trên Mercari JP](https://jp.mercari.com/search?keyword=mg%20nu%20gundam%20ver%20ka)
+- ![MG 1/100 Nu Gundam](https://images.unsplash.com/photo-1618217737233-1a2f6c0e8f8d?auto=format&fit=crop&w=500&q=80)
+
+🤖 **3. Mô Hình Gunpla HG 1/144 RX-78-2 Gundam (Revive)**
+- **Giá tham khảo:** ~1.000 ¥ - 1.300 ¥ (~172.000 đ - 223.000 đ)
+- **Tình trạng:** Bản High Grade nhập môn kinh điển, nhựa màu hoàn hảo không cần dùng keo dán.
+- 🔗 **Link tham khảo:** [Xem trên Amazon JP](https://www.amazon.co.jp/s?k=hg+rx-78-2+revive)
+- ![HG 1/144 RX-78-2](https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=500&q=80)
+
+🛡️ **Cam kết vận chuyển:** Hàng mô hình luôn được ChillBanana đóng gói bọc xốp bóng khí 4 lớp bảo vệ hộp zin góc cạnh, cước bay Narita ⇄ VN chỉ ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg.
+👉 Quý khách copy link sản phẩm ưng ý dán vào công cụ **"Dán Link Tính Giá"** ở đầu trang web để nhận bảng tính chi phí trọn gói ngay ạ! 🍌`
+      : `Chào bạn fan cứng Gundam & Figure nè! 🤖 ChillBanana chuyên săn các dòng Gunpla Bandai (RG, MG, HG, PG) và Figure chính hãng nội địa Nhật giá siêu mềm:
+
+🤖 **1. Mô Hình Gunpla RG 1/144 Strike Freedom Gundam**
+- 🏷️ **Giá:** ~3.000 ¥ - 3.800 ¥ (~516.000 đ - 653.000 đ)
+- 🔗 [Xem mẫu trên Mercari JP](https://jp.mercari.com/search?keyword=rg%20strike%20freedom)
+- ![RG Strike Freedom](https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=500&q=80)
+
+🤖 **2. Mô Hình Gunpla MG 1/100 RX-93 Nu Gundam Ver.Ka**
+- 🏷️ **Giá:** ~7.500 ¥ - 8.500 ¥ (~1.290.000 đ - 1.462.000 đ)
+- 🔗 [Xem mẫu trên Amazon JP](https://www.amazon.co.jp/s?k=mg+nu+gundam+ver+ka)
+- ![MG Nu Gundam](https://images.unsplash.com/photo-1618217737233-1a2f6c0e8f8d?auto=format&fit=crop&w=500&q=80)
+
+🤖 **3. Mô Hình Gunpla HG 1/144 RX-78-2 Gundam Revive**
+- 🏷️ **Giá:** ~1.100 ¥ (~189.000 đ)
+- 🔗 [Xem mẫu trên Surugaya JP](https://www.suruga-ya.jp/search?search_word=hg+rx-78-2)
+- ![HG RX-78-2](https://images.unsplash.com/photo-1578632767115-351597cf2477?auto=format&fit=crop&w=500&q=80)
+
+🛡️ ChillBanana đóng gói bọc bóng khí 4 lớp cam kết giữ nguyên seal hộp không móp méo, cước bay chỉ ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg.
 👉 Bạn copy link món đồ ưng ý dán vào ô tính giá ở trên để nhận bill chi tiết trọn gói ngay nhé! 🍌`;
   }
 

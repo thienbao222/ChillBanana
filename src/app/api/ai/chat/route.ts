@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { AIPersonality } from "@/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {
