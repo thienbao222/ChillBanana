@@ -35,7 +35,7 @@ export async function sendOrderCreatedEmail(order: any) {
           <p>Quý khách vui lòng quét mã <strong>VietQR Napas 247</strong> hoặc chuyển khoản theo cú pháp nội dung <strong>${order.orderCode}</strong> để đội ngũ nhân viên tại Tokyo tiến hành mua hàng ngay ạ.</p>
           
           <div style="text-align: center; margin: 25px 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/tracking?code=${order.orderCode}" style="background-color: #0F172A; color: #F59E0B; padding: 12px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
+            <a href="${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/tracking?code=${order.orderCode}" style="background-color: #0F172A; color: #F59E0B; padding: 12px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
               Tra Cứu Tiến Độ Đơn Hàng (7 Bước)
             </a>
           </div>
@@ -80,7 +80,7 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
           </div>
           
           <div style="text-align: center; margin: 25px 0;">
-            <a href="${process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/tracking?code=${order.orderCode}" style="background-color: #0F172A; color: #F59E0B; padding: 12px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
+            <a href="${process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"}/tracking?code=${order.orderCode}" style="background-color: #0F172A; color: #F59E0B; padding: 12px 28px; text-decoration: none; border-radius: 12px; font-weight: bold; display: inline-block;">
               Xem Chi Tiết Hành Trình 7 Bước
             </a>
           </div>
