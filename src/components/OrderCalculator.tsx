@@ -34,7 +34,8 @@ export default function OrderCalculator() {
   const [detectedStore, setDetectedStore] = useState("");
   const [category, setCategory] = useState("cosmetics");
   const [priceJpy, setPriceJpy] = useState<number>(3500);
-  const [weightKg, setWeightKg] = useState<number>(0.5);
+  const [weightKg, setWeightKg] = useState<number>(0);
+  const [showWeightPreview, setShowWeightPreview] = useState(false);
   const [isGroupBuy, setIsGroupBuy] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeSuccess, setScrapeSuccess] = useState(false);
@@ -126,6 +127,9 @@ export default function OrderCalculator() {
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
         if (data.data.category) setCategory(data.data.category);
+        // Trọng lượng để 0 để chờ cân đo thực tế tại kho Tokyo/VN, không tự động gán
+        setWeightKg(0);
+        setShowWeightPreview(false);
         setScrapeSuccess(true);
       } else {
         alert("Không thể bóc tách tự động link này. Bạn có thể tự nhập tên và giá Yên thủ công nhé!");
@@ -136,6 +140,10 @@ export default function OrderCalculator() {
     } finally {
       setIsScraping(false);
     }
+  };
+
+  const handleCategoryChange = (newCat: string) => {
+    setCategory(newCat);
   };
 
   const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy);
@@ -164,7 +172,7 @@ export default function OrderCalculator() {
         serviceFeeVnd: calc.serviceFeeVnd,
         shippingFeeVnd: calc.shippingFeeVnd,
         totalVnd: calc.totalVnd,
-        depositAmountVnd: depositChoice === "50" ? calc.deposit50Vnd : calc.totalVnd,
+        depositAmountVnd: depositChoice === "50" ? calc.deposit50Vnd : calc.baseOrderCostVnd,
         paymentMethod: "VIETQR",
         isGroupBuy,
         customerNote,
@@ -317,12 +325,12 @@ export default function OrderCalculator() {
               </label>
               <select
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white"
+                onChange={(e) => handleCategoryChange(e.target.value)}
+                className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white cursor-pointer"
               >
                 <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da</option>
                 <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe</option>
-                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (100V)</option>
+                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini</option>
                 <option value="anime">🎎 Anime, Manga & Figure Chính Hãng</option>
                 <option value="other">📦 Danh Mục Khác</option>
               </select>
@@ -356,23 +364,61 @@ export default function OrderCalculator() {
             <div>
               <div className="flex justify-between items-center mb-2">
                 <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  5. Trọng Lượng Ước Tính
+                  5. Trọng Lượng Kiện Hàng
                 </label>
-                <span className="text-xs text-blue-700 font-bold">{weightKg} kg</span>
+                <span className="text-xs font-bold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200">
+                  {weightKg > 0 ? `${weightKg} kg (Ước tính)` : "Cân đo thực tế tại kho"}
+                </span>
               </div>
-              <input
-                type="range"
-                min="0.1"
-                max="10"
-                step="0.1"
-                value={weightKg}
-                onChange={(e) => setWeightKg(parseFloat(e.target.value))}
-                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-banana-500"
-              />
-              <div className="flex justify-between text-[10px] text-slate-400 mt-1">
-                <span>0.1 kg (Son/Mỹ phẩm)</span>
-                <span>1.0 kg (Quần áo/Giày)</span>
-                <span>5.0 kg+ (Đồ gia dụng)</span>
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                <div className="flex items-start space-x-2 text-slate-600">
+                  <span className="text-blue-600 font-bold mt-0.5">ℹ️</span>
+                  <span className="text-[11px] leading-relaxed">
+                    Hệ thống <strong>không áp đặt số kg mặc định</strong> vào tiền cọc. Kiện hàng về kho Tokyo sẽ được cân đo chính xác theo gram để bảo đảm công bằng nhất.
+                  </span>
+                </div>
+
+                <div className="pt-2 border-t border-slate-200/80">
+                  <button
+                    type="button"
+                    onClick={() => setShowWeightPreview(!showWeightPreview)}
+                    className="text-[11px] font-bold text-blue-700 hover:text-blue-900 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <span>{showWeightPreview ? "▼ Thu gọn ước tính cước bay" : "▶ Bạn muốn ước tính thử cước bay trước? (Tùy chọn)"}</span>
+                  </button>
+
+                  {showWeightPreview && (
+                    <div className="mt-2.5 pt-1 space-y-1.5">
+                      <div className="flex items-center space-x-2">
+                        <label className="text-[11px] font-semibold text-slate-600">Nhập số kg bạn dự tính:</label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                          value={weightKg === 0 ? "" : weightKg}
+                          onChange={(e) => setWeightKg(Math.max(0, parseFloat(e.target.value) || 0))}
+                          placeholder="VD: 3.5"
+                          className="w-24 px-2.5 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold font-mono focus:ring-2 focus:ring-banana-500 focus:outline-none"
+                        />
+                        <span className="text-xs font-bold text-slate-700">kg</span>
+                        {weightKg > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setWeightKg(0)}
+                            className="text-[10px] text-rose-600 hover:underline ml-auto"
+                          >
+                            Xóa ước tính
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        * Chỉ để xem cước bay tham khảo. Tiền cọc mua hàng đợt 1 chỉ tính trên tiền hàng gốc.
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -457,10 +503,12 @@ export default function OrderCalculator() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
-                  Cước vận chuyển quốc tế ({weightKg} kg):
+                  Cước bay quốc tế:
                   {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-25% Gộp</span>}
                 </span>
-                <span className="font-medium text-white">{calc.shippingFeeVnd.toLocaleString("vi-VN")} đ</span>
+                <span className="font-medium text-emerald-400">
+                  {weightKg > 0 ? `${calc.shippingFeeVnd.toLocaleString("vi-VN")} đ (${weightKg}kg tham khảo)` : "Cân đo thực tế khi về kho (0 đ)"}
+                </span>
               </div>
               <div className="flex justify-between text-slate-300">
                 <span>Phụ phí hải quan & đóng gói:</span>
@@ -471,19 +519,30 @@ export default function OrderCalculator() {
             {/* Tổng tiền & Đặt cọc 50% */}
             <div className="mt-6 pt-5 border-t border-white/15">
               <div className="flex justify-between items-baseline">
-                <span className="text-sm font-bold text-slate-200">Tổng Trọn Gói (VND):</span>
+                <span className="text-sm font-bold text-slate-200">Tiền Hàng &amp; Phí Mua Hộ:</span>
                 <div className="text-right">
                   <span className="text-2xl sm:text-3xl font-bold font-serif text-banana-400">
-                    {calc.totalVnd.toLocaleString("vi-VN")} <span className="text-base font-normal">đ</span>
+                    {calc.baseOrderCostVnd.toLocaleString("vi-VN")} <span className="text-base font-normal">đ</span>
                   </span>
                 </div>
               </div>
 
               <div className="mt-2.5 flex justify-between items-center text-xs bg-white/10 p-3 rounded-2xl">
-                <span className="text-slate-300">Tiền đặt cọc trước (50%):</span>
-                <strong className="text-banana-300 text-sm">
+                <div>
+                  <span className="text-slate-200 font-bold block">Tiền đặt cọc trước (50%):</span>
+                  <span className="text-[10px] text-emerald-400 font-medium">✓ 50% Tiền Hàng + Phí Mua Hộ</span>
+                </div>
+                <strong className="text-banana-300 text-sm sm:text-base font-mono">
                   {calc.deposit50Vnd.toLocaleString("vi-VN")} đ
                 </strong>
+              </div>
+
+              {/* Ghi chú minh bạch về cân nặng & cước bay */}
+              <div className="mt-3 p-2.5 rounded-xl bg-banana-500/10 border border-banana-500/20 text-[11px] text-banana-200 flex items-start space-x-2">
+                <Info className="w-4 h-4 text-banana-400 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  <strong>Chuẩn quốc tế:</strong> Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!
+                </span>
               </div>
             </div>
           </div>
@@ -561,7 +620,7 @@ export default function OrderCalculator() {
                     Điền Thông Tin Nhận Hàng & Nhận Mã VietQR
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Đơn hàng: <strong>{productName || "Đơn hàng Nhật Bản"}</strong> — Tổng tiền: <strong>{calc.totalVnd.toLocaleString("vi-VN")} đ</strong>
+                    Đơn hàng: <strong>{productName || "Đơn hàng Nhật Bản"}</strong> — Tiền hàng &amp; phí: <strong>{calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ</strong> (Cước bay cân thực tế khi về kho)
                   </p>
                 </div>
 
@@ -659,9 +718,9 @@ export default function OrderCalculator() {
                           className="mr-2 text-banana-600"
                         />
                         <div>
-                          <p className="text-xs font-bold text-slate-800">Thanh toán 100%</p>
+                          <p className="text-xs font-bold text-slate-800">Thanh toán 100% Tiền Hàng</p>
                           <p className="text-[11px] text-banana-800 font-bold">
-                            {calc.totalVnd.toLocaleString("vi-VN")} đ
+                            {calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ
                           </p>
                         </div>
                       </label>

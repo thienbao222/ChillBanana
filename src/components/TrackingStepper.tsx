@@ -63,6 +63,24 @@ const STEPS: { status: OrderStatus; label: string; subLabel: string; icon: React
 ];
 
 export default function TrackingStepper({ currentStatus }: TrackingStepperProps) {
+  if (currentStatus === "CANCELLED") {
+    return (
+      <div className="w-full py-3">
+        <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center space-x-3 text-rose-800">
+          <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center shrink-0 text-rose-600 font-bold text-lg">
+            ✕
+          </div>
+          <div>
+            <h4 className="text-sm font-bold">Đơn Hàng Đã Bị Hủy (Cancelled)</h4>
+            <p className="text-xs text-rose-600 mt-0.5">
+              Đơn hàng này đã kết thúc tiến trình và không còn hiệu lực giao vận. Chi tiết lý do được ghi nhận trong Nhật ký hành trình bên dưới.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const statusOrder: OrderStatus[] = [
     "PENDING_DEPOSIT",
     "PURCHASING_JP",

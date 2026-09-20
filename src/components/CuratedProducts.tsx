@@ -12,6 +12,7 @@ export default function CuratedProducts() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const [products, setProducts] = useState<CuratedProduct[]>(CURATED_PRODUCTS);
+  const [exchangeRate, setExchangeRate] = useState<number>(172);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -21,6 +22,9 @@ export default function CuratedProducts() {
         const data = await res.json();
         if (res.ok && data.products && data.products.length > 0) {
           setProducts(data.products);
+          if (data.exchangeRate) {
+            setExchangeRate(data.exchangeRate);
+          }
         }
       } catch (err) {
         // use fallback CURATED_PRODUCTS
@@ -186,7 +190,7 @@ export default function CuratedProducts() {
                     Giá gốc: {product.priceJpy.toLocaleString()} ¥
                   </p>
                   <p className="text-base font-bold text-banana-700 font-serif">
-                    {product.priceVnd.toLocaleString("vi-VN")} <span className="text-xs">đ</span>
+                    {(product.priceVnd || Math.round(product.priceJpy * exchangeRate)).toLocaleString("vi-VN")} <span className="text-xs">đ</span>
                   </p>
                 </div>
 
@@ -197,7 +201,7 @@ export default function CuratedProducts() {
                         id: product.id,
                         name: product.name,
                         priceJpy: product.priceJpy,
-                        priceVnd: product.priceVnd,
+                        priceVnd: product.priceVnd || Math.round(product.priceJpy * exchangeRate),
                         weightKg: product.weightKg,
                         imageUrl: product.imageUrl,
                         originalStore: product.originalStore,

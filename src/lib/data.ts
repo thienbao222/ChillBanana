@@ -45,7 +45,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "cosmetics",
     categoryName: "Mỹ Phẩm & Chăm Sóc Da",
     priceJpy: 2200,
-    priceVnd: 410000,
+    priceVnd: 378400,
     weightKg: 0.3,
     imageUrl: "https://images.unsplash.com/photo-1556228720-195a672e8a03?auto=format&fit=crop&w=600&q=80",
     description: "Chiết xuất dầu olive nguyên chất, loại bỏ sạch bụi bẩn và lớp trang điểm chống trôi, giữ ẩm tự nhiên.",
@@ -61,7 +61,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "cosmetics",
     categoryName: "Mỹ Phẩm & Chăm Sóc Da",
     priceJpy: 2680,
-    priceVnd: 515000,
+    priceVnd: 460960,
     weightKg: 0.15,
     imageUrl: "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?auto=format&fit=crop&w=600&q=80",
     description: "Công nghệ Auto Booster chống nước, mồ hôi và nhiệt độ cao, bảo vệ da vượt trội cả ngày dài.",
@@ -77,7 +77,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "cosmetics",
     categoryName: "Mỹ Phẩm & Chăm Sóc Da",
     priceJpy: 780,
-    priceVnd: 165000,
+    priceVnd: 134160,
     weightKg: 0.15,
     imageUrl: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?auto=format&fit=crop&w=600&q=80",
     description: "Bọt mịn siêu dày bổ sung 3 loại Axit Hyaluronic cấp ẩm sâu, độ pH 5.5 an toàn cho da nhạy cảm.",
@@ -95,7 +95,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "health",
     categoryName: "Thực Phẩm Chức Năng",
     priceJpy: 5200,
-    priceVnd: 985000,
+    priceVnd: 894400,
     weightKg: 0.65,
     imageUrl: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80",
     description: "Bổ sung hơn 50 loại dưỡng chất, vitamin, collagen và men vi sinh giúp tăng cường miễn dịch và tiêu hóa.",
@@ -111,7 +111,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "health",
     categoryName: "Thực Phẩm Chức Năng",
     priceJpy: 1850,
-    priceVnd: 360000,
+    priceVnd: 318200,
     weightKg: 0.2,
     imageUrl: "https://images.unsplash.com/photo-1584017911766-d451b3d0e843?auto=format&fit=crop&w=600&q=80",
     description: "Chiết xuất lá bạch quả Ginkgo giúp tăng cường tuần hoàn máu não, cải thiện trí nhớ và giảm đau đầu.",
@@ -129,7 +129,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "gadgets",
     categoryName: "Gia Dụng & Điện Tử Mini",
     priceJpy: 2980,
-    priceVnd: 575000,
+    priceVnd: 512560,
     weightKg: 0.35,
     imageUrl: "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=600&q=80",
     description: "Ruột phủ chống dính công nghệ SlickSteel, giữ nóng/lạnh bền bỉ suốt 24 giờ, chống rò rỉ tuyệt đối.",
@@ -145,7 +145,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "gadgets",
     categoryName: "Gia Dụng & Điện Tử Mini",
     priceJpy: 4500,
-    priceVnd: 860000,
+    priceVnd: 774000,
     weightKg: 0.45,
     imageUrl: "https://images.unsplash.com/photo-1503951914875-452162b0f3f1?auto=format&fit=crop&w=600&q=80",
     description: "Lưỡi cắt nanotech góc 30 độ bén ngọt, chống nước IPX7. Đi kèm chân sạc hỗ trợ sạc nhanh.",
@@ -162,7 +162,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "gadgets",
     categoryName: "Gia Dụng & Điện Tử Mini",
     priceJpy: 18500,
-    priceVnd: 3180000,
+    priceVnd: 3182000,
     weightKg: 0.3,
     imageUrl: "https://images.unsplash.com/photo-1524805444758-089113d48a6d?auto=format&fit=crop&w=600&q=80",
     description: "Công nghệ sạc năng lượng ánh sáng Eco-Drive độc quyền Citizen Nhật Bản, mặt kính khoáng chống trầy, chống nước 100m.",
@@ -180,7 +180,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "anime",
     categoryName: "Anime, Manga & Sưu Tầm",
     priceJpy: 12500,
-    priceVnd: 2380000,
+    priceVnd: 2150000,
     weightKg: 0.9,
     imageUrl: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80",
     description: "Mô hình cử động chi tiết sắc nét với hiệu ứng khói và khuôn mặt thay thế, bản quyền Toei Animation.",
@@ -196,7 +196,7 @@ export const CURATED_PRODUCTS: CuratedProduct[] = [
     category: "anime",
     categoryName: "Anime, Manga & Sưu Tầm",
     priceJpy: 3850,
-    priceVnd: 745000,
+    priceVnd: 662200,
     weightKg: 0.55,
     imageUrl: "https://images.unsplash.com/photo-1594736797933-d0501ba2fe65?auto=format&fit=crop&w=600&q=80",
     description: "Khung xương Real Grade thế hệ mới với biên độ khớp cực rộng, độ phân tách màu sắc hoàn hảo.",
@@ -280,37 +280,43 @@ export const KIZUNA_NEWS: NewsItem[] = [
 // Helper tính toán chi phí trọn gói
 export function calculateOrderPrice(
   priceJpy: number,
-  weightKg: number = 0.5,
+  weightKg: number = 0,
   exchangeRate: number = DEFAULT_EXCHANGE_RATE,
   isGroupBuy: boolean = false
 ) {
-  const safeWeight = Math.max(0.1, weightKg);
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
   const serviceFeeVnd = Math.max(20000, Math.round(productPriceVnd * SERVICE_FEE_RATE));
   
-  // Cước bay: Nếu gộp đơn và cân nặng nhẹ (<0.5kg) thì giảm 25% cước bay
-  let shippingRate = AIR_SHIPPING_PER_KG;
-  if (isGroupBuy && safeWeight <= 0.5) {
-    shippingRate = Math.round(AIR_SHIPPING_PER_KG * 0.75);
+  // Tiền cọc đợt 1 (50% tiền hàng + phí dịch vụ mua hộ)
+  const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
+  const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
+
+  // Cước bay quốc tế: Chỉ tính khi có cân nặng thực tế từ kho hoặc khách tự nhập tham khảo
+  let shippingFeeVnd = 0;
+  if (weightKg > 0) {
+    let shippingRate = AIR_SHIPPING_PER_KG;
+    if (isGroupBuy && weightKg <= 0.5) {
+      shippingRate = Math.round(AIR_SHIPPING_PER_KG * 0.75);
+    }
+    shippingFeeVnd = Math.round(weightKg * shippingRate);
   }
-  const shippingFeeVnd = Math.round(safeWeight * shippingRate);
-  const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
-  
-  const isUnderMinOrder = totalVnd < MIN_ORDER_THRESHOLD_VND;
-  const minOrderDiffVnd = Math.max(0, MIN_ORDER_THRESHOLD_VND - totalVnd);
-  const deposit50Vnd = Math.round(totalVnd * 0.5);
+
+  const totalVnd = baseOrderCostVnd + shippingFeeVnd;
+  const isUnderMinOrder = baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND;
+  const minOrderDiffVnd = Math.max(0, MIN_ORDER_THRESHOLD_VND - baseOrderCostVnd);
 
   return {
     priceJpy,
     exchangeRate,
     productPriceVnd,
     serviceFeeVnd,
+    baseOrderCostVnd,
     shippingFeeVnd,
-    weightKg: safeWeight,
+    weightKg,
     totalVnd,
     deposit50Vnd,
     isUnderMinOrder,
     minOrderDiffVnd,
-    canGroupBuy: safeWeight <= 0.8 || isUnderMinOrder,
+    canGroupBuy: weightKg <= 0.8 || isUnderMinOrder,
   };
 }

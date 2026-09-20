@@ -1,14 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/product-store";
+import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
+import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
-// GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category)
+const COOKIE_NAME = "chillbanana_admin_session";
+const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || "chillbanana_secure_admin_salt_2026";
+
+function verifyAdminSession(req: NextRequest): boolean {
+  const cookie = req.cookies.get(COOKIE_NAME);
+  if (!cookie || !cookie.value) return false;
+
+  try {
+    const decoded = Buffer.from(cookie.value, "base64").toString("utf-8");
+    const [payloadStr, signature] = decoded.split("::");
+    const expectedSig = crypto.createHmac("sha256", SESSION_SECRET).update(payloadStr).digest("hex");
+    if (signature !== expectedSig) return false;
+
+    const payload = JSON.parse(payloadStr);
+    if (payload.exp < Date.now()) return false;
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category, tính giá VND theo tỷ giá live thời gian thực)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const category = searchParams.get("category");
+
+    // Lấy tỷ giá thực tế theo thời điểm hiện tại
+    const rateData = await fetchLiveExchangeRate();
+    const liveRate = rateData.roundedRate || 172;
 
     // 1. Lấy từ CSDL Prisma SQLite
     try {
@@ -18,10 +45,16 @@ export async function GET(req: NextRequest) {
       });
 
       if (dbProducts && dbProducts.length > 0) {
+        const liveProducts = dbProducts.map((p) => ({
+          ...p,
+          priceVnd: Math.round(p.priceJpy * liveRate),
+        }));
+
         return NextResponse.json({
           success: true,
-          count: dbProducts.length,
-          products: dbProducts,
+          count: liveProducts.length,
+          exchangeRate: liveRate,
+          products: liveProducts,
         });
       }
     } catch (dbErr) {
@@ -34,10 +67,16 @@ export async function GET(req: NextRequest) {
       products = products.filter((p) => p.category === category);
     }
 
+    const liveProducts = products.map((p) => ({
+      ...p,
+      priceVnd: Math.round(p.priceJpy * liveRate),
+    }));
+
     return NextResponse.json({
       success: true,
-      count: products.length,
-      products,
+      count: liveProducts.length,
+      exchangeRate: liveRate,
+      products: liveProducts,
     });
   } catch (error) {
     return NextResponse.json(
@@ -49,6 +88,9 @@ export async function GET(req: NextRequest) {
 
 // POST: Thêm sản phẩm mới (Admin)
 export async function POST(req: NextRequest) {
+  if (!verifyAdminSession(req)) {
+    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
+  }
   try {
     const body = await req.json();
 
@@ -114,6 +156,9 @@ export async function POST(req: NextRequest) {
 
 // PUT: Cập nhật thông tin sản phẩm
 export async function PUT(req: NextRequest) {
+  if (!verifyAdminSession(req)) {
+    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
+  }
   try {
     const body = await req.json();
     const { id, ...data } = body;
@@ -125,36 +170,46 @@ export async function PUT(req: NextRequest) {
       );
     }
 
-    const updated = updateProduct(id, data);
-    if (!updated) {
-      return NextResponse.json(
-        { success: false, error: "Không tìm thấy sản phẩm." },
-        { status: 404 }
-      );
-    }
+    const rateData = await fetchLiveExchangeRate();
+    const liveRate = rateData.roundedRate || 172;
 
-    // Cập nhật CSDL Prisma SQLite
+    let updated: any = null;
+
+    // 1. Cập nhật trong Prisma SQLite
     try {
-      await prisma.product.update({
+      const priceJpy = data.priceJpy !== undefined ? Number(data.priceJpy) : undefined;
+      const priceVnd = priceJpy !== undefined ? Math.round(priceJpy * liveRate) : undefined;
+
+      updated = await prisma.product.update({
         where: { id },
         data: {
-          name: updated.name,
-          category: updated.category,
-          categoryName: updated.categoryName,
-          priceJpy: updated.priceJpy,
-          priceVnd: updated.priceVnd,
-          weightKg: updated.weightKg,
-          imageUrl: updated.imageUrl,
-          description: updated.description,
-          originalStore: updated.originalStore,
-          stockSlots: updated.stockSlots,
-          isHot: updated.isHot,
-          featuredNote: updated.featuredNote,
-          voltageNote: updated.voltageNote,
+          ...(data.name && { name: data.name }),
+          ...(data.category && { category: data.category }),
+          ...(data.categoryName && { categoryName: data.categoryName }),
+          ...(priceJpy !== undefined && { priceJpy, priceVnd }),
+          ...(data.weightKg !== undefined && { weightKg: Number(data.weightKg) }),
+          ...(data.imageUrl && { imageUrl: data.imageUrl }),
+          ...(data.description && { description: data.description }),
+          ...(data.originalStore && { originalStore: data.originalStore }),
+          ...(data.stockSlots !== undefined && { stockSlots: Number(data.stockSlots) }),
+          ...(data.isHot !== undefined && { isHot: Boolean(data.isHot) }),
+          ...(data.featuredNote !== undefined && { featuredNote: data.featuredNote }),
+          ...(data.voltageNote !== undefined && { voltageNote: data.voltageNote }),
         },
       });
+
+      // Đồng bộ vào RAM store nếu có
+      updateProduct(id, data);
     } catch (dbErr) {
-      console.warn("Cập nhật sản phẩm vào Prisma thất bại:", dbErr);
+      // 2. Fallback sang RAM store
+      updated = updateProduct(id, data);
+    }
+
+    if (!updated) {
+      return NextResponse.json(
+        { success: false, error: "Không tìm thấy sản phẩm cần cập nhật." },
+        { status: 404 }
+      );
     }
 
     return NextResponse.json({
@@ -172,6 +227,9 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: Xóa sản phẩm
 export async function DELETE(req: NextRequest) {
+  if (!verifyAdminSession(req)) {
+    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
+  }
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
@@ -183,19 +241,23 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    const success = deleteProduct(id);
-    if (!success) {
+    let deleted = false;
+
+    // 1. Xóa trong Prisma SQLite
+    try {
+      await prisma.product.delete({ where: { id } });
+      deleted = true;
+      deleteProduct(id);
+    } catch (dbErr) {
+      // 2. Fallback sang RAM store
+      deleted = deleteProduct(id);
+    }
+
+    if (!deleted) {
       return NextResponse.json(
         { success: false, error: "Không tìm thấy sản phẩm cần xóa." },
         { status: 404 }
       );
-    }
-
-    // Xóa từ CSDL Prisma SQLite
-    try {
-      await prisma.product.delete({ where: { id } });
-    } catch (dbErr) {
-      console.warn("Xóa sản phẩm trong Prisma thất bại:", dbErr);
     }
 
     return NextResponse.json({

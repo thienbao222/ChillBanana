@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 2.2. JSON-LD Schema (Amazon, Mercari, Rakuten)
-        if (!priceJpy || priceJpy === 4500) {
+        if (!priceJpy) {
           const ldRegex = /<script type=["']application\/ld\+json["']>([\s\S]*?)<\/script>/gi;
           let ldMatch;
           while ((ldMatch = ldRegex.exec(html)) !== null) {
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
         }
 
         // 2.3. Amazon specific selectors
-        if (!priceJpy || priceJpy === 4500) {
+        if (!priceJpy) {
           const amazonWhole = html.match(/class=["']a-price-whole["']>([0-9,]+)/i);
           const offscreen = html.match(/class=["']a-offscreen["']>[¥￥$]?([0-9,.]+)/i);
           const jsonPrice = html.match(/"price"\s*:\s*"?([0-9.]+)"?/i);
@@ -224,8 +224,9 @@ export async function POST(req: NextRequest) {
     if (!title) {
       title = `[${storeName}] Sản phẩm nội địa Nhật Bản`;
     }
-    if (!priceJpy || priceJpy < 100) {
-      priceJpy = 4500;
+    const priceDetected = typeof priceJpy === "number" && priceJpy > 0;
+    if (!priceDetected) {
+      priceJpy = 0;
     }
     if (!imageUrl) {
       imageUrl = "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
@@ -233,10 +234,12 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      priceDetected,
       data: {
         storeName,
         title,
         priceJpy,
+        priceDetected,
         imageUrl,
         category,
         url,

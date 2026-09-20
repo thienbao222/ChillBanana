@@ -146,7 +146,7 @@ export default function Navbar() {
                       <p className="text-[10px] text-slate-500 truncate">{customer.email}</p>
                     </div>
                     <Link
-                      href={`/tracking?phone=${customer.phone || ""}`}
+                      href="/tracking"
                       onClick={() => setUserDropdownOpen(false)}
                       className="flex items-center px-3 py-2 text-xs text-slate-700 hover:bg-banana-50 hover:text-banana-700"
                     >

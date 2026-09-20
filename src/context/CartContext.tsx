@@ -25,12 +25,14 @@ interface CartContextType {
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
+  exchangeRate: number;
   totalItems: number;
   totalPriceJpy: number;
   totalProductPriceVnd: number;
   totalWeightKg: number;
   shippingFeeVnd: number;
   serviceFeeVnd: number;
+  baseOrderCostVnd: number;
   totalVnd: number;
   deposit50Vnd: number;
 }
@@ -41,6 +43,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
+
+  // Lấy tỷ giá thực tế live từ API
+  useEffect(() => {
+    fetch("/api/exchange-rate")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success && data.data?.roundedRate) {
+          setExchangeRate(data.data.roundedRate);
+        }
+      })
+      .catch((err) => {
+        console.warn("Could not fetch live rate for cart:", err);
+      });
+  }, []);
 
   // Khôi phục giỏ hàng từ localStorage
   useEffect(() => {
@@ -103,24 +120,27 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems([]);
   };
 
-  // Tính toán các chỉ số đơn hàng
+  // Tính toán các chỉ số đơn hàng dựa trên tỷ giá live thực tế theo thời điểm
   const totalItems = items.reduce((acc, item) => acc + item.quantity, 0);
   const totalPriceJpy = items.reduce((acc, item) => acc + item.priceJpy * item.quantity, 0);
-  const totalProductPriceVnd = items.reduce((acc, item) => acc + item.priceVnd * item.quantity, 0);
+  // Sử dụng tỷ giá live để tính tiền hàng VND
+  const totalProductPriceVnd = Math.round(totalPriceJpy * exchangeRate);
   const totalWeightKg = Number(
     items.reduce((acc, item) => acc + item.weightKg * item.quantity, 0).toFixed(2)
   );
 
-  // Cước bay quốc tế: làm tròn tối thiểu 0.5kg
-  const chargeableWeight = Math.max(0.5, totalWeightKg);
-  const shippingFeeVnd = totalItems > 0 ? Math.round(chargeableWeight * AIR_SHIPPING_PER_KG) : 0;
+  // Cước bay: 0đ khi chưa có trọng lượng thực tế (sẽ tính khi kho Tokyo cân đo)
+  const shippingFeeVnd = totalWeightKg > 0 ? Math.round(totalWeightKg * AIR_SHIPPING_PER_KG) : 0;
 
-  // Phí dịch vụ mua hộ (4% giá trị hàng hóa)
-  const serviceFeeVnd = totalItems > 0 ? Math.round(totalProductPriceVnd * 0.04) : 0;
+  // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 20.000đ)
+  const serviceFeeVnd = totalItems > 0 ? Math.max(20000, Math.round(totalProductPriceVnd * 0.04)) : 0;
 
-  // Tổng tiền về tay trọn gói
+  // Tổng tiền
   const totalVnd = totalProductPriceVnd + shippingFeeVnd + serviceFeeVnd;
-  const deposit50Vnd = Math.round(totalVnd * 0.5);
+
+  // Tiền cọc 50% chỉ tính trên (tiền hàng + phí dịch vụ), KHÔNG bao gồm cước bay
+  const baseOrderCostVnd = totalProductPriceVnd + serviceFeeVnd;
+  const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
 
   return (
     <CartContext.Provider
@@ -133,12 +153,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         removeFromCart,
         updateQuantity,
         clearCart,
+        exchangeRate,
         totalItems,
         totalPriceJpy,
         totalProductPriceVnd,
         totalWeightKg,
         shippingFeeVnd,
         serviceFeeVnd,
+        baseOrderCostVnd,
         totalVnd,
         deposit50Vnd,
       }}

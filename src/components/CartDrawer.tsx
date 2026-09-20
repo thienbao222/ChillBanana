@@ -25,6 +25,7 @@ export default function CartDrawer() {
     removeFromCart, 
     updateQuantity, 
     clearCart,
+    exchangeRate,
     totalItems,
     totalPriceJpy,
     totalProductPriceVnd,
@@ -91,6 +92,12 @@ export default function CartDrawer() {
           category: items[0]?.category || "other",
           priceJpy: totalPriceJpy,
           weightKg: totalWeightKg,
+          exchangeRate,
+          productPriceVnd: totalProductPriceVnd,
+          serviceFeeVnd,
+          shippingFeeVnd,
+          totalVnd,
+          depositAmountVnd: deposit50Vnd,
           depositPercent: 50,
           paymentMethod: "VIETQR",
           isGroupBuy: false,
@@ -99,7 +106,7 @@ export default function CartDrawer() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setOrderResult(data.data);
+        setOrderResult(data.order);
         clearCart();
         setShowCheckout(false);
       } else {
@@ -360,7 +367,7 @@ export default function CartDrawer() {
                     </p>
                     <div className="flex items-baseline justify-between mt-1">
                       <span className="text-xs font-bold text-banana-700">
-                        {item.priceVnd.toLocaleString()} đ
+                        {Math.round(item.priceJpy * exchangeRate).toLocaleString()} đ
                       </span>
                       <span className="text-[10px] text-slate-500">
                         ({item.priceJpy.toLocaleString()} ¥ • {item.weightKg}kg)
@@ -399,6 +406,12 @@ export default function CartDrawer() {
         {!orderResult && items.length > 0 && !showCheckout && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 space-y-3">
             <div className="space-y-1.5 text-xs text-slate-600">
+              <div className="flex justify-between items-center text-[11px] text-slate-500 pb-1.5 mb-1 border-b border-slate-200/80">
+                <span>Tỷ giá áp dụng (Live):</span>
+                <span className="font-bold text-banana-800 bg-banana-100/80 px-2 py-0.5 rounded border border-banana-200">
+                  1 JPY = {exchangeRate} đ
+                </span>
+              </div>
               <div className="flex justify-between">
                 <span>Tiền hàng gốc ({totalPriceJpy.toLocaleString()} ¥):</span>
                 <span className="font-semibold text-navy-900">{totalProductPriceVnd.toLocaleString()} đ</span>

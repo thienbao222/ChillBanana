@@ -1,32 +1,37 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAllOrders, createOrder } from "@/lib/order-store";
+import { createOrder } from "@/lib/order-store";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   try {
-    // 1. Lấy toàn bộ đơn hàng thực tế từ CSDL Prisma (SQLite)
-    try {
-      const dbOrders = await prisma.order.findMany({
-        include: {
-          trackingLogs: {
-            orderBy: { createdAt: "desc" },
-          },
-        },
-        orderBy: { createdAt: "desc" },
-      });
+    const { searchParams } = new URL(req.url);
+    const email = searchParams.get("email");
+    const phone = searchParams.get("phone");
 
-      return NextResponse.json({ success: true, orders: dbOrders });
-    } catch (dbErr) {
-      console.warn("Truy vấn Prisma Order thất bại, chuyển sang store:", dbErr);
+    const whereClause: any = {};
+    if (email) {
+      whereClause.customerEmail = email;
+    }
+    if (phone) {
+      whereClause.customerPhone = phone;
     }
 
-    // 2. Fallback sang store
-    const orders = getAllOrders();
+    const orders = await prisma.order.findMany({
+      where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
+      include: {
+        trackingLogs: {
+          orderBy: { createdAt: "desc" },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
     return NextResponse.json({ success: true, orders });
   } catch (error) {
+    console.error("Lỗi tải danh sách đơn hàng:", error);
     return NextResponse.json({ error: "Lỗi tải danh sách đơn hàng" }, { status: 500 });
   }
 }

@@ -57,8 +57,9 @@ export function getOrderByCode(code: string): StoredOrder | undefined {
 }
 
 export function createOrder(data: Partial<StoredOrder>): StoredOrder {
-  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-  const orderCode = `CB-${new Date().getFullYear()}-${randomSuffix}`;
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const randomSuffix = Math.floor(10000 + Math.random() * 90000);
+  const orderCode = `CB-${new Date().getFullYear()}-${timestamp}-${randomSuffix}`;
   
   const now = new Date().toISOString();
   const nowFormatted = new Date().toLocaleString("vi-VN", {
@@ -68,6 +69,15 @@ export function createOrder(data: Partial<StoredOrder>): StoredOrder {
     month: "2-digit",
     year: "numeric",
   });
+
+  const rate = data.exchangeRate || 172;
+  const priceJpy = data.priceJpy || 0;
+  const weightKg = typeof data.weightKg === "number" ? data.weightKg : 0;
+  const productPriceVnd = data.productPriceVnd || Math.round(priceJpy * rate);
+  const serviceFeeVnd = data.serviceFeeVnd || (productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0);
+  const shippingFeeVnd = data.shippingFeeVnd || (weightKg > 0 ? Math.round(weightKg * 185000) : 0);
+  const totalVnd = data.totalVnd || (productPriceVnd + serviceFeeVnd + shippingFeeVnd);
+  const depositAmountVnd = data.depositAmountVnd || Math.round((productPriceVnd + serviceFeeVnd) * 0.5);
 
   const newOrder: StoredOrder = {
     id: "ord-" + Date.now(),
@@ -79,15 +89,15 @@ export function createOrder(data: Partial<StoredOrder>): StoredOrder {
     originalUrl: data.originalUrl || "",
     productName: data.productName || "Sản phẩm Nhật Bản",
     category: data.category || "cosmetics",
-    priceJpy: data.priceJpy || 0,
-    weightKg: data.weightKg || 0.5,
-    exchangeRate: data.exchangeRate || 172,
-    productPriceVnd: data.productPriceVnd || 0,
-    serviceFeeVnd: data.serviceFeeVnd || 0,
-    shippingFeeVnd: data.shippingFeeVnd || 0,
-    totalVnd: data.totalVnd || 0,
-    depositAmountVnd: data.depositAmountVnd || 0,
-    paymentStatus: data.depositAmountVnd === data.totalVnd ? "PAID_100" : "DEPOSITED_50",
+    priceJpy,
+    weightKg,
+    exchangeRate: rate,
+    productPriceVnd,
+    serviceFeeVnd,
+    shippingFeeVnd,
+    totalVnd,
+    depositAmountVnd,
+    paymentStatus: "UNPAID",
     paymentMethod: data.paymentMethod || "VIETQR",
     isGroupBuy: !!data.isGroupBuy,
     status: "PENDING_DEPOSIT",
@@ -146,4 +156,16 @@ export function updateOrderStatus(
   });
 
   return order;
+}
+
+export function deleteOrder(orderCode: string): boolean {
+  const cleanCode = orderCode.trim().toUpperCase();
+  const index = ordersStore.findIndex(
+    (o) => o.orderCode.toUpperCase() === cleanCode || o.id === orderCode
+  );
+  if (index !== -1) {
+    ordersStore.splice(index, 1);
+    return true;
+  }
+  return false;
 }

@@ -1,13 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import Navbar from "@/components/Navbar";
-import Footer from "@/components/Footer";
-import AIChatBot from "@/components/AIChatBot";
-
 import { AuthProvider } from "@/context/AuthContext";
-import { CartProvider } from "@/context/CartContext";
-import AuthModal from "@/components/AuthModal";
-import CartDrawer from "@/components/CartDrawer";
+import LayoutWrapper from "@/components/LayoutWrapper";
 
 export const metadata: Metadata = {
   title: "ChillBanana - Mua Hàng Hộ Nhật Bản Thư Thái & Trợ Lý AI 24/7",
@@ -23,14 +17,7 @@ export default function RootLayout({
     <html lang="vi" className="scroll-smooth">
       <body className="min-h-screen flex flex-col bg-[#FAF8F5] text-slate-900 antialiased selection:bg-banana-200 selection:text-banana-900">
         <AuthProvider>
-          <CartProvider>
-            <Navbar />
-            <main className="flex-grow">{children}</main>
-            <Footer />
-            <AIChatBot />
-            <CartDrawer />
-            <AuthModal />
-          </CartProvider>
+          <LayoutWrapper>{children}</LayoutWrapper>
         </AuthProvider>
       </body>
     </html>

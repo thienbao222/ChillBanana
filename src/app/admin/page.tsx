@@ -31,7 +31,8 @@ import {
   Columns,
   FileText,
   Printer,
-  ChevronRight
+  ChevronRight,
+  Ban
 } from "lucide-react";
 import { StoredOrder } from "@/lib/order-store";
 import { OrderStatus, CuratedProduct } from "@/types";
@@ -47,8 +48,14 @@ export default function AdminDashboardPage() {
   const [authChecking, setAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
-  // Tab đang chọn trong chế độ Dashboard: "orders" | "products" | "ai_trends"
-  const [activeTab, setActiveTab] = useState<"orders" | "ai_trends" | "products">("orders");
+  // Tab đang chọn trong chế độ Dashboard: "orders" | "customers" | "products" | "ai_trends"
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "ai_trends" | "products">("orders");
+
+  // Quản lý Khách Hàng (Customer CRM)
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerStats, setCustomerStats] = useState<any>(null);
 
   // Quản lý đơn hàng
   const [orders, setOrders] = useState<StoredOrder[]>([]);
@@ -65,6 +72,13 @@ export default function AdminDashboardPage() {
   const [jpTrack, setJpTrack] = useState("");
   const [vnTrack, setVnTrack] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+
+  // Modal Hủy đơn hàng
+  const [cancelModalOrder, setCancelModalOrder] = useState<StoredOrder | null>(null);
+  const [cancelReason, setCancelReason] = useState("Sản phẩm hết hàng tại Nhật / Người bán hủy bán");
+  const [cancelCustomReason, setCancelCustomReason] = useState("");
+  const [refundDeposit, setRefundDeposit] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
   // Quản lý xu hướng Chat AI
   const [aiStats, setAiStats] = useState<any>(null);
@@ -162,13 +176,37 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 5. Tải danh sách khách hàng & phân tích chi tiêu
+  const fetchCustomers = async () => {
+    setLoadingCustomers(true);
+    try {
+      const res = await fetch("/api/admin/customers");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setCustomers(data.customers || []);
+        setCustomerStats(data.stats || null);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingCustomers(false);
+    }
+  };
+
   useEffect(() => {
     if (!authChecking) {
       fetchOrders();
       fetchAiTrends();
       fetchProducts();
+      fetchCustomers();
     }
   }, [authChecking]);
+
+  useEffect(() => {
+    if (activeTab === "customers") {
+      fetchCustomers();
+    }
+  }, [activeTab]);
 
   // Handlers Quản lý sản phẩm
   const openCreateProductModal = () => {
@@ -391,6 +429,72 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const openCancelModal = (order: StoredOrder) => {
+    setCancelModalOrder(order);
+    setCancelReason("Sản phẩm hết hàng tại Nhật / Người bán hủy bán");
+    setCancelCustomReason("");
+    setRefundDeposit(order.paymentStatus !== "UNPAID");
+  };
+
+  const handleCancelOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancelModalOrder) return;
+    setIsCancelling(true);
+
+    const finalReason =
+      cancelReason === "Khác" && cancelCustomReason.trim()
+        ? cancelCustomReason.trim()
+        : cancelReason;
+
+    try {
+      const res = await fetch(`/api/orders/${cancelModalOrder.orderCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "cancel",
+          by: "ADMIN",
+          reason: finalReason,
+          paymentStatus: refundDeposit ? "UNPAID" : cancelModalOrder.paymentStatus,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Đã hủy đơn hàng #${cancelModalOrder.orderCode} thành công!`);
+        setCancelModalOrder(null);
+        fetchOrders();
+      } else {
+        alert("Lỗi khi hủy đơn: " + (data.error || "Vui lòng thử lại"));
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ");
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
+  const handleDeleteOrder = async (orderCode: string) => {
+    const confirmed = window.confirm(
+      `CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN đơn hàng #${orderCode} khỏi cơ sở dữ liệu SQLite?\nThao tác này sẽ dọn sạch dữ liệu và không thể hoàn tác!`
+    );
+    if (!confirmed) return;
+
+    try {
+      const res = await fetch(`/api/orders/${orderCode}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Đã xóa vĩnh viễn đơn #${orderCode}!`);
+        fetchOrders();
+      } else {
+        alert("Lỗi khi xóa đơn: " + (data.error || "Vui lòng thử lại"));
+      }
+    } catch {
+      alert("Lỗi kết nối máy chủ khi xóa");
+    }
+  };
+
   const filteredOrders = orders.filter((ord) => {
     const matchesStatus = filterStatus === "ALL" || ord.status === filterStatus;
     const matchesSearch =
@@ -473,6 +577,16 @@ export default function AdminDashboardPage() {
                 </button>
 
                 <button
+                  onClick={() => setActiveTab("customers")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                    activeTab === "customers" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Khách Hàng ({customers.length})</span>
+                </button>
+
+                <button
                   onClick={() => setActiveTab("products")}
                   className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
                     activeTab === "products" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
@@ -532,6 +646,14 @@ export default function AdminDashboardPage() {
             }`}
           >
             Đơn Hàng
+          </button>
+          <button
+            onClick={() => setActiveTab("customers")}
+            className={`flex-1 py-2 text-center font-bold ${
+              activeTab === "customers" ? "bg-banana-500 text-navy-950" : "text-slate-300"
+            }`}
+          >
+            Khách Hàng
           </button>
           <button
             onClick={() => setActiveTab("products")}
@@ -625,6 +747,7 @@ export default function AdminDashboardPage() {
                   <option value="WAREHOUSE_VN">5. Đã về kho Việt Nam</option>
                   <option value="LOCAL_DELIVERY">6. Đang phát nội địa VN</option>
                   <option value="COMPLETED">7. Giao hàng thành công</option>
+                  <option value="CANCELLED">❌ Đã hủy (Cancelled)</option>
                 </select>
 
                 <button
@@ -723,18 +846,50 @@ export default function AdminDashboardPage() {
                             </span>
                           </td>
                           <td className="p-4">
-                            <span className="inline-flex items-center text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl">
-                              {ord.status}
-                            </span>
+                            {ord.status === "CANCELLED" ? (
+                              <span className="inline-flex items-center text-[11px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-1 rounded-xl">
+                                ✕ Đã Hủy
+                              </span>
+                            ) : ord.status === "COMPLETED" ? (
+                              <span className="inline-flex items-center text-[11px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl">
+                                ✓ Hoàn Tất
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl">
+                                {ord.status}
+                              </span>
+                            )}
                           </td>
                           <td className="p-4 text-right">
-                            <button
-                              onClick={() => openUpdateModal(ord)}
-                              className="px-3 py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1 ml-auto"
-                            >
-                              <Edit3 className="w-3.5 h-3.5" />
-                              <span>Cập nhật</span>
-                            </button>
+                            <div className="flex items-center justify-end space-x-1.5">
+                              {ord.status !== "CANCELLED" && (
+                                <>
+                                  <button
+                                    onClick={() => openUpdateModal(ord)}
+                                    title="Cập nhật tiến độ"
+                                    className="px-2.5 py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1"
+                                  >
+                                    <Edit3 className="w-3.5 h-3.5" />
+                                    <span>Tiến độ</span>
+                                  </button>
+                                  <button
+                                    onClick={() => openCancelModal(ord)}
+                                    title="Hủy đơn hàng"
+                                    className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all flex items-center space-x-1"
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                    <span>Hủy</span>
+                                  </button>
+                                </>
+                              )}
+                              <button
+                                onClick={() => handleDeleteOrder(ord.orderCode)}
+                                title="Xóa vĩnh viễn đơn rác / test"
+                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -744,6 +899,206 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+          </div>
+        )}
+
+        {/* ======================================================== */}
+        {/* TAB: QUẢN LÝ KHÁCH HÀNG & THÀNH VIÊN (CUSTOMER CRM) */}
+        {/* ======================================================== */}
+        {activeTab === "customers" && (
+          <div className="space-y-6">
+            {/* Header Banner */}
+            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <div className="inline-flex items-center space-x-1.5 bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
+                  <Users className="w-3.5 h-3.5 text-blue-600" />
+                  <span>Customer Relationship Management (CRM)</span>
+                </div>
+                <h2 className="text-2xl font-serif font-bold text-navy-900">
+                  Quản Lý Khách Hàng &amp; Thành Viên
+                </h2>
+                <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                  Theo dõi danh sách khách hàng đã đăng ký tài khoản, đối chiếu số điện thoại, địa chỉ nhận hàng và tổng doanh thu tích lũy từ từng khách.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={fetchCustomers}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition-all flex items-center space-x-2"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingCustomers ? "animate-spin" : ""}`} />
+                  <span>Làm Mới</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Thống kê khách hàng KPI Cards */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                <span className="text-xs font-medium text-slate-500">Tổng Thành Viên Đăng Ký</span>
+                <div className="text-2xl font-bold text-navy-900 mt-1 font-mono">
+                  {customers.length} <span className="text-xs font-normal text-slate-500">khách hàng</span>
+                </div>
+                <span className="text-[11px] text-blue-600 mt-1 block">Tài khoản lưu trữ SQLite</span>
+              </div>
+
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                <span className="text-xs font-medium text-slate-500">Khách Đã Phát Sinh Đơn Hàng</span>
+                <div className="text-2xl font-bold text-emerald-600 mt-1 font-mono">
+                  {customerStats?.customersWithOrders ?? customers.filter((c) => c.orderCount > 0).length} <span className="text-xs font-normal text-slate-500">thành viên</span>
+                </div>
+                <span className="text-[11px] text-emerald-700 mt-1 block">Tỷ lệ chuyển đổi mua hàng cao</span>
+              </div>
+
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                <span className="text-xs font-medium text-slate-500">Tổng Doanh Số Tích Lũy</span>
+                <div className="text-2xl font-bold text-banana-600 mt-1 font-mono">
+                  {(customerStats?.totalRevenueVnd ?? customers.reduce((acc, c) => acc + (c.totalSpentVnd || 0), 0)).toLocaleString("vi-VN")} <span className="text-xs font-normal text-slate-500">đ</span>
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1 block">Từ các đơn hàng thành viên</span>
+              </div>
+            </div>
+
+            {/* Tìm kiếm khách hàng */}
+            <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="relative w-full sm:w-96">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                <input
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  placeholder="Tìm theo tên, email, số điện thoại..."
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="text-xs text-slate-500">
+                Hiển thị <strong>{customers.filter((c) => {
+                  if (!customerSearch.trim()) return true;
+                  const q = customerSearch.toLowerCase();
+                  return (
+                    c.name?.toLowerCase().includes(q) ||
+                    c.email?.toLowerCase().includes(q) ||
+                    c.phone?.includes(q) ||
+                    c.address?.toLowerCase().includes(q)
+                  );
+                }).length}</strong> / {customers.length} khách hàng
+              </div>
+            </div>
+
+            {/* Bảng danh sách khách hàng */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[10px] font-bold">
+                      <th className="p-4 pl-6">Khách Hàng</th>
+                      <th className="p-4">Thông Tin Liên Hệ</th>
+                      <th className="p-4">Địa Chỉ Nhận Hàng</th>
+                      <th className="p-4 text-center">Số Đơn Hàng</th>
+                      <th className="p-4">Tổng Chi Tiêu</th>
+                      <th className="p-4">Đơn Gần Nhất</th>
+                      <th className="p-4 pr-6 text-right">Thao Tác</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {loadingCustomers ? (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center text-slate-400">
+                          <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-banana-500" />
+                          Đang tải dữ liệu khách hàng từ SQLite...
+                        </td>
+                      </tr>
+                    ) : customers.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          Chưa có khách hàng nào đăng ký trong hệ thống.
+                        </td>
+                      </tr>
+                    ) : (
+                      customers
+                        .filter((c) => {
+                          if (!customerSearch.trim()) return true;
+                          const q = customerSearch.toLowerCase();
+                          return (
+                            c.name?.toLowerCase().includes(q) ||
+                            c.email?.toLowerCase().includes(q) ||
+                            c.phone?.includes(q) ||
+                            c.address?.toLowerCase().includes(q)
+                          );
+                        })
+                        .map((c) => (
+                          <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                            <td className="p-4 pl-6">
+                              <div className="flex items-center space-x-3">
+                                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-banana-400 to-amber-500 text-navy-950 font-bold flex items-center justify-center text-xs shadow-sm uppercase shrink-0">
+                                  {c.name ? c.name.charAt(0) : "U"}
+                                </div>
+                                <div>
+                                  <div className="font-bold text-navy-900 text-xs">{c.name}</div>
+                                  <div className="text-[10px] text-slate-400">
+                                    Gia nhập: {new Date(c.createdAt).toLocaleDateString("vi-VN")}
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <div className="space-y-0.5">
+                                <div className="font-mono text-slate-800 text-[11px]">{c.email}</div>
+                                <div className="text-[11px] text-slate-500">📞 {c.phone}</div>
+                              </div>
+                            </td>
+                            <td className="p-4 max-w-xs">
+                              <div className="text-slate-600 line-clamp-2 text-[11px]" title={c.address}>
+                                📍 {c.address}
+                              </div>
+                            </td>
+                            <td className="p-4 text-center">
+                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold font-mono ${
+                                c.orderCount > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-400"
+                              }`}>
+                                {c.orderCount} đơn
+                              </span>
+                            </td>
+                            <td className="p-4 font-mono font-bold text-navy-900 text-xs">
+                              {(c.totalSpentVnd || 0).toLocaleString("vi-VN")} đ
+                            </td>
+                            <td className="p-4">
+                              {c.latestOrderCode ? (
+                                <div className="space-y-0.5">
+                                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-200">
+                                    #{c.latestOrderCode}
+                                  </span>
+                                  <div className="text-[10px] text-slate-400">
+                                    {c.latestOrderStatus || "Đang xử lý"}
+                                  </div>
+                                </div>
+                              ) : (
+                                <span className="text-slate-400 text-[11px]">Chưa có đơn</span>
+                              )}
+                            </td>
+                            <td className="p-4 pr-6 text-right">
+                              <button
+                                onClick={() => {
+                                  setActiveTab("orders");
+                                  setSearchTerm(c.email || c.name);
+                                }}
+                                className="px-3 py-1.5 bg-slate-100 hover:bg-banana-500 hover:text-navy-950 text-slate-700 font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center space-x-1"
+                                title="Xem danh sách đơn hàng của khách hàng này"
+                              >
+                                <Eye className="w-3.5 h-3.5" />
+                                <span>Xem Đơn</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1239,6 +1594,20 @@ export default function AdminDashboardPage() {
                             >
                               Chi Tiết
                             </button>
+                            <button
+                              onClick={() => openCancelModal(ord)}
+                              title="Hủy đơn"
+                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[10px]"
+                            >
+                              <Ban className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteOrder(ord.orderCode)}
+                              title="Xóa đơn rác"
+                              className="px-2 py-1 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg text-[10px]"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1629,6 +1998,115 @@ export default function AdminDashboardPage() {
                   className="px-5 py-2 bg-banana-500 hover:bg-banana-600 text-navy-950 rounded-xl font-bold disabled:opacity-50"
                 >
                   {isUpdating ? "Đang lưu..." : "Xác nhận cập nhật"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: HỦY ĐƠN HÀNG DÀNH CHO ADMIN */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative my-8">
+            <button
+              onClick={() => setCancelModalOrder(null)}
+              className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="flex items-center space-x-2 text-rose-600 mb-1">
+              <Ban className="w-5 h-5" />
+              <h3 className="text-lg font-bold text-navy-900">
+                Xác Nhận Hủy Đơn Hàng #{cancelModalOrder.orderCode}
+              </h3>
+            </div>
+            <p className="text-xs text-slate-500 mb-4">
+              Khách hàng: <strong>{cancelModalOrder.customerName}</strong> ({cancelModalOrder.customerPhone}) • {cancelModalOrder.productName}
+            </p>
+
+            <form onSubmit={handleCancelOrder} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Lý do hủy đơn hàng <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-rose-500"
+                >
+                  <option value="Sản phẩm hết hàng tại Nhật / Người bán hủy bán">
+                    1. Sản phẩm hết hàng tại Nhật / Người bán hủy bán
+                  </option>
+                  <option value="Người bán có dấu hiệu lừa đảo / Đánh giá quá thấp">
+                    2. Người bán có dấu hiệu lừa đảo / Đánh giá quá thấp
+                  </option>
+                  <option value="Hàng thuộc danh mục cấm bay quốc tế (Pin, Bình xịt khí nén, Chất lỏng cấm)">
+                    3. Hàng thuộc danh mục cấm bay quốc tế (Pin, Khí nén...)
+                  </option>
+                  <option value="Khách hàng yêu cầu hủy đơn hàng">
+                    4. Khách hàng yêu cầu hủy đơn hàng
+                  </option>
+                  <option value="Khác">5. Lý do khác (Nhập chi tiết bên dưới)</option>
+                </select>
+              </div>
+
+              {cancelReason === "Khác" && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Chi tiết lý do hủy
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={cancelCustomReason}
+                    onChange={(e) => setCancelCustomReason(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500"
+                    placeholder="Nhập lý do chi tiết để thông báo đến khách hàng..."
+                    required
+                  />
+                </div>
+              )}
+
+              {cancelModalOrder.paymentStatus !== "UNPAID" && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
+                  <div className="font-bold text-amber-800 flex items-center space-x-1.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600" />
+                    <span>Đơn hàng đã có tiền cọc ({cancelModalOrder.depositAmountVnd.toLocaleString("vi-VN")} đ)</span>
+                  </div>
+                  <label className="flex items-center space-x-2 text-slate-700 cursor-pointer pt-1">
+                    <input
+                      type="checkbox"
+                      checked={refundDeposit}
+                      onChange={(e) => setRefundDeposit(e.target.checked)}
+                      className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                    />
+                    <span className="font-semibold text-xs">
+                      Xác nhận đã hoàn trả tiền cọc cho khách hàng (Chuyển trạng thái thanh toán về Chưa cọc)
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-600">
+                Lưu ý: Sau khi hủy, đơn hàng sẽ chuyển sang trạng thái <strong>CANCELLED</strong> và được ghi nhật ký hành trình để khách hàng tra cứu minh bạch.
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setCancelModalOrder(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                >
+                  Đóng
+                </button>
+                <button
+                  type="submit"
+                  disabled={isCancelling}
+                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold disabled:opacity-50 flex items-center space-x-1.5"
+                >
+                  <Ban className="w-3.5 h-3.5" />
+                  <span>{isCancelling ? "Đang xử lý..." : "Xác Nhận Hủy Đơn"}</span>
                 </button>
               </div>
             </form>

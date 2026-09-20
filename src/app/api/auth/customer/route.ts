@@ -4,8 +4,29 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
+const CUSTOMER_SESSION_SECRET = process.env.CUSTOMER_SESSION_SECRET || "chillbanana-customer-session-secret-2026";
+
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest("hex");
+}
+
+function signSession(data: { id: string; email: string }): string {
+  const payload = JSON.stringify(data);
+  const signature = crypto.createHmac("sha256", CUSTOMER_SESSION_SECRET).update(payload).digest("hex");
+  return Buffer.from(`${payload}::${signature}`).toString("base64");
+}
+
+function verifySession(cookie: string): { id: string; email: string } | null {
+  try {
+    const decoded = Buffer.from(cookie, "base64").toString("utf-8");
+    const [payloadStr, signature] = decoded.split("::");
+    if (!payloadStr || !signature) return null;
+    const expectedSig = crypto.createHmac("sha256", CUSTOMER_SESSION_SECRET).update(payloadStr).digest("hex");
+    if (signature !== expectedSig) return null;
+    return JSON.parse(payloadStr);
+  } catch {
+    return null;
+  }
 }
 
 export async function GET(req: NextRequest) {
@@ -15,14 +36,8 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ customer: null });
     }
 
-    let parsed: { id: string; email: string };
-    try {
-      parsed = JSON.parse(Buffer.from(customerCookie, "base64").toString("utf-8"));
-    } catch {
-      return NextResponse.json({ customer: null });
-    }
-
-    if (!parsed.id) {
+    const parsed = verifySession(customerCookie);
+    if (!parsed || !parsed.id) {
       return NextResponse.json({ customer: null });
     }
 
@@ -89,9 +104,7 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      const sessionToken = Buffer.from(
-        JSON.stringify({ id: customer.id, email: customer.email })
-      ).toString("base64");
+      const sessionToken = signSession({ id: customer.id, email: customer.email });
 
       const response = NextResponse.json({
         success: true,
@@ -139,9 +152,7 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const sessionToken = Buffer.from(
-        JSON.stringify({ id: customer.id, email: customer.email })
-      ).toString("base64");
+      const sessionToken = signSession({ id: customer.id, email: customer.email });
 
       const sanitized = {
         id: customer.id,

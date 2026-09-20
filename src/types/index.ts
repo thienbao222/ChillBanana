@@ -5,7 +5,8 @@ export type OrderStatus =
   | "IN_TRANSIT_AIR"   // Đang vận chuyển quốc tế JP -> VN
   | "WAREHOUSE_VN"     // Đã về kho Hà Nội / TP.HCM
   | "LOCAL_DELIVERY"   // Đang giao hàng nội địa
-  | "COMPLETED";       // Giao hàng thành công
+  | "COMPLETED"        // Giao hàng thành công
+  | "CANCELLED";       // Đã hủy đơn hàng
 
 export type PaymentStatus = "UNPAID" | "DEPOSITED_50" | "PAID_100";
 export type PaymentMethod = "VIETQR" | "VNPAY" | "MOMO" | "COD";

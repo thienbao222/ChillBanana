@@ -24,7 +24,29 @@ export async function POST(req: NextRequest) {
     // 1. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
     const reply = await askGeminiAgent(message, selectedPersonality, history);
 
-    // 2. Lưu lại phiên hội thoại vào CSDL SQLite Prisma & Store để phục vụ thống kê xu hướng khách hàng
+    // 2. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
+    const msgLower = message.toLowerCase();
+    const keywordMap: Record<string, string> = {
+      "mỹ phẩm": "cosmetics", "kem chống nắng": "cosmetics", "sữa rửa mặt": "cosmetics", "tẩy trang": "cosmetics", "son": "cosmetics", "serum": "cosmetics",
+      "thực phẩm": "health", "tảo": "health", "vitamin": "health", "bổ não": "health", "collagen": "health",
+      "nồi cơm": "gadgets", "điện tử": "gadgets", "máy cạo": "gadgets", "đồng hồ": "gadgets", "tai nghe": "gadgets", "100v": "gadgets", "biến áp": "gadgets",
+      "gundam": "anime", "figure": "anime", "anime": "anime", "mô hình": "anime", "manga": "anime", "bandai": "anime",
+      "vận chuyển": "shipping", "cước": "shipping", "ship": "shipping", "gộp đơn": "shipping",
+      "tỷ giá": "exchange", "giá": "pricing", "bao nhiêu": "pricing",
+      "size": "sizing", "quần áo": "sizing", "giày": "sizing",
+    };
+    const detectedKeywords: string[] = [];
+    let topic = "Khác";
+    for (const [kw, cat] of Object.entries(keywordMap)) {
+      if (msgLower.includes(kw)) {
+        detectedKeywords.push(kw);
+        if (topic === "Khác") topic = cat;
+      }
+    }
+    const sentiment = msgLower.includes("không") || msgLower.includes("lỗi") || msgLower.includes("sai") ? "complaint"
+      : msgLower.includes("?") || msgLower.includes("hỏi") || msgLower.includes("tư vấn") ? "inquiry"
+      : "positive";
+
     try {
       saveChatInteraction(sessionId, message, reply, selectedPersonality);
 
@@ -32,9 +54,12 @@ export async function POST(req: NextRequest) {
         where: { sessionId },
         update: {
           personality: selectedPersonality,
+          topic,
+          detectedKeywords: detectedKeywords.join(","),
+          sentiment,
           messages: {
             create: [
-              { role: "user", content: message },
+              { role: "user", content: message, categoryTag: topic },
               { role: "assistant", content: reply },
             ],
           },
@@ -42,9 +67,12 @@ export async function POST(req: NextRequest) {
         create: {
           sessionId,
           personality: selectedPersonality,
+          topic,
+          detectedKeywords: detectedKeywords.join(","),
+          sentiment,
           messages: {
             create: [
-              { role: "user", content: message },
+              { role: "user", content: message, categoryTag: topic },
               { role: "assistant", content: reply },
             ],
           },
