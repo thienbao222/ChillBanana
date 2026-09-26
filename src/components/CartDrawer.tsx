@@ -46,6 +46,7 @@ export default function CartDrawer() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [customerNote, setCustomerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [orderResult, setOrderResult] = useState<any>(null);
 
   // Auto-fill from customer account if available
@@ -59,6 +60,33 @@ export default function CartDrawer() {
   }, [customer]);
 
   if (!isCartOpen) return null;
+
+  // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
+  const handleVnpayPayment = async (order: any) => {
+    setIsRedirecting(true);
+    try {
+      const res = await fetch("/api/payment/vnpay-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderCode: order.orderCode,
+          amount: order.depositAmountVnd,
+          orderInfo: `Dat coc 50% don hang ${order.orderCode} - ChillBanana`,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        alert("Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        setIsRedirecting(false);
+      }
+    } catch (err) {
+      console.error("[VNPAY REDIRECT]", err);
+      alert("Lỗi kết nối. Vui lòng thử lại.");
+      setIsRedirecting(false);
+    }
+  };
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -158,28 +186,52 @@ export default function CartDrawer() {
                 <CheckCircle2 className="w-8 h-8" />
               </div>
               <h4 className="text-lg font-bold font-serif text-emerald-950">
-                Đặt Hàng Thành Công!
+                Đơn Hàng Đã Tạo!
               </h4>
               <p className="text-xs text-emerald-800 mt-1">
-                Mã vận đơn của bạn là: <strong className="text-navy-900 bg-white px-2 py-0.5 rounded border border-emerald-300 font-mono text-sm">{orderResult.orderCode}</strong>
+                Mã đơn hàng:{" "}
+                <strong className="text-navy-900 bg-white px-2 py-0.5 rounded border border-emerald-300 font-mono text-sm">
+                  {orderResult.orderCode}
+                </strong>
               </p>
-              
-              {/* VietQR Quick Box */}
+
+              {/* Thông tin cọc */}
               <div className="mt-4 p-3 bg-white rounded-2xl border border-emerald-200 shadow-sm text-left text-xs space-y-2">
                 <div className="flex justify-between">
                   <span className="text-slate-500">Số tiền cọc 50%:</span>
-                  <strong className="text-banana-600 text-sm">{orderResult.depositAmountVnd?.toLocaleString()} đ</strong>
+                  <strong className="text-banana-600 text-sm">
+                    {orderResult.depositAmountVnd?.toLocaleString()} đ
+                  </strong>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Trạng thái:</span>
-                  <span className="font-semibold text-amber-600">Chờ chuyển cọc</span>
+                  <span className="text-slate-500">Phương thức:</span>
+                  <span className="font-semibold text-blue-700">VNPAY Sandbox</span>
                 </div>
                 <p className="text-[11px] text-slate-500 italic">
-                  * Chuyên viên Tokyo sẽ liên hệ Zalo/SĐT để xác nhận và tiến hành mua hàng ngay khi nhận được cọc.
+                  * Nhấn nút bên dưới để thanh toán qua cổng VNPAY. Đơn hàng sẽ tự động xác nhận sau khi thanh toán thành công.
                 </p>
               </div>
 
-              <div className="mt-5 flex gap-2">
+              {/* Nút thanh toán VNPAY */}
+              <button
+                onClick={() => handleVnpayPayment(orderResult)}
+                disabled={isRedirecting}
+                className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+              >
+                {isRedirecting ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    Đang chuyển đến VNPAY...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="w-4 h-4" />
+                    Thanh Toán Cọc Qua VNPAY
+                  </>
+                )}
+              </button>
+
+              <div className="mt-3 flex gap-2">
                 <a
                   href={`/tracking?orderCode=${orderResult.orderCode}`}
                   className="flex-1 py-2.5 bg-navy-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors inline-block"
@@ -197,6 +249,7 @@ export default function CartDrawer() {
                 </button>
               </div>
             </div>
+
           ) : items.length === 0 ? (
             <div className="text-center py-16 px-4">
               <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center mx-auto text-3xl mb-3 shadow-inner">

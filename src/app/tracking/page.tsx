@@ -49,6 +49,21 @@ function TrackingContent() {
   const [cancelCustomReason, setCancelCustomReason] = useState("");
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // Trạng thái thanh toán VNPAY trả về
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | null>(null);
+
+  useEffect(() => {
+    const code = searchParams.get("orderCode");
+    const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | null;
+    if (code) {
+      setSearchCode(code);
+      fetchOrder(code);
+    }
+    if (payment) {
+      setPaymentStatus(payment);
+    }
+  }, [searchParams]);
+
   const fetchOrder = async (code: string) => {
     if (!code.trim()) return;
     setLoading(true);
@@ -165,6 +180,44 @@ function TrackingContent() {
 
   return (
     <div className="space-y-8">
+      {/* Banner kết quả thanh toán VNPAY */}
+      {paymentStatus === "success" && (
+        <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-300 rounded-2xl text-sm text-emerald-900 shadow">
+          <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+          <div>
+            <p className="font-bold">Thanh toán thành công qua VNPAY! 🎉</p>
+            <p className="text-xs text-emerald-700">Cọc 50% của bạn đã được xác nhận. Đội ngũ Tokyo sẽ tiến hành mua hàng ngay!</p>
+          </div>
+          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-600 hover:text-emerald-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {paymentStatus === "failed" && (
+        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-300 rounded-2xl text-sm text-rose-900 shadow">
+          <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
+          <div>
+            <p className="font-bold">Thanh toán chưa hoàn tất</p>
+            <p className="text-xs text-rose-700">Giao dịch bị hủy hoặc thất bại. Đơn hàng của bạn vẫn còn đó — bạn có thể thử thanh toán lại.</p>
+          </div>
+          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-rose-600 hover:text-rose-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+      {paymentStatus === "invalid" && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-300 rounded-2xl text-sm text-amber-900 shadow">
+          <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
+          <div>
+            <p className="font-bold">Phản hồi thanh toán không hợp lệ</p>
+            <p className="text-xs text-amber-700">Chữ ký xác thực từ VNPAY không khớp. Vui lòng liên hệ bộ phận hỗ trợ.</p>
+          </div>
+          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-amber-600 hover:text-amber-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Top Tabs Switcher (Khi khách hàng đã đăng nhập) */}
       {customer && (
         <div className="flex justify-center">
