@@ -54,6 +54,7 @@ export default function OrderCalculator() {
   const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
   const [customerNote, setCustomerNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRedirecting, setIsRedirecting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
   // Auto-fill from customer account if logged in
@@ -147,6 +148,33 @@ export default function OrderCalculator() {
   };
 
   const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy);
+
+  // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
+  const handleVnpayPayment = async (order: any) => {
+    setIsRedirecting(true);
+    try {
+      const res = await fetch("/api/payment/vnpay-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderCode: order.orderCode,
+          amount: order.depositAmountVnd,
+          orderInfo: `Dat coc 50% don hang ${order.orderCode} - ChillBanana`,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      } else {
+        alert("Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        setIsRedirecting(false);
+      }
+    } catch (err) {
+      console.error("[VNPAY REDIRECT]", err);
+      alert("Lỗi kết nối. Vui lòng thử lại.");
+      setIsRedirecting(false);
+    }
+  };
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -759,7 +787,7 @@ export default function OrderCalculator() {
                 </div>
               </form>
             ) : (
-              /* Màn hình hiển thị mã VietQR thanh toán thật */
+              /* Màn hình hiển thị kết quả đặt hàng và nút VNPAY */
               <div className="text-center space-y-4">
                 <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
                   <CheckCircle2 className="w-7 h-7" />
@@ -773,31 +801,48 @@ export default function OrderCalculator() {
                   </p>
                 </div>
 
-                {/* Khung VietQR Code Chuẩn Napas 247 */}
+                {/* Thông tin cọc & VNPAY */}
                 <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 max-w-sm mx-auto">
-                  <p className="text-xs font-bold text-slate-700 mb-2">
-                    Quét mã VietQR chuyển khoản (Mở mọi App Ngân Hàng):
-                  </p>
-                  <img
-                    src={`https://api.vietqr.io/image/970422-0988889999-compact.png?amount=${orderSuccessData.depositAmountVnd}&addInfo=${encodeURIComponent(orderSuccessData.orderCode)}&accountName=CHILLBANANA%20ORDER%20VIETNAM`}
-                    alt="VietQR Napas 247"
-                    className="w-56 h-auto mx-auto rounded-2xl shadow-sm border border-slate-200"
-                  />
-                  <div className="mt-3 text-xs space-y-1 text-slate-600 text-left bg-white p-3 rounded-xl border">
-                    <p>🏦 Ngân hàng: <strong>MB Bank (Ngân Hàng Quân Đội)</strong></p>
-                    <p>💳 Số tài khoản: <strong>0988 889 999</strong></p>
-                    <p>👤 Chủ tài khoản: <strong>CHILLBANANA ORDER VIETNAM</strong></p>
-                    <p>💰 Số tiền cần cọc: <strong className="text-banana-700 font-bold">{orderSuccessData.depositAmountVnd.toLocaleString("vi-VN")} đ</strong></p>
-                    <p>📝 Nội dung CK: <strong className="text-blue-700">{orderSuccessData.orderCode}</strong></p>
+                  <div className="mt-3 text-xs space-y-2 text-slate-600 text-left bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
+                    <div className="flex justify-between items-center">
+                      <span>Số tiền cọc 50%:</span>
+                      <strong className="text-banana-700 font-bold text-sm">{orderSuccessData.depositAmountVnd.toLocaleString("vi-VN")} đ</strong>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span>Phương thức:</span>
+                      <span className="font-bold text-blue-700">VNPAY Sandbox</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 italic mt-2 border-t pt-2 border-slate-100">
+                      * Nhấn nút bên dưới để thanh toán qua cổng VNPAY. Đơn hàng sẽ tự động xác nhận sau khi thanh toán thành công.
+                    </p>
                   </div>
+
+                  {/* Nút thanh toán VNPAY */}
+                  <button
+                    onClick={() => handleVnpayPayment(orderSuccessData)}
+                    disabled={isRedirecting}
+                    className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                  >
+                    {isRedirecting ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Đang chuyển đến VNPAY...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="w-4 h-4" />
+                        Thanh Toán Cọc Qua VNPAY
+                      </>
+                    )}
+                  </button>
                 </div>
 
                 <div className="flex space-x-3 pt-2">
                   <a
-                    href={`/tracking?code=${orderSuccessData.orderCode}`}
-                    className="flex-1 py-3 bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl transition-colors text-center"
+                    href={`/tracking?orderCode=${orderSuccessData.orderCode}`}
+                    className="flex-1 py-3 bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold rounded-2xl transition-colors text-center flex items-center justify-center"
                   >
-                    Tra Cứu Tiến Độ Đơn Hàng (7 Bước)
+                    Tra Cứu Đơn Hàng (7 Bước)
                   </a>
                   <button
                     onClick={() => {
