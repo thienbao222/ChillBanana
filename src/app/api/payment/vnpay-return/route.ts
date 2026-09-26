@@ -42,7 +42,9 @@ export async function GET(req: NextRequest) {
   const isValidSignature = signed === secureHash;
   const isSuccess = responseCode === "00";
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
   if (!isValidSignature) {
     // Chữ ký không hợp lệ — redirect về tracking với lỗi

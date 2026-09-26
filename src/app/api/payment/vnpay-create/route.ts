@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
     const tmnCode = process.env.VNPAY_TMN_CODE!;
     const hashSecret = process.env.VNPAY_HASH_SECRET!;
     const vnpUrl = process.env.VNPAY_URL!;
-    const returnUrl = `${process.env.NEXT_PUBLIC_APP_URL}/api/payment/vnpay-return`;
+
+    // Tự động phát hiện base URL: ưu tiên env var, sau dùng VERCEL_URL (Vercel tự set), cuối cùng dùng localhost
+    const baseUrl =
+      process.env.NEXT_PUBLIC_APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+
+    const returnUrl = `${baseUrl}/api/payment/vnpay-return`;
 
     const now = new Date();
     // Múi giờ Vietnam (GMT+7)

@@ -185,6 +185,11 @@ add_p(doc, "- PostgreSQL (triển khai trên nền tảng Neon Serverless): CSDL
 add_p(doc, "- Prisma ORM: Công cụ giao tiếp với CSDL, giúp định nghĩa lược đồ (schema) minh bạch bằng file schema.prisma và thao tác dữ liệu thông qua các hàm an toàn kiểu (type-safe).")
 add_heading(doc, "2.2.4. Trí tuệ nhân tạo (AI)", 3)
 add_p(doc, "- Google Gemini 2.5 Flash: Tích hợp qua thư viện @google/genai, cung cấp khả năng hiểu ngôn ngữ tự nhiên để đóng vai trò trợ lý tư vấn (Omotenashi/Vietnamese style) và trích xuất dữ liệu ẩn.")
+add_heading(doc, "2.2.5. Triển khai (Deployment)", 3)
+add_p(doc, "- Vercel (Serverless Platform): Nền tảng triển khai ứng dụng Next.js được lựa chọn do khả năng tích hợp sâu với framework. Vercel tự động tạo môi trường Preview cho mỗi commit, hỗ trợ CI/CD không cần cấu hình phức tạp và cung cấp biến môi trường VERCEL_URL tự động để các API nội bộ nhận biết đúng địa chỉ host đang chạy.")
+add_p(doc, "- Neon (Serverless PostgreSQL): Dịch vụ PostgreSQL dạng serverless được lựa chọn thay thế cho SQLite khi đưa lên Vercel. Neon hỗ trợ Pooling Connection đặc biệt phù hợp với môi trường serverless, giải quyết bài toán giới hạn kết nối đồng thời mà SQLite và các CSDL truyền thống không thể đáp ứng.")
+add_heading(doc, "2.2.6. Cổng thanh toán (Payment Gateway)", 3)
+add_p(doc, "- VNPAY Sandbox: Cổng thanh toán trực tuyến của VNPAY được tích hợp ở môi trường Sandbox (thử nghiệm). Hệ thống tự sinh URL thanh toán có chữ ký HMAC-SHA512, chuyển hướng khách hàng sang trang VNPAY để thực hiện thanh toán, sau đó nhận kết quả qua Return URL (webhook một chiều). Khi thanh toán thành công, trạng thái đơn hàng tự động được cập nhật sang DEPOSITED_50 và PURCHASING_JP trong cơ sở dữ liệu mà không cần nhân viên can thiệp thủ công.")
 
 add_heading(doc, "2.3. Kiến trúc hệ thống", 2)
 add_p(doc, "Hệ thống áp dụng kiến trúc Client-Server liền mạch (Monolithic-like architecture) nhờ Next.js. Luồng xử lý tiêu biểu: Người dùng tương tác giao diện (Client) -> Gọi API nội bộ (Route Handlers) -> API kiểm tra xác thực (HMAC Auth) -> Tương tác Database (Prisma) -> Trả về kết quả JSON -> Client cập nhật UI.")
