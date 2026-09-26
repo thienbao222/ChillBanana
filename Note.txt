@@ -1,4 +1,0 @@
-1- CSDL thành SQLite
-2- bỏ giới hạn Ai angent 
-3- trang admin quảng trị thêm 1 giao diện khác 
-4- Chỉnh cho web có thể việc thật người thật, không có dữ liệu mẫu, không làm đối phó
