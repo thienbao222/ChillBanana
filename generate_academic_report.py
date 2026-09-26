@@ -132,7 +132,7 @@ add_p(doc, "", bold_prefix="Mục tiêu tổng quát: ")
 add_p(doc, "Xây dựng hoàn chỉnh một ứng dụng web thương mại điện tử chuyên biệt cho dịch vụ mua hộ hàng Nhật, tối ưu hóa quy trình từ khâu tra cứu giá, đặt cọc đến theo dõi vận đơn, đồng thời cung cấp công cụ quản trị (Admin Dashboard) hiệu quả cho nhân viên vận hành.")
 add_p(doc, "", bold_prefix="Các mục tiêu cụ thể: ")
 add_p(doc, "- Phát triển module tính giá tự động tích hợp API tỷ giá thời gian thực.")
-add_p(doc, "- Xây dựng luồng giỏ hàng và thanh toán đặt cọc an toàn, tạo mã VietQR tự động.")
+add_p(doc, "- Xây dựng luồng giỏ hàng và thanh toán đặt cọc an toàn, tích hợp cổng thanh toán VNPAY (Môi trường Sandbox).")
 add_p(doc, "- Triển khai hệ thống theo dõi đơn hàng (Tracking) qua 7 chặng minh bạch.")
 add_p(doc, "- Xây dựng phân hệ quản trị (Admin) tách biệt, bảo mật bằng HMAC-SHA256.")
 add_p(doc, "- Tích hợp Trợ lý ảo AI (sử dụng Google Gemini 2.5) để tư vấn khách hàng và tự động trích xuất dữ liệu xu hướng (từ khóa, cảm xúc) hỗ trợ quản trị viên phân tích thị trường.")
@@ -234,14 +234,14 @@ add_p(doc, "Đây là một điểm sáng về kỹ thuật của dự án. Thay
 
 add_heading(doc, "3.4. Thảo luận kết quả", 2)
 add_p(doc, "Dự án đã giải quyết thành công bài toán minh bạch chi phí thông qua việc sử dụng API tỷ giá thời gian thực. Việc tách biệt cước bay quốc tế và tính tiền cọc 50% dựa trên thực tế nhận được sự đánh giá cao về mặt logic nghiệp vụ. Ứng dụng AI vào phân tích từ khóa khách hàng mở ra tiềm năng rất lớn cho việc định hướng nhập hàng bán sẵn (ready-stock) thay vì chỉ làm dịch vụ mua hộ thụ động.")
-add_p(doc, "Tuy nhiên, hệ thống vẫn tồn tại một số hạn chế kỹ thuật. Tính năng 'Dán link sản phẩm' hiện tại chưa bóc tách (scrape) được toàn bộ dữ liệu phức tạp từ các trang thương mại điện tử bảo mật cao (như Amazon có cơ chế chống bot). Việc thanh toán đặt cọc qua mã VietQR hiện đang phải dựa vào việc nhân sự kiểm tra tài khoản ngân hàng và cập nhật thủ công trên hệ thống, chưa tích hợp Webhook để xác nhận tự động theo thời gian thực.")
+add_p(doc, "Tuy nhiên, tính năng 'Dán link sản phẩm' hiện tại chưa bóc tách (scrape) được toàn bộ dữ liệu phức tạp từ các trang thương mại điện tử bảo mật cao (như Amazon có cơ chế chống bot). Điểm cộng lớn của phiên bản hiện tại là đã thay thế việc kiểm tra chuyển khoản thủ công bằng việc tích hợp thành công Cổng thanh toán VNPAY (môi trường Sandbox) để tự động hóa hoàn toàn luồng nhận cọc và xác nhận trạng thái đơn hàng.")
 
 # CHƯƠNG 4
 doc.add_page_break()
 add_heading(doc, "CHƯƠNG 4: GIẢI PHÁP VÀ KIẾN NGHỊ", 1)
 
 add_heading(doc, "4.1. Giải pháp cải thiện hệ thống", 2)
-add_p(doc, "- Về mặt thanh toán: Kiến nghị tích hợp Webhook từ các nhà cung cấp dịch vụ ngân hàng (như SePay hoặc PayOS) để khi khách hàng quét mã QR thanh toán thành công, ngân hàng sẽ tự động gọi API báo cho ChillBanana cập nhật trạng thái đơn hàng từ 'PENDING_DEPOSIT' sang 'PURCHASING_JP' trong vòng 3 giây, loại bỏ hoàn toàn sự can thiệp thủ công.")
+add_p(doc, "- Về mặt thanh toán: Hiện tại hệ thống đang sử dụng cổng thanh toán VNPAY ở môi trường Sandbox phục vụ cho mục đích thử nghiệm và làm đồ án. Để đưa vào hoạt động kinh doanh thực tế, kiến nghị thực hiện thủ tục đăng ký định danh Merchant (KYC) với VNPAY để chuyển đổi API key sang môi trường Production, cho phép nhận tiền thật từ khách hàng.")
 add_p(doc, "- Về mặt dữ liệu giá: Cần xây dựng một hệ thống Crawler tinh vi hơn hoặc sử dụng các API trả phí chuyên dụng để bóc tách chính xác giá tiền, hình ảnh và phân loại (variation) từ link Amazon Nhật/Mercari mà khách hàng cung cấp.")
 
 add_heading(doc, "4.2. Giải pháp mở rộng nghiệp vụ", 2)
