@@ -48,8 +48,8 @@ export default function AdminDashboardPage() {
   const [authChecking, setAuthChecking] = useState(true);
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
-  // Tab đang chọn trong chế độ Dashboard: "orders" | "customers" | "products" | "ai_trends"
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "ai_trends" | "products">("orders");
+  // Tab đang chọn trong chế độ Dashboard: "orders" | "customers" | "products" | "ai_trends" | "reports"
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "ai_trends" | "products" | "reports">("orders");
 
   // Quản lý Khách Hàng (Customer CRM)
   const [customers, setCustomers] = useState<any[]>([]);
@@ -85,6 +85,10 @@ export default function AdminDashboardPage() {
   const [aiSessions, setAiSessions] = useState<any[]>([]);
   const [loadingAi, setLoadingAi] = useState(false);
   const [selectedAiSession, setSelectedAiSession] = useState<any | null>(null);
+
+  // Báo cáo doanh thu & mặt hàng
+  const [reportData, setReportData] = useState<any>(null);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   // Quản lý Sản Phẩm (Products CRUD)
   const [products, setProducts] = useState<CuratedProduct[]>([]);
@@ -193,19 +197,36 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 6. Tải báo cáo doanh thu
+  const fetchReport = async () => {
+    setLoadingReport(true);
+    try {
+      const res = await fetch("/api/admin/reports");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setReportData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingReport(false);
+    }
+  };
+
   useEffect(() => {
     if (!authChecking) {
       fetchOrders();
       fetchAiTrends();
       fetchProducts();
       fetchCustomers();
+      fetchReport();
     }
   }, [authChecking]);
 
   useEffect(() => {
-    if (activeTab === "customers") {
-      fetchCustomers();
-    }
+    if (activeTab === "customers") fetchCustomers();
+    if (activeTab === "ai_trends") fetchAiTrends();
+    if (activeTab === "reports") fetchReport();
   }, [activeTab]);
 
   // Handlers Quản lý sản phẩm
@@ -475,7 +496,7 @@ export default function AdminDashboardPage() {
 
   const handleDeleteOrder = async (orderCode: string) => {
     const confirmed = window.confirm(
-      `CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN đơn hàng #${orderCode} khỏi cơ sở dữ liệu SQLite?\nThao tác này sẽ dọn sạch dữ liệu và không thể hoàn tác!`
+      `CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN đơn hàng #${orderCode} khỏi cơ sở dữ liệu?\nThao tác này sẽ dọn sạch dữ liệu và không thể hoàn tác!`
     );
     if (!confirmed) return;
 
@@ -506,7 +527,11 @@ export default function AdminDashboardPage() {
   });
 
   const totalRevenue = orders.reduce((acc, curr) => acc + curr.totalVnd, 0);
+  const actualRevenue = orders
+    .filter((o) => o.paymentStatus !== "UNPAID")
+    .reduce((acc, curr) => acc + curr.depositAmountVnd, 0);
   const depositedCount = orders.filter((o) => o.paymentStatus !== "UNPAID").length;
+  const completedCount = orders.filter((o) => o.status === "COMPLETED").length;
 
   if (authChecking) {
     return (
@@ -605,6 +630,16 @@ export default function AdminDashboardPage() {
                   <BarChart3 className="w-3.5 h-3.5" />
                   <span>Xu Hướng AI</span>
                 </button>
+
+                <button
+                  onClick={() => setActiveTab("reports")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
+                    activeTab === "reports" ? "bg-slate-800 text-white border border-slate-700 shadow" : "text-slate-400 hover:text-white"
+                  }`}
+                >
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Báo Cáo</span>
+                </button>
               </nav>
             )}
           </div>
@@ -669,7 +704,15 @@ export default function AdminDashboardPage() {
               activeTab === "ai_trends" ? "bg-banana-500 text-navy-950" : "text-slate-300"
             }`}
           >
-            Xu Hướng AI
+            AI
+          </button>
+          <button
+            onClick={() => setActiveTab("reports")}
+            className={`flex-1 py-2 text-center font-bold ${
+              activeTab === "reports" ? "bg-banana-500 text-navy-950" : "text-slate-300"
+            }`}
+          >
+            Báo Cáo
           </button>
         </div>
       </header>
@@ -691,29 +734,31 @@ export default function AdminDashboardPage() {
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
                 <span className="text-xs font-medium text-slate-500">Tổng Đơn Hàng</span>
                 <div className="text-2xl font-bold text-navy-900 mt-1">{orders.length} đơn</div>
-                <span className="text-[11px] text-emerald-600 font-bold mt-1 inline-block">Được lưu trữ an toàn trong CSDL</span>
+                <span className="text-[11px] text-emerald-600 font-bold mt-1 inline-block">Lưu trữ an toàn trong CSDL</span>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Doanh Thu Dự Kiến</span>
+                <span className="text-xs font-medium text-slate-500">Doanh Thu Thực Thu</span>
                 <div className="text-2xl font-bold text-banana-600 mt-1 font-mono">
-                  {totalRevenue.toLocaleString("vi-VN")} đ
+                  {actualRevenue.toLocaleString("vi-VN")} đ
                 </div>
-                <span className="text-[11px] text-slate-500 mt-1 inline-block">Quy đổi theo tỷ giá live</span>
+                <span className="text-[11px] text-slate-500 mt-1 inline-block">Tổng cọc đã nhận từ {depositedCount} đơn</span>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Đơn Đã Nhận Cọc</span>
+                <span className="text-xs font-medium text-slate-500">Đơn Hoàn Thành</span>
                 <div className="text-2xl font-bold text-emerald-600 mt-1 font-mono">
-                  {depositedCount} / {orders.length}
+                  {completedCount} / {orders.length}
                 </div>
-                <span className="text-[11px] text-emerald-600 mt-1 inline-block">Đạt chuẩn thanh toán VietQR</span>
+                <span className="text-[11px] text-emerald-600 mt-1 inline-block">
+                  Tỷ lệ: {orders.length > 0 ? Math.round((completedCount / orders.length) * 100) : 0}% hoàn thành
+                </span>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Đang Xử Lý Mua &amp; Vận Chuyển</span>
+                <span className="text-xs font-medium text-slate-500">Đang Xử Lý Mua & Vận Chuyển</span>
                 <div className="text-2xl font-bold text-blue-600 mt-1 font-mono">
-                  {orders.filter((o) => o.status !== "COMPLETED" && o.status !== "PENDING_DEPOSIT").length} đơn
+                  {orders.filter((o) => o.status !== "COMPLETED" && o.status !== "PENDING_DEPOSIT" && o.status !== "CANCELLED").length} đơn
                 </div>
                 <span className="text-[11px] text-slate-500 mt-1 inline-block">Tiến độ 7 bước liên tục</span>
               </div>
@@ -1303,39 +1348,44 @@ export default function AdminDashboardPage() {
             </div>
 
             {/* Metric Summaries */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-banana-100 flex items-center justify-center text-banana-700 text-xl font-bold">
-                  💬
-                </div>
+                <div className="w-12 h-12 rounded-2xl bg-banana-100 flex items-center justify-center text-xl font-bold">💬</div>
                 <div>
                   <span className="text-xs text-slate-500 font-medium">Tổng Phiên Hội Thoại</span>
-                  <div className="text-2xl font-bold text-navy-900 font-mono">
-                    {aiStats?.totalSessions || 0}
-                  </div>
+                  <div className="text-2xl font-bold text-navy-900 font-mono">{aiStats?.totalSessions || 0}</div>
+                  <div className="text-[10px] text-slate-400">{aiStats?.userMessages || 0} tin nhắn từ khách</div>
                 </div>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-emerald-700 text-xl font-bold">
-                  ⚡
-                </div>
+                <div className="w-12 h-12 rounded-2xl bg-emerald-100 flex items-center justify-center text-xl font-bold">⚡</div>
                 <div>
                   <span className="text-xs text-slate-500 font-medium">Tổng Tin Nhắn Tư Vấn</span>
-                  <div className="text-2xl font-bold text-navy-900 font-mono">
-                    {aiStats?.totalMessages || 0}
-                  </div>
+                  <div className="text-2xl font-bold text-navy-900 font-mono">{aiStats?.totalMessages || 0}</div>
+                  <div className="text-[10px] text-slate-400">{aiStats?.aiMessages || 0} phản hồi từ AI</div>
                 </div>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
-                <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-blue-700 text-xl font-bold">
-                  🎯
-                </div>
+                <div className="w-12 h-12 rounded-2xl bg-banana-100 flex items-center justify-center text-xl font-bold">🔥</div>
                 <div>
-                  <span className="text-xs text-slate-500 font-medium">Tỷ Lệ Hỏi Mua &amp; Tìm Kiếm</span>
-                  <div className="text-2xl font-bold text-navy-900 font-mono">
-                    {aiStats?.totalSessions > 0 ? Math.round(((aiStats?.sentimentSummary?.inquiry || 0) / aiStats.totalSessions) * 100) : 0}%
+                  <span className="text-xs text-slate-500 font-medium">Từ Khóa Hot Nhất</span>
+                  <div className="text-sm font-bold text-banana-700 mt-1 truncate max-w-[120px]">{aiStats?.hotKeyword || "—"}</div>
+                  <div className="text-[10px] text-slate-400">Xuất hiện nhiều nhất</div>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 flex items-center justify-center text-xl font-bold">🎭</div>
+                <div>
+                  <span className="text-xs text-slate-500 font-medium">Cảm Xúc Chủ Đạo</span>
+                  <div className="text-sm font-bold text-navy-900 mt-1">
+                    {aiStats?.dominantSentiment === "positive" ? "😊 Tích cực" :
+                     aiStats?.dominantSentiment === "complaint" ? "😤 Phàn nàn" : "🤔 Tìm hiểu"}
+                  </div>
+                  <div className="text-[10px] text-slate-400">
+                    {aiStats?.sentimentSummary?.positive || 0} tích cực • {aiStats?.sentimentSummary?.complaint || 0} phàn nàn
                   </div>
                 </div>
               </div>
@@ -1485,6 +1535,215 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
+          </div>
+        )}
+
+
+        {/* ======================================================== */}
+        {/* TAB 5: BÁO CÁO DOANH THU & MẶT HÀNG BÁN CHẠY           */}
+        {/* ======================================================== */}
+        {activeTab === "reports" && (
+          <div className="space-y-6">
+
+            {/* Header */}
+            <div className="bg-gradient-to-r from-navy-900 via-slate-800 to-navy-900 text-white p-6 rounded-3xl shadow-lg flex flex-col md:flex-row items-center justify-between gap-4">
+              <div>
+                <span className="inline-flex items-center space-x-1.5 bg-banana-500/20 text-banana-300 text-xs font-bold px-3 py-1 rounded-full mb-2 border border-banana-500/30">
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Báo Cáo Kinh Doanh Thực Tế</span>
+                </span>
+                <h2 className="text-2xl font-serif font-bold text-white">
+                  Thống Kê Doanh Thu & Mặt Hàng Bán Chạy
+                </h2>
+                <p className="text-xs text-slate-400 mt-1 max-w-2xl">
+                  Dữ liệu tổng hợp từ PostgreSQL (Neon). Doanh thu thực thu chỉ tính các đơn hàng đã nhận cọc (DEPOSITED_50 / PAID_100).
+                </p>
+              </div>
+              <button
+                onClick={fetchReport}
+                className="px-4 py-2.5 bg-banana-500 hover:bg-banana-400 text-navy-950 font-bold text-xs rounded-2xl shadow transition-all flex items-center space-x-2 shrink-0"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loadingReport ? "animate-spin" : ""}`} />
+                <span>Làm Mới</span>
+              </button>
+            </div>
+
+            {loadingReport ? (
+              <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
+                <RefreshCw className="w-5 h-5 animate-spin mr-2" /> Đang tải dữ liệu báo cáo...
+              </div>
+            ) : reportData ? (
+              <>
+                {/* KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-medium text-slate-500">Tổng Đơn Hàng</span>
+                    <div className="text-2xl font-bold text-navy-900 mt-1 font-mono">{reportData.kpi.totalOrders}</div>
+                    <div className="text-[11px] text-slate-500 mt-1">{reportData.kpi.activeOrders} đang xử lý • {reportData.kpi.cancelledOrders} đã hủy</div>
+                  </div>
+                  <div className="bg-white p-5 rounded-3xl border border-banana-200 shadow-sm bg-banana-50/50">
+                    <span className="text-xs font-medium text-slate-500">Doanh Thu Thực Thu</span>
+                    <div className="text-2xl font-bold text-banana-600 mt-1 font-mono">{reportData.kpi.actualRevenue.toLocaleString("vi-VN")} đ</div>
+                    <div className="text-[11px] text-slate-500 mt-1">Tổng cọc đã nhận thực tế</div>
+                  </div>
+                  <div className="bg-white p-5 rounded-3xl border border-emerald-200 shadow-sm bg-emerald-50/50">
+                    <span className="text-xs font-medium text-slate-500">Đơn Hoàn Thành</span>
+                    <div className="text-2xl font-bold text-emerald-600 mt-1 font-mono">{reportData.kpi.completedOrders}</div>
+                    <div className="text-[11px] text-emerald-700 mt-1 font-bold">Tỷ lệ: {reportData.kpi.conversionRate}%</div>
+                  </div>
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
+                    <span className="text-xs font-medium text-slate-500">Giá Trị Trung Bình / Đơn</span>
+                    <div className="text-2xl font-bold text-blue-600 mt-1 font-mono">{reportData.kpi.avgOrderValue.toLocaleString("vi-VN")} đ</div>
+                    <div className="text-[11px] text-slate-500 mt-1">Dựa trên tổng giá trị đơn</div>
+                  </div>
+                </div>
+
+                {/* 2-Col: Top Products + Category */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                  {/* Top Products */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between border-b pb-3 mb-4">
+                      <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                        <TrendingUp className="w-4 h-4 text-banana-600" />
+                        <span>Top 10 Mặt Hàng Đặt Mua Nhiều Nhất</span>
+                      </h3>
+                      <span className="text-[10px] text-slate-400">Nhóm theo tên sản phẩm</span>
+                    </div>
+                    <div className="space-y-2.5">
+                      {reportData.topProducts.length === 0 ? (
+                        <p className="text-xs text-slate-400 text-center py-6">Chưa có dữ liệu đơn hàng</p>
+                      ) : (
+                        reportData.topProducts.map((p: any, idx: number) => (
+                          <div key={idx} className="flex items-center justify-between text-xs p-2.5 bg-slate-50 rounded-2xl hover:bg-banana-50/60 transition-colors">
+                            <div className="flex items-center space-x-3 flex-1 min-w-0">
+                              <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                                idx === 0 ? "bg-banana-500 text-navy-950" :
+                                idx === 1 ? "bg-slate-300 text-slate-800" :
+                                idx === 2 ? "bg-amber-300 text-amber-900" : "bg-slate-200 text-slate-600"
+                              }`}>{idx + 1}</span>
+                              <div className="min-w-0">
+                                <p className="font-semibold text-slate-800 truncate">{p.name}</p>
+                                <p className="text-slate-400 text-[10px]">{
+                                  p.category === "cosmetics" ? "Mỹ phẩm" :
+                                  p.category === "health" ? "Thực phẩm CN" :
+                                  p.category === "gadgets" ? "Gia dụng" :
+                                  p.category === "anime" ? "Anime" : "Khác"
+                                }</p>
+                              </div>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="font-mono font-bold text-navy-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">{p.count} đơn</span>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Category Revenue Breakdown */}
+                  <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                    <div className="flex items-center justify-between border-b pb-3 mb-4">
+                      <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                        <ShoppingBag className="w-4 h-4 text-blue-600" />
+                        <span>Phân Bổ Doanh Thu Theo Danh Mục</span>
+                      </h3>
+                      <span className="text-[10px] text-slate-400">Chỉ đơn đã cọc</span>
+                    </div>
+                    <div className="space-y-4">
+                      {reportData.categoryBreakdown.map((cat: any, idx: number) => {
+                        const total = reportData.categoryBreakdown.reduce((s: number, c: any) => s + c.revenue, 0);
+                        const pct = total > 0 ? Math.round((cat.revenue / total) * 100) : 0;
+                        const colors = ["bg-banana-400", "bg-emerald-400", "bg-blue-400", "bg-purple-400", "bg-slate-300"];
+                        return (
+                          <div key={idx} className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-medium text-slate-700">{cat.label}</span>
+                              <span className="font-mono font-bold text-slate-900">
+                                {cat.revenue.toLocaleString("vi-VN")} đ <span className="text-slate-400 font-normal">({pct}%)</span>
+                              </span>
+                            </div>
+                            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full ${colors[idx % colors.length]} rounded-full transition-all duration-700`}
+                                style={{ width: `${Math.max(pct, pct > 0 ? 3 : 0)}%` }}
+                              />
+                            </div>
+                            <p className="text-[10px] text-slate-400">{cat.count} đơn đã cọc</p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Daily Revenue 7 ngày */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between border-b pb-3 mb-5">
+                    <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      <span>Doanh Thu & Số Đơn Theo Ngày (7 Ngày Gần Nhất)</span>
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-7 gap-2">
+                    {reportData.dailyRevenue.map((day: any, idx: number) => {
+                      const maxRev = Math.max(...reportData.dailyRevenue.map((d: any) => d.revenue), 1);
+                      const barH = Math.max(day.revenue > 0 ? Math.round((day.revenue / maxRev) * 100) : 0, day.revenue > 0 ? 6 : 0);
+                      const label = new Date(day.date).toLocaleDateString("vi-VN", { weekday: "short", day: "2-digit", month: "2-digit" });
+                      return (
+                        <div key={idx} className="flex flex-col items-center space-y-1.5">
+                          <span className="text-[10px] font-mono font-bold text-slate-700">{day.count > 0 ? day.count : ""}</span>
+                          <div className="w-full h-24 flex items-end">
+                            <div
+                              className={`w-full rounded-t-lg transition-all duration-700 ${day.revenue > 0 ? "bg-banana-400" : "bg-slate-100"}`}
+                              style={{ height: `${barH}%` }}
+                              title={`${day.revenue.toLocaleString("vi-VN")} đ`}
+                            />
+                          </div>
+                          <span className="text-[9px] text-slate-400 text-center leading-tight">{label}</span>
+                          {day.revenue > 0 && (
+                            <span className="text-[9px] font-mono text-banana-700 font-bold text-center">
+                              {(day.revenue / 1000).toFixed(0)}K
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Status Breakdown */}
+                <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm">
+                  <div className="flex items-center justify-between border-b pb-3 mb-4">
+                    <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                      <Package className="w-4 h-4 text-slate-600" />
+                      <span>Phân Bổ Đơn Hàng Theo Trạng Thái</span>
+                    </h3>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { key: "PENDING_DEPOSIT", label: "Chờ Cọc", color: "text-amber-600 bg-amber-50 border-amber-200" },
+                      { key: "PURCHASING_JP", label: "Đang Mua JP", color: "text-blue-600 bg-blue-50 border-blue-200" },
+                      { key: "WAREHOUSE_JP", label: "Kho Tokyo", color: "text-indigo-600 bg-indigo-50 border-indigo-200" },
+                      { key: "IN_TRANSIT_AIR", label: "Đang Bay", color: "text-sky-600 bg-sky-50 border-sky-200" },
+                      { key: "WAREHOUSE_VN", label: "Kho VN", color: "text-teal-600 bg-teal-50 border-teal-200" },
+                      { key: "LOCAL_DELIVERY", label: "Đang Giao", color: "text-orange-600 bg-orange-50 border-orange-200" },
+                      { key: "COMPLETED", label: "Hoàn Thành", color: "text-emerald-600 bg-emerald-50 border-emerald-200" },
+                      { key: "CANCELLED", label: "Đã Hủy", color: "text-rose-600 bg-rose-50 border-rose-200" },
+                    ].map((s) => (
+                      <div key={s.key} className={`p-4 rounded-2xl border text-center ${s.color}`}>
+                        <div className="text-2xl font-bold font-mono">{reportData.statusBreakdown[s.key] || 0}</div>
+                        <div className="text-[11px] font-bold mt-0.5">{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
+                <AlertCircle className="w-5 h-5 mr-2" /> Không tải được dữ liệu báo cáo.
+              </div>
+            )}
           </div>
         )}
 
