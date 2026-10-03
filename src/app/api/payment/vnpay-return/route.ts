@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
+import { sendPaymentSuccessEmail } from "@/lib/mailer";
 
 function sortObject(obj: Record<string, string>) {
   const sorted: Record<string, string> = {};
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
     try {
       const order = await prisma.order.findFirst({ where: { orderCode } });
       if (order) {
-        await prisma.order.update({
+        const updatedOrder = await prisma.order.update({
           where: { id: order.id },
           data: {
             paymentStatus: "DEPOSITED_50",
@@ -72,6 +73,11 @@ export async function GET(req: NextRequest) {
             location: "ChillBanana - Hệ thống",
           },
         });
+
+        // Gửi email xác nhận thanh toán cọc thành công cho khách hàng
+        sendPaymentSuccessEmail(updatedOrder).catch((err) =>
+          console.warn("[VNPAY Email Error]", err)
+        );
       }
     } catch (err) {
       console.error("[VNPAY RETURN DB]", err);
