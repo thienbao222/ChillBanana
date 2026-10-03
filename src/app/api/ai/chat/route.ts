@@ -7,17 +7,55 @@ import { AIPersonality } from "@/types";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
+// Simple in-memory rate limiter (resets on serverless cold start; sufficient for abuse prevention)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
+    return true; // allowed
+  }
+  if (entry.count >= RATE_LIMIT_MAX) return false; // blocked
+  entry.count++;
+  return true;
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
-    const { message, personality = "omotenashi", history = [], sessionId = "default-session" } = body;
+    // Rate limiting by IP
+    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { error: "Bạn gửi tin nhắn quá nhanh. Vui lòng chờ 1 phút rồi thử lại." },
+        { status: 429 }
+      );
+    }
 
-    if (!message || typeof message !== "string") {
+    const body = await req.json();
+    const { message, personality = "omotenashi", history = [], sessionId } = body;
+
+    // Input validation
+    if (!message || typeof message !== "string" || message.trim().length === 0) {
       return NextResponse.json(
         { error: "Vui lòng cung cấp nội dung tin nhắn hợp lệ." },
         { status: 400 }
       );
     }
+    if (message.length > 2000) {
+      return NextResponse.json(
+        { error: "Tin nhắn quá dài (tối đa 2000 ký tự)." },
+        { status: 400 }
+      );
+    }
+
+    // Use IP-based session fallback instead of shared "default-session"
+    const resolvedSessionId = sessionId && sessionId !== "default-session"
+      ? String(sessionId).slice(0, 100)
+      : `ip-${ip}-${Date.now()}`;
 
     const selectedPersonality: AIPersonality = personality === "vietnamese" ? "vietnamese" : "omotenashi";
 
@@ -48,10 +86,10 @@ export async function POST(req: NextRequest) {
       : "positive";
 
     try {
-      saveChatInteraction(sessionId, message, reply, selectedPersonality);
+      saveChatInteraction(resolvedSessionId, message, reply, selectedPersonality);
 
       await prisma.chatSession.upsert({
-        where: { sessionId },
+        where: { sessionId: resolvedSessionId },
         update: {
           personality: selectedPersonality,
           topic,
@@ -65,7 +103,7 @@ export async function POST(req: NextRequest) {
           },
         },
         create: {
-          sessionId,
+          sessionId: resolvedSessionId,
           personality: selectedPersonality,
           topic,
           detectedKeywords: detectedKeywords.join(","),
@@ -86,7 +124,7 @@ export async function POST(req: NextRequest) {
       success: true,
       reply,
       personality: selectedPersonality,
-      sessionId,
+      sessionId: resolvedSessionId,
     });
   } catch (error) {
     console.error("ChillBanana Gemini AI Error:", error);

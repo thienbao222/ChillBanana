@@ -57,6 +57,20 @@ export async function GET(req: NextRequest) {
     try {
       const order = await prisma.order.findFirst({ where: { orderCode } });
       if (order) {
+        // Idempotency: don't process if already paid
+        if (order.paymentStatus !== 'UNPAID') {
+          console.log(`[VNPAY] Order ${orderCode} already processed, skipping.`);
+          return NextResponse.redirect(`${appUrl}/tracking?orderCode=${orderCode}&payment=success`);
+        }
+
+        // Verify amount matches (VNPAY sends amount * 100)
+        const vnpAmountStr = searchParams.get('vnp_Amount') || '0';
+        const vnpAmount = parseInt(vnpAmountStr, 10);
+        const expectedAmount = order.depositAmountVnd * 100;
+        if (Math.abs(vnpAmount - expectedAmount) > 100) { // allow 1 VND rounding tolerance
+          console.error(`[VNPAY] Amount mismatch for ${orderCode}: got ${vnpAmount}, expected ${expectedAmount}`);
+          return NextResponse.redirect(`${appUrl}/tracking?orderCode=${orderCode}&payment=invalid`);
+        }
         const updatedOrder = await prisma.order.update({
           where: { id: order.id },
           data: {

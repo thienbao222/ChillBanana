@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 const COOKIE_NAME = "chillbanana_admin_session";
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || "chillbanana_secure_admin_salt_2026";
+const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || (() => { console.error('[SECURITY] ADMIN_SESSION_SECRET not set! Using insecure default. Set it in env vars immediately.'); return 'INSECURE_PLACEHOLDER_SET_ADMIN_SESSION_SECRET_ENV'; })();
 
 function hashPassword(password: string): string {
   return crypto.createHmac("sha256", SESSION_SECRET).update(password).digest("hex");
@@ -56,7 +56,7 @@ export async function GET(req: NextRequest) {
       select: { id: true, username: true, name: true, role: true },
     });
   } catch (err) {
-    // SQLite might be loading
+    // Postgres/Neon connection issue
   }
 
   return NextResponse.json({
@@ -67,6 +67,8 @@ export async function GET(req: NextRequest) {
 
 // POST: Xử lý Đăng nhập
 export async function POST(req: NextRequest) {
+  // SECURITY: Only DB-based authentication allowed. No hardcoded credentials.
+  // To set up admin: run `npm run prisma:seed` or create AdminUser via Prisma Studio.
   try {
     const body = await req.json();
     const { username, password } = body;
@@ -91,7 +93,7 @@ export async function POST(req: NextRequest) {
       });
 
       if (dbAdmin) {
-        if (dbAdmin.passwordHash === inputHash || dbAdmin.passwordHash === password) {
+        if (dbAdmin.passwordHash === inputHash) {
           isAuthenticated = true;
           adminName = dbAdmin.name;
           adminRole = dbAdmin.role;
@@ -99,16 +101,6 @@ export async function POST(req: NextRequest) {
       }
     } catch (dbErr) {
       console.warn("DB check error in admin auth, testing fallback:", dbErr);
-    }
-
-    // 2. Tài khoản quản trị chuẩn mặc định (admin / ChillBanana@2026 hoặc admin123)
-    if (!isAuthenticated) {
-      if (
-        (trimmedUser === "admin" && (password === "ChillBanana@2026" || password === "admin123")) ||
-        (trimmedUser === "chillbanana" && password === "admin2026")
-      ) {
-        isAuthenticated = true;
-      }
     }
 
     if (!isAuthenticated) {

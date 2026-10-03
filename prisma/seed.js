@@ -9,23 +9,31 @@ function hashPassword(password) {
 }
 
 async function main() {
-  console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma SQLite)...");
+  console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma + Neon Postgres)...");
 
   // 1. Tạo tài khoản Admin mặc định
-  const adminPassword = "ChillBanana@2026";
-  const adminHash = hashPassword(adminPassword);
+  // SECURITY: Set ADMIN_INITIAL_PASSWORD env var before running seed.
+  // After seeding, change password via admin panel or DB directly.
+  const adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+  if (!adminPassword) {
+    console.error("❌ ADMIN_INITIAL_PASSWORD env var chưa được đặt! Bỏ qua tạo admin.");
+    console.error("   Chạy: ADMIN_INITIAL_PASSWORD=your_secure_password npx prisma db seed");
+  } else {
+    const adminHash = hashPassword(adminPassword);
 
-  const admin = await prisma.adminUser.upsert({
-    where: { username: "admin" },
-    update: { passwordHash: adminHash },
-    create: {
-      username: "admin",
-      passwordHash: adminHash,
-      name: "Quản Trị Viên ChillBanana",
-      role: "SUPER_ADMIN",
-    },
-  });
-  console.log(`✅ Đã tạo tài khoản quản trị: ${admin.username} / ${adminPassword}`);
+    const admin = await prisma.adminUser.upsert({
+      where: { username: "admin" },
+      update: { passwordHash: adminHash },
+      create: {
+        username: "admin",
+        passwordHash: adminHash,
+        name: "Quản Trị Viên ChillBanana",
+        role: "SUPER_ADMIN",
+      },
+    });
+    console.log(`✅ Đã tạo/cập nhật tài khoản quản trị: ${admin.username} (mật khẩu đã băm HMAC-SHA256)`);
+  }
+
 
   // 2. Tạo đơn hàng mẫu
   const sampleOrders = [

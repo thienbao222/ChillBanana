@@ -13,6 +13,47 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Domain allowlist — only allow known Japanese e-commerce sites
+    const ALLOWED_DOMAINS = [
+      'amazon.co.jp', 'amazon.com',
+      'mercari.com', 'jp.mercari.com',
+      'rakuten.co.jp',
+      'yahoo.co.jp', 'auctions.yahoo.co.jp',
+      'uniqlo.com',
+      'suruga-ya.jp',
+      'biccamera.com',
+      'yodobashi.com',
+      'r.jina.ai', // Jina AI reader proxy
+    ];
+
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(url);
+    } catch {
+      return NextResponse.json({ error: 'URL không hợp lệ.' }, { status: 400 });
+    }
+
+    // Block internal addresses (SSRF protection)
+    const hostname = parsedUrl.hostname.toLowerCase();
+    if (
+      hostname === 'localhost' ||
+      hostname === '127.0.0.1' ||
+      hostname.startsWith('192.168.') ||
+      hostname.startsWith('10.') ||
+      hostname.endsWith('.internal') ||
+      hostname === '0.0.0.0'
+    ) {
+      return NextResponse.json({ error: 'URL không hợp lệ.' }, { status: 400 });
+    }
+
+    const isAllowed = ALLOWED_DOMAINS.some(domain => hostname === domain || hostname.endsWith('.' + domain));
+    if (!isAllowed) {
+      return NextResponse.json(
+        { error: 'Chỉ hỗ trợ link từ các sàn Nhật Bản: Amazon JP, Mercari, Rakuten, Yahoo JP, Uniqlo, Surugaya, Bic Camera.' },
+        { status: 400 }
+      );
+    }
+
     const urlLower = url.toLowerCase();
     let storeName = "Website Nhật Bản";
     if (urlLower.includes("amazon.co.jp") || urlLower.includes("amazon.com")) storeName = "Amazon";

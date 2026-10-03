@@ -2,6 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrder } from "@/lib/order-store";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
+import crypto from 'crypto';
+
+const ADMIN_COOKIE = 'chillbanana_admin_session';
+const ADMIN_SECRET = process.env.ADMIN_SESSION_SECRET || 'INSECURE_PLACEHOLDER_SET_ADMIN_SESSION_SECRET_ENV';
+
+function isAdmin(req: NextRequest): boolean {
+  const cookie = req.cookies.get(ADMIN_COOKIE)?.value;
+  if (!cookie) return false;
+  try {
+    const decoded = Buffer.from(cookie, 'base64').toString('utf-8');
+    const [payloadStr, sig] = decoded.split('::');
+    if (!payloadStr || !sig) return false;
+    const expected = crypto.createHmac('sha256', ADMIN_SECRET).update(payloadStr).digest('hex');
+    if (sig !== expected) return false;
+    const payload = JSON.parse(payloadStr);
+    return payload.exp > Date.now();
+  } catch { return false; }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +28,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const email = searchParams.get("email");
     const phone = searchParams.get("phone");
+
+    // Allow admins to get all orders, customers must provide email or phone
+    if (!email && !phone && !isAdmin(req)) {
+      return NextResponse.json(
+        { error: 'Vui lòng cung cấp email hoặc số điện thoại để tra cứu đơn hàng.' },
+        { status: 400 }
+      );
+    }
 
     const whereClause: any = {};
     if (email) {

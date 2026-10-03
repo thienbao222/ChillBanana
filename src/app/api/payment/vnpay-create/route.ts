@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { prisma } from "@/lib/prisma";
 
 // ========== Helpers ==========
 function sortObject(obj: Record<string, string>) {
@@ -21,11 +22,22 @@ function buildQueryString(params: Record<string, string>) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderCode, amount, orderInfo } = body;
+    const { orderCode, orderInfo } = body; // No longer trust 'amount' from client
 
-    if (!orderCode || !amount) {
-      return NextResponse.json({ error: "Thiếu thông tin đơn hàng" }, { status: 400 });
+    if (!orderCode) {
+      return NextResponse.json({ error: 'Thiếu mã đơn hàng' }, { status: 400 });
     }
+
+    // Fetch real amount from DB
+    const order = await prisma.order.findFirst({ where: { orderCode } });
+    if (!order) {
+      return NextResponse.json({ error: 'Không tìm thấy đơn hàng.' }, { status: 404 });
+    }
+    if (order.paymentStatus !== 'UNPAID') {
+      return NextResponse.json({ error: 'Đơn hàng này đã được thanh toán cọc rồi.' }, { status: 400 });
+    }
+
+    const amount = order.depositAmountVnd; // Server-side computed amount
 
     const tmnCode = process.env.VNPAY_TMN_CODE!;
     const hashSecret = process.env.VNPAY_HASH_SECRET!;

@@ -1,14 +1,41 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-export async function POST(req: Request) {
+// Rate limit: 10 image analyses per minute per IP (Gemini Vision is expensive)
+const imgRateMap = new Map<string, { count: number; resetAt: number }>();
+function checkImgRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = imgRateMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    imgRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
+}
+
+export async function POST(req: NextRequest) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
+  if (!checkImgRateLimit(ip)) {
+    return NextResponse.json(
+      { success: false, error: 'Bạn phân tích ảnh quá nhiều lần. Vui lòng chờ 1 phút.' },
+      { status: 429 }
+    );
+  }
+
   try {
     const { imageData, sessionId } = await req.json();
 
     if (!imageData) {
       return NextResponse.json({ success: false, error: 'imageData is required' }, { status: 400 });
+    }
+
+    // Cap image size: base64 of ~10MB file = ~13.3MB string
+    if (typeof imageData !== 'string' || imageData.length > 14_000_000) {
+      return NextResponse.json({ success: false, error: 'Ảnh quá lớn (tối đa 10MB).' }, { status: 400 });
     }
 
     const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;

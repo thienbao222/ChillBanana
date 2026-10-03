@@ -2,6 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getOrderByCode } from "@/lib/order-store";
 import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
+import crypto from 'crypto';
+
+const ADMIN_COOKIE = 'chillbanana_admin_session';
+const ADMIN_SECRET = process.env.ADMIN_SESSION_SECRET || 'INSECURE_PLACEHOLDER_SET_ADMIN_SESSION_SECRET_ENV';
+const CUSTOMER_COOKIE = 'cb_customer_session';
+const CUSTOMER_SECRET = process.env.CUSTOMER_SESSION_SECRET || 'INSECURE_PLACEHOLDER_SET_CUSTOMER_SESSION_SECRET_ENV';
+
+function isAdmin(req: NextRequest): boolean {
+  const cookie = req.cookies.get(ADMIN_COOKIE)?.value;
+  if (!cookie) return false;
+  try {
+    const decoded = Buffer.from(cookie, 'base64').toString('utf-8');
+    const [payloadStr, sig] = decoded.split('::');
+    if (!payloadStr || !sig) return false;
+    const expected = crypto.createHmac('sha256', ADMIN_SECRET).update(payloadStr).digest('hex');
+    if (sig !== expected) return false;
+    const payload = JSON.parse(payloadStr);
+    return payload.exp > Date.now();
+  } catch { return false; }
+}
+
+function getCustomerEmail(req: NextRequest): string | null {
+  const cookie = req.cookies.get(CUSTOMER_COOKIE)?.value;
+  if (!cookie) return null;
+  try {
+    const decoded = Buffer.from(cookie, 'base64').toString('utf-8');
+    const [payloadStr, sig] = decoded.split('::');
+    if (!payloadStr || !sig) return null;
+    const expected = crypto.createHmac('sha256', CUSTOMER_SECRET).update(payloadStr).digest('hex');
+    if (sig !== expected) return null;
+    const payload = JSON.parse(payloadStr);
+    return payload.email || null;
+  } catch { return null; }
+}
 
 export const dynamic = "force-dynamic";
 
@@ -86,6 +120,19 @@ export async function PATCH(
       );
     }
 
+    const isAdminUser = isAdmin(req);
+    const customerEmail = getCustomerEmail(req);
+
+    if (!isAdminUser && (!customerEmail || existingOrder.customerEmail !== customerEmail)) {
+      return NextResponse.json({ error: "Không có quyền thực hiện." }, { status: 401 });
+    }
+
+    if (!isAdminUser) {
+      if (action !== 'cancel' || by !== 'CUSTOMER') {
+        return NextResponse.json({ error: "Khách hàng chỉ có quyền hủy đơn." }, { status: 401 });
+      }
+    }
+
     // Hỗ trợ hành động HỦY ĐƠN (từ Khách hàng hoặc Admin)
     if (action === "cancel") {
       status = "CANCELLED";
@@ -133,7 +180,7 @@ export async function PATCH(
       },
     };
 
-    if (paymentStatus !== undefined) {
+    if (paymentStatus !== undefined && isAdminUser) {
       updateData.paymentStatus = paymentStatus;
     }
     if (jpTrack !== undefined) {
@@ -178,6 +225,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
+    if (!isAdmin(req)) return NextResponse.json({ error: 'Không có quyền xóa đơn hàng.' }, { status: 403 });
     const orderCode = params.id;
 
     // Xóa trong CSDL Prisma (TrackingLog sẽ cascade xóa tự động)

@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 export const dynamic = "force-dynamic";
 
-const CUSTOMER_SESSION_SECRET = process.env.CUSTOMER_SESSION_SECRET || "chillbanana-customer-session-secret-2026";
+const CUSTOMER_SESSION_SECRET = process.env.CUSTOMER_SESSION_SECRET || (() => { console.error('[SECURITY] CUSTOMER_SESSION_SECRET not set! Set it in Vercel env vars.'); return 'INSECURE_PLACEHOLDER_SET_CUSTOMER_SESSION_SECRET_ENV'; })();
 
 function hashPassword(password: string): string {
   return crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest("hex");
