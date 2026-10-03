@@ -8,7 +8,9 @@ import {
   Bot, 
   ShieldAlert, 
   RefreshCw,
-  ShoppingBag
+  ShoppingBag,
+  ImagePlus,
+  Loader2
 } from "lucide-react";
 import { AIPersonality } from "@/types";
 
@@ -54,11 +56,13 @@ export default function AIChatBot() {
   const [sessionId, setSessionId] = useState<string>("");
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
+  const [imageAnalyzing, setImageAnalyzing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Kính chào Quý khách! Em là ChillBanana Gemini 2.5 AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tìm kiếm sản phẩm nội địa Nhật, tra cứu link & hình ảnh, tư vấn kỹ thuật điện 100V, mẹo săn sale, tính bill cước vận chuyển và giảm 25% cước gộp đơn ạ!",
+      text: "Kính chào Quý khách! Em là ChillBanana Gemini 2.5 AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tìm kiếm sản phẩm nội địa Nhật, tra cứu link & hình ảnh, tư vấn kỹ thuật điện 100V, mẹo săn sale, tính bill cước vận chuyển và giảm 25% cước gộp đơn ạ!\n\n📸 **Mới:** Bạn có thể gửi ảnh sản phẩm để AI nhận diện tên tiếng Nhật và tìm giá!",
       time: "Vừa xong",
     },
   ]);
@@ -164,7 +168,95 @@ export default function AIChatBot() {
     }
   };
 
-  // Helper parse markdown inline (bold, links, images)
+  // Handler phân tích ảnh sản phẩm bằng AI Vision
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || imageAnalyzing) return;
+    // Reset input
+    if (fileInputRef.current) fileInputRef.current.value = "";
+
+    // Validate
+    if (!file.type.startsWith("image/")) {
+      alert("Vui lòng chọn file ảnh (JPG, PNG, WebP)");
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File ảnh quá lớn (tối đa 10MB)");
+      return;
+    }
+
+    setImageAnalyzing(true);
+
+    // Add user message with image indicator
+    const userMsg: Message = {
+      id: "user-img-" + Date.now(),
+      sender: "user",
+      text: `📸 Đã gửi ảnh sản phẩm: ${file.name}`,
+      time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+    };
+    setMessages((prev) => [...prev, userMsg]);
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      const imageData = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+
+      const res = await fetch("/api/ai/image-analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageData, sessionId }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success && data.analysis) {
+        const a = data.analysis;
+        let replyText = `### 🔍 Kết Quả Phân Tích Ảnh (AI Vision)\n\n`;
+        if (a.nameJp) replyText += `**Tên tiếng Nhật:** ${a.nameJp}\n`;
+        if (a.nameVi) replyText += `**Tên tiếng Việt:** ${a.nameVi}\n`;
+        if (a.estimatedPriceJpy) replyText += `**Giá ước tính:** ~¥${a.estimatedPriceJpy.toLocaleString()}\n`;
+        if (a.category) {
+          const catName = a.category === "cosmetics" ? "Mỹ phẩm" :
+            a.category === "health" ? "Thực phẩm CN" :
+            a.category === "gadgets" ? "Gia dụng/Điện tử" :
+            a.category === "anime" ? "Anime/Mô hình" : "Khác";
+          replyText += `**Danh mục:** ${catName}\n`;
+        }
+        if (a.voltageWarning) replyText += `\n⚠️ **Cảnh báo điện áp:** Sản phẩm sử dụng nguồn 100V nội địa Nhật — cần mua kèm biến áp 220V→100V!\n`;
+        if (a.riskNotes) replyText += `\n🛡️ **Lưu ý:** ${a.riskNotes}\n`;
+        if (a.description) replyText += `\n${a.description}\n`;
+        if (a.searchKeywords?.length > 0) {
+          replyText += `\n**Từ khóa tìm kiếm trên sàn Nhật:**\n`;
+          a.searchKeywords.forEach((kw: string) => {
+            replyText += `- [Tìm "${kw}" trên Amazon JP](https://www.amazon.co.jp/s?k=${encodeURIComponent(kw)})\n`;
+          });
+        }
+        replyText += `\n💡 *Để đặt hàng, hãy copy link sản phẩm từ kết quả tìm kiếm trên và dán vào ô "Dán Link Tính Giá" ở đầu trang!*`;
+
+        setMessages((prev) => [...prev, {
+          id: "bot-img-" + Date.now(),
+          sender: "bot",
+          text: replyText,
+          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+      } else {
+        throw new Error(data.error || "Không thể phân tích ảnh");
+      }
+    } catch (err) {
+      setMessages((prev) => [...prev, {
+        id: "err-img-" + Date.now(),
+        sender: "bot",
+        text: "Xin lỗi, em chưa phân tích được ảnh này. Quý khách thử chụp lại ảnh rõ hơn hoặc gửi link sản phẩm trực tiếp ạ! 🍌",
+        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } finally {
+      setImageAnalyzing(false);
+    }
+  };
   const parseInlineFormatting = (text: string) => {
     const tokenRegex = /(!\[.*?\]\(https?:\/\/[^\s\)]+\)|\[.*?\]\(https?:\/\/[^\s\)]+\)|\*\*.*?\*\*)/g;
     const parts = text.split(tokenRegex);
@@ -399,6 +491,12 @@ export default function AIChatBot() {
                 <span>ChillBanana Gemini AI đang phản hồi...</span>
               </div>
             )}
+            {imageAnalyzing && (
+              <div className="flex items-center space-x-2 text-xs py-1 pl-8">
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-banana-600" />
+                <span className="text-banana-700 font-semibold">AI Vision đang phân tích ảnh sản phẩm...</span>
+              </div>
+            )}
             <div ref={messagesEndRef} />
           </div>
 
@@ -417,6 +515,14 @@ export default function AIChatBot() {
 
           {/* Input Box */}
           <div className="p-3 bg-white border-t border-slate-200">
+            {/* Hidden file input */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -424,6 +530,19 @@ export default function AIChatBot() {
               }}
               className="flex items-center space-x-2"
             >
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={imageAnalyzing || loading}
+                className="p-2.5 bg-slate-100 hover:bg-banana-100 disabled:opacity-40 text-slate-600 hover:text-banana-700 rounded-2xl transition-all shrink-0"
+                title="Gửi ảnh sản phẩm để AI nhận diện"
+              >
+                {imageAnalyzing ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <ImagePlus className="w-4 h-4" />
+                )}
+              </button>
               <input
                 type="text"
                 value={inputMessage}

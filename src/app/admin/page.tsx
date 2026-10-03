@@ -90,6 +90,10 @@ export default function AdminDashboardPage() {
   const [reportData, setReportData] = useState<any>(null);
   const [loadingReport, setLoadingReport] = useState(false);
 
+  // AI Business Insights
+  const [insightsData, setInsightsData] = useState<any>(null);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
   // Quản lý Sản Phẩm (Products CRUD)
   const [products, setProducts] = useState<CuratedProduct[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -1459,9 +1463,65 @@ export default function AdminDashboardPage() {
                   })}
                 </div>
 
-                {/* AI Recommendation Alert */}
-                <div className="mt-4 p-3.5 rounded-2xl bg-banana-50 border border-banana-200 text-xs text-banana-900 leading-relaxed">
-                  💡 <strong>Gợi ý kinh doanh từ AI:</strong> Nhu cầu tìm kiếm mô hình <strong>Gundam/Anime Figure</strong> và thực phẩm chức năng <strong>Tảo xoắn Spirulina</strong> đang dẫn đầu. Doanh nghiệp nên đẩy mạnh bài viết cẩm nang và mở thêm các slot gộp đơn cho 2 ngành hàng này!
+                {/* AI Business Insights Generator */}
+                <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-banana-50 to-amber-50 border border-banana-200 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-banana-900 flex items-center space-x-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-banana-600" />
+                      <span>Gợi Ý Kinh Doanh Từ AI (Gemini Analysis)</span>
+                    </h4>
+                    <button
+                      onClick={async () => {
+                        setLoadingInsights(true);
+                        try {
+                          const res = await fetch("/api/admin/ai-insights");
+                          const data = await res.json();
+                          if (res.ok && data.success) {
+                            setInsightsData(data.insights);
+                          }
+                        } catch {} finally { setLoadingInsights(false); }
+                      }}
+                      disabled={loadingInsights}
+                      className="px-3 py-1 bg-banana-500 hover:bg-banana-400 text-navy-950 font-bold text-[10px] rounded-xl transition-all flex items-center space-x-1 disabled:opacity-50"
+                    >
+                      {loadingInsights ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                      <span>{loadingInsights ? "Đang phân tích..." : "Tạo Phân Tích AI"}</span>
+                    </button>
+                  </div>
+
+                  {insightsData ? (
+                    <div className="space-y-2.5 text-xs text-banana-900">
+                      {insightsData.marketOverview && (
+                        <p className="leading-relaxed">📊 <strong>Tổng quan:</strong> {insightsData.marketOverview}</p>
+                      )}
+                      {insightsData.topDemandProducts?.length > 0 && (
+                        <div>
+                          <p className="font-bold mb-1">🔥 Mặt hàng nhu cầu cao:</p>
+                          {insightsData.topDemandProducts.map((p: any, i: number) => (
+                            <p key={i} className="pl-3">• <strong>{p.name}</strong> — {p.reason}</p>
+                          ))}
+                        </div>
+                      )}
+                      {insightsData.groupBuySuggestions?.length > 0 && (
+                        <div>
+                          <p className="font-bold mb-1">📦 Đề xuất Gom Đơn:</p>
+                          {insightsData.groupBuySuggestions.map((g: any, i: number) => (
+                            <p key={i} className="pl-3">• <strong>{g.productName}</strong> (~{g.estimatedDemand} đơn, tiết kiệm {g.savingsPercent}% cước — {g.shippingMethod})</p>
+                          ))}
+                        </div>
+                      )}
+                      {insightsData.actionItems?.length > 0 && (
+                        <div>
+                          <p className="font-bold mb-1">✅ Hành động đề xuất:</p>
+                          {insightsData.actionItems.map((a: string, i: number) => (
+                            <p key={i} className="pl-3">• {a}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-banana-700">Bấm "Tạo Phân Tích AI" để Gemini tổng hợp xu hướng kinh doanh từ dữ liệu Chat & Đơn hàng thực tế.</p>
+                  )}
                 </div>
               </div>
 
