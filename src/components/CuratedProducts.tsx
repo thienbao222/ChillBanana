@@ -62,12 +62,15 @@ export default function CuratedProducts() {
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <div>
           <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-banana-200">
-            <Flame className="w-3.5 h-3.5 text-banana-600" />
-            <span>Sản Phẩm Đang Săn Deal & Sẵn Slot Gom</span>
+            <Sparkles className="w-3.5 h-3.5 text-banana-600" />
+            <span>Sản Phẩm Có Sẵn Tại Shop • Giao Ngay 24H</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-navy-900">
-            Gợi Ý Mặt Hàng Bán Chạy Tại Nhật
+            Sản Phẩm Có Sẵn Tại Kho ChillBanana
           </h2>
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
+            Các mặt hàng nội địa Nhật tuyển chọn chính hãng, đã có sẵn tại kho Hà Nội &amp; TP.HCM. Đặt mua nhận hàng ngay trong 24h - 48h, không cần chờ thời gian gom đơn từ Nhật!
+          </p>
         </div>
 
         {/* Filter buttons */}
@@ -147,14 +150,14 @@ export default function CuratedProducts() {
                     🔥 HOT DEAL
                   </span>
                 )}
-                <span className="bg-navy-900/90 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
-                  {product.originalStore}
+                <span className="bg-emerald-700/90 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
+                  ⚡ Sẵn Hàng Tại Kho
                 </span>
               </div>
 
-              {/* Slot mua hộ còn lại */}
-              <div className="absolute bottom-2.5 right-2.5 bg-navy-950/80 backdrop-blur-sm text-banana-300 text-[11px] font-bold px-2 py-0.5 rounded-lg">
-                Còn {product.stockSlots} slot gom
+              {/* Số lượng còn lại */}
+              <div className="absolute bottom-2.5 right-2.5 bg-navy-950/85 backdrop-blur-sm text-banana-300 text-[11px] font-bold px-2 py-0.5 rounded-lg">
+                Còn {product.stockSlots} sản phẩm
               </div>
             </div>
 

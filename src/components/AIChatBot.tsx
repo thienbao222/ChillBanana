@@ -320,6 +320,12 @@ export default function AIChatBot() {
         return <hr key={lIdx} className="my-2.5 border-slate-200" />;
       }
 
+      // Tự động nhận diện dòng chứa link ảnh (dù AI in dạng "* Link ảnh: https://...", "Ảnh: https://...", hoặc "Hình ảnh: https://...")
+      const linkImageMatch = trimmed.match(/^(?:\*\s*)?(?:Link\s*ảnh|Ảnh\s*sản\s*phẩm|Ảnh|Hình\s*ảnh):\s*(https?:\/\/[^\s\)]+)/i);
+      if (linkImageMatch && linkImageMatch[1]) {
+        return <ChatImage key={lIdx} url={linkImageMatch[1].trim()} alt="Hình ảnh sản phẩm" />;
+      }
+
       // Tiêu đề ###
       if (trimmed.startsWith("### ")) {
         return (
