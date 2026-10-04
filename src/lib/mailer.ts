@@ -1,22 +1,22 @@
 import nodemailer from "nodemailer";
 
 function getBaseUrl(): string {
-  // APP_URL: biến server-side riêng, set tay trong Vercel Environment Variables
-  // Ví dụ: APP_URL=https://chill-banana.vercel.app
-  if (process.env.APP_URL) return process.env.APP_URL;
+  // 1. Ưu tiên APP_URL do người dùng cài đặt
+  if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, "");
 
-  // NEXT_PUBLIC_APP_URL: nếu đã set (http://localhost:3000 trên local)
+  // 2. NEXT_PUBLIC_APP_URL nếu không phải localhost
   if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
-    return process.env.NEXT_PUBLIC_APP_URL;
+    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "");
   }
 
-  // VERCEL_URL: URL deployment tự động của Vercel (có thể là preview URL, KHÔNG phải domain production)
-  // Chỉ dùng khi không có lựa chọn nào khác
-  if (process.env.VERCEL_URL) {
-    console.warn("[Mailer] Đang dùng VERCEL_URL làm base URL email. Hãy set biến APP_URL=https://chill-banana.vercel.app trong Vercel Environment Variables để fix đường dẫn email!");
-    return `https://${process.env.VERCEL_URL}`;
+  // 3. Môi trường Production / Vercel: Dùng trực tiếp domain chính thức công khai
+  // TUYỆT ĐỐI KHÔNG dùng process.env.VERCEL_URL vì đây là URL preview deployment nội bộ,
+  // Vercel sẽ tự động bật Deployment Protection và bắt người dùng phải đăng nhập tài khoản Vercel!
+  if (process.env.VERCEL || process.env.NODE_ENV === "production") {
+    return "https://chill-banana.vercel.app";
   }
 
+  // 4. Môi trường Local development
   return "http://localhost:3000";
 }
 

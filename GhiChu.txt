@@ -1,0 +1,5 @@
+1- về tư vấn kéo thông tin giá san phẩm, quy đổi giá, khi AI trả lời
+2- về Ai tư vấn thêm các thông tin của trang web thứ 3 khi dùng AI
+3- Các chức năng nên chia ra dùng nhiều API để mở rộng phân chia - tự chuyển API khi cái cũ hết
+4- chức năng lưu lịch sử chat thêm phầm tìm kiếm lọc ngày tháng và phân biệt loại khách hàng như tài khoản khách hay khách đã có tài khoản
+5- Trang Xu hướng AI và Trang Báo cáo có thể làm cho tối ưu hơn phân chia rõ và phù hợp hơn 

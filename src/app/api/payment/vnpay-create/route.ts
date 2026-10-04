@@ -43,10 +43,11 @@ export async function POST(req: NextRequest) {
     const hashSecret = process.env.VNPAY_HASH_SECRET!;
     const vnpUrl = process.env.VNPAY_URL!;
 
-    // Tự động phát hiện base URL: ưu tiên env var, sau dùng VERCEL_URL (Vercel tự set), cuối cùng dùng localhost
+    // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
     const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL ||
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+      process.env.APP_URL?.replace(/\/+$/, "") ||
+      (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost") ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "") : null) ||
+      (process.env.VERCEL || process.env.NODE_ENV === "production" ? "https://chill-banana.vercel.app" : "http://localhost:3000");
 
     const returnUrl = `${baseUrl}/api/payment/vnpay-return`;
 

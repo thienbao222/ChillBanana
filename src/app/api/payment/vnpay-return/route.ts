@@ -44,8 +44,9 @@ export async function GET(req: NextRequest) {
   const isSuccess = responseCode === "00";
 
   const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    process.env.APP_URL?.replace(/\/+$/, "") ||
+    (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost") ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "") : null) ||
+    (process.env.VERCEL || process.env.NODE_ENV === "production" ? "https://chill-banana.vercel.app" : "http://localhost:3000");
 
   if (!isValidSignature) {
     // Chữ ký không hợp lệ — redirect về tracking với lỗi
