@@ -39,6 +39,7 @@ export default function OrderCalculator() {
   const [isGroupBuy, setIsGroupBuy] = useState(false);
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeSuccess, setScrapeSuccess] = useState(false);
+  const [isPriceLocked, setIsPriceLocked] = useState(false);
   
   // Tỷ giá thời gian thực tế
   const [exchangeRate, setExchangeRate] = useState<number>(172);
@@ -90,7 +91,10 @@ export default function OrderCalculator() {
     const handleSelectProduct = (e: any) => {
       if (e.detail) {
         if (e.detail.name) setProductName(e.detail.name);
-        if (e.detail.priceJpy) setPriceJpy(e.detail.priceJpy);
+        if (e.detail.priceJpy) {
+          setPriceJpy(e.detail.priceJpy);
+          setIsPriceLocked(true);
+        }
         if (e.detail.weightKg) setWeightKg(e.detail.weightKg);
         if (e.detail.imageUrl) setProductImage(e.detail.imageUrl);
         if (e.detail.originalStore) setDetectedStore(e.detail.originalStore);
@@ -124,7 +128,12 @@ export default function OrderCalculator() {
       const data = await res.json();
       if (res.ok && data.success && data.data) {
         if (data.data.title) setProductName(data.data.title);
-        if (data.data.priceJpy && data.data.priceJpy > 0) setPriceJpy(data.data.priceJpy);
+        if (data.data.priceJpy && data.data.priceJpy > 0) {
+          setPriceJpy(data.data.priceJpy);
+          setIsPriceLocked(true);
+        } else {
+          setIsPriceLocked(false);
+        }
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
         if (data.data.category) setCategory(data.data.category);
@@ -368,25 +377,65 @@ export default function OrderCalculator() {
           {/* Giá Yên & Cân Nặng */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  4. Giá Gốc Tại Nhật (¥ Yên)
-                </label>
-                <span className="text-xs text-banana-700 font-bold">
-                  ≈ {(priceJpy * exchangeRate).toLocaleString("vi-VN")} đ
-                </span>
+              <div className="flex flex-wrap justify-between items-center gap-1 mb-2">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                    4. Giá Gốc Tại Nhật (¥ Yên)
+                  </label>
+                  {isPriceLocked && (
+                    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-200">
+                      <span>🔒</span> Đã khóa giá sàn
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {isPriceLocked && (
+                    <button
+                      type="button"
+                      onClick={() => setIsPriceLocked(false)}
+                      className="text-[11px] text-amber-600 hover:text-amber-700 hover:underline font-medium"
+                      title="Bấm để mở khóa sửa nếu có coupon hoặc giá khác"
+                    >
+                      ✏️ Mở khóa sửa
+                    </button>
+                  )}
+                  <span className="text-xs text-banana-700 font-bold">
+                    ≈ {(priceJpy * exchangeRate).toLocaleString("vi-VN")} đ
+                  </span>
+                </div>
               </div>
+
               <div className="relative">
                 <input
                   type="number"
                   min={100}
                   step={100}
                   value={priceJpy}
+                  readOnly={isPriceLocked}
                   onChange={(e) => setPriceJpy(Math.max(0, Number(e.target.value)))}
-                  className="w-full pl-8 pr-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white"
+                  className={`w-full pl-8 pr-9 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all ${
+                    isPriceLocked
+                      ? "bg-slate-100 border border-slate-300 text-slate-700 cursor-not-allowed select-none"
+                      : "bg-slate-50 border border-amber-400 text-slate-900 focus:ring-2 focus:ring-banana-500 focus:bg-white"
+                  }`}
                 />
                 <span className="absolute left-3 top-2.5 text-slate-500 font-bold">¥</span>
+                {isPriceLocked && (
+                  <span className="absolute right-3 top-2.5 text-slate-400 text-xs" title="Giá đã khóa tự động từ website sàn Nhật">
+                    🔒
+                  </span>
+                )}
               </div>
+
+              {/* Cảnh báo khi người dùng tự mở khóa sửa giá thủ công */}
+              {!isPriceLocked && scrapeSuccess && (
+                <div className="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-start gap-1.5 leading-snug">
+                  <span className="shrink-0 text-amber-600 font-bold">⚠️</span>
+                  <span>
+                    <strong>Cảnh báo đối soát:</strong> Bạn đang tự sửa giá thủ công. Nhân viên văn phòng Tokyo sẽ kiểm tra lại giá niêm yết trên web gốc trước khi tiến hành thanh toán cho người bán.
+                  </span>
+                </div>
+              )}
             </div>
 
             <div>
@@ -570,6 +619,14 @@ export default function OrderCalculator() {
                 <Info className="w-4 h-4 text-banana-400 shrink-0 mt-0.5" />
                 <span className="leading-relaxed">
                   <strong>Chuẩn quốc tế:</strong> Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!
+                </span>
+              </div>
+
+              {/* Chính sách bảo vệ rủi ro biến động giá */}
+              <div className="mt-2 p-2.5 rounded-xl bg-slate-800/80 border border-slate-700/80 text-[11px] text-slate-300 flex items-start space-x-2">
+                <span className="text-emerald-400 font-bold shrink-0 mt-0.5">🛡️</span>
+                <span className="leading-relaxed">
+                  <strong>Bảo vệ rủi ro giá:</strong> Nếu người bán Nhật đổi giá hoặc hết hàng sau khi cọc, ChillBanana sẽ liên hệ xác nhận ngay hoặc <strong>hoàn 100% tiền cọc</strong> trong 24h.
                 </span>
               </div>
             </div>

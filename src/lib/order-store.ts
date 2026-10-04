@@ -70,14 +70,23 @@ export function createOrder(data: Partial<StoredOrder>): StoredOrder {
     year: "numeric",
   });
 
-  const rate = data.exchangeRate || 172;
-  const priceJpy = data.priceJpy || 0;
-  const weightKg = typeof data.weightKg === "number" ? data.weightKg : 0;
-  const productPriceVnd = data.productPriceVnd || Math.round(priceJpy * rate);
-  const serviceFeeVnd = data.serviceFeeVnd || (productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0);
-  const shippingFeeVnd = data.shippingFeeVnd || (weightKg > 0 ? Math.round(weightKg * 185000) : 0);
-  const totalVnd = data.totalVnd || (productPriceVnd + serviceFeeVnd + shippingFeeVnd);
-  const depositAmountVnd = data.depositAmountVnd || Math.round((productPriceVnd + serviceFeeVnd) * 0.5);
+  const rate = Math.max(100, Number(data.exchangeRate) || 172);
+  const priceJpy = Math.max(0, Math.round(Number(data.priceJpy) || 0));
+  const weightKg = Math.max(0, Number(data.weightKg) || 0);
+
+  // BẢO MẬT: TÍNH TOÁN BẮT BUỘC TRÊN SERVER - Tuyệt đối không tin tưởng số tiền client tự gửi lên
+  const productPriceVnd = Math.round(priceJpy * rate);
+  const serviceFeeVnd = productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0;
+  const shippingFeeVnd = weightKg > 0 ? Math.round(weightKg * 185000) : 0;
+  const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
+
+  // Tiền cọc 50% chỉ tính trên (tiền hàng + phí mua hộ), cước bay tính sau khi hàng về kho
+  const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
+  const clientDeposit = Number(data.depositAmountVnd);
+  // Khách chọn cọc 100% nếu số tiền gửi lên xấp xỉ toàn bộ chi phí gốc
+  const depositAmountVnd = clientDeposit >= baseOrderCostVnd && baseOrderCostVnd > 0
+    ? baseOrderCostVnd
+    : Math.round(baseOrderCostVnd * 0.5);
 
   const newOrder: StoredOrder = {
     id: "ord-" + Date.now(),

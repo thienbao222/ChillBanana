@@ -72,9 +72,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const priceJpy = Math.round(Number(body.priceJpy) || 0);
+    if (!priceJpy || priceJpy < 100) {
+      return NextResponse.json(
+        { error: "Giá sản phẩm tại Nhật không hợp lệ (tối thiểu 100 ¥)." },
+        { status: 400 }
+      );
+    }
+
     const order = createOrder(body);
 
-    // Lưu đơn hàng thực tế vào CSDL SQLite Prisma
+    // Lưu đơn hàng thực tế vào CSDL Neon Postgres qua Prisma
     try {
       const createdDbOrder = await prisma.order.create({
         data: {
@@ -122,13 +130,12 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({ success: true, order: createdDbOrder });
     } catch (dbErr) {
-      console.warn("Lưu đơn hàng vào Prisma thất bại:", dbErr);
+      console.error("Lưu đơn hàng vào Prisma thất bại:", dbErr);
+      return NextResponse.json(
+        { error: "Lỗi kết nối cơ sở dữ liệu khi tạo đơn hàng. Vui lòng thử lại sau giây lát." },
+        { status: 500 }
+      );
     }
-
-    // Gửi email xác nhận fallback
-    sendOrderCreatedEmail(order).catch((err) => console.warn(err));
-
-    return NextResponse.json({ success: true, order });
   } catch (error) {
     console.error("Order creation error:", error);
     return NextResponse.json({ error: "Lỗi khi tạo đơn hàng mới" }, { status: 500 });

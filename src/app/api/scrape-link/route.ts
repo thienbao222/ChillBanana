@@ -197,7 +197,7 @@ export async function POST(req: NextRequest) {
       console.warn("Direct fetch error:", directErr);
     }
 
-    // 3. Tự động nhận diện Danh Mục dựa trên Tiêu Đề sản phẩm
+    // 3. Tự động nhận diện Danh Mục dựa trên Tiêu Đề sản phẩm (Hỗ trợ tiếng Nhật, Anh, Việt)
     const titleLower = (title || "").toLowerCase();
     if (
       titleLower.includes("gundam") ||
@@ -209,6 +209,19 @@ export async function POST(req: NextRequest) {
       titleLower.includes("nendoroid") ||
       titleLower.includes("gunpla") ||
       titleLower.includes("pokemon") ||
+      titleLower.includes("ポケモン") ||
+      titleLower.includes("カード") ||
+      titleLower.includes("トレカ") ||
+      titleLower.includes("フィギュア") ||
+      titleLower.includes("グッズ") ||
+      titleLower.includes("コミック") ||
+      titleLower.includes("アニメ") ||
+      titleLower.includes("マンガ") ||
+      titleLower.includes("アクリル") ||
+      titleLower.includes("キーホルダー") ||
+      titleLower.includes("ぬいぐるみ") ||
+      titleLower.includes("缶バッジ") ||
+      titleLower.includes("ブルーアーカイブ") ||
       titleLower.includes("mô hình") ||
       titleLower.includes("ステッカー") ||
       titleLower.includes("sticker") ||
@@ -234,7 +247,13 @@ export async function POST(req: NextRequest) {
       titleLower.includes("máy cạo râu") ||
       titleLower.includes("tai nghe") ||
       titleLower.includes("sony") ||
-      titleLower.includes("điện tử")
+      titleLower.includes("điện tử") ||
+      titleLower.includes("家電") ||
+      titleLower.includes("シェーバー") ||
+      titleLower.includes("ドライヤー") ||
+      titleLower.includes("炊飯器") ||
+      titleLower.includes("イヤホン") ||
+      titleLower.includes("ヘッドホン")
     ) {
       category = "gadgets";
     } else if (
@@ -246,7 +265,15 @@ export async function POST(req: NextRequest) {
       titleLower.includes("son") ||
       titleLower.includes("tẩy trang") ||
       titleLower.includes("skincare") ||
-      titleLower.includes("mỹ phẩm")
+      titleLower.includes("mỹ phẩm") ||
+      titleLower.includes("化粧品") ||
+      titleLower.includes("スキンケア") ||
+      titleLower.includes("コスメ") ||
+      titleLower.includes("クレンジング") ||
+      titleLower.includes("ローション") ||
+      titleLower.includes("日焼け止め") ||
+      titleLower.includes("美容液") ||
+      titleLower.includes("パック")
     ) {
       category = "cosmetics";
     } else if (
@@ -256,7 +283,11 @@ export async function POST(req: NextRequest) {
       titleLower.includes("spirulina") ||
       titleLower.includes("collagen") ||
       titleLower.includes("bổ não") ||
-      titleLower.includes("vitamin")
+      titleLower.includes("vitamin") ||
+      titleLower.includes("サプリメント") ||
+      titleLower.includes("サプリ") ||
+      titleLower.includes("健康食品") ||
+      titleLower.includes("青汁")
     ) {
       category = "health";
     }
