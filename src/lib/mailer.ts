@@ -1,10 +1,23 @@
 import nodemailer from "nodemailer";
 
 function getBaseUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000")
-  );
+  // APP_URL: biến server-side riêng, set tay trong Vercel Environment Variables
+  // Ví dụ: APP_URL=https://chill-banana.vercel.app
+  if (process.env.APP_URL) return process.env.APP_URL;
+
+  // NEXT_PUBLIC_APP_URL: nếu đã set (http://localhost:3000 trên local)
+  if (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_APP_URL;
+  }
+
+  // VERCEL_URL: URL deployment tự động của Vercel (có thể là preview URL, KHÔNG phải domain production)
+  // Chỉ dùng khi không có lựa chọn nào khác
+  if (process.env.VERCEL_URL) {
+    console.warn("[Mailer] Đang dùng VERCEL_URL làm base URL email. Hãy set biến APP_URL=https://chill-banana.vercel.app trong Vercel Environment Variables để fix đường dẫn email!");
+    return `https://${process.env.VERCEL_URL}`;
+  }
+
+  return "http://localhost:3000";
 }
 
 // Cấu hình transporter Nodemailer cho ChillBanana
