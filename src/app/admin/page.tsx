@@ -579,6 +579,7 @@ export default function AdminDashboardPage() {
     const matchesSearch =
       ord.orderCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ord.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (ord.customerEmail && ord.customerEmail.toLowerCase().includes(searchTerm.toLowerCase())) ||
       ord.customerPhone.includes(searchTerm) ||
       ord.productName.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesStatus && matchesSearch;
