@@ -65,7 +65,6 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
         setOrders(data.orders);
       }
     } catch (err) {
-      console.error(err);
       adminToast.error("Lỗi tải đơn hàng");
     } finally {
       setLoadingOrders(false);
