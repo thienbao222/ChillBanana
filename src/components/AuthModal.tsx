@@ -36,10 +36,11 @@ export default function AuthModal() {
     if (!res.success) {
       setErrorMessage(res.message || "Đăng nhập thất bại.");
     } else {
-      setSuccessMessage("Đăng nhập thành công!");
+      // Use server message (may include Identity Stitching info)
+      setSuccessMessage(res.message || "Đăng nhập thành công!");
       setTimeout(() => {
         closeAuthModal();
-      }, 800);
+      }, (res.stitched && res.stitched.orders > 0) ? 2000 : 900);
     }
   };
 
@@ -60,10 +61,11 @@ export default function AuthModal() {
     if (!res.success) {
       setErrorMessage(res.message || "Đăng ký thất bại.");
     } else {
-      setSuccessMessage("Đăng ký tài khoản thành công!");
+      // Use server message (may include Identity Stitching info)
+      setSuccessMessage(res.message || "Đăng ký tài khoản thành công!");
       setTimeout(() => {
         closeAuthModal();
-      }, 800);
+      }, (res.stitched && res.stitched.orders > 0) ? 2500 : 1000);
     }
   };
 
@@ -137,9 +139,15 @@ export default function AuthModal() {
         )}
 
         {successMessage && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl flex items-center space-x-2">
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-            <span>{successMessage}</span>
+          <div className={`mb-4 p-3 border text-xs rounded-xl flex items-start space-x-2 ${
+            successMessage.includes("đơn hàng") || successMessage.includes("kết nối")
+              ? "bg-banana-50 border-banana-300 text-banana-900"
+              : "bg-emerald-50 border-emerald-200 text-emerald-700"
+          }`}>
+            <span className="text-base shrink-0">
+              {successMessage.includes("đơn hàng") || successMessage.includes("kết nối") ? "🔗" : "✅"}
+            </span>
+            <span className="leading-relaxed">{successMessage}</span>
           </div>
         )}
 

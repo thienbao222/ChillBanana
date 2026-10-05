@@ -82,11 +82,33 @@ export async function POST(req: NextRequest) {
 
     const order = createOrder(body);
 
+    // Kiểm tra định danh khách hàng (Thành viên vs Khách vãng lai)
+    let customerId = body.customerId || null;
+    let customerType = "GUEST";
+    try {
+      if (!customerId && order.customerEmail) {
+        const existingCustomer = await prisma.customer.findUnique({
+          where: { email: order.customerEmail.toLowerCase().trim() },
+          select: { id: true },
+        });
+        if (existingCustomer) {
+          customerId = existingCustomer.id;
+        }
+      }
+      if (customerId) {
+        customerType = "REGISTERED";
+      }
+    } catch {
+      // Non-blocking lookup
+    }
+
     // Lưu đơn hàng thực tế vào CSDL Neon Postgres qua Prisma
     try {
       const createdDbOrder = await prisma.order.create({
         data: {
           orderCode: order.orderCode,
+          customerId,
+          customerType,
           customerName: order.customerName,
           customerEmail: order.customerEmail || "",
           customerPhone: order.customerPhone,

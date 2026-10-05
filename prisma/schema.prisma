@@ -27,6 +27,11 @@ model Order {
   customerPhone    String
   customerAddress  String
   
+  // Phân loại khách hàng (REGISTERED | GUEST)
+  customerId       String?      
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerType     String       @default("GUEST")
+
   // Thông tin sản phẩm mua hộ
   originalUrl      String?       // Link từ Amazon JP, Mercari, Rakuten...
   productName      String
@@ -58,6 +63,10 @@ model Order {
   trackingLogs     TrackingLog[]
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+
+  @@index([customerType])
+  @@index([customerId])
+  @@index([customerEmail])
 }
 
 model TrackingLog {
@@ -125,9 +134,20 @@ model ChatSession {
   detectedKeywords String?       // Từ khóa khách hỏi: gundam, son dưỡng, nồi cơm 100V, cước bay...
   sentiment        String?       // positive, inquiry, complaint
   userIp           String?       // IP hoặc thiết bị khách hàng
+  // Phân loại & Định danh khách hàng trong Chat
+  customerType     String       @default("ANONYMOUS_GUEST") // "REGISTERED" | "GUEST_ORDER" | "ANONYMOUS_GUEST"
+  customerId       String?      
+  customer         Customer?    @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  customerName     String?      
+  customerEmail    String?      
+  customerPhone    String?      
   messages         ChatMessage[]
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
+
+  @@index([customerType])
+  @@index([createdAt])
+  @@index([customerId])
 }
 
 model ChatMessage {
@@ -148,6 +168,8 @@ model Customer {
   name         String
   phone        String?
   address      String?
+  orders       Order[]      
+  chatSessions ChatSession[] 
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }

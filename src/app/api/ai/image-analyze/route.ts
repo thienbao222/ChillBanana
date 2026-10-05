@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { visionKeyPool } from '@/lib/api-key-manager';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -38,9 +39,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Ảnh quá lớn (tối đa 10MB).' }, { status: 400 });
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+    const apiKey = visionKeyPool.getNextKey();
     if (!apiKey) {
-      return NextResponse.json({ success: false, error: 'API key is missing' }, { status: 500 });
+      return NextResponse.json({ success: false, error: 'Hệ thống AI phân tích ảnh đang quá tải, vui lòng thử lại sau 1 phút.' }, { status: 503 });
     }
 
     // Parse imageData
@@ -96,6 +97,7 @@ Return ONLY a valid JSON object matching this structure. Do not wrap in markdown
     if (!response.ok) {
       const errText = await response.text();
       console.error('Gemini API error:', errText);
+      visionKeyPool.markError(apiKey, response.status);
       return NextResponse.json({ success: false, error: 'Failed to analyze image' }, { status: response.status });
     }
 

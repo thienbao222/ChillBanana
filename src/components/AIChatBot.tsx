@@ -13,6 +13,7 @@ import {
   Loader2
 } from "lucide-react";
 import { AIPersonality } from "@/types";
+import { useAuth } from "@/context/AuthContext";
 
 interface Message {
   id: string;
@@ -51,6 +52,7 @@ function ChatImage({ url, alt }: { url: string; alt: string }) {
 }
 
 export default function AIChatBot() {
+  const { customer } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [personality, setPersonality] = useState<AIPersonality>("omotenashi");
   const [sessionId, setSessionId] = useState<string>("");
@@ -123,8 +125,45 @@ export default function AIChatBot() {
     setLoading(true);
 
     try {
+      let enrichedQuery = query;
+
+      // Detect links for automatic scraping
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const urls = query.match(urlRegex);
+      if (urls && urls.length > 0) {
+        const targetUrl = urls[0];
+        setMessages((prev) => [...prev, {
+          id: "system-scrape-" + Date.now(),
+          sender: "bot",
+          text: `Đang kéo thông tin giá và sản phẩm từ link Nhật Bản...`,
+          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+
+        try {
+          const scrapeRes = await fetch("/api/scrape-link", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: targetUrl }),
+          });
+          const scrapeData = await scrapeRes.json();
+          
+          if (scrapeRes.ok && scrapeData.success) {
+            const sd = scrapeData.data;
+            enrichedQuery += `\n\n[Hệ thống tự động chèn thông tin cào được từ link: Sản phẩm "${sd.title}", Giá web: ${sd.priceJpy} JPY, Hình ảnh: ${sd.imageUrl}. Hãy tính toán tỷ giá, phí mua hộ và hiển thị thẻ báo giá cho khách hàng dựa trên thông tin này.]`;
+            
+            // Remove the temporary "Đang kéo..." message
+            setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
+          } else {
+             // Let Gemini handle the error or raw link
+             setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
+          }
+        } catch (err) {
+           setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
+        }
+      }
+
       // Chuẩn bị lịch sử hội thoại ngắn gửi kèm lên Gemini
-      const conversationHistory = messages.map((m) => ({
+      const conversationHistory = messages.filter(m => !m.id.startsWith("system-scrape-")).map((m) => ({
         role: m.sender === "user" ? "user" : "model",
         text: m.text,
       }));
@@ -133,10 +172,16 @@ export default function AIChatBot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: query,
+          message: enrichedQuery,
           personality,
           sessionId,
           history: conversationHistory,
+          customer: customer ? {
+            id: customer.id,
+            name: customer.name,
+            email: customer.email,
+            phone: customer.phone,
+          } : null,
         }),
       });
 
@@ -258,7 +303,7 @@ export default function AIChatBot() {
     }
   };
   const parseInlineFormatting = (text: string) => {
-    const tokenRegex = /(!\[.*?\]\(https?:\/\/[^\s\)]+\)|\[.*?\]\(https?:\/\/[^\s\)]+\)|\*\*.*?\*\*)/g;
+    const tokenRegex = /(!\[.*?\]\([\w:\/\.\-\?\=]+\)|\[.*?\]\([\w:\/\.\-\?\=]+\)|\*\*.*?\*\*)/g;
     const parts = text.split(tokenRegex);
 
     return parts.map((chunk, idx) => {
@@ -276,7 +321,7 @@ export default function AIChatBot() {
 
       // 2. Link Markdown: [text](url)
       if (chunk.startsWith("[") && chunk.endsWith(")")) {
-        const linkMatch = chunk.match(/\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/);
+        const linkMatch = chunk.match(/\[(.*?)\]\(([\w:\/\.\-\?\=]+)\)/);
         if (linkMatch) {
           const linkText = linkMatch[1];
           const linkUrl = linkMatch[2];
@@ -284,12 +329,16 @@ export default function AIChatBot() {
             <a
               key={idx}
               href={linkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center text-banana-700 hover:text-banana-800 underline font-semibold mx-1 bg-banana-50 px-1.5 py-0.5 rounded transition-colors"
+              target={linkUrl.startsWith("http") ? "_blank" : "_self"}
+              rel={linkUrl.startsWith("http") ? "noopener noreferrer" : undefined}
+              className={`inline-flex items-center underline font-semibold mx-1 px-1.5 py-0.5 rounded transition-colors ${
+                linkText.includes("ĐẶT CỌC") || linkText.includes("MUA") 
+                  ? "bg-banana-500 hover:bg-banana-600 text-navy-950 no-underline shadow-sm" 
+                  : "bg-banana-50 text-banana-700 hover:text-banana-800"
+              }`}
             >
               <span>{linkText}</span>
-              <span className="text-[10px] ml-0.5">↗</span>
+              {linkUrl.startsWith("http") && <span className="text-[10px] ml-0.5">↗</span>}
             </a>
           );
         }
@@ -342,6 +391,15 @@ export default function AIChatBot() {
           <h3 key={lIdx} className="font-bold text-base text-navy-950 mt-3.5 mb-1.5">
             {parseInlineFormatting(trimmed.substring(3))}
           </h3>
+        );
+      }
+
+      // Blockquote for AI Quote Card (Báo giá)
+      if (trimmed.startsWith("> ")) {
+        return (
+          <div key={lIdx} className="pl-3 py-0.5 border-l-4 border-banana-500 bg-banana-50/50 my-1 text-navy-900 rounded-r-lg">
+            {parseInlineFormatting(trimmed.substring(2))}
+          </div>
         );
       }
 

@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message, personality = "omotenashi", history = [], sessionId } = body;
+    const { message, personality = "omotenashi", history = [], sessionId, customer } = body;
 
     // Input validation
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -85,6 +85,27 @@ export async function POST(req: NextRequest) {
       : msgLower.includes("?") || msgLower.includes("hỏi") || msgLower.includes("tư vấn") ? "inquiry"
       : "positive";
 
+    let customerId = customer?.id || null;
+    let customerType = customerId ? "REGISTERED" : "ANONYMOUS_GUEST";
+    let customerName = customer?.name || null;
+    let customerEmail = customer?.email || null;
+    let customerPhone = customer?.phone || null;
+
+    if (!customerEmail) {
+      const emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
+      if (emailMatch) {
+        customerEmail = emailMatch[0].toLowerCase();
+        if (customerType === "ANONYMOUS_GUEST") customerType = "CHAT_LEAD";
+      }
+    }
+    if (!customerPhone) {
+      const phoneMatch = message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
+      if (phoneMatch) {
+        customerPhone = phoneMatch[0];
+        if (customerType === "ANONYMOUS_GUEST") customerType = "CHAT_LEAD";
+      }
+    }
+
     try {
       saveChatInteraction(resolvedSessionId, message, reply, selectedPersonality);
 
@@ -95,6 +116,11 @@ export async function POST(req: NextRequest) {
           topic,
           detectedKeywords: detectedKeywords.join(","),
           sentiment,
+          ...(customerId ? { customerId, customerType: "REGISTERED" } : {}),
+          ...(customerName ? { customerName } : {}),
+          ...(customerEmail ? { customerEmail } : {}),
+          ...(customerPhone ? { customerPhone } : {}),
+          ...(!customerId && customerType === "CHAT_LEAD" ? { customerType: "CHAT_LEAD" } : {}),
           messages: {
             create: [
               { role: "user", content: message, categoryTag: topic },
@@ -108,6 +134,12 @@ export async function POST(req: NextRequest) {
           topic,
           detectedKeywords: detectedKeywords.join(","),
           sentiment,
+          userIp: ip,
+          customerId,
+          customerType,
+          customerName,
+          customerEmail,
+          customerPhone,
           messages: {
             create: [
               { role: "user", content: message, categoryTag: topic },
@@ -117,7 +149,7 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (saveErr) {
-      console.warn("Could not save chat interaction to SQLite:", saveErr);
+      console.warn("Could not save chat interaction to database:", saveErr);
     }
 
     return NextResponse.json({

@@ -106,10 +106,86 @@ export async function POST(req: NextRequest) {
 
       const sessionToken = signSession({ id: customer.id, email: customer.email });
 
+      // ============================================================
+      // SPRINT 4 — IDENTITY STITCHING
+      // Tự động gán đơn hàng cũ & phiên chat cũ cho tài khoản mới
+      // Dựa theo email (và phone nếu có)
+      // ============================================================
+      let stitchedOrders = 0;
+      let stitchedSessions = 0;
+      try {
+        const phoneVal = phone ? phone.trim() : null;
+
+        // Gán đơn hàng cũ của khách vãng lai (cùng email)
+        const orderUpdate = await prisma.order.updateMany({
+          where: {
+            customerEmail: cleanEmail,
+            customerId: null,  // Chưa được gán cho tài khoản nào
+          },
+          data: {
+            customerId: customer.id,
+            customerType: "REGISTERED",
+          },
+        });
+        stitchedOrders += orderUpdate.count;
+
+        // Gán thêm theo số điện thoại nếu có
+        if (phoneVal) {
+          const phoneOrderUpdate = await prisma.order.updateMany({
+            where: {
+              customerPhone: phoneVal,
+              customerId: null,
+            },
+            data: {
+              customerId: customer.id,
+              customerType: "REGISTERED",
+            },
+          });
+          stitchedOrders += phoneOrderUpdate.count;
+        }
+
+        // Gán phiên chat AI cũ (cùng email)
+        const sessionUpdate = await prisma.chatSession.updateMany({
+          where: {
+            customerEmail: cleanEmail,
+            customerId: null,
+          },
+          data: {
+            customerId: customer.id,
+            customerType: "REGISTERED",
+          },
+        });
+        stitchedSessions += sessionUpdate.count;
+
+        // Gán phiên chat theo số điện thoại nếu có
+        if (phoneVal) {
+          const phoneSessionUpdate = await prisma.chatSession.updateMany({
+            where: {
+              customerPhone: phoneVal,
+              customerId: null,
+            },
+            data: {
+              customerId: customer.id,
+              customerType: "REGISTERED",
+            },
+          });
+          stitchedSessions += phoneSessionUpdate.count;
+        }
+
+        if (stitchedOrders > 0 || stitchedSessions > 0) {
+          console.log(`[IdentityStitching] Tài khoản ${cleanEmail}: Gán ${stitchedOrders} đơn hàng + ${stitchedSessions} phiên chat cũ.`);
+        }
+      } catch (stitchErr) {
+        console.warn("[IdentityStitching] Lỗi khi gán dữ liệu cũ:", stitchErr);
+      }
+
       const response = NextResponse.json({
         success: true,
-        message: "Đăng ký tài khoản thành công!",
+        message: stitchedOrders > 0
+          ? `Đăng ký thành công! Chúng tôi đã tự động khôi phục ${stitchedOrders} đơn hàng trước đây của bạn.`
+          : "Đăng ký tài khoản thành công!",
         customer,
+        stitched: { orders: stitchedOrders, sessions: stitchedSessions },
       });
 
       response.cookies.set("cb_customer_session", sessionToken, {
@@ -154,6 +230,40 @@ export async function POST(req: NextRequest) {
 
       const sessionToken = signSession({ id: customer.id, email: customer.email });
 
+      // ============================================================
+      // SPRINT 4 — IDENTITY STITCHING ON LOGIN
+      // Khi đăng nhập, kiểm tra và gán lại những dữ liệu cũ chưa liên kết
+      // ============================================================
+      let loginStitchedOrders = 0;
+      let loginStitchedSessions = 0;
+      try {
+        const loginOrderUpdate = await prisma.order.updateMany({
+          where: { customerEmail: cleanEmail, customerId: null },
+          data: { customerId: customer.id, customerType: "REGISTERED" },
+        });
+        loginStitchedOrders = loginOrderUpdate.count;
+
+        if (customer.phone) {
+          const phoneLoginUpdate = await prisma.order.updateMany({
+            where: { customerPhone: customer.phone, customerId: null },
+            data: { customerId: customer.id, customerType: "REGISTERED" },
+          });
+          loginStitchedOrders += phoneLoginUpdate.count;
+        }
+
+        const loginSessionUpdate = await prisma.chatSession.updateMany({
+          where: { customerEmail: cleanEmail, customerId: null },
+          data: { customerId: customer.id, customerType: "REGISTERED" },
+        });
+        loginStitchedSessions = loginSessionUpdate.count;
+
+        if (loginStitchedOrders > 0 || loginStitchedSessions > 0) {
+          console.log(`[IdentityStitching/Login] ${cleanEmail}: +${loginStitchedOrders} đơn, +${loginStitchedSessions} chat.`);
+        }
+      } catch (stitchErr) {
+        console.warn("[IdentityStitching/Login] Lỗi:", stitchErr);
+      }
+
       const sanitized = {
         id: customer.id,
         email: customer.email,
@@ -165,8 +275,11 @@ export async function POST(req: NextRequest) {
 
       const response = NextResponse.json({
         success: true,
-        message: `Chào mừng ${customer.name} trở lại ChillBanana!`,
+        message: loginStitchedOrders > 0
+          ? `Chào mừng ${customer.name}! Chúng tôi đã kết nối thêm ${loginStitchedOrders} đơn hàng cũ vào tài khoản của bạn.`
+          : `Chào mừng ${customer.name} trở lại ChillBanana!`,
         customer: sanitized,
+        stitched: { orders: loginStitchedOrders, sessions: loginStitchedSessions },
       });
 
       response.cookies.set("cb_customer_session", sessionToken, {

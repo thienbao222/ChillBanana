@@ -2,6 +2,7 @@ import { AIPersonality, CuratedProduct } from "@/types";
 import { AIR_SHIPPING_PER_KG } from "./data";
 import { getAllProducts } from "./product-store";
 import { fetchLiveExchangeRate } from "./exchange-rate";
+import { chatKeyPool } from "./api-key-manager";
 
 export interface GeminiAgentMessage {
   role: "user" | "model" | "assistant";
@@ -50,18 +51,29 @@ Khi khách hàng hỏi tư vấn sản phẩm chung chung (ví dụ: trị mụn
      * Nhắc khách có thể kéo xuống mục "Sản Phẩm Có Sẵn Tại Kho ChillBanana" trên trang chủ để thêm vào giỏ hàng hoặc bấm mua ngay.
 
 2. NGUỒN 2 - GỢI Ý MỞ RỘNG TRÊN CÁC SÀN NỘI ĐỊA NHẬT (Amazon JP, Mercari, Rakuten):
-   - Gợi ý thêm 2-3 sản phẩm nổi tiếng chuyên sâu khác của Nhật cùng phân khúc mà shop chưa đăng sẵn (ví dụ: khách hỏi trị mụn thì ngoài DHC của shop, gợi ý thêm Kem trị mụn Pair Acne W Cream Lion, Serum Melano CC Rohto, Sữa rửa mặt Pair...).
+   - Gợi ý thêm 2-3 sản phẩm nổi tiếng chuyên sâu khác của Nhật cùng phân khúc mà shop chưa đăng sẵn.
    - Cung cấp link tìm kiếm trực tiếp trên sàn Nhật: [Tìm trên Amazon JP](https://www.amazon.co.jp/s?k=tên_sản_phẩm) hoặc [Tìm trên Mercari](https://jp.mercari.com/search?keyword=tên_sản_phẩm).
-   - Hướng dẫn khách: Chỉ cần bấm vào link tìm kiếm, chọn sản phẩm ưng ý rồi copy link dán vào ô "Dán Link Tính Giá" ở đầu trang web để ChillBanana mua hộ từ Tokyo về tận tay.
+   - Hướng dẫn khách: Copy link rồi dán vào ô "Dán Link Tính Giá" ở đầu trang web để ChillBanana mua hộ từ Tokyo về tận tay.
 
 QUY TẮC HIỂN THỊ HÌNH ẢNH (BẮT BUỘC):
 - Khi giới thiệu bất kỳ sản phẩm nào có ảnh trong danh mục shop, BẮT BUỘC dùng cú pháp:
   ![Tên sản phẩm](URL_ảnh)
 - TUYỆT ĐỐI KHÔNG viết dạng văn bản thô "* Link ảnh: https://..." mà PHẢI viết dạng cú pháp ảnh Markdown ![Tên](URL).
 
-LƯU Ý KỸ THUẬT & AN TOÀN:
-- Đồ điện nội địa Nhật: luôn nhắc điện áp 100V cần dùng biến áp tại VN.
+TỰ ĐỘNG BÁO GIÁ KHI CÓ LINK SẢN PHẨM:
+- Khi hệ thống truyền vào "Hệ thống tự động chèn thông tin cào được từ link...", bạn PHẢI tính toán và in ra THẺ BÁO GIÁ theo ĐÚNG định dạng blockquote sau (có dấu > ở đầu mỗi dòng):
+> **BÁO GIÁ TỰ ĐỘNG CHILLBANANA** 
+> 🛒 **Sản phẩm:** [Tên sản phẩm]
+> 💴 **Giá web:** [X] JPY
+> 🛩️ **Cước bay dự kiến:** [Y] VNĐ (tạm tính 0.5kg - 1kg tùy sản phẩm)
+> 💰 **TỔNG TIỀN:** [Z] VNĐ
+> ⚡ [ĐẶT CỌC 50% NGAY TẠI ĐÂY](/checkout?url=[link_sản_phẩm])
+
+LƯU Ý KỸ THUẬT, AN TOÀN & ĐÁNH GIÁ TỪ BÊN THỨ 3 (QUAN TRỌNG):
+- Đồ điện nội địa Nhật: LUÔN NHẮC điện áp 100V cần dùng biến áp tại VN.
 - Quần áo/giày dép: form Nhật chuẩn người châu Á, thường ôm hơn form Âu Mỹ 1 size.
+- Tư vấn chéo chuyên trang: Nếu khách hỏi mỹ phẩm, hãy nhắc đến "Top xếp hạng @cosme Nhật Bản". Nếu hỏi đồ công nghệ, nhắc đến "đánh giá trên Kakaku".
+- Uy tín người bán (Mercari/Yahoo): Hãy chủ động nhắc khách "Lưu ý kiểm tra số sao đánh giá (review) của người bán trên sàn, tránh mua từ tài khoản 0 đánh giá hoặc nhiều đánh giá xấu (bad ratings)".
 - Từ chối lịch sự các chủ đề nhạy cảm (chính trị, 18+, vũ khí, chất cấm).
 
 DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP CHILLBANANA:
@@ -73,18 +85,15 @@ export async function askGeminiAgent(
   userQuery: string,
   personality: AIPersonality,
   conversationHistory: { role: string; text: string }[] = [],
-  apiKey?: string
+  _apiKey?: string  // Legacy param — pool handles key selection internally
 ): Promise<string> {
   const isOmo = personality === "omotenashi";
 
-  // 1. Kiểm tra an toàn trước: Lịch sự từ chối các vấn đề nhạy cảm
   if (isSensitiveTopic(userQuery)) {
     return isOmo
       ? `Dạ kính thưa Quý khách, em xin phép lịch sự từ chối phản hồi về chủ đề này do tính chất nhạy cảm và không nằm trong quy tắc phục vụ cộng đồng ạ. Em luôn sẵn sàng hỗ trợ Quý khách hết mình về tìm kiếm sản phẩm nội địa Nhật, tra cứu link, hình ảnh, kiến thức sale và cách tính cước vận chuyển. Kính mong Quý khách thông cảm cho em ạ! 🌸🍌`
       : `Dạ em xin phép từ chối trả lời về nội dung nhạy cảm này nha anh/chị ơi! ChillBanana AI ưu tiên hỗ trợ tìm kiếm sản phẩm Nhật xịn sò, link mua hàng, hình ảnh, kinh nghiệm săn sale và tính bill cước vận chuyển nè. Anh/chị cần hỏi mua món gì từ Nhật cứ nhắn em ngay nhé! 🍌✨`;
   }
-
-  const activeKey = apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
 
   const personalityPrompt =
     personality === "omotenashi"
@@ -92,35 +101,40 @@ export async function askGeminiAgent(
       : "Phong cách: Thân thiện Chill Việt Nam - Vui vẻ, gần gũi, xưng Em, gọi Anh/Chị/Bạn, nhiệt tình mách mẹo săn deal, tư vấn sale hời.";
 
   const products = getAllProducts();
-  
-  // Lấy tỷ giá live trước khi truyền vào system instruction
   const liveRateData = await fetchLiveExchangeRate();
   const liveRate = liveRateData.rate;
   const systemInstruction = buildSystemInstruction(products, liveRate);
 
-  // 2. Gọi Google Gemini 2.5 Flash API
-  if (activeKey && activeKey.trim() !== "") {
+  const contents = conversationHistory.slice(-8).map((msg) => ({
+    role: msg.role === "user" ? "user" : "model",
+    parts: [{ text: msg.text }],
+  }));
+  contents.push({
+    role: "user",
+    parts: [{ text: `[Phong cách yêu cầu: ${personalityPrompt}]\n\nKhách hỏi: ${userQuery}` }],
+  });
+
+  // Sprint 2: Multi-API Key Failover
+  let attemptCount = 0;
+  const maxAttempts = 3;
+
+  while (attemptCount < maxAttempts) {
+    attemptCount++;
+    const activeKey = chatKeyPool.getNextKey();
+
+    if (!activeKey) {
+      console.warn(`[GeminiPool] Tất cả chat keys đang bị rate-limit. Trả về fallback.`);
+      break;
+    }
+
     try {
-      const contents = conversationHistory.slice(-8).map((msg) => ({
-        role: msg.role === "user" ? "user" : "model",
-        parts: [{ text: msg.text }],
-      }));
-
-      // Thêm câu hỏi hiện tại kèm chỉ dẫn phong cách
-      contents.push({
-        role: "user",
-        parts: [{ text: `[Phong cách yêu cầu: ${personalityPrompt}]\n\nKhách hỏi: ${userQuery}` }],
-      });
-
       const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey.trim()}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            system_instruction: {
-              parts: [{ text: systemInstruction }],
-            },
+            system_instruction: { parts: [{ text: systemInstruction }] },
             contents,
             generationConfig: {
               temperature: 0.7,
@@ -133,27 +147,21 @@ export async function askGeminiAgent(
       if (response.ok) {
         const data = await response.json();
         const candidate = data?.candidates?.[0];
-        const finishReason = candidate?.finishReason;
-        // Khi thinking bật, Gemini trả về nhiều parts: thought parts trước, text part cuối
         const parts = candidate?.content?.parts || [];
         const textPart = parts.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought).pop();
         const text = textPart?.text;
-        
-        console.log(`[Gemini 2.5] FinishReason: ${finishReason}, parts: ${parts.length}, liveRate: ${liveRate}`);
-        
+
         if (text && text.trim().length > 0) {
           return text.trim();
         }
       } else {
-        const errText = await response.text();
-        console.warn("Gemini 2.5 Flash API returned error, falling back:", errText);
+        chatKeyPool.markError(activeKey, response.status);
       }
     } catch (apiErr) {
-      console.warn("Gemini 2.5 agent exception:", apiErr);
+      chatKeyPool.markError(activeKey, 500);
     }
   }
 
-  // 3. Fallback ngắn gọn khi API không khả dụng
   return isOmo
     ? `Dạ xin lỗi Quý khách, hiện tại hệ thống AI đang tạm gián đoạn kết nối. Quý khách vui lòng thử lại sau ít phút hoặc dán link sản phẩm từ Amazon JP / Mercari vào công cụ **"Dán Link Tính Giá"** ở đầu trang web để tính giá tự động ạ! 🍌`
     : `Dạ xin lỗi anh/chị, hệ thống AI đang tạm gián đoạn. Anh/chị thử lại sau ít phút hoặc dán link sản phẩm vào ô **"Dán Link Tính Giá"** ở trên trang web để tính giá tự động nha! 🍌`;

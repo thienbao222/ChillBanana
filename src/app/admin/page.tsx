@@ -56,6 +56,7 @@ export default function AdminDashboardPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [customerSearch, setCustomerSearch] = useState("");
   const [customerStats, setCustomerStats] = useState<any>(null);
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<"ALL" | "REGISTERED" | "GUEST_ORDER" | "CHAT_LEAD">("ALL");
 
   // Quản lý đơn hàng
   const [orders, setOrders] = useState<StoredOrder[]>([]);
@@ -86,9 +87,22 @@ export default function AdminDashboardPage() {
   const [loadingAi, setLoadingAi] = useState(false);
   const [selectedAiSession, setSelectedAiSession] = useState<any | null>(null);
 
+  // Chat Trends Filters
+  const [chatSearch, setChatSearch] = useState("");
+  const [chatCustomerType, setChatCustomerType] = useState<string>("ALL");
+  const [chatDateFrom, setChatDateFrom] = useState("");
+  const [chatDateTo, setChatDateTo] = useState("");
+
+  // API Keys Monitor
+  const [apiKeyStatus, setApiKeyStatus] = useState<any>(null);
+
   // Báo cáo doanh thu & mặt hàng
   const [reportData, setReportData] = useState<any>(null);
   const [loadingReport, setLoadingReport] = useState(false);
+
+  // Sprint 4 — Phễu Chuyển Đổi (Conversion Funnel)
+  const [funnelData, setFunnelData] = useState<any>(null);
+  const [loadingFunnel, setLoadingFunnel] = useState(false);
 
   // AI Business Insights
   const [insightsData, setInsightsData] = useState<any>(null);
@@ -155,7 +169,13 @@ export default function AdminDashboardPage() {
   const fetchAiTrends = async () => {
     setLoadingAi(true);
     try {
-      const res = await fetch("/api/admin/chat-trends");
+      const params = new URLSearchParams();
+      if (chatSearch) params.append("search", chatSearch);
+      if (chatCustomerType !== "ALL") params.append("customerType", chatCustomerType);
+      if (chatDateFrom) params.append("dateFrom", chatDateFrom);
+      if (chatDateTo) params.append("dateTo", chatDateTo);
+
+      const res = await fetch(`/api/admin/chat-trends?${params.toString()}`);
       const data = await res.json();
       if (res.ok && data.success) {
         setAiStats(data.stats);
@@ -165,6 +185,18 @@ export default function AdminDashboardPage() {
       console.error(err);
     } finally {
       setLoadingAi(false);
+    }
+  };
+
+  const fetchApiKeyStatus = async () => {
+    try {
+      const res = await fetch("/api/admin/api-keys");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setApiKeyStatus(data);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -217,6 +249,22 @@ export default function AdminDashboardPage() {
     }
   };
 
+  // 7. Tải dữ liệu phễu chuyển đổi (Sprint 4)
+  const fetchFunnel = async () => {
+    setLoadingFunnel(true);
+    try {
+      const res = await fetch("/api/admin/funnel");
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFunnelData(data);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingFunnel(false);
+    }
+  };
+
   useEffect(() => {
     if (!authChecking) {
       fetchOrders();
@@ -229,8 +277,14 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     if (activeTab === "customers") fetchCustomers();
-    if (activeTab === "ai_trends") fetchAiTrends();
-    if (activeTab === "reports") fetchReport();
+    if (activeTab === "ai_trends") {
+      fetchAiTrends();
+      fetchApiKeyStatus();
+    }
+    if (activeTab === "reports") {
+      fetchReport();
+      fetchFunnel();
+    }
   }, [activeTab]);
 
   // Handlers Quản lý sản phẩm
@@ -863,7 +917,18 @@ export default function AdminDashboardPage() {
                             )}
                           </td>
                           <td className="p-4">
-                            <div className="font-bold text-slate-900">{ord.customerName}</div>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold text-slate-900">{ord.customerName}</span>
+                              {((ord as any).customerType === "REGISTERED" || (ord as any).customerId) ? (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-700 border border-emerald-200 shrink-0">
+                                  👤 Thành viên
+                                </span>
+                              ) : (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 border border-orange-200 shrink-0">
+                                  🛍️ Vãng lai
+                                </span>
+                              )}
+                            </div>
                             <div className="text-[11px] text-slate-500">{ord.customerPhone}</div>
                           </td>
                           <td className="p-4 max-w-xs">
@@ -952,7 +1017,7 @@ export default function AdminDashboardPage() {
         )}
 
         {/* ======================================================== */}
-        {/* TAB: QUẢN LÝ KHÁCH HÀNG & THÀNH VIÊN (CUSTOMER CRM) */}
+        {/* TAB: QUẢN LÝ KHÁCH HÀNG TOÀN DIỆN (UNIFIED CUSTOMER CRM) */}
         {/* ======================================================== */}
         {activeTab === "customers" && (
           <div className="space-y-6">
@@ -961,16 +1026,15 @@ export default function AdminDashboardPage() {
               <div>
                 <div className="inline-flex items-center space-x-1.5 bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
                   <Users className="w-3.5 h-3.5 text-blue-600" />
-                  <span>Customer Relationship Management (CRM)</span>
+                  <span>Unified Customer 360 — CRM Toàn Diện</span>
                 </div>
                 <h2 className="text-2xl font-serif font-bold text-navy-900">
-                  Quản Lý Khách Hàng &amp; Thành Viên
+                  Quản Lý Toàn Bộ Khách Hàng
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 max-w-xl">
-                  Theo dõi danh sách khách hàng đã đăng ký tài khoản, đối chiếu số điện thoại, địa chỉ nhận hàng và tổng doanh thu tích lũy từ từng khách.
+                  Theo dõi đầy đủ: Thành viên đã đăng ký, Khách vãng lai đặt đơn (Guest Checkout) và Khách tư vấn Chat AI — tất cả trong một trang.
                 </p>
               </div>
-
               <div className="flex items-center gap-3">
                 <button
                   onClick={fetchCustomers}
@@ -982,34 +1046,62 @@ export default function AdminDashboardPage() {
               </div>
             </div>
 
-            {/* Thống kê khách hàng KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Tổng Thành Viên Đăng Ký</span>
-                <div className="text-2xl font-bold text-navy-900 mt-1 font-mono">
-                  {customers.length} <span className="text-xs font-normal text-slate-500">khách hàng</span>
-                </div>
-                <span className="text-[11px] text-blue-600 mt-1 block">Tài khoản lưu trữ SQLite</span>
+            {/* KPI Cards — 5 chỉ số bấm được để lọc */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div
+                onClick={() => setCustomerTypeFilter("ALL")}
+                className={`bg-white p-4 rounded-3xl border-2 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                  customerTypeFilter === "ALL" ? "border-navy-700 bg-navy-50" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Tất Cả</div>
+                <div className="text-2xl font-bold text-navy-900 font-mono">{customerStats?.totalAll ?? customers.length}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">khách hàng & lead</div>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Khách Đã Phát Sinh Đơn Hàng</span>
-                <div className="text-2xl font-bold text-emerald-600 mt-1 font-mono">
-                  {customerStats?.customersWithOrders ?? customers.filter((c) => c.orderCount > 0).length} <span className="text-xs font-normal text-slate-500">thành viên</span>
-                </div>
-                <span className="text-[11px] text-emerald-700 mt-1 block">Tỷ lệ chuyển đổi mua hàng cao</span>
+              <div
+                onClick={() => setCustomerTypeFilter("REGISTERED")}
+                className={`bg-white p-4 rounded-3xl border-2 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                  customerTypeFilter === "REGISTERED" ? "border-emerald-600 bg-emerald-50" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider mb-1">👤 Thành Viên</div>
+                <div className="text-2xl font-bold text-emerald-700 font-mono">{customerStats?.totalRegistered ?? customers.filter(c => c.customerType === "REGISTERED").length}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">đã đăng ký tài khoản</div>
               </div>
 
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm">
-                <span className="text-xs font-medium text-slate-500">Tổng Doanh Số Tích Lũy</span>
-                <div className="text-2xl font-bold text-banana-600 mt-1 font-mono">
-                  {(customerStats?.totalRevenueVnd ?? customers.reduce((acc, c) => acc + (c.totalSpentVnd || 0), 0)).toLocaleString("vi-VN")} <span className="text-xs font-normal text-slate-500">đ</span>
+              <div
+                onClick={() => setCustomerTypeFilter("GUEST_ORDER")}
+                className={`bg-white p-4 rounded-3xl border-2 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                  customerTypeFilter === "GUEST_ORDER" ? "border-orange-500 bg-orange-50" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="text-[10px] font-bold text-orange-700 uppercase tracking-wider mb-1">🛍️ Vãng Lai</div>
+                <div className="text-2xl font-bold text-orange-600 font-mono">{customerStats?.totalGuestOrder ?? customers.filter(c => c.customerType === "GUEST_ORDER").length}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">đặt đơn không đăng ký</div>
+              </div>
+
+              <div
+                onClick={() => setCustomerTypeFilter("CHAT_LEAD")}
+                className={`bg-white p-4 rounded-3xl border-2 cursor-pointer transition-all shadow-sm hover:shadow-md ${
+                  customerTypeFilter === "CHAT_LEAD" ? "border-purple-500 bg-purple-50" : "border-slate-200 hover:border-slate-300"
+                }`}
+              >
+                <div className="text-[10px] font-bold text-purple-700 uppercase tracking-wider mb-1">💬 Chat Lead</div>
+                <div className="text-2xl font-bold text-purple-600 font-mono">{customerStats?.totalChatLead ?? customers.filter(c => c.customerType === "CHAT_LEAD").length}</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">chỉ tư vấn chưa mua</div>
+              </div>
+
+              <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
+                <div className="text-[10px] font-bold text-banana-700 uppercase tracking-wider mb-1">💰 Doanh Số</div>
+                <div className="text-lg font-bold text-banana-600 font-mono">
+                  {((customerStats?.totalRevenueVnd ?? customers.reduce((acc, c) => acc + (c.totalSpentVnd || 0), 0)) / 1_000_000).toFixed(1)}M
                 </div>
-                <span className="text-[11px] text-slate-400 mt-1 block">Từ các đơn hàng thành viên</span>
+                <div className="text-[10px] text-slate-400 mt-0.5">VNĐ tích lũy</div>
               </div>
             </div>
 
-            {/* Tìm kiếm khách hàng */}
+            {/* Toolbar: Search + Segment Filter Buttons */}
             <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
               <div className="relative w-full sm:w-96">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
@@ -1022,53 +1114,60 @@ export default function AdminDashboardPage() {
                 />
               </div>
 
-              <div className="text-xs text-slate-500">
-                Hiển thị <strong>{customers.filter((c) => {
-                  if (!customerSearch.trim()) return true;
-                  const q = customerSearch.toLowerCase();
-                  return (
-                    c.name?.toLowerCase().includes(q) ||
-                    c.email?.toLowerCase().includes(q) ||
-                    c.phone?.includes(q) ||
-                    c.address?.toLowerCase().includes(q)
-                  );
-                }).length}</strong> / {customers.length} khách hàng
+              <div className="flex items-center gap-2 text-xs font-bold flex-wrap justify-end">
+                {([
+                  { key: "ALL" as const, label: "Tất Cả" },
+                  { key: "REGISTERED" as const, label: "👤 Thành Viên" },
+                  { key: "GUEST_ORDER" as const, label: "🛍️ Vãng Lai" },
+                  { key: "CHAT_LEAD" as const, label: "💬 Chat Lead" },
+                ]).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => setCustomerTypeFilter(key)}
+                    className={`px-3 py-1.5 rounded-xl transition-all ${
+                      customerTypeFilter === key
+                        ? key === "ALL" ? "bg-navy-900 text-white"
+                          : key === "REGISTERED" ? "bg-emerald-600 text-white"
+                          : key === "GUEST_ORDER" ? "bg-orange-500 text-white"
+                          : "bg-purple-600 text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Bảng danh sách khách hàng */}
+            {/* Bảng danh sách khách hàng hợp nhất */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-left border-collapse text-xs">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 uppercase tracking-wider text-[10px] font-bold">
                       <th className="p-4 pl-6">Khách Hàng</th>
+                      <th className="p-4">Phân Loại</th>
                       <th className="p-4">Thông Tin Liên Hệ</th>
-                      <th className="p-4">Địa Chỉ Nhận Hàng</th>
-                      <th className="p-4 text-center">Số Đơn Hàng</th>
+                      <th className="p-4 text-center">Đơn Hàng</th>
+                      <th className="p-4 text-center">Lịch Sử Chat AI</th>
                       <th className="p-4">Tổng Chi Tiêu</th>
-                      <th className="p-4">Đơn Gần Nhất</th>
+                      <th className="p-4">Hoạt Động Gần Nhất</th>
                       <th className="p-4 pr-6 text-right">Thao Tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {loadingCustomers ? (
                       <tr>
-                        <td colSpan={7} className="p-8 text-center text-slate-400">
+                        <td colSpan={8} className="p-8 text-center text-slate-400">
                           <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-banana-500" />
-                          Đang tải dữ liệu khách hàng từ SQLite...
-                        </td>
-                      </tr>
-                    ) : customers.length === 0 ? (
-                      <tr>
-                        <td colSpan={7} className="p-12 text-center text-slate-400">
-                          <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          Chưa có khách hàng nào đăng ký trong hệ thống.
+                          Đang tải dữ liệu khách hàng hợp nhất...
                         </td>
                       </tr>
                     ) : (
                       customers
                         .filter((c) => {
+                          const matchType = customerTypeFilter === "ALL" || c.customerType === customerTypeFilter;
+                          if (!matchType) return false;
                           if (!customerSearch.trim()) return true;
                           const q = customerSearch.toLowerCase();
                           return (
@@ -1080,72 +1179,189 @@ export default function AdminDashboardPage() {
                         })
                         .map((c) => (
                           <tr key={c.id} className="hover:bg-slate-50/80 transition-colors">
+                            {/* Cột 1: Thông tin khách hàng */}
                             <td className="p-4 pl-6">
                               <div className="flex items-center space-x-3">
-                                <div className="w-9 h-9 rounded-2xl bg-gradient-to-br from-banana-400 to-amber-500 text-navy-950 font-bold flex items-center justify-center text-xs shadow-sm uppercase shrink-0">
+                                <div className={`w-9 h-9 rounded-2xl font-bold flex items-center justify-center text-xs shadow-sm uppercase shrink-0 text-white ${
+                                  c.customerType === "REGISTERED" ? "bg-gradient-to-br from-emerald-500 to-emerald-600" :
+                                  c.customerType === "GUEST_ORDER" ? "bg-gradient-to-br from-orange-400 to-orange-500" :
+                                  "bg-gradient-to-br from-purple-400 to-purple-500"
+                                }`}>
                                   {c.name ? c.name.charAt(0) : "U"}
                                 </div>
                                 <div>
                                   <div className="font-bold text-navy-900 text-xs">{c.name}</div>
                                   <div className="text-[10px] text-slate-400">
-                                    Gia nhập: {new Date(c.createdAt).toLocaleDateString("vi-VN")}
+                                    {c.customerType === "REGISTERED" ? `Gia nhập: ${new Date(c.createdAt).toLocaleDateString("vi-VN")}` :
+                                     c.customerType === "GUEST_ORDER" ? `Đơn đầu: ${new Date(c.createdAt).toLocaleDateString("vi-VN")}` :
+                                     `Chat từ: ${new Date(c.createdAt).toLocaleDateString("vi-VN")}`}
                                   </div>
                                 </div>
                               </div>
                             </td>
+
+                            {/* Cột 2: Badge phân loại */}
+                            <td className="p-4">
+                              {c.customerType === "REGISTERED" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                  👤 Thành Viên
+                                </span>
+                              )}
+                              {c.customerType === "GUEST_ORDER" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700 border border-orange-200">
+                                  🛍️ Vãng Lai
+                                </span>
+                              )}
+                              {c.customerType === "CHAT_LEAD" && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
+                                  💬 Chat Lead
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Cột 3: Liên hệ */}
                             <td className="p-4">
                               <div className="space-y-0.5">
-                                <div className="font-mono text-slate-800 text-[11px]">{c.email}</div>
+                                <div className="font-mono text-slate-800 text-[11px]">{c.email || "—"}</div>
                                 <div className="text-[11px] text-slate-500">📞 {c.phone}</div>
                               </div>
                             </td>
-                            <td className="p-4 max-w-xs">
-                              <div className="text-slate-600 line-clamp-2 text-[11px]" title={c.address}>
-                                📍 {c.address}
-                              </div>
-                            </td>
+
+                            {/* Cột 4: Đơn hàng */}
                             <td className="p-4 text-center">
-                              <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold font-mono ${
-                                c.orderCount > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-400"
-                              }`}>
-                                {c.orderCount} đơn
-                              </span>
-                            </td>
-                            <td className="p-4 font-mono font-bold text-navy-900 text-xs">
-                              {(c.totalSpentVnd || 0).toLocaleString("vi-VN")} đ
-                            </td>
-                            <td className="p-4">
-                              {c.latestOrderCode ? (
-                                <div className="space-y-0.5">
-                                  <span className="font-mono font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded text-[10px] border border-blue-200">
-                                    #{c.latestOrderCode}
+                              {c.customerType !== "CHAT_LEAD" ? (
+                                <div className="space-y-1">
+                                  <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold font-mono ${
+                                    c.orderCount > 0 ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : "bg-slate-100 text-slate-400"
+                                  }`}>
+                                    {c.orderCount} đơn
                                   </span>
-                                  <div className="text-[10px] text-slate-400">
-                                    {c.latestOrderStatus || "Đang xử lý"}
-                                  </div>
+                                  {c.latestOrderCode && (
+                                    <div className="text-[10px] font-mono text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 truncate max-w-[110px]">
+                                      #{c.latestOrderCode}
+                                    </div>
+                                  )}
+                                  {c.latestOrderStatus && (
+                                    <div className="text-[10px] text-slate-400 truncate max-w-[110px]">{c.latestOrderStatus}</div>
+                                  )}
                                 </div>
                               ) : (
-                                <span className="text-slate-400 text-[11px]">Chưa có đơn</span>
+                                <span className="text-slate-300 text-[11px]">—</span>
                               )}
                             </td>
+
+                            {/* Cột 5: Chat AI */}
+                            <td className="p-4 text-center">
+                              {c.chatSessionCount > 0 ? (
+                                <div className="space-y-1">
+                                  <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold font-mono bg-purple-50 text-purple-700 border border-purple-200">
+                                    💬 {c.chatSessionCount} phiên
+                                  </span>
+                                  {c.lastChatTopic && (
+                                    <div className="text-[10px] text-slate-400 truncate max-w-[110px]">{c.lastChatTopic}</div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-slate-300 text-[11px]">—</span>
+                              )}
+                            </td>
+
+                            {/* Cột 6: Tổng chi tiêu */}
+                            <td className="p-4 font-mono font-bold text-navy-900 text-xs">
+                              {c.customerType !== "CHAT_LEAD"
+                                ? (c.totalSpentVnd || 0).toLocaleString("vi-VN") + " đ"
+                                : <span className="text-slate-300">—</span>}
+                            </td>
+
+                            {/* Cột 7: Hoạt động gần nhất */}
+                            <td className="p-4 text-[10px] text-slate-500">
+                              {c.lastActiveAt ? new Date(c.lastActiveAt).toLocaleDateString("vi-VN", {
+                                day: "2-digit", month: "2-digit", year: "numeric"
+                              }) : "—"}
+                            </td>
+
+                            {/* Cột 8: Thao tác */}
                             <td className="p-4 pr-6 text-right">
-                              <button
-                                onClick={() => {
-                                  setActiveTab("orders");
-                                  setSearchTerm(c.email || c.name);
-                                }}
-                                className="px-3 py-1.5 bg-slate-100 hover:bg-banana-500 hover:text-navy-950 text-slate-700 font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center space-x-1"
-                                title="Xem danh sách đơn hàng của khách hàng này"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                                <span>Xem Đơn</span>
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {c.customerType !== "CHAT_LEAD" && (
+                                  <button
+                                    onClick={() => {
+                                      setActiveTab("orders");
+                                      setSearchTerm(c.email || c.name);
+                                    }}
+                                    className="px-2.5 py-1.5 bg-slate-100 hover:bg-banana-500 hover:text-navy-950 text-slate-700 font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center space-x-1"
+                                    title="Xem đơn hàng của khách này"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                    <span>Xem Đơn</span>
+                                  </button>
+                                )}
+                                {c.chatSessionCount > 0 && (
+                                  <button
+                                    onClick={() => setActiveTab("ai_trends")}
+                                    className="px-2.5 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 font-bold text-xs rounded-xl shadow-sm transition-all inline-flex items-center space-x-1"
+                                    title="Xem lịch sử chat AI"
+                                  >
+                                    <MessageSquare className="w-3.5 h-3.5" />
+                                    <span>Chat</span>
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))
                     )}
+                    {!loadingCustomers && customers.filter((c) => {
+                      const matchType = customerTypeFilter === "ALL" || c.customerType === customerTypeFilter;
+                      if (!matchType) return false;
+                      if (!customerSearch.trim()) return true;
+                      const q = customerSearch.toLowerCase();
+                      return (
+                        c.name?.toLowerCase().includes(q) ||
+                        c.email?.toLowerCase().includes(q) ||
+                        c.phone?.includes(q) ||
+                        c.address?.toLowerCase().includes(q)
+                      );
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                          <Users className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          <div className="font-medium">Không tìm thấy khách hàng nào phù hợp.</div>
+                          {customerTypeFilter !== "ALL" && (
+                            <button
+                              onClick={() => setCustomerTypeFilter("ALL")}
+                              className="mt-2 text-xs text-banana-600 hover:underline"
+                            >
+                              Xem tất cả khách hàng
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
+              </div>
+              {/* Footer tổng kết */}
+              <div className="px-6 py-3 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500">
+                <span>
+                  Hiển thị <strong className="text-navy-900">{customers.filter((c) => {
+                    const matchType = customerTypeFilter === "ALL" || c.customerType === customerTypeFilter;
+                    if (!matchType) return false;
+                    if (!customerSearch.trim()) return true;
+                    const q = customerSearch.toLowerCase();
+                    return (
+                      c.name?.toLowerCase().includes(q) ||
+                      c.email?.toLowerCase().includes(q) ||
+                      c.phone?.includes(q) ||
+                      c.address?.toLowerCase().includes(q)
+                    );
+                  }).length}</strong> / {customers.length} khách hàng
+                </span>
+                {customerStats?.anonymousSessionCount > 0 && (
+                  <span className="text-slate-400 italic">
+                    + {customerStats.anonymousSessionCount} phiên chat ẩn danh (chưa xác định danh tính)
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1351,6 +1567,35 @@ export default function AdminDashboardPage() {
               </button>
             </div>
 
+            {/* API Key Failover Monitor */}
+            {apiKeyStatus && (
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h3 className="text-sm font-bold text-navy-900 flex items-center space-x-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>Hệ Thống API Key Pool (Gemini)</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">Tự động chuyển đổi khóa khi bị quá tải (HTTP 429/503). Đang có {apiKeyStatus.activeKeys} khóa sẵn sàng.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {apiKeyStatus.keys?.map((k: any) => (
+                    <div key={k.index} className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center space-x-2 ${
+                      k.status === "ACTIVE" 
+                        ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                        : "bg-rose-50 border-rose-200 text-rose-700"
+                    }`}>
+                      <span>Key {k.index}: {k.keyPreview}</span>
+                      {k.status === "ACTIVE" ? (
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                      ) : (
+                        <span className="text-[10px] text-rose-500 animate-pulse">Nghỉ {k.cooldownRemainingSec}s</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Metric Summaries */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex items-center space-x-4">
@@ -1529,13 +1774,64 @@ export default function AdminDashboardPage() {
 
             {/* Recent Conversations Inspector */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="p-5 border-b border-slate-200 flex items-center justify-between">
-                <div>
-                  <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
-                    <MessageSquare className="w-4 h-4 text-banana-600" />
-                    <span>Lịch Sử Các Phiên Chat Của Khách Hàng (Lưu Trữ CSDL)</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Nhấp vào một phiên để xem toàn bộ nội dung trò chuyện với Gemini AI</p>
+              <div className="p-5 border-b border-slate-200 flex flex-col space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                      <MessageSquare className="w-4 h-4 text-banana-600" />
+                      <span>Lịch Sử Các Phiên Chat Của Khách Hàng (Lưu Trữ CSDL)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Nhấp vào một phiên để xem toàn bộ nội dung trò chuyện với Gemini AI</p>
+                  </div>
+                </div>
+                
+                {/* Filters */}
+                <div className="flex flex-col md:flex-row gap-3">
+                  <div className="relative flex-1">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Tìm ID, email, số điện thoại, nội dung..."
+                      value={chatSearch}
+                      onChange={(e) => setChatSearch(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && fetchAiTrends()}
+                      className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={chatDateFrom}
+                      onChange={(e) => setChatDateFrom(e.target.value)}
+                      className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                      title="Từ ngày"
+                    />
+                    <input
+                      type="date"
+                      value={chatDateTo}
+                      onChange={(e) => setChatDateTo(e.target.value)}
+                      className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                      title="Đến ngày"
+                    />
+                    <select
+                      value={chatCustomerType}
+                      onChange={(e) => setChatCustomerType(e.target.value)}
+                      className="px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 bg-white"
+                    >
+                      <option value="ALL">Tất cả khách hàng</option>
+                      <option value="REGISTERED">Thành viên</option>
+                      <option value="GUEST_ORDER">Khách mua hàng</option>
+                      <option value="CHAT_LEAD">Khách tiềm năng (Lead)</option>
+                      <option value="ANONYMOUS_GUEST">Khách vô danh</option>
+                    </select>
+                    <button
+                      onClick={fetchAiTrends}
+                      className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors flex items-center space-x-1"
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      <span>Lọc</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1543,40 +1839,54 @@ export default function AdminDashboardPage() {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
-                      <th className="p-4">Mã Phiên (Session ID)</th>
-                      <th className="p-4">Phong Cách</th>
-                      <th className="p-4">Chủ Đề Quan Tâm</th>
-                      <th className="p-4">Từ Khóa Trích Xuất</th>
-                      <th className="p-4">Số Tin Nhắn</th>
-                      <th className="p-4 text-right">Xem Đối Thoại</th>
+                      <th className="p-4">Khách Hàng</th>
+                      <th className="p-4">Phiên Chat</th>
+                      <th className="p-4">Chủ Đề & Từ Khóa</th>
+                      <th className="p-4 text-center">Tương Tác</th>
+                      <th className="p-4 text-right">Thao Tác</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {aiSessions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="p-8 text-center text-slate-400">
-                          Chưa có phiên trò chuyện nào trong CSDL. Hãy thử mở chatbot ở trang chủ và gửi tin nhắn!
+                        <td colSpan={5} className="p-8 text-center text-slate-400">
+                          Chưa có phiên trò chuyện nào phù hợp với bộ lọc.
                         </td>
                       </tr>
                     ) : (
                       aiSessions.map((s) => (
                         <tr key={s.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-4 font-mono font-bold text-navy-900">
-                            {s.sessionId.substring(0, 18)}...
+                          <td className="p-4">
+                            <div className="flex flex-col">
+                              <span className="font-bold text-navy-900">{s.customerName || "Khách Ẩn Danh"}</span>
+                              {(s.customerEmail || s.customerPhone) && (
+                                <span className="text-[10px] text-slate-500">{s.customerEmail} {s.customerPhone ? `• ${s.customerPhone}` : ""}</span>
+                              )}
+                              <span className={`inline-block mt-1 px-2 py-0.5 w-fit rounded-full text-[9px] font-bold ${
+                                s.customerType === "REGISTERED" ? "bg-emerald-100 text-emerald-800" :
+                                s.customerType === "GUEST_ORDER" ? "bg-amber-100 text-amber-800" :
+                                s.customerType === "CHAT_LEAD" ? "bg-purple-100 text-purple-800" : "bg-slate-100 text-slate-500"
+                              }`}>
+                                {s.customerType === "REGISTERED" ? "Thành Viên" :
+                                 s.customerType === "GUEST_ORDER" ? "Khách Mua" :
+                                 s.customerType === "CHAT_LEAD" ? "Lead Tiềm Năng" : "Vô Danh"}
+                              </span>
+                            </div>
                           </td>
                           <td className="p-4">
+                            <div className="text-[11px] text-slate-500 font-mono mb-1">{s.sessionId.substring(0, 16)}...</div>
                             <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
                               {s.personality === "omotenashi" ? "🇯🇵 Omotenashi" : "🇻🇳 Thân thiện"}
                             </span>
                           </td>
-                          <td className="p-4 font-medium text-slate-800">
-                            {s.topic}
+                          <td className="p-4">
+                            <div className="font-medium text-slate-800">{s.topic}</div>
+                            <div className="text-[10px] text-slate-500 truncate max-w-[200px] mt-0.5">{s.detectedKeywords || "—"}</div>
                           </td>
-                          <td className="p-4 text-slate-500">
-                            {s.detectedKeywords || "—"}
-                          </td>
-                          <td className="p-4 font-mono font-bold text-navy-900">
-                            {s.messagesCount} msgs
+                          <td className="p-4 text-center">
+                            <span className="font-mono font-bold text-navy-900 bg-white border border-slate-200 px-2 py-1 rounded-lg shadow-sm">
+                              {s.messagesCount} msgs
+                            </span>
                           </td>
                           <td className="p-4 text-right">
                             <button
@@ -1619,13 +1929,43 @@ export default function AdminDashboardPage() {
                   Dữ liệu tổng hợp từ PostgreSQL (Neon). Doanh thu thực thu chỉ tính các đơn hàng đã nhận cọc (DEPOSITED_50 / PAID_100).
                 </p>
               </div>
-              <button
-                onClick={fetchReport}
-                className="px-4 py-2.5 bg-banana-500 hover:bg-banana-400 text-navy-950 font-bold text-xs rounded-2xl shadow transition-all flex items-center space-x-2 shrink-0"
-              >
-                <RefreshCw className={`w-3.5 h-3.5 ${loadingReport ? "animate-spin" : ""}`} />
-                <span>Làm Mới</span>
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    const csvLines = [
+                      "BÁO CÁO DOANH THU CHILLBANANA",
+                      `Tổng số đơn: ${reportData?.kpi?.totalOrders || 0}`,
+                      `Doanh thu thực thu: ${reportData?.kpi?.actualRevenue || 0} VND`,
+                      "",
+                      "Danh mục,Số đơn,Doanh thu (VND)"
+                    ];
+                    if (reportData?.categoryBreakdown) {
+                      reportData.categoryBreakdown.forEach((c: any) => {
+                        csvLines.push(`${c.label},${c.count},${c.revenue}`);
+                      });
+                    }
+                    const blob = new Blob([csvLines.join("\\n")], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", `bao-cao-doanh-thu-${new Date().toISOString().slice(0,10)}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  disabled={!reportData}
+                  className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-2xl shadow transition-all flex items-center space-x-2 shrink-0 disabled:opacity-50"
+                >
+                  <span>Xuất CSV</span>
+                </button>
+                <button
+                  onClick={fetchReport}
+                  className="px-4 py-2.5 bg-banana-500 hover:bg-banana-400 text-navy-950 font-bold text-xs rounded-2xl shadow transition-all flex items-center space-x-2 shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${loadingReport ? "animate-spin" : ""}`} />
+                  <span>Làm Mới</span>
+                </button>
+              </div>
             </div>
 
             {loadingReport ? (
@@ -1657,6 +1997,32 @@ export default function AdminDashboardPage() {
                     <div className="text-[11px] text-slate-500 mt-1">Dựa trên tổng giá trị đơn</div>
                   </div>
                 </div>
+
+                {/* Phân loại khách hàng */}
+                {reportData.customerTypeBreakdown && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="bg-white p-5 rounded-3xl border border-emerald-200 shadow-sm flex justify-between items-center bg-emerald-50/30">
+                      <div>
+                        <span className="text-xs font-medium text-emerald-800">Thành Viên (Đã Đăng Ký)</span>
+                        <div className="text-xl font-bold text-emerald-600 mt-1">{reportData.customerTypeBreakdown.registered.revenue.toLocaleString("vi-VN")} đ</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-navy-900 font-mono">{reportData.customerTypeBreakdown.registered.count}</div>
+                        <span className="text-[10px] text-slate-500">Đơn hàng</span>
+                      </div>
+                    </div>
+                    <div className="bg-white p-5 rounded-3xl border border-amber-200 shadow-sm flex justify-between items-center bg-amber-50/30">
+                      <div>
+                        <span className="text-xs font-medium text-amber-800">Khách Vãng Lai (Guest)</span>
+                        <div className="text-xl font-bold text-amber-600 mt-1">{reportData.customerTypeBreakdown.guest.revenue.toLocaleString("vi-VN")} đ</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-navy-900 font-mono">{reportData.customerTypeBreakdown.guest.count}</div>
+                        <span className="text-[10px] text-slate-500">Đơn hàng</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* 2-Col: Top Products + Category */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -1797,6 +2163,119 @@ export default function AdminDashboardPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+
+                {/* ============================================== */}
+                {/* SPRINT 4 — PHỄU CHUYỂN ĐỔI (CONVERSION FUNNEL) */}
+                {/* ============================================== */}
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                  <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
+                        <TrendingUp className="w-4 h-4 text-banana-600" />
+                        <span>Phễu Chuyển Đổi Khách Hàng (Conversion Funnel)</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">Đo lường hành trình: Chat AI → Để lại thông tin → Đặt hàng → Đăng ký thành viên</p>
+                    </div>
+                    <button
+                      onClick={fetchFunnel}
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-banana-100 text-slate-700 hover:text-banana-900 rounded-xl text-xs font-bold flex items-center space-x-1 transition-colors"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${loadingFunnel ? "animate-spin" : ""}`} />
+                      <span>Làm mới</span>
+                    </button>
+                  </div>
+
+                  {loadingFunnel ? (
+                    <div className="flex items-center justify-center py-16 text-slate-400 text-xs">
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2" /> Đang tải dữ liệu phễu...
+                    </div>
+                  ) : funnelData ? (
+                    <div className="p-6 space-y-6">
+                      {/* Funnel Steps Visual */}
+                      <div className="space-y-3">
+                        {funnelData.funnel?.map((step: any) => (
+                          <div key={step.step} className="flex items-center gap-4">
+                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600 shrink-0">
+                              {step.step}
+                            </div>
+                            <div className="flex-1">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-xs font-bold text-navy-900">{step.label}</span>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-mono font-bold text-navy-900">{step.count.toLocaleString()}</span>
+                                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                                    step.percentage >= 50 ? "bg-emerald-100 text-emerald-700" :
+                                    step.percentage >= 20 ? "bg-amber-100 text-amber-700" :
+                                    "bg-rose-100 text-rose-700"
+                                  }`}>{step.percentage}%</span>
+                                </div>
+                              </div>
+                              <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all duration-700 ${
+                                    step.step === 1 ? "bg-slate-500" :
+                                    step.step === 2 ? "bg-blue-500" :
+                                    step.step === 3 ? "bg-amber-500" :
+                                    step.step === 4 ? "bg-emerald-500" : "bg-banana-500"
+                                  }`}
+                                  style={{ width: `${Math.max(step.percentage, 2)}%` }}
+                                />
+                              </div>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{step.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Summary Metrics */}
+                      {funnelData.summary && (
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 pt-4 border-t border-slate-100">
+                          <div className="text-center p-3 bg-slate-50 rounded-2xl">
+                            <div className="text-lg font-bold text-navy-900 font-mono">{funnelData.summary.chatToOrderRate}%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Chat → Đặt Hàng</div>
+                          </div>
+                          <div className="text-center p-3 bg-emerald-50 rounded-2xl">
+                            <div className="text-lg font-bold text-emerald-700 font-mono">{funnelData.summary.memberConversionRate}%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Chat → Đăng Ký</div>
+                          </div>
+                          <div className="text-center p-3 bg-amber-50 rounded-2xl">
+                            <div className="text-lg font-bold text-amber-700 font-mono">{funnelData.summary.orderCompletionRate}%</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Tỷ lệ Hoàn Thành</div>
+                          </div>
+                          <div className="text-center p-3 bg-blue-50 rounded-2xl">
+                            <div className="text-lg font-bold text-blue-700 font-mono">{funnelData.summary.chatLeadEmails}</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5">Chat Leads (có email)</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Revenue Split by Customer Type */}
+                      {funnelData.summary && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-4 border-t border-slate-100">
+                          <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl">
+                            <div className="text-xs font-bold text-emerald-800 mb-1">💎 Doanh Thu từ Thành Viên</div>
+                            <div className="text-base font-bold text-emerald-600 font-mono">{funnelData.summary.registeredRevenue.toLocaleString("vi-VN")} đ</div>
+                            <div className="text-[10px] text-slate-500">{funnelData.summary.registeredOrders} đơn</div>
+                          </div>
+                          <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl">
+                            <div className="text-xs font-bold text-amber-800 mb-1">🛍️ Doanh Thu từ Khách Vãng Lai</div>
+                            <div className="text-base font-bold text-amber-600 font-mono">{funnelData.summary.guestRevenue.toLocaleString("vi-VN")} đ</div>
+                            <div className="text-[10px] text-slate-500">{funnelData.summary.guestOrders} đơn</div>
+                          </div>
+                          <div className="p-4 bg-blue-50 border border-blue-200 rounded-2xl">
+                            <div className="text-xs font-bold text-blue-800 mb-1">💬 Chat Lead → Có Đơn Hàng</div>
+                            <div className="text-base font-bold text-blue-600 font-mono">{funnelData.summary.ordersFromChatLeads}</div>
+                            <div className="text-[10px] text-slate-500">đơn phát sinh từ Chat Lead</div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center py-12 text-slate-400 text-xs">
+                      <AlertCircle className="w-4 h-4 mr-2" /> Nhấn làm mới để tải dữ liệu phễu.
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

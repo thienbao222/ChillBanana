@@ -140,6 +140,27 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // ====== 7. Báo cáo phân loại khách hàng (REGISTERED vs GUEST) ======
+    let registeredRevenue = 0;
+    let registeredCount = 0;
+    let guestRevenue = 0;
+    let guestCount = 0;
+
+    orders.filter(o => o.status !== "CANCELLED").forEach(o => {
+      if (o.customerType === "REGISTERED") {
+        registeredCount++;
+        registeredRevenue += o.depositAmountVnd;
+      } else {
+        guestCount++;
+        guestRevenue += o.depositAmountVnd;
+      }
+    });
+
+    const customerTypeBreakdown = {
+      registered: { count: registeredCount, revenue: registeredRevenue },
+      guest: { count: guestCount, revenue: guestRevenue }
+    };
+
     return NextResponse.json({
       success: true,
       kpi: {
@@ -156,6 +177,7 @@ export async function GET(req: NextRequest) {
       topProducts,
       categoryBreakdown,
       dailyRevenue,
+      customerTypeBreakdown,
     });
   } catch (error) {
     console.error("[ADMIN REPORTS]", error);

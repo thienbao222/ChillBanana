@@ -10,6 +10,13 @@ export interface CustomerUser {
   address?: string | null;
 }
 
+// Sprint 4: Include stitched info in auth responses
+interface AuthResponse {
+  success: boolean;
+  message?: string;
+  stitched?: { orders: number; sessions: number };
+}
+
 interface AuthContextType {
   customer: CustomerUser | null;
   loading: boolean;
@@ -17,8 +24,8 @@ interface AuthContextType {
   authModalTab: "login" | "register";
   openAuthModal: (tab?: "login" | "register") => void;
   closeAuthModal: () => void;
-  login: (email: string, password: string) => Promise<{ success: boolean; message?: string }>;
-  register: (data: { name: string; email: string; password: string; phone?: string; address?: string }) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string) => Promise<AuthResponse>;
+  register: (data: { name: string; email: string; password: string; phone?: string; address?: string }) => Promise<AuthResponse>;
   logout: () => Promise<void>;
   refreshSession: () => Promise<void>;
 }
@@ -58,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAuthModalOpen(false);
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<AuthResponse> => {
     try {
       const res = await fetch("/api/auth/customer", {
         method: "POST",
@@ -68,8 +75,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setCustomer(data.customer);
-        setIsAuthModalOpen(false);
-        return { success: true, message: data.message };
+        // Keep modal open briefly to show stitching success message
+        if (!data.stitched || data.stitched.orders === 0) {
+          setIsAuthModalOpen(false);
+        }
+        return { success: true, message: data.message, stitched: data.stitched };
       }
       return { success: false, message: data.error || "Đăng nhập thất bại" };
     } catch (err: any) {
@@ -77,7 +87,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const register = async (userData: { name: string; email: string; password: string; phone?: string; address?: string }) => {
+  const register = async (userData: { name: string; email: string; password: string; phone?: string; address?: string }): Promise<AuthResponse> => {
     try {
       const res = await fetch("/api/auth/customer", {
         method: "POST",
@@ -87,8 +97,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const data = await res.json();
       if (res.ok && data.success) {
         setCustomer(data.customer);
-        setIsAuthModalOpen(false);
-        return { success: true, message: data.message };
+        // Keep modal open briefly to show stitching success message
+        if (!data.stitched || data.stitched.orders === 0) {
+          setIsAuthModalOpen(false);
+        }
+        return { success: true, message: data.message, stitched: data.stitched };
       }
       return { success: false, message: data.error || "Đăng ký thất bại" };
     } catch (err: any) {

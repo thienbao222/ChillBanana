@@ -25,18 +25,61 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
   }
   try {
+    const { searchParams } = new URL(req.url);
+    const dateFrom = searchParams.get("dateFrom");     // ISO date string "YYYY-MM-DD"
+    const dateTo = searchParams.get("dateTo");         // ISO date string "YYYY-MM-DD"
+    const customerType = searchParams.get("customerType"); // "ALL" | "REGISTERED" | "GUEST_ORDER" | "CHAT_LEAD" | "ANONYMOUS_GUEST"
+    const searchQ = searchParams.get("search")?.toLowerCase().trim() || "";
+    const limitParam = parseInt(searchParams.get("limit") || "150");
+    const limit = Math.min(limitParam, 500); // Max 500 sessions per request
+
+    // === Build date range filter ===
+    const dateFilter: { gte?: Date; lte?: Date } = {};
+    if (dateFrom) {
+      dateFilter.gte = new Date(dateFrom + "T00:00:00.000Z");
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo + "T23:59:59.999Z");
+      dateFilter.lte = toDate;
+    }
+
+    // === Build customer type filter ===
+    const customerTypeFilter =
+      customerType && customerType !== "ALL"
+        ? { customerType }
+        : undefined;
+
     // 1. Lấy danh sách phiên trò chuyện kèm tin nhắn
     let sessions: any[] = [];
     try {
       sessions = await prisma.chatSession.findMany({
+        where: {
+          ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+          ...(customerTypeFilter || {}),
+        },
         include: {
           messages: { orderBy: { createdAt: "asc" } },
         },
         orderBy: { updatedAt: "desc" },
-        take: 100,
+        take: limit,
       });
     } catch (dbErr) {
       console.warn("Lỗi truy vấn chat sessions:", dbErr);
+    }
+
+    // === Client-side search filter (topic, keywords, sessionId, email, name, phone) ===
+    if (searchQ) {
+      sessions = sessions.filter((s) => {
+        return (
+          s.sessionId?.toLowerCase().includes(searchQ) ||
+          s.topic?.toLowerCase().includes(searchQ) ||
+          s.detectedKeywords?.toLowerCase().includes(searchQ) ||
+          s.customerEmail?.toLowerCase().includes(searchQ) ||
+          s.customerName?.toLowerCase().includes(searchQ) ||
+          s.customerPhone?.includes(searchQ) ||
+          s.messages?.some((m: any) => m.content?.toLowerCase().includes(searchQ))
+        );
+      });
     }
 
     // 2. Từ khóa & chủ đề
@@ -70,7 +113,7 @@ export async function GET(req: NextRequest) {
       .map(([name, count]) => ({ name, count }))
       .filter((t) => t.count > 0 || sessions.length === 0);
 
-    // 3. Tổng hợp
+    // 3. Tổng hợp stats
     const totalSessions = sessions.length;
     const totalMessages = sessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0);
     const userMessages = sessions.reduce(
@@ -90,7 +133,15 @@ export async function GET(req: NextRequest) {
     const dominantSentiment = Object.entries(sentimentCounts)
       .sort((a, b) => b[1] - a[1])[0]?.[0] || "inquiry";
 
-    // 4. Sessions theo ngày - 7 ngày gần nhất
+    // Phân loại khách hàng trong sessions hiện tại
+    const customerTypeCounts = {
+      REGISTERED: sessions.filter(s => s.customerType === "REGISTERED").length,
+      GUEST_ORDER: sessions.filter(s => s.customerType === "GUEST_ORDER").length,
+      CHAT_LEAD: sessions.filter(s => s.customerType === "CHAT_LEAD").length,
+      ANONYMOUS_GUEST: sessions.filter(s => !s.customerType || s.customerType === "ANONYMOUS_GUEST").length,
+    };
+
+    // 4. Sessions theo ngày (7 ngày gần nhất hoặc trong range)
     const now = new Date();
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const d = new Date(now);
@@ -111,6 +162,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      filters: { dateFrom, dateTo, customerType, searchQ, limit },
       stats: {
         totalSessions,
         totalMessages,
@@ -121,6 +173,7 @@ export async function GET(req: NextRequest) {
         topKeywords,
         topicsChart,
         sentimentSummary: sentimentCounts,
+        customerTypeCounts,
         dailySessions,
       },
       sessions: sessions.map((s) => ({
@@ -130,6 +183,13 @@ export async function GET(req: NextRequest) {
         topic: s.topic || "Tư vấn chung",
         detectedKeywords: s.detectedKeywords || "",
         sentiment: s.sentiment || "inquiry",
+        // Customer identity fields
+        customerType: s.customerType || "ANONYMOUS_GUEST",
+        customerId: s.customerId || null,
+        customerName: s.customerName || null,
+        customerEmail: s.customerEmail || null,
+        customerPhone: s.customerPhone || null,
+        userIp: s.userIp || null,
         createdAt: s.createdAt,
         updatedAt: s.updatedAt,
         messagesCount: s.messages?.length || 0,
