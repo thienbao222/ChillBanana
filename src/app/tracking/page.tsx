@@ -600,9 +600,19 @@ function TrackingContent() {
                         <span>Tổng Đơn Trọn Gói:</span>
                         <span className="text-banana-600 text-base">{order.totalVnd.toLocaleString("vi-VN")} đ</span>
                       </div>
-                      <div className="flex justify-between text-xs bg-slate-50 p-2.5 rounded-xl border">
-                        <span>Đã đặt cọc:</span>
-                        <span className="font-bold text-emerald-700">{order.depositAmountVnd.toLocaleString("vi-VN")} đ</span>
+                      <div className={`flex justify-between text-xs p-2.5 rounded-xl border ${
+                        order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT"
+                          ? "bg-amber-50 border-amber-200"
+                          : "bg-emerald-50 border-emerald-200"
+                      }`}>
+                        <span className={order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT" ? "text-amber-800 font-medium" : "text-emerald-800"}>
+                          {order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT"
+                            ? "⏳ Cần đặt cọc (50%):"
+                            : "✅ Đã đặt cọc:"}
+                        </span>
+                        <span className={`font-bold ${order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT" ? "text-amber-700" : "text-emerald-700"}`}>
+                          {order.depositAmountVnd.toLocaleString("vi-VN")} đ
+                        </span>
                       </div>
                     </div>
 
