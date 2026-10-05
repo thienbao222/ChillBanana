@@ -417,6 +417,71 @@ export default function AiTrendsTab() {
               </div>
             </div>
 
+      {/* MODAL 2: XEM CHI TIẾT ĐỐI THOẠI AI CỦA KHÁCH HÀNG */}
+      {selectedAiSession && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 shadow-2xl border border-slate-200 relative my-8 flex flex-col max-h-[85vh]">
+            <button
+              onClick={() => setSelectedAiSession(null)}
+              className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="border-b pb-3 mb-3">
+              <span className="text-[10px] font-bold text-banana-900 bg-banana-100 px-2.5 py-0.5 rounded-full border border-banana-200">
+                Phiên: {selectedAiSession.sessionId}
+              </span>
+              <h3 className="text-base font-bold text-navy-900 mt-1">
+                Lịch Sử Trò Chuyện Khách Hàng ⇄ Gemini AI Agent
+              </h3>
+              <p className="text-xs text-slate-500">
+                Chủ đề nhận diện: <strong>{selectedAiSession.topic}</strong> • Từ khóa: {selectedAiSession.detectedKeywords || "Chưa có"}
+              </p>
+            </div>
+
+            {/* Messages Transcript */}
+            <div className="flex-1 overflow-y-auto space-y-3 p-3 bg-slate-50 rounded-2xl border text-xs">
+              {selectedAiSession.messages?.map((msg: any, idx: number) => (
+                <div
+                  key={msg.id || idx}
+                  className={`flex items-start gap-2 ${
+                    msg.role === "user" ? "flex-row-reverse" : "flex-row"
+                  }`}
+                >
+                  <div
+                    className={`w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 ${
+                      msg.role === "user" ? "bg-navy-900 text-white" : "bg-banana-500 text-navy-950 font-extrabold"
+                    }`}
+                  >
+                    {msg.role === "user" ? "Khách" : "🍌"}
+                  </div>
+
+                  <div
+                    className={`max-w-[85%] p-3 rounded-2xl text-xs leading-relaxed whitespace-pre-line ${
+                      msg.role === "user"
+                        ? "bg-navy-900 text-white rounded-tr-none"
+                        : "bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-sm"
+                    }`}
+                  >
+                    {msg.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="pt-3 flex justify-end">
+              <button
+                onClick={() => setSelectedAiSession(null)}
+                className="px-5 py-2 bg-navy-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
           </div>
   );
 }

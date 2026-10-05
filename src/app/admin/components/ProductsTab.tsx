@@ -288,6 +288,225 @@ export default function ProductsTab() {
               </div>
             </div>
 
+      {/* MODAL 3: THÊM / SỬA SẢN PHẨM TRANG CHỦ */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative my-8">
+            <button
+              onClick={() => setIsProductModalOpen(false)}
+              className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X className="w-6 h-6" />
+            </button>
+
+            <div className="mb-6">
+              <span className="text-[10px] font-bold text-banana-900 bg-banana-100 px-3 py-1 rounded-full border border-banana-200">
+                {editingProduct ? "Cập Nhật Sản Phẩm" : "Thêm Mới Sản Phẩm"}
+              </span>
+              <h3 className="text-xl font-serif font-bold text-navy-900 mt-2">
+                {editingProduct ? `Chỉnh sửa: ${editingProduct.name}` : "Thêm Sản Phẩm Gom Mua Vào Trang Chủ"}
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Sản phẩm sau khi lưu sẽ xuất hiện trực tiếp trong mục gợi ý săn deal trên trang chủ ChillBanana.
+              </p>
+            </div>
+
+            <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
+              
+              {/* Tên sản phẩm */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Tên sản phẩm <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Nồi Cơm Điện Cao Tần Zojirushi IH 1L"
+                  value={productForm.name}
+                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                />
+              </div>
+
+              {/* Danh mục & Nguồn Store */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Danh mục</label>
+                  <select
+                    value={productForm.category}
+                    onChange={(e) => {
+                      const cat = e.target.value;
+                      let voltageNote = productForm.voltageNote;
+                      if (cat === "gadgets" && !voltageNote) {
+                        voltageNote = "Điện áp 100V - Cần dùng biến áp đổi nguồn";
+                      }
+                      setProductForm({ ...productForm, category: cat, voltageNote });
+                    }}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 bg-white"
+                  >
+                    <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da</option>
+                    <option value="health">🌿 Thực Phẩm Chức Năng</option>
+                    <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (100V)</option>
+                    <option value="anime">🎎 Anime, Manga & Sưu Tầm</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Nguồn website mua hộ</label>
+                  <input
+                    type="text"
+                    placeholder="Amazon JP, Rakuten, Mercari..."
+                    value={productForm.originalStore}
+                    onChange={(e) => setProductForm({ ...productForm, originalStore: e.target.value })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+              </div>
+
+              {/* Giá Yên & Cân Nặng & Slot */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Giá gốc (JPY ¥) <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    min={1}
+                    value={productForm.priceJpy}
+                    onChange={(e) => setProductForm({ ...productForm, priceJpy: Number(e.target.value) })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 font-mono font-bold"
+                  />
+                  <span className="text-[11px] text-banana-700 font-semibold mt-1 block">
+                    ≈ {Math.round(productForm.priceJpy * 172).toLocaleString("vi-VN")} đ
+                  </span>
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Trọng lượng (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min={0.1}
+                    value={productForm.weightKg}
+                    onChange={(e) => setProductForm({ ...productForm, weightKg: Number(e.target.value) })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Số slot gom</label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={productForm.stockSlots}
+                    onChange={(e) => setProductForm({ ...productForm, stockSlots: Number(e.target.value) })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 font-mono"
+                  />
+                </div>
+              </div>
+
+              {/* URL Hình ảnh */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Đường dẫn hình ảnh (URL)</label>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/..."
+                    value={productForm.imageUrl}
+                    onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
+                    className="flex-1 p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  />
+                  {productForm.imageUrl && (
+                    <img
+                      src={productForm.imageUrl}
+                      alt="Preview"
+                      className="w-11 h-11 object-cover rounded-xl border shrink-0"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Ghi chú điện áp & Nổi bật */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    Cảnh báo điện áp (nếu có)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Điện áp 100V - Cần dùng biến áp đổi nguồn"
+                    value={productForm.voltageNote}
+                    onChange={(e) => setProductForm({ ...productForm, voltageNote: e.target.value })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">Ghi chú nổi bật / Tag</label>
+                  <input
+                    type="text"
+                    placeholder="Top 1 Cosme Nhật Bản, Săn sale 30%..."
+                    value={productForm.featuredNote}
+                    onChange={(e) => setProductForm({ ...productForm, featuredNote: e.target.value })}
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+              </div>
+
+              {/* Hot Deal Checkbox */}
+              <div className="flex items-center space-x-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="isHot"
+                  checked={productForm.isHot}
+                  onChange={(e) => setProductForm({ ...productForm, isHot: e.target.checked })}
+                  className="w-4 h-4 text-banana-600 rounded border-slate-300 focus:ring-banana-500"
+                />
+                <label htmlFor="isHot" className="font-bold text-navy-900 cursor-pointer">
+                  Gắn nhãn 🔥 HOT DEAL trên trang chủ
+                </label>
+              </div>
+
+              {/* Mô tả */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Mô tả ngắn</label>
+                <textarea
+                  rows={2}
+                  placeholder="Mô tả công dụng, tính năng hoặc lưu ý khi đặt hàng..."
+                  value={productForm.description}
+                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                  className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="pt-4 border-t flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingProduct}
+                  className="px-6 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 rounded-xl font-bold transition-all shadow-md disabled:opacity-50 flex items-center space-x-2"
+                >
+                  {isSavingProduct ? (
+                    <span>Đang lưu sản phẩm...</span>
+                  ) : (
+                    <span>{editingProduct ? "Lưu Thay Đổi" : "Tạo Sản Phẩm"}</span>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
           </div>
   );
 }
