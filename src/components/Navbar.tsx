@@ -146,12 +146,12 @@ export default function Navbar() {
                       <p className="text-[10px] text-slate-500 truncate">{customer.email}</p>
                     </div>
                     <Link
-                      href="/tracking"
+                      href="/profile"
                       onClick={() => setUserDropdownOpen(false)}
                       className="flex items-center px-3 py-2 text-xs text-slate-700 hover:bg-banana-50 hover:text-banana-700"
                     >
-                      <PackageSearch className="w-3.5 h-3.5 mr-2 text-blue-600" />
-                      Đơn Hàng Của Tôi
+                      <User className="w-3.5 h-3.5 mr-2 text-blue-600" />
+                      Hồ Sơ Của Tôi
                     </Link>
                     <button
                       onClick={() => {
@@ -270,20 +270,30 @@ export default function Navbar() {
           </Link>
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (
-              <div className="flex items-center justify-between p-2.5 bg-slate-100 rounded-xl">
-                <div>
-                  <p className="text-xs font-bold text-navy-900">{customer.name}</p>
-                  <p className="text-[10px] text-slate-500">{customer.email}</p>
+              <div className="flex flex-col gap-2 p-2.5 bg-slate-100 rounded-xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-bold text-navy-900">{customer.name}</p>
+                    <p className="text-[10px] text-slate-500">{customer.email}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setMobileMenuOpen(false);
+                      logout();
+                    }}
+                    className="text-xs text-rose-600 font-bold px-2 py-1 bg-white rounded-lg border border-slate-200 shadow-sm"
+                  >
+                    Đăng xuất
+                  </button>
                 </div>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    logout();
-                  }}
-                  className="text-xs text-rose-600 font-bold px-2 py-1 bg-white rounded-lg border border-slate-200"
+                <Link
+                  href="/profile"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors"
                 >
-                  Đăng xuất
-                </button>
+                  <User className="w-3.5 h-3.5 mr-1.5" />
+                  Hồ Sơ Của Tôi
+                </Link>
               </div>
             ) : (
               <button
