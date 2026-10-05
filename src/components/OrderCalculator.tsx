@@ -334,8 +334,17 @@ export default function OrderCalculator() {
               </button>
             </div>
 
-            {/* Preview ảnh & tên nếu quét thành công */}
-            {scrapeSuccess && (
+            {/* Preview ảnh & tên hoặc Loading Skeleton */}
+            {isScraping ? (
+              <div className="mt-3 p-3 bg-white border border-slate-200 rounded-2xl flex items-center space-x-3">
+                <div className="w-14 h-14 rounded-xl bg-slate-200 animate-pulse shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3 bg-slate-200 rounded w-24 animate-pulse" />
+                  <div className="h-4 bg-slate-200 rounded w-full animate-pulse" />
+                  <div className="h-3 bg-slate-200 rounded w-1/2 animate-pulse" />
+                </div>
+              </div>
+            ) : scrapeSuccess && (
               <div className="mt-3 p-3 bg-banana-50/70 border border-banana-200 rounded-2xl flex items-center space-x-3 animate-in fade-in duration-200">
                 {productImage && (
                   <img
