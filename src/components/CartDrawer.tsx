@@ -3,16 +3,12 @@
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
-import { 
-  X, 
-  Trash2, 
-  Plus, 
-  Minus, 
-  ShoppingBag, 
-  ArrowRight, 
-  ShieldCheck, 
-  Plane, 
-  AlertCircle,
+import {
+  X,
+  Trash2,
+  Plus,
+  Minus,
+  ArrowRight,
   CheckCircle2,
   ExternalLink
 } from "lucide-react";

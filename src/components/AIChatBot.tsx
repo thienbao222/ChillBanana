@@ -1,14 +1,11 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { 
-  Sparkles, 
-  Send, 
-  X, 
-  Bot, 
-  ShieldAlert, 
-  RefreshCw,
-  ShoppingBag,
+import {
+  Sparkles,
+  Send,
+  X,
+  ShieldAlert,
   ImagePlus,
   Loader2
 } from "lucide-react";

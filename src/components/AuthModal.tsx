@@ -3,7 +3,16 @@
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { X, Lock, Mail, User, Phone, MapPin, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
+import {
+  X,
+  Lock,
+  Mail,
+  User,
+  Phone,
+  MapPin,
+  AlertCircle,
+  ArrowRight
+} from "lucide-react";
 
 export default function AuthModal() {
   const { isAuthModalOpen, closeAuthModal, authModalTab, openAuthModal, login, register } = useAuth();

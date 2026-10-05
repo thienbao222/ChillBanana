@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Sparkles, Zap, Flame, ShoppingBag, ExternalLink, RefreshCw, ShoppingCart, Plus } from "lucide-react";
+import {
+  Sparkles,
+  Zap,
+  ShoppingBag,
+  ShoppingCart
+} from "lucide-react";
 import { CURATED_PRODUCTS } from "@/lib/data";
 import { CuratedProduct } from "@/types";
 import { useCart } from "@/context/CartContext";

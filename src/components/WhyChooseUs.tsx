@@ -1,5 +1,10 @@
 import React from "react";
-import { ShieldCheck, Plane, Bot, RefreshCw, BadgePercent } from "lucide-react";
+import {
+  ShieldCheck,
+  Plane,
+  Bot,
+  BadgePercent
+} from "lucide-react";
 
 export default function WhyChooseUs() {
   const points = [

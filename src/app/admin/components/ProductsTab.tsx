@@ -2,8 +2,13 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  RefreshCw, ShoppingBag, Plus, Edit3, Trash2, Search,
-  AlertCircle, CheckCircle2, Tag, X, ExternalLink
+  RefreshCw,
+  ShoppingBag,
+  Plus,
+  Edit3,
+  Trash2,
+  Search,
+  X
 } from "lucide-react";
 import { CuratedProduct } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";

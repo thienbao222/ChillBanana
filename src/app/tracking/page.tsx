@@ -5,23 +5,17 @@ export const dynamic = "force-dynamic";
 import React, { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { 
-  PackageSearch, 
-  Search, 
-  MapPin, 
-  Clock, 
-  ShieldCheck, 
-  CheckCircle2, 
-  AlertCircle, 
-  Truck, 
-  Building2, 
-  ExternalLink, 
-  Users, 
-  QrCode,
+import {
+  PackageSearch,
+  Search,
+  MapPin,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+  Users,
   Ban,
   X,
-  FileText,
-  ChevronRight,
   ShoppingBag,
   RefreshCw
 } from "lucide-react";

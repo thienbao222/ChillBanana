@@ -2,8 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  RefreshCw, Users, ShieldCheck, MessageSquare, AlertCircle,
-  Package, TrendingUp, Search, Eye, ArrowRight, ShoppingBag, Link2
+  RefreshCw,
+  Users,
+  MessageSquare,
+  Search,
+  Eye
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
 

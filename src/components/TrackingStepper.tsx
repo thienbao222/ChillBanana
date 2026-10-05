@@ -1,15 +1,14 @@
 "use client";
 
 import React from "react";
-import { 
-  CreditCard, 
-  ShoppingBag, 
-  Warehouse, 
-  Globe, 
-  Building2, 
-  Truck, 
-  CheckCircle,
-  Clock
+import {
+  CreditCard,
+  ShoppingBag,
+  Warehouse,
+  Globe,
+  Building2,
+  Truck,
+  CheckCircle
 } from "lucide-react";
 import { OrderStatus } from "@/types";
 

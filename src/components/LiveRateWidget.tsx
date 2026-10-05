@@ -1,7 +1,12 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { TrendingUp, RefreshCw, Activity, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import {
+  RefreshCw,
+  Activity,
+  ArrowUpRight,
+  ArrowDownRight
+} from "lucide-react";
 import { LiveRateData } from "@/lib/exchange-rate";
 
 interface LiveRateWidgetProps {
