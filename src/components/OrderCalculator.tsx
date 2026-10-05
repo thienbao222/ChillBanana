@@ -58,6 +58,22 @@ export default function OrderCalculator() {
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
 
+  // Lắng nghe URL param để tự động dán và cào dữ liệu khi từ chat qua
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlToScrape = urlParams.get("url");
+      if (urlToScrape) {
+        setProductUrl(urlToScrape);
+        // Tự động cuộn xuống phần calculator
+        const el = document.getElementById("calculator");
+        if (el) el.scrollIntoView({ behavior: "smooth" });
+        // Chạy scrape luôn
+        handleAutoScrape(urlToScrape);
+      }
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-fill from customer account if logged in
   useEffect(() => {
     if (customer) {
@@ -109,8 +125,9 @@ export default function OrderCalculator() {
   }, []);
 
   // Hàm tự động cào dữ liệu từ URL thật
-  const handleAutoScrape = async () => {
-    if (!productUrl || !productUrl.startsWith("http")) {
+  const handleAutoScrape = async (overrideUrl?: string) => {
+    const targetUrl = overrideUrl || productUrl;
+    if (!targetUrl || !targetUrl.startsWith("http")) {
       alert("Vui lòng nhập đường dẫn URL đầy đủ (ví dụ: https://www.amazon.co.jp/... hoặc https://jp.mercari.com/...)");
       return;
     }
@@ -122,7 +139,7 @@ export default function OrderCalculator() {
       const res = await fetch("/api/scrape-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: productUrl }),
+        body: JSON.stringify({ url: targetUrl }),
       });
 
       const data = await res.json();
@@ -308,7 +325,7 @@ export default function OrderCalculator() {
               </div>
               <button
                 type="button"
-                onClick={handleAutoScrape}
+                onClick={() => handleAutoScrape()}
                 disabled={isScraping || !productUrl}
                 className="px-4 py-3 bg-banana-500 hover:bg-banana-600 disabled:opacity-50 text-white font-bold text-xs rounded-xl shadow transition-all flex items-center justify-center space-x-1.5 shrink-0"
               >

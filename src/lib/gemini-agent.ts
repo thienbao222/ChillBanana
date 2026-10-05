@@ -67,7 +67,7 @@ TỰ ĐỘNG BÁO GIÁ KHI CÓ LINK SẢN PHẨM:
 > 💴 **Giá web:** [X] JPY
 > 🛩️ **Cước bay dự kiến:** [Y] VNĐ (tạm tính 0.5kg - 1kg tùy sản phẩm)
 > 💰 **TỔNG TIỀN:** [Z] VNĐ
-> ⚡ [ĐẶT CỌC 50% NGAY TẠI ĐÂY](/checkout?url=[link_sản_phẩm])
+> ⚡ [ĐẶT CỌC 50% NGAY TẠI ĐÂY](/?url=[link_sản_phẩm])
 
 LƯU Ý KỸ THUẬT, AN TOÀN & ĐÁNH GIÁ TỪ BÊN THỨ 3 (QUAN TRỌNG):
 - Đồ điện nội địa Nhật: LUÔN NHẮC điện áp 100V cần dùng biến áp tại VN.
