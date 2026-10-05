@@ -2,13 +2,15 @@
 
 import React, { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { useRouter } from "next/navigation";
-import { User, Package, MessageSquare, Clock, ArrowRight, ShieldCheck, MapPin, Phone, Mail, FileText } from "lucide-react";
+import { User, Package, MessageSquare, Clock, ArrowRight, ShieldCheck, MapPin, Phone, Mail } from "lucide-react";
 import Link from "next/link";
 import LayoutWrapper from "@/components/LayoutWrapper";
 
 export default function ProfilePage() {
   const { customer, loading: authLoading, openAuthModal } = useAuth();
+  const { toast } = useToast();
   const router = useRouter();
   
   const [profileData, setProfileData] = useState<any>(null);
@@ -28,15 +30,18 @@ export default function ProfilePage() {
         .then(data => {
           if (data.success) {
             setProfileData(data.profile);
+          } else {
+            toast.error("Không thể tải hồ sơ. Vui lòng thử lại.");
           }
           setLoading(false);
         })
-        .catch(err => {
-          console.error(err);
+        .catch(() => {
+          toast.error("Lỗi kết nối máy chủ. Vui lòng thử lại sau.");
           setLoading(false);
         });
     }
   }, [customer]);
+
 
   if (authLoading || (!customer && loading)) {
     return (

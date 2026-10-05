@@ -35,10 +35,12 @@ import {
   Ban
 } from "lucide-react";
 import { StoredOrder } from "@/lib/order-store";
+import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import { OrderStatus, CuratedProduct } from "@/types";
 
-export default function AdminDashboardPage() {
+function AdminDashboardPageInner() {
   const router = useRouter();
+  const { adminToast } = useAdminToast();
 
   // Chế độ giao diện Admin: "dashboard" (Bảng điều khiển tổng quan) | "operations" (Bàn tác nghiệp kho vận Kanban)
   const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations">("dashboard");
@@ -327,7 +329,7 @@ export default function AdminDashboardPage() {
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!productForm.name || !productForm.priceJpy) {
-      alert("Vui lòng điền tên sản phẩm và giá Yên!");
+      adminToast.error("Vui lòng điền tên sản phẩm và giá Yên!");
       return;
     }
 
@@ -345,7 +347,7 @@ export default function AdminDashboardPage() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert("Cập nhật sản phẩm thành công!");
+          adminToast.success("Cập nhật sản phẩm thành công!");
           setIsProductModalOpen(false);
           fetchProducts();
         } else {
@@ -360,7 +362,7 @@ export default function AdminDashboardPage() {
         });
         const data = await res.json();
         if (res.ok && data.success) {
-          alert("Đã thêm sản phẩm mới thành công!");
+          adminToast.success("Đã thêm sản phẩm mới thành công!");
           setIsProductModalOpen(false);
           fetchProducts();
         } else {
@@ -368,7 +370,7 @@ export default function AdminDashboardPage() {
         }
       }
     } catch (err) {
-      alert("Lỗi kết nối máy chủ");
+      adminToast.error("Lỗi kết nối máy chủ");
     } finally {
       setIsSavingProduct(false);
     }
@@ -383,13 +385,13 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert("Đã xóa sản phẩm!");
+        adminToast.error("Đã xóa sản phẩm!");
         fetchProducts();
       } else {
         alert(data.error || "Lỗi khi xóa");
       }
     } catch {
-      alert("Lỗi kết nối");
+      adminToast.error("Lỗi kết nối");
     }
   };
 
@@ -419,7 +421,7 @@ export default function AdminDashboardPage() {
         alert("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
-      alert("Lỗi kết nối máy chủ");
+      adminToast.error("Lỗi kết nối máy chủ");
     }
   };
 
@@ -495,14 +497,14 @@ export default function AdminDashboardPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`Đã cập nhật đơn #${selectedOrder.orderCode} thành công!`);
+        adminToast.success(`Đã cập nhật đơn #${selectedOrder.orderCode} thành công!`);
         setSelectedOrder(null);
         fetchOrders();
       } else {
         alert("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
-      alert("Lỗi kết nối máy chủ");
+      adminToast.error("Lỗi kết nối máy chủ");
     } finally {
       setIsUpdating(false);
     }
@@ -539,14 +541,14 @@ export default function AdminDashboardPage() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`Đã hủy đơn hàng #${cancelModalOrder.orderCode} thành công!`);
+        adminToast.success(`Đã hủy đơn hàng #${cancelModalOrder.orderCode} thành công!`);
         setCancelModalOrder(null);
         fetchOrders();
       } else {
         alert("Lỗi khi hủy đơn: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
-      alert("Lỗi kết nối máy chủ");
+      adminToast.error("Lỗi kết nối máy chủ");
     } finally {
       setIsCancelling(false);
     }
@@ -564,13 +566,13 @@ export default function AdminDashboardPage() {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(`Đã xóa vĩnh viễn đơn #${orderCode}!`);
+        adminToast.error(`Đã xóa vĩnh viễn đơn #${orderCode}!`);
         fetchOrders();
       } else {
         alert("Lỗi khi xóa đơn: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
-      alert("Lỗi kết nối máy chủ khi xóa");
+      adminToast.error("Lỗi kết nối máy chủ khi xóa");
     }
   };
 
@@ -3343,5 +3345,13 @@ export default function AdminDashboardPage() {
       )}
 
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <AdminToastProvider>
+      <AdminDashboardPageInner />
+    </AdminToastProvider>
   );
 }

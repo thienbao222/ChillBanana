@@ -2,10 +2,12 @@
 
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import { X, Lock, Mail, User, Phone, MapPin, CheckCircle2, AlertCircle, ArrowRight } from "lucide-react";
 
 export default function AuthModal() {
   const { isAuthModalOpen, closeAuthModal, authModalTab, openAuthModal, login, register } = useAuth();
+  const { toast } = useToast();
 
   // Login form state
   const [loginEmail, setLoginEmail] = useState("");
@@ -36,11 +38,13 @@ export default function AuthModal() {
     if (!res.success) {
       setErrorMessage(res.message || "Đăng nhập thất bại.");
     } else {
-      // Use server message (may include Identity Stitching info)
-      setSuccessMessage(res.message || "Đăng nhập thành công!");
+      const msg = res.message || "Đăng nhập thành công! Chào mừng trở lại.";
+      setSuccessMessage(msg);
+      const delay = (res.stitched && res.stitched.orders > 0) ? 2000 : 900;
       setTimeout(() => {
         closeAuthModal();
-      }, (res.stitched && res.stitched.orders > 0) ? 2000 : 900);
+        toast.success(msg);
+      }, delay);
     }
   };
 
@@ -61,11 +65,13 @@ export default function AuthModal() {
     if (!res.success) {
       setErrorMessage(res.message || "Đăng ký thất bại.");
     } else {
-      // Use server message (may include Identity Stitching info)
-      setSuccessMessage(res.message || "Đăng ký tài khoản thành công!");
+      const msg = res.message || "Đăng ký tài khoản thành công! Chào mừng bạn.";
+      setSuccessMessage(msg);
+      const delay = (res.stitched && res.stitched.orders > 0) ? 2500 : 1000;
       setTimeout(() => {
         closeAuthModal();
-      }, (res.stitched && res.stitched.orders > 0) ? 2500 : 1000);
+        toast.success(msg);
+      }, delay);
     }
   };
 
