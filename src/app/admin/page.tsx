@@ -925,7 +925,7 @@ export default function AdminDashboardPage() {
                                 </span>
                               ) : (
                                 <span className="text-[9px] px-1.5 py-0.5 rounded-full font-bold bg-orange-100 text-orange-700 border border-orange-200 shrink-0">
-                                  🛍️ Vãng lai
+                                  🛍️ Khách lạ
                                 </span>
                               )}
                             </div>
@@ -1032,10 +1032,21 @@ export default function AdminDashboardPage() {
                   Quản Lý Toàn Bộ Khách Hàng
                 </h2>
                 <p className="text-xs text-slate-500 mt-1 max-w-xl">
-                  Theo dõi đầy đủ: Thành viên đã đăng ký, Khách vãng lai đặt đơn (Guest Checkout) và Khách tư vấn Chat AI — tất cả trong một trang.
+                  Theo dõi đầy đủ: Thành viên đã đăng ký, Khách lạ đặt đơn (Guest Checkout) và Khách tư vấn Chat AI — tất cả trong một trang.
                 </p>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={async () => {
+                    const res = await fetch("/api/admin/stitch-all", { method: "POST" });
+                    const data = await res.json();
+                    alert(data.message || "Hoan thanh!");
+                    fetchCustomers();
+                  }}
+                  className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-2xl transition-all flex items-center space-x-2"
+                >
+                  <span>🔗 Hop Nhat Du Lieu Cu</span>
+                </button>
                 <button
                   onClick={fetchCustomers}
                   className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition-all flex items-center space-x-2"
