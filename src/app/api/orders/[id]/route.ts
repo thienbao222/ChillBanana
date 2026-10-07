@@ -102,6 +102,14 @@ export async function PATCH(
       return NextResponse.json({ error: "Không có quyền thực hiện." }, { status: 401 });
     }
 
+    // Không cho phép thay đổi nếu đơn hàng đã hoàn tất hoặc đã hủy
+    if (existingOrder.status === "COMPLETED" || existingOrder.status === "CANCELLED") {
+      return NextResponse.json(
+        { error: `Đơn hàng đã ${existingOrder.status === "COMPLETED" ? "hoàn tất" : "hủy"}, không thể thay đổi trạng thái.` },
+        { status: 400 }
+      );
+    }
+
     if (!isAdminUser) {
       if (action !== 'cancel' || by !== 'CUSTOMER') {
         return NextResponse.json({ error: "Khách hàng chỉ có quyền hủy đơn." }, { status: 401 });

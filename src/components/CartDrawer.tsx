@@ -100,7 +100,12 @@ export default function CartDrawer() {
         .map((it) => `${it.name} (x${it.quantity})`)
         .join(", ");
 
-      const primaryUrl = items[0]?.originalUrl || "https://chillbanana.vn/cart";
+      const primaryUrl = items[0]?.originalUrl;
+      if (!primaryUrl || primaryUrl.trim() === "") {
+        alert("Có món trong giỏ hàng chưa có link sản phẩm. Vui lòng dùng công cụ tính giá để dán link trước khi đặt.");
+        setIsSubmitting(false);
+        return;
+      }
 
       const res = await fetch("/api/orders", {
         method: "POST",

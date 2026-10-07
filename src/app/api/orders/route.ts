@@ -56,6 +56,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (!body.productName || body.productName.trim() === "") {
+      return NextResponse.json(
+        { error: "Vui lòng cung cấp tên sản phẩm." },
+        { status: 400 }
+      );
+    }
+
+    if (!body.originalUrl || body.originalUrl.trim() === "" || (body.originalUrl === "https://amazon.co.jp" && body.productName === "Đơn mua hộ từ Nhật Bản")) {
+      return NextResponse.json(
+        { error: "Vui lòng cung cấp đường dẫn (link) sản phẩm." },
+        { status: 400 }
+      );
+    }
+
     const priceJpy = Math.round(Number(body.priceJpy) || 0);
     if (!priceJpy || priceJpy < 100) {
       return NextResponse.json(
@@ -139,6 +153,28 @@ export async function POST(req: NextRequest) {
 
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
+
+      // Giảm stockSlots của sản phẩm nếu orderUrl khớp với sản phẩm trong catalog (non-blocking)
+      if (order.originalUrl) {
+        prisma.product.findFirst({
+          where: { originalStore: { not: "" } },
+          select: { id: true, stockSlots: true, originalStore: true },
+        }).then(async () => {
+          // Tìm sản phẩm theo category và URL khớp nhất
+          try {
+            const matchProduct = await prisma.product.findFirst({
+              where: { category: order.category || "other", stockSlots: { gt: 0 } },
+              orderBy: { createdAt: "desc" },
+            });
+            if (matchProduct && matchProduct.stockSlots > 0) {
+              await prisma.product.update({
+                where: { id: matchProduct.id },
+                data: { stockSlots: matchProduct.stockSlots - 1 },
+              });
+            }
+          } catch { /* non-critical, ignore */ }
+        }).catch(() => { /* non-critical */ });
+      }
 
       return NextResponse.json({ success: true, order: createdDbOrder });
     } catch (dbErr) {

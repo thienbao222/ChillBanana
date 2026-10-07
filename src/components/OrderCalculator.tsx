@@ -204,6 +204,14 @@ export default function OrderCalculator() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!productUrl || productUrl.trim() === "") {
+      alert("Vui lòng dán link sản phẩm (Bước 1)!");
+      return;
+    }
+    if (!productName || productName.trim() === "") {
+      alert("Vui lòng nhập tên sản phẩm (Bước 2)!");
+      return;
+    }
     if (!customerName || !customerPhone || !customerAddress) {
       alert("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ nhận hàng!");
       return;
@@ -216,8 +224,8 @@ export default function OrderCalculator() {
         customerEmail: customerEmail || "khachhang@chillbanana.vn",
         customerPhone,
         customerAddress,
-        originalUrl: productUrl || "https://amazon.co.jp",
-        productName: productName || "Đơn mua hộ từ Nhật Bản",
+        originalUrl: productUrl,
+        productName: productName,
         category,
         priceJpy,
         weightKg,
@@ -660,37 +668,54 @@ export default function OrderCalculator() {
 
           {/* CTA Buttons */}
           <div className="mt-8 space-y-2.5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  addToCart({
-                    id: "calc-" + Date.now(),
-                    name: productName || "Sản phẩm mua hộ Nhật Bản",
-                    priceJpy,
-                    priceVnd: calc.productPriceVnd,
-                    weightKg,
-                    imageUrl: productImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80",
-                    originalStore: detectedStore || "Sàn thương mại Nhật Bản",
-                    originalUrl: productUrl || undefined,
-                    category,
-                  });
-                }}
-                className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
-              >
-                <ShoppingCart className="w-4 h-4 text-banana-400" />
-                <span>Thêm Vào Giỏ Hàng</span>
-              </button>
+            {direction === "VN_TO_JP" ? (
+              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-center space-y-2">
+                <p className="text-sm font-bold text-amber-900">🇻🇳 ➔ 🇯🇵 Dịch Vụ Gửi Hàng Sang Nhật</p>
+                <p className="text-xs text-amber-800 leading-relaxed">
+                  Dịch vụ gửi hàng từ Việt Nam sang Nhật cần nhân viên tư vấn trực tiếp. Vui lòng liên hệ qua Facebook hoặc Zalo để được hỗ trợ báo giá.
+                </p>
+                <a
+                  href="https://m.me/chillbanana.vn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-block mt-1 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all"
+                >
+                  💬 Nhắn Tin Tư Vấn Ngay
+                </a>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    addToCart({
+                      id: "calc-" + Date.now(),
+                      name: productName || "Sản phẩm mua hộ Nhật Bản",
+                      priceJpy,
+                      priceVnd: calc.productPriceVnd,
+                      weightKg,
+                      imageUrl: productImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80",
+                      originalStore: detectedStore || "Sàn thương mại Nhật Bản",
+                      originalUrl: productUrl || undefined,
+                      category,
+                    });
+                  }}
+                  className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
+                >
+                  <ShoppingCart className="w-4 h-4 text-banana-400" />
+                  <span>Thêm Vào Giỏ Hàng</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => setShowOrderModal(true)}
-                className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
-              >
-                <span>Đặt Cọc & Mua Ngay</span>
-                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={() => setShowOrderModal(true)}
+                  className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
+                >
+                  <span>Đặt Cọc & Mua Ngay</span>
+                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            )}
 
             <button
               type="button"
