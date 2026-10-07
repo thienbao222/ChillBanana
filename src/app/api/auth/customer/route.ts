@@ -1,37 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import {
+  CUSTOMER_COOKIE_NAME,
+  hashCustomerPassword as hashPassword,
+  createCustomerSessionToken as signSession,
+  verifyCustomerSessionToken as verifySession,
+} from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
-const CUSTOMER_SESSION_SECRET = process.env.CUSTOMER_SESSION_SECRET || (() => { console.error('[SECURITY] CUSTOMER_SESSION_SECRET not set! Set it in Vercel env vars.'); return 'INSECURE_PLACEHOLDER_SET_CUSTOMER_SESSION_SECRET_ENV'; })();
-
-function hashPassword(password: string): string {
-  return crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest("hex");
-}
-
-function signSession(data: { id: string; email: string }): string {
-  const payload = JSON.stringify(data);
-  const signature = crypto.createHmac("sha256", CUSTOMER_SESSION_SECRET).update(payload).digest("hex");
-  return Buffer.from(`${payload}::${signature}`).toString("base64");
-}
-
-function verifySession(cookie: string): { id: string; email: string } | null {
-  try {
-    const decoded = Buffer.from(cookie, "base64").toString("utf-8");
-    const [payloadStr, signature] = decoded.split("::");
-    if (!payloadStr || !signature) return null;
-    const expectedSig = crypto.createHmac("sha256", CUSTOMER_SESSION_SECRET).update(payloadStr).digest("hex");
-    if (signature !== expectedSig) return null;
-    return JSON.parse(payloadStr);
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const customerCookie = req.cookies.get("cb_customer_session")?.value;
+    const customerCookie = req.cookies.get(CUSTOMER_COOKIE_NAME)?.value;
     if (!customerCookie) {
       return NextResponse.json({ customer: null });
     }
@@ -188,7 +168,7 @@ export async function POST(req: NextRequest) {
         stitched: { orders: stitchedOrders, sessions: stitchedSessions },
       });
 
-      response.cookies.set("cb_customer_session", sessionToken, {
+      response.cookies.set(CUSTOMER_COOKIE_NAME, sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -282,7 +262,7 @@ export async function POST(req: NextRequest) {
         stitched: { orders: loginStitchedOrders, sessions: loginStitchedSessions },
       });
 
-      response.cookies.set("cb_customer_session", sessionToken, {
+      response.cookies.set(CUSTOMER_COOKIE_NAME, sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -299,7 +279,7 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "Đăng xuất thành công.",
       });
-      response.cookies.set("cb_customer_session", "", {
+      response.cookies.set(CUSTOMER_COOKIE_NAME, "", {
         maxAge: 0,
         path: "/",
       });

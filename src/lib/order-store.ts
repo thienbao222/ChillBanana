@@ -56,11 +56,24 @@ export function getOrderByCode(code: string): StoredOrder | undefined {
   return ordersStore.find((o) => o.orderCode.toUpperCase() === cleanCode || o.id === code);
 }
 
-export function createOrder(data: Partial<StoredOrder>): StoredOrder {
+/**
+ * BẢO MẬT (quan trọng): tham số `liveExchangeRate` BẮT BUỘC phải do server tự
+ * fetch từ `fetchLiveExchangeRate()` (xem lib/exchange-rate.ts) rồi truyền vào —
+ * hàm này không được phép đọc tỷ giá từ `data` (payload client gửi lên) nữa.
+ *
+ * Lý do: trước đây hàm tự tính `productPriceVnd/serviceFeeVnd/totalVnd` từ
+ * `priceJpy * rate`, nhưng `rate` lại lấy thẳng từ `data.exchangeRate` do
+ * client gửi lên (chỉ chặn sàn dưới 100). Vì toàn bộ số tiền phụ thuộc trực
+ * tiếp vào rate, ai gọi thẳng POST /api/orders với exchangeRate thấp hơn tỷ
+ * giá thật (ví dụ gửi 100 trong khi tỷ giá thật ~164) vẫn tạo được đơn hàng
+ * hợp lệ với giá bị hạ thấp ~40%, dù "trông" như server đã tự tính toán.
+ * Nay giá trị rate đến từ một nguồn DUY NHẤT mà client không chạm được tới.
+ */
+export function createOrder(data: Partial<StoredOrder>, liveExchangeRate: number): StoredOrder {
   const timestamp = Date.now().toString(36).toUpperCase();
   const randomSuffix = Math.floor(10000 + Math.random() * 90000);
   const orderCode = `CB-${new Date().getFullYear()}-${timestamp}-${randomSuffix}`;
-  
+
   const now = new Date().toISOString();
   const nowFormatted = new Date().toLocaleString("vi-VN", {
     hour: "2-digit",
@@ -70,7 +83,7 @@ export function createOrder(data: Partial<StoredOrder>): StoredOrder {
     year: "numeric",
   });
 
-  const rate = Math.max(100, Number(data.exchangeRate) || 172);
+  const rate = Math.max(100, Number(liveExchangeRate) || 172);
   const priceJpy = Math.max(0, Math.round(Number(data.priceJpy) || 0));
   const weightKg = Math.max(0, Number(data.weightKg) || 0);
 

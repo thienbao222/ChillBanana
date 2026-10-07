@@ -1,34 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import { getCustomerFromRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
-const CUSTOMER_SESSION_SECRET = process.env.CUSTOMER_SESSION_SECRET || (() => { return 'INSECURE_PLACEHOLDER_SET_CUSTOMER_SESSION_SECRET_ENV'; })();
-
-function verifySession(cookie: string): { id: string; email: string } | null {
-  try {
-    const decoded = Buffer.from(cookie, "base64").toString("utf-8");
-    const [payloadStr, signature] = decoded.split("::");
-    if (!payloadStr || !signature) return null;
-    const expectedSig = crypto.createHmac("sha256", CUSTOMER_SESSION_SECRET).update(payloadStr).digest("hex");
-    if (signature !== expectedSig) return null;
-    return JSON.parse(payloadStr);
-  } catch {
-    return null;
-  }
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const customerCookie = req.cookies.get("cb_customer_session")?.value;
-    if (!customerCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const sessionData = verifySession(customerCookie);
+    const sessionData = getCustomerFromRequest(req);
     if (!sessionData) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
     const customer = await prisma.customer.findUnique({

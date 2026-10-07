@@ -1,31 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import crypto from "crypto";
+import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
-const COOKIE_NAME = "chillbanana_admin_session";
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || "chillbanana_secure_admin_salt_2026";
-
-function verifyAdminSession(req: NextRequest): boolean {
-  const cookie = req.cookies.get(COOKIE_NAME);
-  if (!cookie || !cookie.value) return false;
-  try {
-    const decoded = Buffer.from(cookie.value, "base64").toString("utf-8");
-    const [payloadStr, signature] = decoded.split("::");
-    const expectedSig = crypto.createHmac("sha256", SESSION_SECRET).update(payloadStr).digest("hex");
-    if (signature !== expectedSig) return false;
-    const payload = JSON.parse(payloadStr);
-    if (payload.exp < Date.now()) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 export async function GET(req: NextRequest) {
   try {
-    const isAdmin = verifyAdminSession(req);
+    const isAdmin = isAdminRequest(req);
     if (!isAdmin) {
       return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
     }

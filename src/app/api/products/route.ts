@@ -2,30 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/product-store";
 import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
-import crypto from "crypto";
+import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
-
-const COOKIE_NAME = "chillbanana_admin_session";
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET || "chillbanana_secure_admin_salt_2026";
-
-function verifyAdminSession(req: NextRequest): boolean {
-  const cookie = req.cookies.get(COOKIE_NAME);
-  if (!cookie || !cookie.value) return false;
-
-  try {
-    const decoded = Buffer.from(cookie.value, "base64").toString("utf-8");
-    const [payloadStr, signature] = decoded.split("::");
-    const expectedSig = crypto.createHmac("sha256", SESSION_SECRET).update(payloadStr).digest("hex");
-    if (signature !== expectedSig) return false;
-
-    const payload = JSON.parse(payloadStr);
-    if (payload.exp < Date.now()) return false;
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 // GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category, tính giá VND theo tỷ giá live thời gian thực)
 export async function GET(req: NextRequest) {
@@ -88,7 +67,7 @@ export async function GET(req: NextRequest) {
 
 // POST: Thêm sản phẩm mới (Admin)
 export async function POST(req: NextRequest) {
-  if (!verifyAdminSession(req)) {
+  if (!isAdminRequest(req)) {
     return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
   }
   try {
@@ -156,7 +135,7 @@ export async function POST(req: NextRequest) {
 
 // PUT: Cập nhật thông tin sản phẩm
 export async function PUT(req: NextRequest) {
-  if (!verifyAdminSession(req)) {
+  if (!isAdminRequest(req)) {
     return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
   }
   try {
@@ -227,7 +206,7 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: Xóa sản phẩm
 export async function DELETE(req: NextRequest) {
-  if (!verifyAdminSession(req)) {
+  if (!isAdminRequest(req)) {
     return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
   }
   try {

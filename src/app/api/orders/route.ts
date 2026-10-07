@@ -2,24 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrder } from "@/lib/order-store";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
-import crypto from 'crypto';
-
-const ADMIN_COOKIE = 'chillbanana_admin_session';
-const ADMIN_SECRET = process.env.ADMIN_SESSION_SECRET || 'INSECURE_PLACEHOLDER_SET_ADMIN_SESSION_SECRET_ENV';
-
-function isAdmin(req: NextRequest): boolean {
-  const cookie = req.cookies.get(ADMIN_COOKIE)?.value;
-  if (!cookie) return false;
-  try {
-    const decoded = Buffer.from(cookie, 'base64').toString('utf-8');
-    const [payloadStr, sig] = decoded.split('::');
-    if (!payloadStr || !sig) return false;
-    const expected = crypto.createHmac('sha256', ADMIN_SECRET).update(payloadStr).digest('hex');
-    if (sig !== expected) return false;
-    const payload = JSON.parse(payloadStr);
-    return payload.exp > Date.now();
-  } catch { return false; }
-}
+import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
+import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +14,7 @@ export async function GET(req: NextRequest) {
     const phone = searchParams.get("phone");
 
     // Allow admins to get all orders, customers must provide email or phone
-    if (!email && !phone && !isAdmin(req)) {
+    if (!email && !phone && !isAdminRequest(req)) {
       return NextResponse.json(
         { error: 'Vui lòng cung cấp email hoặc số điện thoại để tra cứu đơn hàng.' },
         { status: 400 }
@@ -80,7 +64,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const order = createOrder(body);
+    // BẢO MẬT: tỷ giá PHẢI do server tự lấy (live, có cache), không bao giờ tin
+    // giá trị exchangeRate mà client gửi trong payload — xem chú thích đầy đủ
+    // trong lib/order-store.ts::createOrder().
+    const liveRateData = await fetchLiveExchangeRate();
+    const liveRate = liveRateData.roundedRate || liveRateData.rate || 172;
+
+    const order = createOrder(body, liveRate);
 
     // Kiểm tra định danh khách hàng (Thành viên vs Khách vãng lai)
     let customerId = body.customerId || null;
