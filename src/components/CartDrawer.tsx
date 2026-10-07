@@ -86,6 +86,7 @@ export default function CartDrawer() {
 
   const handleCheckoutSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (items.length === 0) return;
 
     if (!customerName || !customerPhone || !customerAddress) {
@@ -235,7 +236,7 @@ export default function CartDrawer() {
               <div className="mt-3 flex gap-2">
                 <a
                   href={`/tracking?orderCode=${orderResult.orderCode}`}
-                  className="flex-1 py-2.5 bg-navy-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors inline-block"
+                  className="flex-1 py-2.5 bg-navy-900 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors inline-block text-center"
                 >
                   Theo Dõi Đơn Hàng
                 </a>
@@ -438,9 +439,12 @@ export default function CartDrawer() {
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="text-xs font-bold px-1.5 text-navy-950">
-                          {item.quantity}
-                        </span>
+                        <input
+                          type="number"
+                          value={item.quantity}
+                          onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
+                          className="w-8 text-center text-xs font-bold px-0 py-0.5 text-navy-950 bg-transparent border-none focus:outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none"
+                        />
                         <button
                           onClick={() => updateQuantity(item.id, item.quantity + 1)}
                           className="text-slate-500 hover:text-navy-900 p-0.5"

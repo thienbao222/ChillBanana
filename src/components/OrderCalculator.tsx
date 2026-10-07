@@ -24,10 +24,22 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 export default function OrderCalculator() {
-  const { addToCart } = useCart();
+  const { addToCart, items, clearCart } = useCart();
   const { customer } = useAuth();
 
-  const [direction, setDirection] = useState<"JP_TO_VN" | "VN_TO_JP">("JP_TO_VN");
+  const [direction, setDirectionState] = useState<"JP_TO_VN" | "VN_TO_JP">("JP_TO_VN");
+
+  const setDirection = (newDirection: "JP_TO_VN" | "VN_TO_JP") => {
+    if (newDirection === "VN_TO_JP" && items.length > 0) {
+      if (window.confirm("Chuyển sang gửi hàng đi Nhật sẽ xóa các sản phẩm mua hộ đang có trong giỏ hàng. Bạn có chắc chắn?")) {
+        clearCart();
+        setDirectionState(newDirection);
+      }
+    } else {
+      setDirectionState(newDirection);
+    }
+  };
+
   const [productUrl, setProductUrl] = useState("");
   const [productName, setProductName] = useState("");
   const [productImage, setProductImage] = useState("");
@@ -204,6 +216,8 @@ export default function OrderCalculator() {
 
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     if (!productUrl || productUrl.trim() === "") {
       alert("Vui lòng dán link sản phẩm (Bước 1)!");
       return;

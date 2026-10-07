@@ -56,6 +56,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (body.direction === "VN_TO_JP") {
+      return NextResponse.json(
+        { error: "Đơn hàng gửi từ Việt Nam sang Nhật Bản cần nhân viên tư vấn trực tiếp. Vui lòng liên hệ qua Zalo/Facebook." },
+        { status: 400 }
+      );
+    }
+
     if (!body.productName || body.productName.trim() === "") {
       return NextResponse.json(
         { error: "Vui lòng cung cấp tên sản phẩm." },

@@ -13,6 +13,7 @@ export interface CartItem {
   originalStore: string;
   originalUrl?: string;
   category?: string;
+  stockSlots?: number;
   quantity: number;
 }
 
@@ -91,13 +92,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     setItems((prev) => {
       const existing = prev.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
       if (existing) {
+        const maxQ = existing.stockSlots || 99;
+        const newQ = Math.min(existing.quantity + quantity, maxQ);
         return prev.map((item) =>
           item.id === existing.id
-            ? { ...item, quantity: item.quantity + quantity }
+            ? { ...item, quantity: newQ }
             : item
         );
       }
-      return [...prev, { ...product, quantity }];
+      const maxQ = product.stockSlots || 99;
+      const initialQ = Math.min(quantity, maxQ);
+      return [...prev, { ...product, quantity: initialQ }];
     });
     setIsCartOpen(true);
   };
@@ -112,7 +117,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, quantity } : item))
+      prev.map((item) => {
+        if (item.id === id) {
+          const maxQ = item.stockSlots || 99;
+          const newQ = Math.min(quantity, maxQ);
+          return { ...item, quantity: newQ };
+        }
+        return item;
+      })
     );
   };
 
