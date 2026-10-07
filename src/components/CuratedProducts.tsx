@@ -233,6 +233,7 @@ export default function CuratedProducts() {
                           imageUrl: product.imageUrl,
                           originalStore: product.originalStore,
                           category: product.category,
+                          stockSlots: product.stockSlots,
                         })
                       }
                       className="p-2.5 rounded-xl bg-banana-50 hover:bg-banana-500 text-banana-800 hover:text-navy-950 border border-banana-200 transition-colors"

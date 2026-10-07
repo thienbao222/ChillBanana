@@ -341,7 +341,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
             {/* Orders Table */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs whitespace-nowrap">
+                <table className="w-full min-w-[1000px] text-left text-xs whitespace-nowrap">
                   <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200">
                     <tr>
                       <th className="p-4">Mã Đơn</th>
@@ -1163,7 +1163,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
 
             {/* Product Table */}
             <div className="border border-slate-200 rounded-xl overflow-x-auto mb-4 text-xs">
-              <table className="w-full text-left whitespace-nowrap">
+              <table className="w-full min-w-[1000px] text-left whitespace-nowrap">
                 <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                   <tr>
                     <th className="p-2.5">Sản Phẩm</th>
