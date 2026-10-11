@@ -62,13 +62,15 @@ export default function AIChatBot() {
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Kính chào Quý khách! Em là ChillBanana Gemini 2.5 AI Agent 🍌 - Trợ lý thông minh hỗ trợ Quý khách: tìm kiếm sản phẩm nội địa Nhật, tra cứu link & hình ảnh, tư vấn kỹ thuật điện 100V, mẹo săn sale, tính bill cước vận chuyển và giảm 25% cước gộp đơn ạ!\n\n📸 **Mới:** Bạn có thể gửi ảnh sản phẩm để AI nhận diện tên tiếng Nhật và tìm giá!",
+      text: "Chào bạn! Mình là Neo Universe, trợ lý AI của ChillBanana. Mình có thể giúp tìm sản phẩm Nhật, đọc link, tư vấn đồ điện 100V, ước tính chi phí và giải đáp chuyện mua hàng. Bạn đang cần hỗ trợ điều gì?\n\nBạn cũng có thể gửi ảnh sản phẩm để Neo nhận diện và tìm thông tin.",
       time: "Vừa xong",
     },
   ]);
   const [showGreetingAnimation, setShowGreetingAnimation] = useState(false);
   const hasShownGreetingAnimationRef = useRef(false);
   const [petVisible, setPetVisible] = useState(true);
+  const [petConversationOpen, setPetConversationOpen] = useState(false);
+  const [petConversationPosition, setPetConversationPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const [ambientAnimation, setAmbientAnimation] = useState<NeoUniverseAnimation>("idle");
   const [ambientHint, setAmbientHint] = useState("");
   const [petPosition, setPetPosition] = useState<{ left: number; top: number } | null>(null);
@@ -76,6 +78,7 @@ export default function AIChatBot() {
   const [isPetHovered, setIsPetHovered] = useState(false);
   const [isPetDragging, setIsPetDragging] = useState(false);
   const petRef = useRef<HTMLDivElement>(null);
+  const petDialogueRef = useRef<HTMLDivElement>(null);
   const petPositionRef = useRef(petPosition);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number; moved: boolean } | null>(null);
   const draggedRef = useRef(false);
@@ -123,7 +126,7 @@ export default function AIChatBot() {
   // Neo strolls to new places in the viewport, pauses on hover or while dragged,
   // and honors the browser's reduced-motion preference.
   useEffect(() => {
-    if (isOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (isOpen || petConversationOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const hints = ["Neo có thể giúp bạn tìm món hàng Nhật đó!", "Chạm vào Neo để bắt đầu tư vấn nhé.", "Neo đang ở đây nếu bạn cần hỗ trợ."];
     let actionTimer: number;
@@ -166,7 +169,7 @@ export default function AIChatBot() {
       window.clearTimeout(settleTimer);
       window.clearTimeout(hintTimer);
     };
-  }, [isOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging]);
+  }, [isOpen, petConversationOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging]);
 
   const clampPetPosition = (left: number, top: number) => {
     const width = petRef.current?.offsetWidth ?? 120;
@@ -185,6 +188,32 @@ export default function AIChatBot() {
     window.addEventListener("resize", keepPetInViewport);
     return () => window.removeEventListener("resize", keepPetInViewport);
   }, []);
+
+  useEffect(() => {
+    if (!petConversationOpen) {
+      setPetConversationPosition(null);
+      return;
+    }
+    const positionPanel = () => {
+      const rect = petRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const width = Math.min(360, window.innerWidth - 24);
+      const height = Math.min(360, window.innerHeight - 24);
+      const left = Math.max(12, Math.min(window.innerWidth - width - 12, rect.left + rect.width / 2 - width / 2));
+      const above = rect.top - height - 12;
+      const top = above >= 12 ? above : Math.max(12, Math.min(window.innerHeight - height - 12, rect.bottom + 12));
+      setPetConversationPosition({ left, top, width });
+    };
+    positionPanel();
+    window.addEventListener("resize", positionPanel);
+    return () => window.removeEventListener("resize", positionPanel);
+  }, [petConversationOpen, petPosition]);
+
+  useEffect(() => {
+    if (petConversationOpen && petDialogueRef.current) {
+      petDialogueRef.current.scrollTop = petDialogueRef.current.scrollHeight;
+    }
+  }, [petConversationOpen, messages.length, loading]);
 
   const handlePetPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
     if (event.button !== 0 || !petRef.current) return;
@@ -227,14 +256,25 @@ export default function AIChatBot() {
     if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
     if (/đề xuất|gợi ý|nên chọn|phù hợp nhất|khuyên chọn/i.test(text)) return "recommend";
     if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "product";
+    if (/\?\s*$/.test(text.trim())) return "ask";
     return "explain";
   };
   const petAnimation: NeoUniverseAnimation = !isOpen
-    ? ambientAnimation
+    ? petConversationOpen
+      ? loading || imageAnalyzing
+        ? "analyze"
+        : inputMessage.trim()
+          ? "listen"
+        : latestAssistantMessage
+          ? responseAnimation(latestAssistantMessage.text)
+          : "listen"
+      : ambientAnimation
     : showGreetingAnimation
       ? "ask"
       : imageAnalyzing || loading
         ? "analyze"
+        : inputMessage.trim()
+          ? "listen"
         : latestAssistantMessage
           ? responseAnimation(latestAssistantMessage.text)
           : "listen";
@@ -604,7 +644,7 @@ export default function AIChatBot() {
           {ambientHint && <div className="absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{ambientHint}</div>}
           <button
             id="ai-chat-toggle-btn"
-            onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setIsOpen(true); }}
+            onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setPetConversationOpen(true); }}
             onPointerDown={handlePetPointerDown}
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
@@ -626,6 +666,60 @@ export default function AIChatBot() {
               NEO · AI TƯ VẤN
             </span>
           </button>
+          {petConversationOpen && petConversationPosition && (
+            <section
+              role="dialog"
+              aria-label="Trò chuyện trực tiếp với Neo Universe"
+              className="pointer-events-auto fixed z-[60] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
+              style={{ left: petConversationPosition.left, top: petConversationPosition.top, width: petConversationPosition.width }}
+            >
+              <header className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-navy-950 to-navy-800 px-3 py-2.5 text-white">
+                <span className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-white/10">
+                  <NeoUniverseSprite animation={petAnimation} className="h-full w-full" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold">Neo Universe</p>
+                  <p className="text-[10px] text-emerald-300">{loading ? "Đang suy nghĩ..." : "Đang lắng nghe bạn"}</p>
+                </div>
+                <button type="button" onClick={() => { setPetConversationOpen(false); setIsOpen(true); }} className="rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-200 hover:bg-white/10 hover:text-white" title="Mở khung tư vấn đầy đủ">Mở chat</button>
+                <button type="button" onClick={() => setPetConversationOpen(false)} className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Đóng hội thoại với Neo">
+                  <X className="h-4 w-4" />
+                </button>
+              </header>
+
+              <div ref={petDialogueRef} className="min-h-0 max-h-52 flex-1 space-y-2 overflow-y-auto bg-slate-50/80 p-3 text-xs" role="log" aria-live="polite" aria-relevant="additions text">
+                {messages.slice(-5).map((message) => (
+                  <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
+                    <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
+                      <div className="break-words">{renderFormattedMessage(message.text)}</div>
+                    </div>
+                  </div>
+                ))}
+                {loading && <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-slate-600 shadow-sm"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Neo đang phân tích câu hỏi của bạn…</div>}
+              </div>
+
+              {!messages.some((message) => message.sender === "user") && (
+                <div className="flex flex-wrap gap-1.5 border-t border-slate-100 bg-white px-3 py-2">
+                  <button type="button" onClick={() => handleSendMessage("Tôi muốn tìm một sản phẩm Nhật, Neo có thể tư vấn không?")} className="rounded-full border border-banana-200 bg-banana-50 px-2.5 py-1 text-[10px] font-semibold text-navy-800 hover:bg-banana-100">Tìm sản phẩm Nhật</button>
+                  <button type="button" onClick={() => handleSendMessage("Đồ điện 100V của Nhật dùng ở Việt Nam thế nào?")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100">Hỏi về điện 100V</button>
+                </div>
+              )}
+
+              <form onSubmit={(event) => { event.preventDefault(); handleSendMessage(); }} className="flex items-center gap-2 border-t border-slate-100 bg-white p-2.5">
+                <input
+                  value={inputMessage}
+                  onChange={(event) => setInputMessage(event.target.value)}
+                  placeholder="Nhắn trực tiếp với Neo…"
+                  aria-label="Tin nhắn gửi Neo Universe"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-banana-400 focus:ring-2 focus:ring-banana-100"
+                  disabled={loading}
+                />
+                <button type="submit" disabled={loading || !inputMessage.trim()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-banana-500 text-navy-950 hover:bg-banana-400 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Gửi tin nhắn cho Neo">
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
+            </section>
+          )}
           <div className="pointer-events-auto mt-1 flex justify-center gap-1.5 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-md backdrop-blur">
             <button type="button" onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"} title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}>
               {wanderingEnabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
