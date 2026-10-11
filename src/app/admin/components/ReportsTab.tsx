@@ -2,11 +2,11 @@
 
 import React, { useState, useEffect } from "react";
 import {
-  RefreshCw, TrendingUp, BarChart3, ShoppingBag, Package, AlertCircle,
+  RefreshCw, TrendingUp, BarChart3, ShoppingBag, Package, AlertCircle, Sparkles,
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
 
-export default function ReportsTab() {
+export default function ReportsTab({ onOpenAgent }: { onOpenAgent?: () => void }) {
   const { adminToast } = useAdminToast();
   const [reportData, setReportData] = useState<any>(null);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -56,6 +56,13 @@ export default function ReportsTab() {
                 </p>
               </div>
               <div className="flex gap-2">
+                <button
+                  onClick={onOpenAgent}
+                  className="px-4 py-2.5 bg-white/10 hover:bg-white/20 text-banana-200 border border-white/15 font-bold text-xs rounded-2xl transition-all flex items-center space-x-2 shrink-0"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Hỏi AI Agent</span>
+                </button>
                 <button
                   onClick={() => {
                     const csvLines = [

@@ -6,7 +6,7 @@ import crypto from "crypto";
 //
 // TẠI SAO FILE NÀY TỒN TẠI:
 // Trước đây mỗi route (products, orders, admin/customers, admin/reports,
-// admin/funnel, admin/chat-trends, admin/ai-insights, admin/api-keys,
+// admin/funnel, admin/chat-trends, admin/assistant, admin/api-keys,
 // admin/stitch-all, analytics/chats, customer/profile, auth/customer...)
 // tự khai báo lại logic đọc ADMIN_SESSION_SECRET / CUSTOMER_SESSION_SECRET,
 // và vài file lại tự bịa một giá trị fallback KHÁC NHAU khi thiếu biến môi
@@ -15,7 +15,7 @@ import crypto from "crypto";
 //
 // Hậu quả thực tế: nếu ADMIN_SESSION_SECRET chưa được set trên Vercel, cookie
 // đăng nhập admin được ký bằng fallback A (ở admin/auth), nhưng route Sản
-// phẩm/Khách hàng/Báo cáo/Funnel/AI Insights/API Keys lại verify bằng fallback
+// phẩm/Khách hàng/Báo cáo/Funnel/AI Agent/API Keys lại verify bằng fallback
 // B khác -> admin đăng nhập được nhưng vào các mục đó bị 401 "Không có quyền
 // truy cập". Gom về một nơi duy nhất để toàn bộ hệ thống luôn dùng ĐÚNG MỘT
 // giá trị secret, dù biến môi trường có được set hay không.

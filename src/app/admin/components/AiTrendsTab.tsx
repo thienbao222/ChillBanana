@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
 
-export default function AiTrendsTab() {
+export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void }) {
   const { adminToast } = useAdminToast();
   const [aiStats, setAiStats] = useState<any>(null);
   const [aiSessions, setAiSessions] = useState<any[]>([]);
@@ -24,8 +24,6 @@ export default function AiTrendsTab() {
   const [chatDateFrom, setChatDateFrom] = useState("");
   const [chatDateTo, setChatDateTo] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState<any>(null);
-  const [insightsData, setInsightsData] = useState<any>(null);
-  const [loadingInsights, setLoadingInsights] = useState(false);
 
   const fetchAiTrends = async () => {
     setLoadingAi(true);
@@ -69,10 +67,10 @@ export default function AiTrendsTab() {
                   <span>Google Gemini AI Analytics Engine</span>
                 </span>
                 <h2 className="text-2xl font-serif font-bold text-navy-950">
-                  Thống Kê Xu Hướng &amp; Nhu Cầu Khách Hàng (AI Chat Insights)
+                  Thống Kê Tag Chủ Đề &amp; Từ Khóa Trong Chat
                 </h2>
                 <p className="text-xs text-navy-900/80 mt-1 max-w-2xl">
-                  Dữ liệu hội thoại giữa khách hàng và Trợ lý Gemini AI được lưu trữ tự động vào CSDL, giúp doanh nghiệp nắm bắt mặt hàng hot, xu hướng tìm kiếm và tối ưu chiến dịch nhập hàng.
+                  Thống kê từ tag chủ đề và từ khóa website ghi nhận trong các phiên chat. Đây là tín hiệu nội bộ, không đại diện toàn thị trường; trợ lý AI có thể giải thích nhưng không tự thêm số liệu.
                 </p>
               </div>
 
@@ -139,7 +137,7 @@ export default function AiTrendsTab() {
                 <div>
                   <span className="text-xs text-slate-500 font-medium">Từ Khóa Hot Nhất</span>
                   <div className="text-sm font-bold text-banana-700 mt-1 truncate max-w-[120px]">{aiStats?.hotKeyword || "—"}</div>
-                  <div className="text-[10px] text-slate-400">Xuất hiện nhiều nhất</div>
+                  <div className="text-[10px] text-slate-400">Số phiên có tag này nhiều nhất</div>
                 </div>
               </div>
 
@@ -152,7 +150,7 @@ export default function AiTrendsTab() {
                      aiStats?.dominantSentiment === "complaint" ? "😤 Phàn nàn" : "🤔 Tìm hiểu"}
                   </div>
                   <div className="text-[10px] text-slate-400">
-                    {aiStats?.sentimentSummary?.positive || 0} tích cực • {aiStats?.sentimentSummary?.complaint || 0} phàn nàn
+                    {aiStats?.sentimentSummary?.positive || 0} tích cực • {aiStats?.sentimentSummary?.complaint || 0} phàn nàn (tag phiên)
                   </div>
                 </div>
               </div>
@@ -166,9 +164,9 @@ export default function AiTrendsTab() {
                 <div className="flex items-center justify-between border-b pb-3">
                   <h3 className="font-bold text-sm text-navy-900 flex items-center space-x-2">
                     <TrendingUp className="w-4 h-4 text-banana-600" />
-                    <span>Top 10 Từ Khóa &amp; Sản Phẩm Được Khách Hỏi Nhiều Nhất</span>
+                    <span>Top Từ Khóa Được Gắn Vào Phiên Chat</span>
                   </h3>
-                  <span className="text-[10px] text-slate-400">Trích xuất tự động</span>
+                  <span className="text-[10px] text-slate-400">Đếm phiên có tag · không phải lượt tìm kiếm</span>
                 </div>
 
                 <div className="space-y-2.5">
@@ -186,7 +184,7 @@ export default function AiTrendsTab() {
                           <span className="font-semibold text-slate-800">{item.keyword}</span>
                         </div>
                         <span className="font-mono font-bold text-navy-900 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                          {item.count} lượt hỏi
+                          {item.count} phiên có tag
                         </span>
                       </div>
                     ))
@@ -218,7 +216,7 @@ export default function AiTrendsTab() {
                         <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                           <div
                             className="h-full bg-gradient-to-r from-banana-400 to-amber-500 rounded-full"
-                            style={{ width: `${Math.min(100, Math.max(8, pct * 2))}%` }}
+                            style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
                           />
                         </div>
                       </div>
@@ -226,65 +224,14 @@ export default function AiTrendsTab() {
                   })}
                 </div>
 
-                {/* AI Business Insights Generator */}
-                <div className="mt-4 p-4 rounded-2xl bg-gradient-to-r from-banana-50 to-amber-50 border border-banana-200 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold text-banana-900 flex items-center space-x-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-banana-600" />
-                      <span>Gợi Ý Kinh Doanh Từ AI (Gemini Analysis)</span>
-                    </h4>
-                    <button
-                      onClick={async () => {
-                        setLoadingInsights(true);
-                        try {
-                          const res = await fetch("/api/admin/ai-insights");
-                          const data = await res.json();
-                          if (res.ok && data.success) {
-                            setInsightsData(data.insights);
-                          }
-                        } catch {} finally { setLoadingInsights(false); }
-                      }}
-                      disabled={loadingInsights}
-                      className="px-3 py-1 bg-banana-500 hover:bg-banana-400 text-navy-950 font-bold text-[10px] rounded-xl transition-all flex items-center space-x-1 disabled:opacity-50"
-                    >
-                      {loadingInsights ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
-                      <span>{loadingInsights ? "Đang phân tích..." : "Tạo Phân Tích AI"}</span>
-                    </button>
-                  </div>
-
-                  {insightsData ? (
-                    <div className="space-y-2.5 text-xs text-banana-900">
-                      {insightsData.marketOverview && (
-                        <p className="leading-relaxed">📊 <strong>Tổng quan:</strong> {insightsData.marketOverview}</p>
-                      )}
-                      {insightsData.topDemandProducts?.length > 0 && (
-                        <div>
-                          <p className="font-bold mb-1">🔥 Mặt hàng nhu cầu cao:</p>
-                          {insightsData.topDemandProducts.map((p: any, i: number) => (
-                            <p key={i} className="pl-3">• <strong>{p.name}</strong> — {p.reason}</p>
-                          ))}
-                        </div>
-                      )}
-                      {insightsData.groupBuySuggestions?.length > 0 && (
-                        <div>
-                          <p className="font-bold mb-1">📦 Đề xuất Gom Đơn:</p>
-                          {insightsData.groupBuySuggestions.map((g: any, i: number) => (
-                            <p key={i} className="pl-3">• <strong>{g.productName}</strong> (~{g.estimatedDemand} đơn, tiết kiệm {g.savingsPercent}% cước — {g.shippingMethod})</p>
-                          ))}
-                        </div>
-                      )}
-                      {insightsData.actionItems?.length > 0 && (
-                        <div>
-                          <p className="font-bold mb-1">✅ Hành động đề xuất:</p>
-                          {insightsData.actionItems.map((a: string, i: number) => (
-                            <p key={i} className="pl-3">• {a}</p>
-                          ))}
-                        </div>
-                      )}
+                <div className="mt-4 rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50 p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="flex items-center gap-1.5 text-xs font-bold text-indigo-950"><Sparkles className="h-4 w-4 text-indigo-600" />Cần phân tích sâu hơn?</p>
+                      <p className="mt-1 text-[11px] leading-relaxed text-indigo-800">Trợ lý AI sẽ dùng tag chat và số liệu mới nhất, đồng thời nêu rõ giới hạn dữ liệu thay vì khẳng định xu hướng thị trường.</p>
                     </div>
-                  ) : (
-                    <p className="text-[11px] text-banana-700">Bấm "Tạo Phân Tích AI" để Gemini tổng hợp xu hướng kinh doanh từ dữ liệu Chat & Đơn hàng thực tế.</p>
-                  )}
+                    <button onClick={onOpenAgent} className="shrink-0 rounded-xl bg-indigo-700 px-3 py-2 text-xs font-bold text-white hover:bg-indigo-800">Mở AI Agent · Xu hướng khách</button>
+                  </div>
                 </div>
               </div>
 
@@ -299,7 +246,7 @@ export default function AiTrendsTab() {
                       <MessageSquare className="w-4 h-4 text-banana-600" />
                       <span>Lịch Sử Các Phiên Chat Của Khách Hàng (Lưu Trữ CSDL)</span>
                     </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">Nhấp vào một phiên để xem toàn bộ nội dung trò chuyện với Gemini AI</p>
+                    <p className="text-xs text-slate-500 mt-0.5">KPI tính trên toàn bộ kết quả lọc; bảng dưới hiển thị tối đa 150 phiên mới nhất. Nhấp để xem nội dung đã lưu.</p>
                   </div>
                 </div>
                 

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { isAdminRequest } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
-import { recentVietnamDateKeys, vietnamDateKey, vietnamDayEnd, vietnamDayStart } from "@/lib/vietnam-time";
+import { recentVietnamDateKeys, vietnamDayEnd, vietnamDayStart } from "@/lib/vietnam-time";
 
 export const dynamic = "force-dynamic";
 
@@ -15,9 +16,9 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get("dateFrom");     // ISO date string "YYYY-MM-DD"
     const dateTo = searchParams.get("dateTo");         // ISO date string "YYYY-MM-DD"
     const customerType = searchParams.get("customerType"); // "ALL" | "REGISTERED" | "GUEST_ORDER" | "CHAT_LEAD" | "ANONYMOUS_GUEST"
-    const searchQ = searchParams.get("search")?.toLowerCase().trim() || "";
-    const limitParam = parseInt(searchParams.get("limit") || "150");
-    const limit = Math.min(limitParam, 500); // Max 500 sessions per request
+    const searchQ = searchParams.get("search")?.toLowerCase().trim().slice(0, 120) || "";
+    const requestedLimit = Number(searchParams.get("limit") || "150");
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0 ? Math.min(Math.floor(requestedLimit), 500) : 150;
 
     // === Build date range filter ===
     const dateFilter: { gte?: Date; lte?: Date } = {};
@@ -36,116 +37,82 @@ export async function GET(req: NextRequest) {
     }
 
     // === Build customer type filter ===
-    const customerTypeFilter =
-      customerType && customerType !== "ALL"
-        ? { customerType }
-        : undefined;
+    const validCustomerTypes = new Set(["ALL", "REGISTERED", "GUEST_ORDER", "CHAT_LEAD", "ANONYMOUS_GUEST"]);
+    if (customerType && !validCustomerTypes.has(customerType)) {
+      return NextResponse.json({ error: "Loại khách hàng không hợp lệ." }, { status: 400 });
+    }
+    const customerTypeFilter = customerType && customerType !== "ALL" ? { customerType } : {};
+    const searchableText = (field: string) => ({ [field]: { contains: searchQ, mode: "insensitive" as const } });
+    const sessionWhere: Prisma.ChatSessionWhereInput = {
+      ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
+      ...customerTypeFilter,
+      ...(searchQ ? { OR: [
+        searchableText("sessionId"), searchableText("topic"), searchableText("detectedKeywords"),
+        searchableText("customerEmail"), searchableText("customerName"),
+        { customerPhone: { contains: searchQ } },
+        { messages: { some: { content: { contains: searchQ, mode: "insensitive" } } } },
+      ] } : {}),
+    };
 
-    // 1. Lấy danh sách phiên trò chuyện kèm tin nhắn
-    let sessions: any[] = [];
-    try {
-      sessions = await prisma.chatSession.findMany({
-        where: {
-          ...(Object.keys(dateFilter).length > 0 ? { createdAt: dateFilter } : {}),
-          ...(customerTypeFilter || {}),
-        },
-        include: {
-          messages: { orderBy: { createdAt: "asc" } },
-        },
+    // Aggregate over every matching session. The table's 150-row page is only for details.
+    const [sessions, totalSessions, topicGroups, keywordGroups, sentimentGroups, customerGroups, messageGroups] = await Promise.all([
+      prisma.chatSession.findMany({
+        where: sessionWhere,
+        include: { messages: { orderBy: { createdAt: "asc" } } },
         orderBy: { updatedAt: "desc" },
         take: limit,
-      });
-    } catch (dbErr) {
-      console.warn("Lỗi truy vấn chat sessions:", dbErr);
-    }
+      }),
+      prisma.chatSession.count({ where: sessionWhere }),
+      prisma.chatSession.groupBy({ by: ["topic"], where: sessionWhere, _count: { _all: true } }),
+      prisma.chatSession.groupBy({ by: ["detectedKeywords"], where: sessionWhere, _count: { _all: true } }),
+      prisma.chatSession.groupBy({ by: ["sentiment"], where: sessionWhere, _count: { _all: true } }),
+      prisma.chatSession.groupBy({ by: ["customerType"], where: sessionWhere, _count: { _all: true } }),
+      prisma.chatMessage.groupBy({ by: ["role"], where: { chatSession: sessionWhere }, _count: { _all: true } }),
+    ]);
 
-    // === Client-side search filter (topic, keywords, sessionId, email, name, phone) ===
-    if (searchQ) {
-      sessions = sessions.filter((s) => {
-        return (
-          s.sessionId?.toLowerCase().includes(searchQ) ||
-          s.topic?.toLowerCase().includes(searchQ) ||
-          s.detectedKeywords?.toLowerCase().includes(searchQ) ||
-          s.customerEmail?.toLowerCase().includes(searchQ) ||
-          s.customerName?.toLowerCase().includes(searchQ) ||
-          s.customerPhone?.includes(searchQ) ||
-          s.messages?.some((m: any) => m.content?.toLowerCase().includes(searchQ))
-        );
-      });
-    }
-
-    // 2. Từ khóa & chủ đề
-    const topicCounts: Record<string, number> = {
-      "Anime & Mô Hình Figure": 0,
-      "Mỹ Phẩm & Chăm Sóc Da": 0,
-      "Thực Phẩm Chức Năng": 0,
-      "Gia Dụng & Đồ Điện 100V": 0,
-      "Thời Trang & Quy Đổi Size": 0,
-      "Tỷ Giá & Cước Vận Chuyển": 0,
-      "Khác": 0,
-    };
     const keywordCounts: Record<string, number> = {};
-
-    sessions.forEach((s) => {
-      const topic = s.topic || "Khác";
-      topicCounts[topic] = (topicCounts[topic] || 0) + 1;
-      if (s.detectedKeywords) {
-        s.detectedKeywords.split(",").map((w: string) => w.trim()).forEach((w: string) => {
-          if (w) keywordCounts[w] = (keywordCounts[w] || 0) + 1;
-        });
-      }
+    keywordGroups.forEach((group) => {
+      if (!group.detectedKeywords) return;
+      group.detectedKeywords.split(",").map((word) => word.trim()).filter(Boolean).forEach((word) => {
+        keywordCounts[word] = (keywordCounts[word] || 0) + group._count._all;
+      });
     });
-
     const topKeywords = Object.entries(keywordCounts)
       .map(([keyword, count]) => ({ keyword, count }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 15);
-
-    const topicsChart = Object.entries(topicCounts)
-      .map(([name, count]) => ({ name, count }))
-      .filter((t) => t.count > 0 || sessions.length === 0);
-
-    // 3. Tổng hợp stats
-    const totalSessions = sessions.length;
-    const totalMessages = sessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0);
-    const userMessages = sessions.reduce(
-      (acc, s) => acc + (s.messages?.filter((m: any) => m.role === "user").length || 0), 0
-    );
-    const aiMessages = sessions.reduce(
-      (acc, s) => acc + (s.messages?.filter((m: any) => m.role === "assistant").length || 0), 0
-    );
-    const hotKeyword = topKeywords.length > 0 ? topKeywords[0].keyword : "—";
-
-    const sentimentCounts = { inquiry: 0, positive: 0, complaint: 0 };
-    sessions.forEach((s) => {
-      const sent = (s.sentiment || "inquiry") as keyof typeof sentimentCounts;
-      if (sentimentCounts[sent] !== undefined) sentimentCounts[sent]++;
+    const topicsChart = topicGroups.map((group) => ({ name: group.topic || "Khác", count: group._count._all }));
+    const messageCountForRole = (role: string) => messageGroups.find((group) => group.role === role)?._count._all || 0;
+    const totalMessages = messageGroups.reduce((sum, group) => sum + group._count._all, 0);
+    const userMessages = messageCountForRole("user");
+    const aiMessages = messageCountForRole("assistant");
+    const hotKeyword = topKeywords[0]?.keyword || "—";
+    const sentimentSummary = { inquiry: 0, positive: 0, complaint: 0 };
+    sentimentGroups.forEach((group) => {
+      const sentiment = group.sentiment || "inquiry";
+      if (sentiment in sentimentSummary) sentimentSummary[sentiment as keyof typeof sentimentSummary] += group._count._all;
     });
-
-    const dominantSentiment = Object.entries(sentimentCounts)
-      .sort((a, b) => b[1] - a[1])[0]?.[0] || "inquiry";
-
-    // Phân loại khách hàng trong sessions hiện tại
+    const dominantSentiment = Object.entries(sentimentSummary).sort((a, b) => b[1] - a[1])[0]?.[0] || "inquiry";
     const customerTypeCounts = {
-      REGISTERED: sessions.filter(s => s.customerType === "REGISTERED").length,
-      GUEST_ORDER: sessions.filter(s => s.customerType === "GUEST_ORDER").length,
-      CHAT_LEAD: sessions.filter(s => s.customerType === "CHAT_LEAD").length,
-      ANONYMOUS_GUEST: sessions.filter(s => !s.customerType || s.customerType === "ANONYMOUS_GUEST").length,
+      REGISTERED: 0, GUEST_ORDER: 0, CHAT_LEAD: 0, ANONYMOUS_GUEST: 0,
     };
-
-    // 4. Sessions theo ngày (7 ngày gần nhất hoặc trong range)
-    const last7Days = recentVietnamDateKeys(7);
-
-    const dailySessions = last7Days.map((dateStr) => {
-      const daySessions = sessions.filter(
-        (s) => vietnamDateKey(new Date(s.createdAt)) === dateStr
-      );
-      return {
-        date: dateStr,
-        count: daySessions.length,
-        messages: daySessions.reduce((acc, s) => acc + (s.messages?.length || 0), 0),
-      };
+    customerGroups.forEach((group) => {
+      const type = group.customerType || "ANONYMOUS_GUEST";
+      if (type in customerTypeCounts) customerTypeCounts[type as keyof typeof customerTypeCounts] += group._count._all;
     });
+
+    // Exact day counts, not counts from the limited detail table.
+    const last7Days = recentVietnamDateKeys(7);
+    const dailySessions = await Promise.all(last7Days.map(async (dateStr) => {
+      const start = vietnamDayStart(dateStr)!;
+      const end = vietnamDayEnd(dateStr)!;
+      const where = { AND: [sessionWhere, { createdAt: { gte: start, lte: end } }] } satisfies Prisma.ChatSessionWhereInput;
+      const [count, dailyMessageGroups] = await Promise.all([
+        prisma.chatSession.count({ where }),
+        prisma.chatMessage.groupBy({ by: ["role"], where: { chatSession: where }, _count: { _all: true } }),
+      ]);
+      return { date: dateStr, count, messages: dailyMessageGroups.reduce((sum, group) => sum + group._count._all, 0) };
+    }));
 
     return NextResponse.json({
       success: true,
@@ -159,7 +126,7 @@ export async function GET(req: NextRequest) {
         dominantSentiment,
         topKeywords,
         topicsChart,
-        sentimentSummary: sentimentCounts,
+        sentimentSummary,
         customerTypeCounts,
         dailySessions,
       },
