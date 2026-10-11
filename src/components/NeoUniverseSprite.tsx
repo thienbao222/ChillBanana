@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef } from "react";
 
 export type NeoUniverseAnimation =
   | "analyze"
@@ -12,11 +12,14 @@ export type NeoUniverseAnimation =
   | "listen"
   | "move"
   | "product"
-  | "recommend";
+  | "recommend"
+  | "presentation"
+  | "walk";
 
 type Props = {
   animation: NeoUniverseAnimation;
   className?: string;
+  flipX?: boolean;
 };
 
 const SPRITES: Record<NeoUniverseAnimation, string> = {
@@ -29,34 +32,50 @@ const SPRITES: Record<NeoUniverseAnimation, string> = {
   listen: "/neo-universe/listen.webp",
   move: "/neo-universe/move.webp",
   product: "/neo-universe/product.webp",
+  presentation: "/neo-universe/product.webp",
   recommend: "/neo-universe/recommend.webp",
+  walk: "/neo-universe/move.webp",
 };
 
-export default function NeoUniverseSprite({ animation, className = "" }: Props) {
-  const [frame, setFrame] = useState(0);
+export default function NeoUniverseSprite({ animation, className = "", flipX = false }: Props) {
+  const spriteRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
-    setFrame(0);
+    const sprite = spriteRef.current;
+    if (!sprite) return;
+    sprite.style.backgroundPosition = "0% 0%";
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reducedMotion) return;
-
-    const timer = window.setInterval(() => {
-      setFrame((current) => (current + 1) % 36);
-    }, 90);
-    return () => window.clearInterval(timer);
+    // Keep sprite feedback visible for users who request reduced motion, but
+    // slow it down. The companion's viewport roaming is disabled separately.
+    const frameDuration = reducedMotion ? 240 : animation === "idle" || animation === "listen" ? 120 : 82;
+    let frame = 0;
+    let lastFrameAt = performance.now();
+    let requestId = 0;
+    const drawNextFrame = (now: number) => {
+      if (now - lastFrameAt >= frameDuration) {
+        const elapsedFrames = Math.floor((now - lastFrameAt) / frameDuration);
+        frame = (frame + elapsedFrames) % 36;
+        lastFrameAt += elapsedFrames * frameDuration;
+        const row = Math.floor(frame / 6);
+        const column = frame % 6;
+        sprite.style.backgroundPosition = `${column * 20}% ${row * 20}%`;
+      }
+      requestId = window.requestAnimationFrame(drawNextFrame);
+    };
+    requestId = window.requestAnimationFrame(drawNextFrame);
+    return () => window.cancelAnimationFrame(requestId);
   }, [animation]);
-
-  const row = Math.floor(frame / 6);
-  const column = frame % 6;
 
   return (
     <span
+      ref={spriteRef}
       aria-hidden="true"
       className={`block shrink-0 bg-no-repeat ${className}`}
       style={{
         backgroundImage: `url("${SPRITES[animation]}")`,
         backgroundSize: "600% 600%",
-        backgroundPosition: `${column * 20}% ${row * 20}%`,
+        backgroundPosition: "0% 0%",
+        transform: flipX ? "scaleX(-1)" : undefined,
       }}
     />
   );

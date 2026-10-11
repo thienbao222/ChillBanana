@@ -70,16 +70,23 @@ export default function AIChatBot() {
   const hasShownGreetingAnimationRef = useRef(false);
   const [petVisible, setPetVisible] = useState(true);
   const [petConversationOpen, setPetConversationOpen] = useState(false);
+  const [showPetGreeting, setShowPetGreeting] = useState(false);
   const [petConversationPosition, setPetConversationPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const [ambientAnimation, setAmbientAnimation] = useState<NeoUniverseAnimation>("idle");
   const [ambientHint, setAmbientHint] = useState("");
+  const [typedHint, setTypedHint] = useState("");
+  const [typedReply, setTypedReply] = useState<{ id: string; text: string } | null>(null);
   const [petPosition, setPetPosition] = useState<{ left: number; top: number } | null>(null);
   const [wanderingEnabled, setWanderingEnabled] = useState(true);
   const [isPetHovered, setIsPetHovered] = useState(false);
   const [isPetDragging, setIsPetDragging] = useState(false);
+  const [isPageScrolling, setIsPageScrolling] = useState(false);
+  const [facingLeft, setFacingLeft] = useState(false);
   const petRef = useRef<HTMLDivElement>(null);
   const petDialogueRef = useRef<HTMLDivElement>(null);
   const petPositionRef = useRef(petPosition);
+  const scrollTimerRef = useRef<number | null>(null);
+  const pageScrollActiveRef = useRef(false);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number; moved: boolean } | null>(null);
   const draggedRef = useRef(false);
   petPositionRef.current = petPosition;
@@ -104,6 +111,16 @@ export default function AIChatBot() {
   }, [isOpen]);
 
   useEffect(() => {
+    if (!petConversationOpen) {
+      setShowPetGreeting(false);
+      return;
+    }
+    setShowPetGreeting(true);
+    const timer = window.setTimeout(() => setShowPetGreeting(false), 1500);
+    return () => window.clearTimeout(timer);
+  }, [petConversationOpen]);
+
+  useEffect(() => {
     try {
       const saved = window.localStorage.getItem("neo-universe-pet-position");
       if (saved) {
@@ -126,7 +143,7 @@ export default function AIChatBot() {
   // Neo strolls to new places in the viewport, pauses on hover or while dragged,
   // and honors the browser's reduced-motion preference.
   useEffect(() => {
-    if (isOpen || petConversationOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (isOpen || petConversationOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || isPageScrolling || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const hints = ["Neo có thể giúp bạn tìm món hàng Nhật đó!", "Chạm vào Neo để bắt đầu tư vấn nhé.", "Neo đang ở đây nếu bạn cần hỗ trợ."];
     let actionTimer: number;
@@ -147,8 +164,9 @@ export default function AIChatBot() {
           nextLeft = (nextLeft + maxLeft / 2) % maxLeft;
           nextTop = nextTop < window.innerHeight / 2 ? maxTop : 80;
         }
+        setFacingLeft(nextLeft < current.left);
         setPetPosition({ left: Math.min(maxLeft, nextLeft), top: Math.min(maxTop, nextTop) });
-        setAmbientAnimation("move");
+        setAmbientAnimation("walk");
 
         if (Math.random() > 0.72) {
           setAmbientHint(hints[Math.floor(Math.random() * hints.length)]);
@@ -169,7 +187,7 @@ export default function AIChatBot() {
       window.clearTimeout(settleTimer);
       window.clearTimeout(hintTimer);
     };
-  }, [isOpen, petConversationOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging]);
+  }, [isOpen, petConversationOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging, isPageScrolling]);
 
   const clampPetPosition = (left: number, top: number) => {
     const width = petRef.current?.offsetWidth ?? 120;
@@ -188,6 +206,54 @@ export default function AIChatBot() {
     window.addEventListener("resize", keepPetInViewport);
     return () => window.removeEventListener("resize", keepPetInViewport);
   }, []);
+
+  useEffect(() => {
+    const onPageScroll = () => {
+      if (!petVisible || isOpen || petConversationOpen || isPetDragging) return;
+      setIsPageScrolling(true);
+      setAmbientHint("Neo đang theo dõi trang cùng bạn!");
+      if (!pageScrollActiveRef.current && petRef.current) {
+        const rect = petRef.current.getBoundingClientRect();
+        const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
+        const target = clampPetPosition(current.left + (current.left > window.innerWidth / 2 ? -52 : 52), current.top - 18);
+        setFacingLeft(target.left < current.left);
+        setPetPosition(target);
+        setAmbientAnimation("walk");
+      }
+      pageScrollActiveRef.current = true;
+      if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = window.setTimeout(() => {
+        pageScrollActiveRef.current = false;
+        setIsPageScrolling(false);
+        setAmbientAnimation("idle");
+        setAmbientHint("");
+        scrollTimerRef.current = null;
+      }, 1500);
+    };
+    window.addEventListener("scroll", onPageScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onPageScroll);
+      if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+      scrollTimerRef.current = null;
+      pageScrollActiveRef.current = false;
+      setIsPageScrolling(false);
+    };
+  }, [isOpen, petConversationOpen, petVisible, isPetDragging]);
+
+  useEffect(() => {
+    if (!ambientHint) {
+      setTypedHint("");
+      return;
+    }
+    let cursor = 0;
+    setTypedHint("");
+    const timer = window.setInterval(() => {
+      cursor = Math.min(ambientHint.length, cursor + 2);
+      setTypedHint(ambientHint.slice(0, cursor));
+      if (cursor >= ambientHint.length) window.clearInterval(timer);
+    }, 28);
+    return () => window.clearInterval(timer);
+  }, [ambientHint]);
 
   useEffect(() => {
     if (!petConversationOpen) {
@@ -231,7 +297,8 @@ export default function AIChatBot() {
     drag.moved = true;
     draggedRef.current = true;
     setIsPetDragging(true);
-    setAmbientAnimation("move");
+    setAmbientAnimation("walk");
+    if (deltaX !== 0) setFacingLeft(deltaX < 0);
     setAmbientHint("Neo đã tới chỗ mới!");
     setPetPosition(clampPetPosition(drag.left + deltaX, drag.top + deltaY));
   };
@@ -252,32 +319,52 @@ export default function AIChatBot() {
   const latestAssistantMessage = [...messages].reverse().find(
     (message) => message.sender === "bot" && message.id !== "welcome-1"
   );
+  const latestBotMessage = [...messages].reverse().find((message) => message.sender === "bot");
+
+  useEffect(() => {
+    if (isOpen || petConversationOpen || !petVisible || !latestAssistantMessage) return;
+    const speech = latestAssistantMessage.text
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/https?:\/\/\S+/g, "")
+      .replace(/[#*_`>]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const preview = speech.length > 112 ? `${speech.slice(0, 109).trimEnd()}…` : speech;
+    if (!preview) return;
+    setAmbientHint(preview);
+    const timer = window.setTimeout(() => setAmbientHint(""), 7000);
+    return () => window.clearTimeout(timer);
+  }, [isOpen, petConversationOpen, petVisible, latestAssistantMessage?.id]);
+
+  useEffect(() => {
+    if (!(isOpen || petConversationOpen) || !latestBotMessage) return;
+    const response = latestBotMessage;
+    let cursor = 0;
+    const chunkSize = Math.max(2, Math.ceil(response.text.length / 80));
+    setTypedReply({ id: response.id, text: "" });
+    const timer = window.setInterval(() => {
+      cursor = Math.min(response.text.length, cursor + chunkSize);
+      setTypedReply({ id: response.id, text: response.text.slice(0, cursor) });
+      if (cursor >= response.text.length) window.clearInterval(timer);
+    }, 24);
+    return () => window.clearInterval(timer);
+  }, [isOpen, petConversationOpen, latestBotMessage?.id]);
+
   const responseAnimation = (text: string): NeoUniverseAnimation => {
     if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
     if (/đề xuất|gợi ý|nên chọn|phù hợp nhất|khuyên chọn/i.test(text)) return "recommend";
-    if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "product";
+    if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "presentation";
     if (/\?\s*$/.test(text.trim())) return "ask";
     return "explain";
   };
-  const petAnimation: NeoUniverseAnimation = !isOpen
-    ? petConversationOpen
-      ? loading || imageAnalyzing
-        ? "analyze"
-        : inputMessage.trim()
-          ? "listen"
-        : latestAssistantMessage
-          ? responseAnimation(latestAssistantMessage.text)
-          : "listen"
-      : ambientAnimation
-    : showGreetingAnimation
-      ? "ask"
-      : imageAnalyzing || loading
-        ? "analyze"
-        : inputMessage.trim()
-          ? "listen"
-        : latestAssistantMessage
-          ? responseAnimation(latestAssistantMessage.text)
-          : "listen";
+  const petAnimation: NeoUniverseAnimation = (() => {
+    if (!isOpen && !petConversationOpen) return ambientAnimation;
+    if (petConversationOpen && showPetGreeting) return "ask";
+    if (isOpen && showGreetingAnimation) return "ask";
+    if (imageAnalyzing || loading) return "analyze";
+    if (inputMessage.trim()) return "listen";
+    return latestAssistantMessage ? responseAnimation(latestAssistantMessage.text) : "listen";
+  })();
 
   const handlePersonalityChange = (newP: AIPersonality) => {
     setPersonality(newP);
@@ -625,6 +712,13 @@ export default function AIChatBot() {
     });
   };
 
+  const renderMessageContent = (message: Message) => {
+    if (message.sender === "bot" && typedReply?.id === message.id && typedReply.text.length < message.text.length) {
+      return <span className="whitespace-pre-wrap">{typedReply.text}<span className="ml-0.5 animate-pulse text-banana-600">▍</span></span>;
+    }
+    return renderFormattedMessage(message.text);
+  };
+
   const quickPrompts = [
     { label: "🎮 Máy chơi game Nhật 3tr", query: "Cho tôi xem link và hình tham khảo các dòng máy chơi game nội địa Nhật trong tầm giá 3 triệu" },
     { label: "👔 Hướng dẫn chọn Size", query: "Tư vấn cách chọn size quần áo Uniqlo và giày dép Nhật Bản" },
@@ -638,10 +732,10 @@ export default function AIChatBot() {
       {!isOpen && (petVisible ? (
         <div
           ref={petRef}
-          className="pointer-events-none fixed z-50"
+          className="pointer-events-none fixed z-[9999]"
           style={{ ...(petPosition ? { left: petPosition.left, top: petPosition.top } : { right: 12, bottom: 12 }), transition: isPetDragging ? "none" : "left 2.1s cubic-bezier(.2,.8,.2,1), top 2.1s cubic-bezier(.2,.8,.2,1)" }}
         >
-          {ambientHint && <div className="absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{ambientHint}</div>}
+          {ambientHint && !petConversationOpen && <div role="status" className="pointer-events-none absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{typedHint}<span className="animate-pulse">▍</span></div>}
           <button
             id="ai-chat-toggle-btn"
             onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setPetConversationOpen(true); }}
@@ -649,14 +743,14 @@ export default function AIChatBot() {
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
             onPointerCancel={handlePetPointerUp}
-            onPointerEnter={() => { setIsPetHovered(true); if (ambientAnimation === "idle") setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
+            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
             onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
             className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"
           >
             <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
-              <NeoUniverseSprite animation={petAnimation} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)] group-hover:drop-shadow-[0_8px_12px_rgba(15,23,42,0.38)]" />
+              <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)] group-hover:drop-shadow-[0_8px_12px_rgba(15,23,42,0.38)]" />
               <span className="absolute right-0 top-2 flex h-4 w-4">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
                 <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
@@ -670,12 +764,12 @@ export default function AIChatBot() {
             <section
               role="dialog"
               aria-label="Trò chuyện trực tiếp với Neo Universe"
-              className="pointer-events-auto fixed z-[60] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
+              className="pointer-events-auto fixed z-[10000] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
               style={{ left: petConversationPosition.left, top: petConversationPosition.top, width: petConversationPosition.width }}
             >
               <header className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-navy-950 to-navy-800 px-3 py-2.5 text-white">
                 <span className="h-9 w-9 shrink-0 overflow-hidden rounded-xl bg-white/10">
-                  <NeoUniverseSprite animation={petAnimation} className="h-full w-full" />
+                  <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full" />
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold">Neo Universe</p>
@@ -691,7 +785,7 @@ export default function AIChatBot() {
                 {messages.slice(-5).map((message) => (
                   <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
-                      <div className="break-words">{renderFormattedMessage(message.text)}</div>
+                      <div className="break-words">{renderMessageContent(message)}</div>
                     </div>
                   </div>
                 ))}
@@ -733,12 +827,12 @@ export default function AIChatBot() {
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-50 rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
+        <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-[9999] rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
       ))}
 
       {/* Chat Window Panel */}
       {isOpen && (
-        <div className="fixed bottom-20 right-2 sm:right-6 z-50 w-[96vw] sm:w-[500px] h-[640px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-20 right-2 sm:right-6 z-[9999] w-[96vw] sm:w-[500px] h-[640px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
           
           {/* Header */}
           <div className="bg-navy-900 text-white p-4 border-b border-slate-800">
@@ -826,7 +920,7 @@ export default function AIChatBot() {
                     </div>
                   )}
                   <div className="whitespace-pre-line space-y-2 leading-relaxed">
-                    {renderFormattedMessage(msg.text)}
+                    {renderMessageContent(msg)}
                   </div>
                   <span
                     className={`block text-[9px] mt-1 text-right ${
