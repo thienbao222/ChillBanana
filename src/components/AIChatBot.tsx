@@ -280,15 +280,32 @@ export default function AIChatBot() {
     }
   };
   const parseInlineFormatting = (text: string) => {
-    const tokenRegex = /(!\[.*?\]\([\w:\/\.\-\?\=]+\)|\[.*?\]\([\w:\/\.\-\?\=]+\)|\*\*.*?\*\*)/g;
+    // Keep URL query strings intact (for example %E9..., &, + and # in marketplace searches).
+    // Also linkify raw URLs because model output is not always consistent about Markdown.
+    const tokenRegex = /(!\[[^\]]*\]\(https?:\/\/[^\s)]+\)|\[[^\]]*\]\((?:https?:\/\/[^\s)]+|\/(?!\/)[^\s)]*)\)|\*\*.*?\*\*|https?:\/\/[^\s<>()\]]+)/g;
     const parts = text.split(tokenRegex);
+
+    const getSafeLink = (rawUrl: string) => {
+      if (rawUrl.startsWith("/") && !rawUrl.startsWith("//") && !rawUrl.includes("\\")) {
+        return { href: rawUrl, external: false };
+      }
+      try {
+        const parsedUrl = new URL(rawUrl);
+        if (parsedUrl.protocol === "https:" || parsedUrl.protocol === "http:") {
+          return { href: parsedUrl.toString(), external: true };
+        }
+      } catch {
+        // Render malformed or unsupported links as plain text below.
+      }
+      return null;
+    };
 
     return parts.map((chunk, idx) => {
       if (!chunk) return null;
 
       // 1. Ảnh Markdown: ![alt](url)
       if (chunk.startsWith("![") && chunk.endsWith(")")) {
-        const imgMatch = chunk.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/);
+        const imgMatch = chunk.match(/^!\[([^\]]*)\]\((https?:\/\/[^\s)]+)\)$/);
         if (imgMatch) {
           const alt = imgMatch[1];
           const url = imgMatch[2];
@@ -298,30 +315,42 @@ export default function AIChatBot() {
 
       // 2. Link Markdown: [text](url)
       if (chunk.startsWith("[") && chunk.endsWith(")")) {
-        const linkMatch = chunk.match(/\[(.*?)\]\(([\w:\/\.\-\?\=]+)\)/);
+        const linkMatch = chunk.match(/^\[([^\]]*)\]\((https?:\/\/[^\s)]+|\/(?!\/)[^\s)]*)\)$/);
         if (linkMatch) {
           const linkText = linkMatch[1];
-          const linkUrl = linkMatch[2];
+          const safeLink = getSafeLink(linkMatch[2]);
+          if (!safeLink) return <span key={idx}>{chunk}</span>;
           return (
             <a
               key={idx}
-              href={linkUrl}
-              target={linkUrl.startsWith("http") ? "_blank" : "_self"}
-              rel={linkUrl.startsWith("http") ? "noopener noreferrer" : undefined}
-              className={`inline-flex items-center underline font-semibold mx-1 px-1.5 py-0.5 rounded transition-colors ${
+              href={safeLink.href}
+              target={safeLink.external ? "_blank" : undefined}
+              rel={safeLink.external ? "noopener noreferrer nofollow" : undefined}
+              className={`inline-flex max-w-full items-center underline font-semibold mx-1 px-1.5 py-0.5 rounded transition-colors ${
                 linkText.includes("ĐẶT CỌC") || linkText.includes("MUA") 
                   ? "bg-banana-500 hover:bg-banana-600 text-navy-950 no-underline shadow-sm" 
                   : "bg-banana-50 text-banana-700 hover:text-banana-800"
               }`}
             >
-              <span>{linkText}</span>
-              {linkUrl.startsWith("http") && <span className="text-[10px] ml-0.5">↗</span>}
+              <span className="break-words">{linkText}</span>
+              {safeLink.external && <span aria-hidden="true" className="text-[10px] ml-0.5 shrink-0">↗</span>}
             </a>
           );
         }
       }
 
-      // 3. Bold text: **text**
+      // 3. URL thuần cũng bấm được; chỉ cho phép HTTP(S), không render javascript: hay data:.
+      if (/^https?:\/\//i.test(chunk)) {
+        const safeLink = getSafeLink(chunk);
+        if (safeLink) {
+          return <a key={idx} href={safeLink.href} target="_blank" rel="noopener noreferrer nofollow"
+            className="break-all font-medium text-sky-700 underline decoration-sky-300 underline-offset-2 hover:text-sky-900">
+            {chunk}<span aria-hidden="true" className="ml-1 text-[10px]">↗</span>
+          </a>;
+        }
+      }
+
+      // 4. Bold text: **text**
       if (chunk.startsWith("**") && chunk.endsWith("**") && chunk.length >= 4) {
         return (
           <strong key={idx} className="font-semibold text-navy-950">
@@ -330,7 +359,7 @@ export default function AIChatBot() {
         );
       }
 
-      // 4. Plain text
+      // 5. Plain text
       return <span key={idx}>{chunk}</span>;
     });
   };
@@ -380,14 +409,13 @@ export default function AIChatBot() {
         );
       }
 
+      const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("* ");
       return (
         <div
           key={lIdx}
-          className={`min-h-[1.25rem] leading-relaxed ${
-            trimmed.startsWith("- ") || trimmed.startsWith("* ") ? "pl-2" : ""
-          }`}
+          className={`min-h-[1.25rem] leading-relaxed ${isBullet ? "flex items-start gap-1.5 pl-1" : ""}`}
         >
-          {parseInlineFormatting(line)}
+          {isBullet ? <><span aria-hidden="true" className="text-banana-600">•</span><span>{parseInlineFormatting(trimmed.slice(2))}</span></> : parseInlineFormatting(line)}
         </div>
       );
     });
