@@ -4,7 +4,6 @@ import React, { useState, useEffect } from "react";
 import {
   RefreshCw,
   ExternalLink,
-  Trash2,
   Edit3,
   X,
   CheckCircle,
@@ -20,6 +19,17 @@ import {
 import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
+import { ORDER_STATUS_FLOW } from "@/lib/order-policy";
+
+const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
+  PENDING_DEPOSIT: "1. Chờ cọc",
+  PURCHASING_JP: "2. Đang mua hàng tại Nhật",
+  WAREHOUSE_JP: "3. Đã nhập kho Nhật",
+  IN_TRANSIT_AIR: "4. Đang vận chuyển quốc tế",
+  WAREHOUSE_VN: "5. Đã nhập kho Việt Nam",
+  LOCAL_DELIVERY: "6. Đang giao chặng cuối",
+  COMPLETED: "7. Giao hàng thành công",
+};
 
 interface OrderManagementTabProps {
   adminViewMode: "dashboard" | "operations";
@@ -77,15 +87,21 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
 
   const openUpdateModal = (order: StoredOrder) => {
     setSelectedOrder(order);
-    setNewStatus(order.status);
+    setNewStatus(order.status as OrderStatus);
     setJpTrack(order.jpDomesticTrack || "");
     setVnTrack(order.vnDomesticTrack || "");
 
     if (order.status === "PENDING_DEPOSIT") {
-      setNewStatus("PURCHASING_JP");
-      setUpdateTitle("Đã nhận cọc - Đang mua hàng tại Tokyo");
-      setUpdateDesc("Nhân viên văn phòng Tokyo đã tiến hành order hàng trực tiếp từ người bán.");
-      setUpdateLocation("Tokyo, Nhật Bản");
+      if (order.isPriceVerified) {
+        setNewStatus("PURCHASING_JP");
+        setUpdateTitle("Đã nhận cọc - Đang mua hàng tại Tokyo");
+        setUpdateDesc("Nhân viên văn phòng Tokyo đã tiến hành order hàng trực tiếp từ người bán.");
+        setUpdateLocation("Tokyo, Nhật Bản");
+      } else {
+        setUpdateTitle("Đơn đang chờ xác minh báo giá");
+        setUpdateDesc("Vui lòng duyệt giá trước khi chuyển sang bước mua hàng.");
+        setUpdateLocation("Việt Nam");
+      }
     } else if (order.status === "PURCHASING_JP") {
       setNewStatus("WAREHOUSE_JP");
       setUpdateTitle("Đã nhập kho Tokyo");
@@ -192,28 +208,6 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     }
   };
 
-  const handleDeleteOrder = async (orderCode: string) => {
-    const confirmed = window.confirm(
-      `CẢNH BÁO: Bạn có chắc chắn muốn XÓA VĨNH VIỄN đơn hàng #${orderCode} khỏi cơ sở dữ liệu?\nThao tác này sẽ dọn sạch dữ liệu và không thể hoàn tác!`
-    );
-    if (!confirmed) return;
-
-    try {
-      const res = await fetch(`/api/orders/${orderCode}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        adminToast.error(`Đã xóa vĩnh viễn đơn #${orderCode}!`);
-        fetchOrders();
-      } else {
-        alert("Lỗi khi xóa đơn: " + (data.error || "Vui lòng thử lại"));
-      }
-    } catch {
-      adminToast.error("Lỗi kết nối máy chủ khi xóa");
-    }
-  };
-
   const handleVerifyPrice = async (order: StoredOrder) => {
     const priceInput = window.prompt(`Nhập giá chốt bằng JPY cho đơn ${order.orderCode}:`, String(order.priceJpy));
     if (priceInput === null) return;
@@ -285,6 +279,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
       ord.productName.toLowerCase().includes(term);
     return matchesStatus && matchesSearch;
   });
+
+  const editableStatuses = selectedOrder
+    ? ORDER_STATUS_FLOW.filter((status, index) =>
+        status === selectedOrder.status ||
+        (status === ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(selectedOrder.status as (typeof ORDER_STATUS_FLOW)[number]) + 1] &&
+          (status !== "PURCHASING_JP" || selectedOrder.isPriceVerified))
+      )
+    : [];
 
   const totalRevenue = orders.reduce((acc, curr) => acc + curr.totalVnd, 0);
   const actualRevenue = orders
@@ -491,7 +493,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                           </td>
                           <td className="p-4 text-right">
                             <div className="flex items-center justify-end space-x-1.5">
-                              {ord.status !== "CANCELLED" && (
+                              {ord.status !== "CANCELLED" && ord.status !== "COMPLETED" && (
                                 <>
                                   {!ord.isPriceVerified && ord.status === "PENDING_DEPOSIT" && (
                                     <button
@@ -521,13 +523,6 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                                   </button>
                                 </>
                               )}
-                              <button
-                                onClick={() => handleDeleteOrder(ord.orderCode)}
-                                title="Xóa vĩnh viễn đơn rác / test"
-                                className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
                             </div>
                           </td>
                         </tr>
@@ -643,25 +638,20 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                             >
                               In Phiếu
                             </button>
-                            <button
-                              onClick={() => openUpdateModal(ord)}
-                              className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
-                            >
-                              Chi Tiết
-                            </button>
+                            {ord.status !== "COMPLETED" && (
+                              <button
+                                onClick={() => openUpdateModal(ord)}
+                                className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-semibold"
+                              >
+                                Chi Tiết
+                              </button>
+                            )}
                             <button
                               onClick={() => openCancelModal(ord)}
                               title="Hủy đơn"
                               className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-[10px]"
                             >
                               <Ban className="w-3 h-3" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteOrder(ord.orderCode)}
-                              title="Xóa đơn rác"
-                              className="px-2 py-1 bg-slate-100 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded-lg text-[10px]"
-                            >
-                              <Trash2 className="w-3 h-3" />
                             </button>
                           </div>
                         </div>
@@ -983,13 +973,9 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                   onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-banana-500"
                 >
-                  <option value="PENDING_DEPOSIT">1. Chờ cọc (Pending Deposit)</option>
-                  <option value="PURCHASING_JP">2. Đang mua hàng tại Nhật (Tokyo)</option>
-                  <option value="WAREHOUSE_JP">3. Đã nhập kho Tokyo (Cân &amp; Đóng gói)</option>
-                  <option value="IN_TRANSIT_AIR">4. Đang vận chuyển quốc tế Tokyo ⇄ VN</option>
-                  <option value="WAREHOUSE_VN">5. Đã nhập kho phân phối Việt Nam</option>
-                  <option value="LOCAL_DELIVERY">6. Đang giao hàng chặng cuối (GHTK/GHN)</option>
-                  <option value="COMPLETED">7. Giao hàng thành công</option>
+                  {editableStatuses.map((status) => (
+                    <option key={status} value={status}>{ORDER_STATUS_LABELS[status]}</option>
+                  ))}
                 </select>
               </div>
 

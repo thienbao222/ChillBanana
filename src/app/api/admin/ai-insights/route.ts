@@ -21,25 +21,10 @@ export async function GET(req: NextRequest) {
     const chatSessions = await prisma.chatSession.findMany({
       take: 100,
       orderBy: { createdAt: "desc" },
-      include: { messages: true },
+      include: { messages: { select: { role: true } } },
     });
 
-    if (chatSessions.length === 0) {
-      return NextResponse.json({
-        success: true,
-        insights: {
-          marketOverview: "Chưa có dữ liệu chat để phân tích. Hãy khuyến khích khách hàng sử dụng Chatbot AI trên trang chủ.",
-          topDemandProducts: [],
-          groupBuySuggestions: [],
-          riskAlerts: [],
-          actionItems: ["Thêm sản phẩm mới vào danh mục", "Chia sẻ link web cho khách hàng"],
-        },
-        generatedAt: new Date().toISOString(),
-      });
-    }
-
     // Thu thập tin nhắn user
-    const userMessages: string[] = [];
     let totalMessages = 0;
     const topicCounts: Record<string, number> = {};
     const keywordSet: Record<string, number> = {};
@@ -47,7 +32,6 @@ export async function GET(req: NextRequest) {
     chatSessions.forEach((s) => {
       s.messages.forEach((m) => {
         totalMessages++;
-        if (m.role === "user") userMessages.push(m.content);
       });
       if (s.topic) topicCounts[s.topic] = (topicCounts[s.topic] || 0) + 1;
       if (s.detectedKeywords) {
@@ -57,40 +41,50 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    // 2. Lấy Orders
-    const orders = await prisma.order.findMany({
-      take: 100,
-      orderBy: { createdAt: "desc" },
-    });
+    // Keep financial totals complete, even when the order history grows beyond the
+    // recent chat sample used for demand trends.
+    const [totalOrderCount, orderValue, paidDeposits, productGroups, categoryGroups] = await Promise.all([
+      prisma.order.count(),
+      prisma.order.aggregate({
+        where: { status: { not: "CANCELLED" } },
+        _sum: { totalVnd: true },
+      }),
+      prisma.order.aggregate({
+        where: { paymentStatus: { notIn: ["UNPAID", "REFUNDED"] } },
+        _sum: { depositAmountVnd: true },
+      }),
+      prisma.order.groupBy({
+        by: ["productName"],
+        where: { status: { not: "CANCELLED" } },
+        _count: { _all: true },
+        orderBy: { _count: { productName: "desc" } },
+        take: 10,
+      }),
+      prisma.order.groupBy({
+        by: ["category"],
+        where: { status: { not: "CANCELLED" } },
+        _count: { _all: true },
+      }),
+    ]);
 
-    const totalRevenue = orders.reduce((acc, o) => acc + o.totalVnd, 0);
-    const depositedRevenue = orders
-      .filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
-      .reduce((acc, o) => acc + o.depositAmountVnd, 0);
-
-    const productCounts: Record<string, number> = {};
-    const categoryCounts: Record<string, number> = {};
-    orders.filter((o) => o.status !== "CANCELLED").forEach((o) => {
-      const name = o.productName.trim();
-      productCounts[name] = (productCounts[name] || 0) + 1;
-      categoryCounts[o.category] = (categoryCounts[o.category] || 0) + 1;
-    });
-
-    const topProducts = Object.entries(productCounts).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const totalRevenue = orderValue._sum.totalVnd || 0;
+    const depositedRevenue = paidDeposits._sum.depositAmountVnd || 0;
+    const topProducts = productGroups.map((group) => [group.productName, group._count._all] as [string, number]);
+    const categoryCounts = Object.fromEntries(categoryGroups.map((group) => [group.category, group._count._all]));
     const topKeywords = Object.entries(keywordSet).sort((a, b) => b[1] - a[1]).slice(0, 15);
-    const sampledMessages = userMessages.slice(0, 40).join("\n- ");
 
     // 3. Gửi Gemini phân tích
     const prompt = `Bạn là chuyên gia phân tích kinh doanh thương mại điện tử cho "ChillBanana" - Dịch vụ mua hộ hàng nội địa Nhật Bản tại Việt Nam.
 
 DỮ LIỆU THỰC TẾ:
-- ${chatSessions.length} phiên chat AI gần nhất (${totalMessages} tin nhắn)
+- ${chatSessions.length} phiên chat AI gần nhất (${totalMessages} tin nhắn trong mẫu)
 - Chủ đề được hỏi nhiều: ${JSON.stringify(Object.entries(topicCounts).sort((a, b) => b[1] - a[1]).slice(0, 7))}
 - Từ khóa hot: ${JSON.stringify(topKeywords)}
-- Mẫu tin nhắn khách: \n- ${sampledMessages}
-- ${orders.length} đơn hàng gần nhất. Tổng giá trị: ${totalRevenue.toLocaleString()} VND. Cọc thực thu: ${depositedRevenue.toLocaleString()} VND.
+- ${totalOrderCount} đơn hàng toàn bộ lịch sử. Tổng giá trị ước tính của các đơn chưa hủy: ${totalRevenue.toLocaleString()} VND. Cọc đã ghi nhận: ${depositedRevenue.toLocaleString()} VND.
 - Mặt hàng đặt nhiều: ${JSON.stringify(topProducts)}
 - Phân bổ danh mục: ${JSON.stringify(categoryCounts)}
+
+Chỉ dựa vào các số liệu tổng hợp ở trên; không suy diễn rằng dữ liệu chat mẫu đại diện cho toàn bộ khách hàng.
 
 Trả về phân tích bằng tiếng Việt, dạng JSON hợp lệ với schema:
 {

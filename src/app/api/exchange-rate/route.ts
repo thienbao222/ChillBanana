@@ -17,9 +17,12 @@ export async function GET() {
         data: {
           rate: 172,
           roundedRate: 172,
+          previousRate: 172,
           changePercent: 0,
-          updatedAt: "Vừa xong",
-          source: "Tỷ giá tham chiếu",
+          updatedAt: "",
+          source: "Tỷ giá tham chiếu mặc định",
+          isFallback: true,
+          isStale: true,
         },
       },
       { status: 200 }

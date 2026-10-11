@@ -574,7 +574,7 @@ export default function OrderCalculator() {
                   {calc.isUnderMinOrder ? (
                     <>
                       <p className="font-bold text-amber-900">
-                        Đơn hàng hiện tại ({calc.totalVnd.toLocaleString("vi-VN")} đ) chưa đạt hạn mức tối thiểu ({MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")} đ)
+                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")} đ)
                       </p>
                       <p className="text-slate-600">
                         👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm 25% cước vận chuyển quốc tế!

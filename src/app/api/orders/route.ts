@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
 import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
+import { MIN_ORDER_THRESHOLD_VND } from "@/lib/order-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -178,17 +179,15 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const priceJpy = Math.round(Number(body.priceJpy) || 0);
-    if (!priceJpy || priceJpy < 100) {
-      return NextResponse.json(
-        { error: "Giá sản phẩm tại Nhật không hợp lệ (tối thiểu 100 ¥)." },
-        { status: 400 }
-      );
-    }
-
     // BẢO MẬT: tỷ giá PHẢI do server tự lấy (live, có cache), không bao giờ tin
     // giá trị exchangeRate mà client gửi trong payload.
     const liveRateData = await fetchLiveExchangeRate();
+    if (liveRateData.isStale) {
+      return NextResponse.json(
+        { error: "Chưa lấy được tỷ giá mới để lập báo giá chính xác. Vui lòng thử lại sau ít phút." },
+        { status: 503 }
+      );
+    }
     const liveRate = liveRateData.roundedRate || liveRateData.rate || 172;
 
     // Khởi tạo mã đơn hàng
@@ -300,9 +299,17 @@ export async function POST(req: NextRequest) {
           verifiedProductName = body.productName || "Đơn mua hộ từ Nhật Bản";
         }
 
+        if (!Number.isSafeInteger(verifiedPriceJpy) || verifiedPriceJpy < 100) {
+          throw new Error("ORDER_PRICE_TOO_LOW");
+        }
+
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
         const productPriceVnd = Math.round(verifiedPriceJpy * liveRate);
         const serviceFeeVnd = productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0;
+        const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
+        if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
+          throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
+        }
 
         let shippingRate = 185000;
         if (body.isGroupBuy && verifiedWeightKg <= 0.5) {
@@ -312,7 +319,7 @@ export async function POST(req: NextRequest) {
 
         const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
 
-        const baseCost = productPriceVnd + serviceFeeVnd;
+        const baseCost = baseOrderCostVnd;
         const clientDeposit = Number(body.depositAmountVnd) || 0;
         const depositAmountVnd = (clientDeposit >= baseCost && baseCost > 0)
           ? baseCost
@@ -372,6 +379,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, order: createdDbOrder });
     } catch (dbErr: any) {
       console.error("Lưu đơn hàng vào Prisma thất bại:", dbErr);
+      if (dbErr.message === "ORDER_PRICE_TOO_LOW") {
+        return NextResponse.json({ error: "Tổng giá sản phẩm phải từ 100 ¥ trở lên." }, { status: 400 });
+      }
+      if (dbErr.message === `ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`) {
+        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
+      }
       if (dbErr.message && dbErr.message.startsWith("INSUFFICIENT_STOCK:")) {
         const productName = dbErr.message.split(":")[2] || "Sản phẩm này";
         return NextResponse.json(

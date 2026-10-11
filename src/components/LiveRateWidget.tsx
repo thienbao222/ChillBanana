@@ -18,10 +18,12 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
   const [rateData, setRateData] = useState<LiveRateData>({
     rate: 172,
     roundedRate: 172,
-    previousRate: 171.5,
-    changePercent: 0.29,
-    updatedAt: "Vừa xong",
-    source: "Tỷ giá liên ngân hàng",
+    previousRate: 172,
+    changePercent: 0,
+    updatedAt: "",
+    source: "Tỷ giá tham chiếu mặc định",
+    isFallback: true,
+    isStale: true,
   });
   const [loading, setLoading] = useState(false);
 
@@ -32,7 +34,7 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
       const json = await res.json();
       if (json.success && json.data) {
         setRateData(json.data);
-        if (onRateChange) {
+        if (onRateChange && !json.data.isStale) {
           onRateChange(json.data.roundedRate);
         }
       }
@@ -54,8 +56,8 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
     return (
       <div className="inline-flex items-center space-x-2 bg-navy-950/60 border border-slate-700/80 px-2.5 py-1 rounded-full text-[11px] text-white">
         <span className="flex h-2 w-2 relative">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          {!rateData.isStale && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
+          <span className={`relative inline-flex rounded-full h-2 w-2 ${rateData.isStale ? "bg-amber-500" : "bg-emerald-500"}`}></span>
         </span>
         <span className="font-semibold text-banana-300">
           1 JPY = {rateData.rate} VND
@@ -78,9 +80,9 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
     <div className="bg-gradient-to-br from-navy-900 via-navy-950 to-slate-900 p-4 rounded-2xl border border-slate-800 text-white shadow-md">
       <div className="flex items-center justify-between border-b border-slate-800 pb-2.5 mb-3">
         <div className="flex items-center space-x-2">
-          <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+          <Activity className={`w-4 h-4 ${rateData.isStale ? "text-amber-400" : "text-emerald-400 animate-pulse"}`} />
           <span className="text-xs font-bold uppercase tracking-wider text-banana-400">
-            Tỷ Giá Ngoại Tệ Thời Gian Thực
+            Tỷ Giá JPY Tham Khảo
           </span>
         </div>
         <button
@@ -88,7 +90,7 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
           className="text-[11px] text-slate-400 hover:text-white flex items-center space-x-1"
         >
           <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-          <span>Cập nhật ({rateData.updatedAt})</span>
+          <span>{loading ? "Đang cập nhật" : rateData.updatedAt ? `Cập nhật ${new Date(rateData.updatedAt).toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" })}` : "Chưa có tỷ giá trực tuyến"}</span>
         </button>
       </div>
 
@@ -107,8 +109,8 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
               {rateData.changePercent >= 0 ? `+${rateData.changePercent}%` : `${rateData.changePercent}%`}
             </span>
           </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Nguồn: {rateData.source} • Cập nhật trực tiếp
+          <p className={`text-[11px] mt-1 ${rateData.isStale ? "text-amber-300" : "text-slate-400"}`}>
+            {rateData.isStale ? "Không lấy được dữ liệu mới; đang hiển thị tỷ giá tham chiếu/cũ. Báo giá cần được kiểm tra lại." : `Nguồn: ${rateData.source} • Dữ liệu tham khảo`}
           </p>
         </div>
       </div>

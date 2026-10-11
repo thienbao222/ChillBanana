@@ -7,30 +7,37 @@ export interface LiveRateData {
   changePercent: number; // % Tăng giảm
   updatedAt: string;     // Thời điểm cập nhật
   source: string;        // Nguồn dữ liệu (Ngân hàng / Open Exchange API)
+  isFallback: boolean;
+  isStale: boolean;
 }
 
-let cachedRate: LiveRateData = {
+const FALLBACK_RATE: LiveRateData = {
   rate: 172,
   roundedRate: 172,
-  previousRate: 171.5,
-  changePercent: 0.29,
-  updatedAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+  previousRate: 172,
+  changePercent: 0,
+  updatedAt: "",
   source: "Tỷ giá tham chiếu mặc định",
+  isFallback: true,
+  isStale: true,
 };
 
+let cachedRate: LiveRateData = FALLBACK_RATE;
 let lastFetchTime = 0;
+let lastFetchSucceeded = false;
 const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 phút
 
 export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
   const now = Date.now();
   if (now - lastFetchTime < CACHE_DURATION_MS && cachedRate.rate > 0) {
-    return cachedRate;
+    return { ...cachedRate, isStale: !lastFetchSucceeded };
   }
 
   try {
     // Gọi API tỷ giá quốc tế trực tiếp miễn phí, cập nhật từng phút
     const res = await fetch("https://open.er-api.com/v6/latest/JPY", {
-      next: { revalidate: 600 },
+      cache: "no-store",
+      signal: AbortSignal.timeout(5000),
       headers: { "Accept": "application/json" },
     });
 
@@ -47,10 +54,13 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
           roundedRate: rounded,
           previousRate: cachedRate.rate,
           changePercent: change,
-          updatedAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+          updatedAt: new Date().toISOString(),
           source: "open.er-api.com",
+          isFallback: false,
+          isStale: false,
         };
         lastFetchTime = now;
+        lastFetchSucceeded = true;
         return cachedRate;
       }
     }
@@ -58,6 +68,8 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
     console.warn("Live Exchange Rate API call failed, using cached/default:", err);
   }
 
-  // Fallback an toàn nếu mất mạng
-  return cachedRate;
+  // Keep the last known rate if available, but clearly mark it as stale.
+  lastFetchTime = now;
+  lastFetchSucceeded = false;
+  return { ...cachedRate, isStale: true };
 }

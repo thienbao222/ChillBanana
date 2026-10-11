@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
+import { isNextOrderStatus } from "@/lib/order-policy";
 
 function isAdmin(req: NextRequest): boolean {
   return isAdminRequest(req);
@@ -104,6 +105,9 @@ export async function PATCH(
     if (status !== undefined && !allowedStatuses.has(status)) {
       return NextResponse.json({ error: "Trạng thái đơn hàng không hợp lệ." }, { status: 400 });
     }
+    if (status === "CANCELLED" && action !== "cancel") {
+      return NextResponse.json({ error: "Hãy dùng thao tác hủy đơn để hoàn kho và ghi nhận lý do hủy." }, { status: 400 });
+    }
     if (paymentStatus !== undefined && !["UNPAID", "DEPOSITED_50", "PAID_100", "REFUNDED"].includes(paymentStatus)) {
       return NextResponse.json({ error: "Trạng thái thanh toán không hợp lệ." }, { status: 400 });
     }
@@ -173,6 +177,14 @@ export async function PATCH(
           by === "CUSTOMER" ? "Khách hàng" : "Hệ thống Quản trị ChillBanana";
       }
 
+    }
+
+    const requestedStatus = status || existingOrder.status;
+    if (requestedStatus !== existingOrder.status && requestedStatus !== "CANCELLED" && !isNextOrderStatus(existingOrder.status, requestedStatus)) {
+      return NextResponse.json({ error: "Đơn chỉ được chuyển sang bước kế tiếp trong quy trình. Hãy kiểm tra lại trạng thái hiện tại." }, { status: 409 });
+    }
+    if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP" && !existingOrder.isPriceVerified) {
+      return NextResponse.json({ error: "Cần xác minh báo giá trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
     }
 
     const logStatus = status || existingOrder.status;
@@ -302,41 +314,9 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    if (!isAdmin(req)) return NextResponse.json({ error: 'Không có quyền xóa đơn hàng.' }, { status: 403 });
-    const orderCode = params.id;
-
-    // Xóa trong CSDL Prisma (TrackingLog sẽ cascade xóa tự động)
-    const existingOrder = await prisma.order.findFirst({
-      where: {
-        OR: [{ orderCode }, { id: orderCode }],
-      },
-    });
-
-    if (!existingOrder) {
-      return NextResponse.json(
-        { error: "Không tìm thấy đơn hàng để xóa." },
-        { status: 404 }
-      );
-    }
-
-    await prisma.order.delete({
-      where: { id: existingOrder.id },
-    });
-
-    return NextResponse.json({
-      success: true,
-      message: `Đã xóa vĩnh viễn đơn hàng #${existingOrder.orderCode} thành công.`,
-    });
-  } catch (error) {
-    console.error("Lỗi khi xóa đơn hàng khỏi hệ thống:", error);
-    return NextResponse.json(
-      { error: "Lỗi khi xóa đơn hàng khỏi hệ thống" },
-      { status: 500 }
-    );
-  }
+export async function DELETE() {
+  return NextResponse.json(
+    { error: "Hệ thống không xóa vĩnh viễn đơn hàng để bảo toàn lịch sử và tồn kho. Hãy hủy đơn nếu cần dừng xử lý." },
+    { status: 405, headers: { Allow: "GET, PATCH" } }
+  );
 }

@@ -1,9 +1,10 @@
 import type { CuratedProduct, NewsItem, ProductCategory } from "@/types";
 import curatedProducts from "./curated-products.json";
+import { MIN_ORDER_THRESHOLD_VND } from "./order-policy";
 
 export const DEFAULT_EXCHANGE_RATE = 172; // 1 JPY = 172 VND
 export const AIR_SHIPPING_PER_KG = 185000; // 185.000đ / kg
-export const MIN_ORDER_THRESHOLD_VND = 300000; // Hạn mức tối thiểu 300k VND
+export { MIN_ORDER_THRESHOLD_VND } from "./order-policy";
 export const SERVICE_FEE_RATE = 0.04; // 4% phí mua hộ & bảo hiểm trọn gói
 
 export const CATEGORIES: ProductCategory[] = [
