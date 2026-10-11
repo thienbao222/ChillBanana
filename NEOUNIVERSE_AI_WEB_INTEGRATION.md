@@ -66,9 +66,10 @@ Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển độn
 
 ### Nâng cấp trải nghiệm pet trên website
 
-- Dùng thêm animation `move` và `ask-alt`; Neo tự đi chuyển nhẹ trong vùng góc dưới màn hình, thỉnh thoảng chào và hiện lời mời hỗ trợ.
+- Dùng thêm animation `move` và `ask-alt`; Neo tự đi đến các vị trí ngẫu nhiên trong viewport, thỉnh thoảng chào và hiện lời mời hỗ trợ.
+- Có thể kéo Neo bằng chuột hoặc cảm ứng đến vị trí tùy ý trong cửa sổ; vị trí được lưu trên thiết bị. Có nút tạm dừng/tiếp tục đi dạo, đưa Neo về góc mặc định, ẩn và hiện lại.
 - Hover vào Neo kích hoạt động tác chào; nhấn Neo mở chatbot. Khi chatbot mở, nhân vật vẫn xuất hiện ở phần đầu khung chat.
-- Có nút ẩn pet và nút hiện lại; các chuyển động tự phát dừng khi người dùng bật `prefers-reduced-motion`.
+- Chuyển động tự phát dừng khi người dùng bật `prefers-reduced-motion`.
 - Đây là mô phỏng pet bằng sprite sheet và chuyển động CSS trong viewport website. Chuyển động của nhân vật vẫn giới hạn theo các khung hình đã xuất; muốn xoay người, nhìn theo con trỏ, cử động từng bộ phận hoặc phản ứng tùy ý như model rig thì cần model Live2D/Spine có rig và các animation tương ứng.
 
 ## Trạng thái hiện tại

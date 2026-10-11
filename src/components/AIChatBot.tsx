@@ -7,7 +7,10 @@ import {
   X,
   ShieldAlert,
   ImagePlus,
-  Loader2
+  Loader2,
+  Pause,
+  Play,
+  RotateCcw
 } from "lucide-react";
 import { AIPersonality } from "@/types";
 import NeoUniverseSprite, { NeoUniverseAnimation } from "@/components/NeoUniverseSprite";
@@ -68,7 +71,15 @@ export default function AIChatBot() {
   const [petVisible, setPetVisible] = useState(true);
   const [ambientAnimation, setAmbientAnimation] = useState<NeoUniverseAnimation>("idle");
   const [ambientHint, setAmbientHint] = useState("");
-  const [petOffset, setPetOffset] = useState({ x: 0, y: 0 });
+  const [petPosition, setPetPosition] = useState<{ left: number; top: number } | null>(null);
+  const [wanderingEnabled, setWanderingEnabled] = useState(true);
+  const [isPetHovered, setIsPetHovered] = useState(false);
+  const [isPetDragging, setIsPetDragging] = useState(false);
+  const petRef = useRef<HTMLDivElement>(null);
+  const petPositionRef = useRef(petPosition);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; left: number; top: number; moved: boolean } | null>(null);
+  const draggedRef = useRef(false);
+  petPositionRef.current = petPosition;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -89,45 +100,125 @@ export default function AIChatBot() {
     window.setTimeout(() => setShowGreetingAnimation(false), 2200);
   }, [isOpen]);
 
-  // Neo has small autonomous moments while idle. These use the movement and
-  // alternate greeting sheets already included in NeoV2, and pause for reduced motion.
   useEffect(() => {
-    if (isOpen || !petVisible || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    try {
+      const saved = window.localStorage.getItem("neo-universe-pet-position");
+      if (saved) {
+        const position = JSON.parse(saved) as { left?: number; top?: number };
+        if (typeof position.left === "number" && typeof position.top === "number") {
+          const width = petRef.current?.offsetWidth ?? 120;
+          const height = petRef.current?.offsetHeight ?? 170;
+          setPetPosition({
+            left: Math.max(8, Math.min(window.innerWidth - width - 8, position.left)),
+            top: Math.max(8, Math.min(window.innerHeight - height - 8, position.top)),
+          });
+        }
+      } else if (petRef.current) {
+        const rect = petRef.current.getBoundingClientRect();
+        setPetPosition({ left: rect.left, top: rect.top });
+      }
+    } catch { /* Storage is optional. */ }
+  }, []);
+
+  // Neo strolls to new places in the viewport, pauses on hover or while dragged,
+  // and honors the browser's reduced-motion preference.
+  useEffect(() => {
+    if (isOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
     const hints = ["Neo có thể giúp bạn tìm món hàng Nhật đó!", "Chạm vào Neo để bắt đầu tư vấn nhé.", "Neo đang ở đây nếu bạn cần hỗ trợ."];
-    let actionTimer = 0;
-    let settleTimer = 0;
-    let hintTimer = 0;
+    let actionTimer: number;
+    let settleTimer: number;
+    let hintTimer: number;
     let stopped = false;
 
-    const scheduleAction = () => {
+    const scheduleStroll = (delay: number) => {
       actionTimer = window.setTimeout(() => {
-        if (stopped) return;
-        const nextX = Math.round((Math.random() - 0.72) * 104);
-        const nextY = Math.round((Math.random() - 0.75) * 62);
-        setPetOffset({ x: nextX, y: nextY });
+        if (stopped || !petRef.current) return;
+        const rect = petRef.current.getBoundingClientRect();
+        const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
+        const maxTop = Math.max(80, window.innerHeight - rect.height - 12);
+        const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
+        let nextLeft = 8 + Math.random() * maxLeft;
+        let nextTop = 80 + Math.random() * Math.max(0, maxTop - 80);
+        if (Math.abs(nextLeft - current.left) < 100 && Math.abs(nextTop - current.top) < 80) {
+          nextLeft = (nextLeft + maxLeft / 2) % maxLeft;
+          nextTop = nextTop < window.innerHeight / 2 ? maxTop : 80;
+        }
+        setPetPosition({ left: Math.min(maxLeft, nextLeft), top: Math.min(maxTop, nextTop) });
         setAmbientAnimation("move");
 
-        if (Math.random() > 0.45) {
+        if (Math.random() > 0.72) {
           setAmbientHint(hints[Math.floor(Math.random() * hints.length)]);
           hintTimer = window.setTimeout(() => setAmbientHint(""), 3200);
         }
 
         settleTimer = window.setTimeout(() => {
           setAmbientAnimation("idle");
-          scheduleAction();
+          scheduleStroll(11000 + Math.random() * 14000);
         }, 2100);
-      }, 7000 + Math.random() * 7000);
+      }, delay);
     };
 
-    scheduleAction();
+    scheduleStroll(10000 + Math.random() * 8000);
     return () => {
       stopped = true;
       window.clearTimeout(actionTimer);
       window.clearTimeout(settleTimer);
       window.clearTimeout(hintTimer);
     };
-  }, [isOpen, petVisible]);
+  }, [isOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging]);
+
+  const clampPetPosition = (left: number, top: number) => {
+    const width = petRef.current?.offsetWidth ?? 120;
+    const height = petRef.current?.offsetHeight ?? 170;
+    return {
+      left: Math.max(8, Math.min(window.innerWidth - width - 8, left)),
+      top: Math.max(8, Math.min(window.innerHeight - height - 8, top)),
+    };
+  };
+
+  useEffect(() => {
+    const keepPetInViewport = () => {
+      const position = petPositionRef.current;
+      if (position) setPetPosition(clampPetPosition(position.left, position.top));
+    };
+    window.addEventListener("resize", keepPetInViewport);
+    return () => window.removeEventListener("resize", keepPetInViewport);
+  }, []);
+
+  const handlePetPointerDown = (event: React.PointerEvent<HTMLButtonElement>) => {
+    if (event.button !== 0 || !petRef.current) return;
+    const rect = petRef.current.getBoundingClientRect();
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, left: rect.left, top: rect.top, moved: false };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const handlePetPointerMove = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - drag.startX;
+    const deltaY = event.clientY - drag.startY;
+    if (!drag.moved && Math.hypot(deltaX, deltaY) < 7) return;
+    drag.moved = true;
+    draggedRef.current = true;
+    setIsPetDragging(true);
+    setAmbientAnimation("move");
+    setAmbientHint("Neo đã tới chỗ mới!");
+    setPetPosition(clampPetPosition(drag.left + deltaX, drag.top + deltaY));
+  };
+
+  const handlePetPointerUp = (event: React.PointerEvent<HTMLButtonElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.moved && petPositionRef.current) {
+      try { window.localStorage.setItem("neo-universe-pet-position", JSON.stringify(petPositionRef.current)); } catch { /* Storage is optional. */ }
+      window.setTimeout(() => setAmbientHint(""), 1800);
+      window.setTimeout(() => setAmbientAnimation("idle"), 1800);
+    }
+    dragRef.current = null;
+    setIsPetDragging(false);
+    window.setTimeout(() => { draggedRef.current = false; }, 0);
+  };
 
   const latestAssistantMessage = [...messages].reverse().find(
     (message) => message.sender === "bot" && message.id !== "welcome-1"
@@ -505,14 +596,23 @@ export default function AIChatBot() {
     <>
       {/* Floating Toggle Button */}
       {!isOpen && (petVisible ? (
-        <div className="pointer-events-none fixed bottom-3 right-3 z-50 sm:bottom-5 sm:right-5" style={{ transform: `translate(${petOffset.x}px, ${petOffset.y}px)`, transition: "transform 1.4s cubic-bezier(.2,.8,.2,1)" }}>
+        <div
+          ref={petRef}
+          className="pointer-events-none fixed z-50"
+          style={{ ...(petPosition ? { left: petPosition.left, top: petPosition.top } : { right: 12, bottom: 12 }), transition: isPetDragging ? "none" : "left 2.1s cubic-bezier(.2,.8,.2,1), top 2.1s cubic-bezier(.2,.8,.2,1)" }}
+        >
           {ambientHint && <div className="absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{ambientHint}</div>}
           <button
             id="ai-chat-toggle-btn"
-            onClick={() => { setAmbientHint(""); setIsOpen(true); }}
-            onPointerEnter={() => { if (ambientAnimation === "idle") setAmbientAnimation("ask-alt"); setAmbientHint("Neo có thể giúp gì cho bạn?"); }}
-            onPointerLeave={() => { setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
-            className="group pointer-events-auto flex flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+            onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setIsOpen(true); }}
+            onPointerDown={handlePetPointerDown}
+            onPointerMove={handlePetPointerMove}
+            onPointerUp={handlePetPointerUp}
+            onPointerCancel={handlePetPointerUp}
+            onPointerEnter={() => { setIsPetHovered(true); if (ambientAnimation === "idle") setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
+            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
+            className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+            style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"
           >
             <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
@@ -526,9 +626,17 @@ export default function AIChatBot() {
               NEO · AI TƯ VẤN
             </span>
           </button>
-          <button type="button" onClick={() => { setPetVisible(false); setAmbientHint(""); }} className="pointer-events-auto absolute right-0 top-0 flex h-6 w-6 translate-x-1 -translate-y-1 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 opacity-70 shadow transition-opacity hover:text-red-600 hover:opacity-100 focus:opacity-100" aria-label="Ẩn Neo Universe">
-            <X className="h-3.5 w-3.5" />
-          </button>
+          <div className="pointer-events-auto mt-1 flex justify-center gap-1.5 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-md backdrop-blur">
+            <button type="button" onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"} title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}>
+              {wanderingEnabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+            </button>
+            <button type="button" onClick={() => { setPetPosition(null); setAmbientAnimation("move"); try { window.localStorage.removeItem("neo-universe-pet-position"); } catch { /* Storage is optional. */ } window.setTimeout(() => setAmbientAnimation("idle"), 1800); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label="Đưa Neo về góc mặc định" title="Về góc mặc định">
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+            <button type="button" onClick={() => { setPetVisible(false); setAmbientHint(""); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-100 hover:text-rose-700" aria-label="Ẩn Neo Universe" title="Ẩn Neo">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       ) : (
         <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-50 rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
