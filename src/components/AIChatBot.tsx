@@ -10,6 +10,7 @@ import {
   Loader2
 } from "lucide-react";
 import { AIPersonality } from "@/types";
+import NeoUniverseSprite, { NeoUniverseAnimation } from "@/components/NeoUniverseSprite";
 
 interface Message {
   id: string;
@@ -62,6 +63,8 @@ export default function AIChatBot() {
       time: "Vừa xong",
     },
   ]);
+  const [showGreetingAnimation, setShowGreetingAnimation] = useState(false);
+  const hasShownGreetingAnimationRef = useRef(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -74,6 +77,32 @@ export default function AIChatBot() {
       scrollToBottom();
     }
   }, [messages, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || hasShownGreetingAnimationRef.current) return;
+    hasShownGreetingAnimationRef.current = true;
+    setShowGreetingAnimation(true);
+    window.setTimeout(() => setShowGreetingAnimation(false), 2200);
+  }, [isOpen]);
+
+  const latestAssistantMessage = [...messages].reverse().find(
+    (message) => message.sender === "bot" && message.id !== "welcome-1"
+  );
+  const responseAnimation = (text: string): NeoUniverseAnimation => {
+    if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
+    if (/đề xuất|gợi ý|nên chọn|phù hợp nhất|khuyên chọn/i.test(text)) return "recommend";
+    if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "product";
+    return "explain";
+  };
+  const petAnimation: NeoUniverseAnimation = !isOpen
+    ? "idle"
+    : showGreetingAnimation
+      ? "ask"
+      : imageAnalyzing || loading
+        ? "analyze"
+        : latestAssistantMessage
+          ? responseAnimation(latestAssistantMessage.text)
+          : "listen";
 
   const handlePersonalityChange = (newP: AIPersonality) => {
     setPersonality(newP);
@@ -431,25 +460,23 @@ export default function AIChatBot() {
   return (
     <>
       {/* Floating Toggle Button */}
-      <button
+      {!isOpen && <button
         id="ai-chat-toggle-btn"
-        onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-50 p-4 bg-gradient-to-br from-banana-400 via-banana-500 to-amber-600 hover:from-banana-500 hover:to-amber-700 text-navy-950 rounded-full shadow-2xl hover:scale-105 transition-all duration-300 flex items-center justify-center group border-2 border-white"
-        aria-label="Open ChillBanana AI"
+        onClick={() => setIsOpen((open) => !open)}
+        className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-50 flex flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+        aria-label={isOpen ? "Đóng tư vấn AI" : "Mở tư vấn AI cùng Neo Universe"}
       >
-        <span className="absolute -top-1 -right-1 flex h-4 w-4">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-          <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-white"></span>
+        <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
+          <NeoUniverseSprite animation={petAnimation} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)]" />
+          <span className="absolute right-0 top-2 flex h-4 w-4">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+            <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+          </span>
         </span>
-        {isOpen ? (
-          <X className="w-6 h-6 text-white" />
-        ) : (
-          <div className="flex items-center space-x-1.5 px-1">
-            <span className="text-xl">🍌</span>
-            <span className="inline text-xs font-extrabold font-serif pr-1 text-navy-950 tracking-tight">ChillBanana AI</span>
-          </div>
-        )}
-      </button>
+        <span className="-mt-1 rounded-full border border-white/80 bg-navy-950/95 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg sm:text-[11px]">
+          NEO · AI TƯ VẤN
+        </span>
+      </button>}
 
       {/* Chat Window Panel */}
       {isOpen && (

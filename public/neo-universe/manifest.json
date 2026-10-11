@@ -1,0 +1,82 @@
+[
+  {
+    "id": "analyze",
+    "label": "Phân tích",
+    "src": "/neo-universe/analyze.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "ask",
+    "label": "Hỏi nhu cầu",
+    "src": "/neo-universe/ask.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "ask-alt",
+    "label": "Hỏi nhu cầu · biến thể",
+    "src": "/neo-universe/ask-alt.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "confirm",
+    "label": "Xác nhận đơn",
+    "src": "/neo-universe/confirm.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "move",
+    "label": "Di chuyển",
+    "src": "/neo-universe/move.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "product",
+    "label": "Giới thiệu sản phẩm",
+    "src": "/neo-universe/product.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "explain",
+    "label": "Giải thích",
+    "src": "/neo-universe/explain.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "idle",
+    "label": "Chờ / nghỉ",
+    "src": "/neo-universe/idle.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "recommend",
+    "label": "Đề xuất",
+    "src": "/neo-universe/recommend.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  },
+  {
+    "id": "listen",
+    "label": "Lắng nghe",
+    "src": "/neo-universe/listen.webp",
+    "columns": 6,
+    "rows": 6,
+    "frameCount": 36
+  }
+]
