@@ -12,15 +12,11 @@ import {
   BarChart3,
   ShoppingBag,
   Columns,
-  FileText,
   ExternalLink,
   RefreshCw,
-  Sparkles,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
-import ReportsTab from "@/app/admin/components/ReportsTab";
-import AiTrendsTab from "@/app/admin/components/AiTrendsTab";
-import AdminAgentTab from "@/app/admin/components/AdminAgentTab";
+import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
 import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
@@ -38,12 +34,14 @@ function AdminDashboardPageInner() {
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
   // Tab đang chọn
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "ai_trends" | "products" | "reports" | "admin_agent">("orders");
-  const [agentInitialModule, setAgentInitialModule] = useState<AdminAiModuleId>("overview");
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics">("orders");
+  const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
+  const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("overview");
 
-  const openAdminAgent = (module: AdminAiModuleId) => {
-    setAgentInitialModule(module);
-    setActiveTab("admin_agent");
+  const openAnalytics = (section: AnalyticsSection, module: AdminAiModuleId = "overview") => {
+    setAnalyticsInitialSection(section);
+    setAnalyticsInitialModule(module);
+    setActiveTab("analytics");
   };
 
   // searchTerm để truyền vào OrderManagementTab (khi bấm "Xem Đơn" từ tab Khách Hàng)
@@ -142,9 +140,7 @@ function AdminDashboardPageInner() {
                   { key: "orders",    icon: <Package className="w-3.5 h-3.5" />,     label: "Đơn Hàng" },
                   { key: "customers", icon: <Users className="w-3.5 h-3.5" />,       label: "Khách Hàng" },
                   { key: "products",  icon: <ShoppingBag className="w-3.5 h-3.5" />, label: "Sản Phẩm" },
-                  { key: "ai_trends", icon: <BarChart3 className="w-3.5 h-3.5" />,   label: "Xu Hướng AI" },
-                  { key: "reports",   icon: <FileText className="w-3.5 h-3.5" />,    label: "Báo Cáo" },
-                  { key: "admin_agent", icon: <Sparkles className="w-3.5 h-3.5" />, label: "AI Agent" },
+                  { key: "analytics", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Phân tích & AI" },
                 ].map((tab) => (
                   <button
                     key={tab.key}
@@ -198,9 +194,7 @@ function AdminDashboardPageInner() {
             { key: "orders",    label: "Đơn Hàng" },
             { key: "customers", label: "Khách Hàng" },
             { key: "products",  label: "Sản Phẩm" },
-            { key: "ai_trends", label: "AI" },
-            { key: "reports",   label: "Báo Cáo" },
-            { key: "admin_agent", label: "Agent" },
+            { key: "analytics", label: "Phân tích & AI" },
           ].map((tab) => (
             <button
               key={tab.key}
@@ -232,13 +226,13 @@ function AdminDashboardPageInner() {
             {activeTab === "customers" && (
               <CustomersTab
                 onViewOrders={(term) => { setSearchTerm(term); setActiveTab("orders"); }}
-                onViewAiTrends={() => setActiveTab("ai_trends")}
+                onViewAiTrends={() => openAnalytics("trends", "trends")}
               />
             )}
             {activeTab === "products"  && <ProductsTab />}
-            {activeTab === "ai_trends" && <AiTrendsTab onOpenAgent={() => openAdminAgent("trends")} />}
-            {activeTab === "reports"   && <ReportsTab onOpenAgent={() => openAdminAgent("reports")} />}
-            {activeTab === "admin_agent" && <AdminAgentTab initialModule={agentInitialModule} />}
+            {activeTab === "analytics" && (
+              <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
+            )}
           </>
         )}
 
