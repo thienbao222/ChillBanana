@@ -756,9 +756,6 @@ export default function AIChatBot() {
                 <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
               </span>
             </span>
-            <span className="-mt-1 rounded-full border border-white/80 bg-navy-950/95 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg sm:text-[11px]">
-              NEO · AI TƯ VẤN
-            </span>
           </button>
           {petConversationOpen && petConversationPosition && (
             <section
@@ -814,7 +811,7 @@ export default function AIChatBot() {
               </form>
             </section>
           )}
-          <div className="pointer-events-auto mt-1 flex justify-center gap-1.5 rounded-full border border-slate-200/80 bg-white/90 p-1 shadow-md backdrop-blur">
+          <div className="pointer-events-auto mt-0.5 flex justify-center gap-2">
             <button type="button" onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"} title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}>
               {wanderingEnabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
             </button>
