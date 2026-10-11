@@ -23,9 +23,9 @@ function runNpm(args) {
 }
 
 if (isProductionDeployment) {
-  runNpm(["run", "prisma:migrate:deploy"]);
+  runNpm(["run", "prisma:push", "--", "--skip-generate"]);
 } else {
-  console.log("Skipping database migrations outside a Vercel production deployment.");
+  console.log("Skipping database schema sync outside a Vercel production deployment.");
 }
 
 runNpm(["run", "build"]);
