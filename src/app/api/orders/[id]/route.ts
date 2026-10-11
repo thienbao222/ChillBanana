@@ -186,6 +186,14 @@ export async function PATCH(
     if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP" && !existingOrder.isPriceVerified) {
       return NextResponse.json({ error: "Cần xác minh báo giá trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
     }
+    if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP") {
+      const paymentStatusForTransition = isAdminUser && paymentStatus !== undefined
+        ? paymentStatus
+        : existingOrder.paymentStatus;
+      if (paymentStatusForTransition !== "DEPOSITED_50" && paymentStatusForTransition !== "PAID_100") {
+        return NextResponse.json({ error: "Cần xác nhận đã nhận tiền cọc trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
+      }
+    }
 
     const logStatus = status || existingOrder.status;
     const logTitle =

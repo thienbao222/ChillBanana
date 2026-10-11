@@ -249,13 +249,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     nextStatus: OrderStatus,
     title: string,
     desc: string,
-    loc: string
+    loc: string,
+    paymentStatus?: "DEPOSITED_50"
   ) => {
     try {
       const res = await fetch(`/api/orders/${orderCode}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, title, description: desc, location: loc }),
+        body: JSON.stringify({ status: nextStatus, title, description: desc, location: loc, ...(paymentStatus ? { paymentStatus } : {}) }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -284,7 +285,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     ? ORDER_STATUS_FLOW.filter((status, index) =>
         status === selectedOrder.status ||
         (status === ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(selectedOrder.status as (typeof ORDER_STATUS_FLOW)[number]) + 1] &&
-          (status !== "PURCHASING_JP" || selectedOrder.isPriceVerified))
+          (status !== "PURCHASING_JP" || (selectedOrder.isPriceVerified && ["DEPOSITED_50", "PAID_100"].includes(selectedOrder.paymentStatus))))
       )
     : [];
 
@@ -615,7 +616,8 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               "PURCHASING_JP",
                               "Đã nhận cọc - Đang mua hàng tại Tokyo",
                               "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
-                              "Tokyo, Nhật Bản"
+                              "Tokyo, Nhật Bản",
+                              ord.paymentStatus === "UNPAID" ? "DEPOSITED_50" : undefined
                             )}
                             className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
