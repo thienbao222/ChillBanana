@@ -37,6 +37,9 @@ const SPRITES: Record<NeoUniverseAnimation, string> = {
   walk: "/neo-universe/move.webp",
 };
 
+const FRAME_COUNT = 36;
+const LOOP_DURATION_MS = 3000;
+
 export default function NeoUniverseSprite({ animation, className = "", flipX = false }: Props) {
   const spriteRef = useRef<HTMLSpanElement>(null);
 
@@ -44,26 +47,44 @@ export default function NeoUniverseSprite({ animation, className = "", flipX = f
     const sprite = spriteRef.current;
     if (!sprite) return;
     sprite.style.backgroundPosition = "0% 0%";
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    // Keep sprite feedback visible for users who request reduced motion, but
-    // slow it down. The companion's viewport roaming is disabled separately.
-    const frameDuration = reducedMotion ? 240 : animation === "idle" || animation === "listen" ? 120 : 82;
-    let frame = 0;
-    let lastFrameAt = performance.now();
+    let disposed = false;
     let requestId = 0;
-    const drawNextFrame = (now: number) => {
-      if (now - lastFrameAt >= frameDuration) {
-        const elapsedFrames = Math.floor((now - lastFrameAt) / frameDuration);
-        frame = (frame + elapsedFrames) % 36;
-        lastFrameAt += elapsedFrames * frameDuration;
-        const row = Math.floor(frame / 6);
-        const column = frame % 6;
-        sprite.style.backgroundPosition = `${column * 20}% ${row * 20}%`;
-      }
+    let lastFrame = -1;
+
+    const startAnimation = () => {
+      if (disposed) return;
+      const startedAt = performance.now();
+      const drawNextFrame = (now: number) => {
+        const elapsed = (now - startedAt) % LOOP_DURATION_MS;
+        const frame = Math.min(FRAME_COUNT - 1, Math.floor((elapsed / LOOP_DURATION_MS) * FRAME_COUNT));
+        if (frame !== lastFrame) {
+          lastFrame = frame;
+          const row = Math.floor(frame / 6);
+          const column = frame % 6;
+          sprite.style.backgroundPosition = `${column * 20}% ${row * 20}%`;
+        }
+        requestId = window.requestAnimationFrame(drawNextFrame);
+      };
       requestId = window.requestAnimationFrame(drawNextFrame);
     };
-    requestId = window.requestAnimationFrame(drawNextFrame);
-    return () => window.cancelAnimationFrame(requestId);
+
+    // Decode a newly selected sheet before starting its 3-second loop so the
+    // first visible frames do not stutter while the browser decodes the WebP.
+    const image = new Image();
+    image.src = SPRITES[animation];
+    if (typeof image.decode === "function") {
+      void image.decode().catch(() => undefined).then(startAnimation);
+    } else if (image.complete) {
+      startAnimation();
+    } else {
+      image.addEventListener("load", startAnimation, { once: true });
+    }
+
+    return () => {
+      disposed = true;
+      image.removeEventListener("load", startAnimation);
+      window.cancelAnimationFrame(requestId);
+    };
   }, [animation]);
 
   return (

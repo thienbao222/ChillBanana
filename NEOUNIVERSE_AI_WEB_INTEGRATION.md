@@ -11,7 +11,7 @@ Nhân vật dự kiến: **Neo Universe** trong *Umamusume*.
 - Chưa có model Live2D hoặc PSD phân lớp; NeoV2 là sprite sheet 2D, không phải model Live2D đã rig.
 - Đã chọn tích hợp **sprite animation** vào widget chatbot khách hàng hiện có. Trình duyệt phát lần lượt các khung hình 6×6.
 - Widget dùng Idle khi đóng; Ask khi chào lần đầu; Analyze khi AI đang xử lý; Listen khi đang chat; và chọn Explain/Product/Recommend/Confirm theo nội dung phản hồi gần nhất.
-- Tôn trọng thiết lập `prefers-reduced-motion`: sprite vẫn có phản hồi chuyển động nhưng chạy chậm hơn, còn tự đi dạo sẽ tắt.
+- Tôn trọng thiết lập `prefers-reduced-motion`: vòng sprite giữ nhịp 36 frame/3 giây để không bị khựng; tự đi dạo sẽ tắt.
 - Live2D có thể là bước nâng cấp sau nếu có PSD nhiều layer và model đã rig trong Cubism Editor. Sprite sheet không tự chuyển thành model Live2D.
 
 ## Tài nguyên và trạng thái triển khai
@@ -29,7 +29,7 @@ Nhân vật dự kiến: **Neo Universe** trong *Umamusume*.
 - Thư mục nguồn: `NeoUniverse/NeoV2/`; có 10 sprite sheet PNG 3840×3840, mỗi sheet là lưới 6×6 nền trong suốt.
 - Đã tạo script `scripts/prepare-neov2-assets.py` để cắt/chuẩn hóa từng frame vào cùng lưới, resize và xuất WebP.
 - Tài nguyên production: `public/neo-universe/`; gồm 10 sprite sheet WebP và manifest, tổng khoảng 5.2 MB (giảm từ khoảng 60 MB PNG nguồn).
-- Component phát frame: `src/components/NeoUniverseSprite.tsx`; dùng `requestAnimationFrame` để cập nhật vị trí nền 6×6 mà không render lại React theo từng frame.
+- Component phát frame: `src/components/NeoUniverseSprite.tsx`; dùng `requestAnimationFrame` và thời gian thực để phát đủ 36 frame trong 3 giây (khoảng 83,33 ms/frame), chờ ảnh WebP giải mã trước khi bắt đầu để tránh khựng ở frame đầu.
 - Đã tích hợp vào nút nổi của `src/components/AIChatBot.tsx`; animation đổi theo chat và nội dung phản hồi.
 - Đã chạy `npm run build` thành công sau tích hợp.
 
@@ -74,7 +74,7 @@ Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển độn
 - Khi cuộn trang, Neo bước nhẹ theo hướng vào trong viewport và hiện lời nhắc; kích thước màn hình thay đổi thì vị trí của Neo được giới hạn lại trong viewport.
 - Overlay dùng `pointer-events-none` ở nền và chỉ bật nhận thao tác tại nhân vật, các nút điều khiển, hộp thoại; z-index đặt cao để nổi trên nội dung trang.
 - Khi khung chat đầy đủ mở, nhân vật vẫn xuất hiện ở phần đầu khung chat.
-- Tự đi dạo dừng khi người dùng bật `prefers-reduced-motion`; các sheet vẫn phát ở tốc độ chậm hơn để trạng thái lắng nghe/xử lý/trả lời vẫn có phản hồi trực quan.
+- Tự đi dạo dừng khi người dùng bật `prefers-reduced-motion`; các sheet vẫn phát theo vòng 3 giây để trạng thái lắng nghe/xử lý/trả lời giữ cùng nhịp.
 - Đây là mô phỏng pet bằng sprite sheet và chuyển động CSS trong viewport website. Chuyển động của nhân vật vẫn giới hạn theo các khung hình đã xuất; muốn xoay người, nhìn theo con trỏ, cử động từng bộ phận hoặc phản ứng tùy ý như model rig thì cần model Live2D/Spine có rig và các animation tương ứng.
 
 ## Trạng thái hiện tại
