@@ -15,7 +15,7 @@ let cachedRate: LiveRateData = {
   previousRate: 171.5,
   changePercent: 0.29,
   updatedAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-  source: "Hệ thống tỷ giá liên ngân hàng",
+  source: "Tỷ giá tham chiếu mặc định",
 };
 
 let lastFetchTime = 0;
@@ -48,7 +48,7 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
           previousRate: cachedRate.rate,
           changePercent: change,
           updatedAt: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-          source: "Live API (open.er-api / Vietcombank Interbank)",
+          source: "open.er-api.com",
         };
         lastFetchTime = now;
         return cachedRate;

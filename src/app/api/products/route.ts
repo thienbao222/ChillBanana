@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
       anime: "Anime, Manga & Sưu Tầm",
     };
 
-    // Lưu vào CSDL Prisma SQLite
+    // Lưu vào PostgreSQL thông qua Prisma.
     const newProd = await prisma.product.create({
       data: {
         id: "prod-" + Date.now(),

@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { AIR_SHIPPING_PER_KG, DEFAULT_EXCHANGE_RATE } from "@/lib/data";
+import { useToast } from "@/context/ToastContext";
 
 export interface CartItem {
   id: string;
@@ -22,7 +23,7 @@ interface CartContextType {
   isCartOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
-  addToCart: (product: Omit<CartItem, "quantity">, quantity?: number) => void;
+  addToCart: (product: Omit<CartItem, "quantity">, quantity?: number) => boolean;
   removeFromCart: (id: string) => void;
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
@@ -41,6 +42,7 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { toast } = useToast();
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -65,7 +67,25 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = localStorage.getItem("cb_shopping_cart");
       if (saved) {
-        setItems(JSON.parse(saved));
+        const parsed: unknown = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const validItems = parsed.filter((item): item is CartItem =>
+            item &&
+            typeof item === "object" &&
+            typeof item.id === "string" &&
+            typeof item.name === "string" &&
+            Number.isSafeInteger(item.quantity) && item.quantity > 0 &&
+            Number.isSafeInteger(item.priceJpy) && item.priceJpy >= 0 &&
+            Number.isFinite(item.weightKg) && item.weightKg >= 0
+          );
+          setItems(validItems);
+          if (validItems.length !== parsed.length) {
+            toast.info("Giỏ hàng cũ có dữ liệu không hợp lệ và đã được làm sạch.");
+          }
+        } else {
+          localStorage.removeItem("cb_shopping_cart");
+          toast.info("Giỏ hàng cũ không hợp lệ và đã được làm mới.");
+        }
       }
     } catch (err) {
       console.warn("Could not load cart from localStorage:", err);
@@ -89,14 +109,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const closeCart = () => setIsCartOpen(false);
 
   const addToCart = (product: Omit<CartItem, "quantity">, quantity = 1) => {
+    if (!Number.isSafeInteger(quantity) || quantity < 1) {
+      toast.warning("Số lượng sản phẩm không hợp lệ.");
+      return false;
+    }
+    if (product.stockSlots !== undefined && product.stockSlots < 1) {
+      toast.warning("Sản phẩm này hiện đã hết hàng.");
+      return false;
+    }
+    const existingItem = items.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
+    const availableSlots = product.stockSlots ?? existingItem?.stockSlots ?? 99;
+    if (existingItem && existingItem.quantity >= availableSlots) {
+      if (existingItem.quantity > availableSlots) {
+        setItems((prev) => prev.map((item) => item.id === existingItem.id
+          ? { ...item, stockSlots: availableSlots, quantity: availableSlots }
+          : item
+        ));
+      }
+      toast.warning(`Chỉ còn tối đa ${availableSlots} sản phẩm trong kho.`);
+      return false;
+    }
+
     setItems((prev) => {
       const existing = prev.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
       if (existing) {
-        const maxQ = existing.stockSlots ?? 99;
+        const maxQ = product.stockSlots ?? existing.stockSlots ?? 99;
         const newQ = Math.min(existing.quantity + quantity, maxQ);
         return prev.map((item) =>
           item.id === existing.id
-            ? { ...item, quantity: newQ }
+            ? { ...item, ...product, stockSlots: maxQ, quantity: newQ }
             : item
         );
       }
@@ -105,6 +146,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return [...prev, { ...product, quantity: initialQ }];
     });
     setIsCartOpen(true);
+    return true;
   };
 
   const removeFromCart = (id: string) => {
@@ -116,12 +158,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeFromCart(id);
       return;
     }
+    if (!Number.isSafeInteger(quantity)) {
+      toast.warning("Số lượng cần là số nguyên dương.");
+      return;
+    }
+    const currentItem = items.find((item) => item.id === id);
+    const maxQ = currentItem?.stockSlots ?? 99;
+    if (currentItem && maxQ < 1) {
+      removeFromCart(id);
+      toast.warning("Sản phẩm đã hết hàng và được xóa khỏi giỏ hàng.");
+      return;
+    }
+    if (currentItem && quantity > maxQ) {
+      toast.warning(`Chỉ còn tối đa ${maxQ} sản phẩm trong kho.`);
+    }
     setItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const maxQ = item.stockSlots ?? 99;
-          const newQ = Math.min(quantity, maxQ);
-          return { ...item, quantity: newQ };
+          return { ...item, quantity: Math.min(quantity, item.stockSlots ?? 99) };
         }
         return item;
       })

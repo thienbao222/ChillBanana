@@ -22,10 +22,12 @@ import {
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart } = useCart();
   const { customer } = useAuth();
+  const { toast } = useToast();
 
   const [direction, setDirectionState] = useState<"JP_TO_VN" | "VN_TO_JP">("JP_TO_VN");
 
@@ -143,7 +145,7 @@ export default function OrderCalculator() {
   const handleAutoScrape = async (overrideUrl?: string) => {
     const targetUrl = overrideUrl || productUrl;
     if (!targetUrl || !targetUrl.startsWith("http")) {
-      alert("Vui lòng nhập đường dẫn URL đầy đủ (ví dụ: https://www.amazon.co.jp/... hoặc https://jp.mercari.com/...)");
+      toast.warning("Vui lòng nhập đường dẫn đầy đủ bắt đầu bằng https://.");
       return;
     }
 
@@ -175,11 +177,11 @@ export default function OrderCalculator() {
         setShowWeightPreview(false);
         setScrapeSuccess(true);
       } else {
-        alert("Không thể bóc tách tự động link này. Bạn có thể tự nhập tên và giá Yên thủ công nhé!");
+        toast.info("Chưa đọc được thông tin từ link này. Bạn có thể nhập tên và giá Yên thủ công.");
       }
     } catch (err) {
       console.warn(err);
-      alert("Lỗi kết nối khi quét link. Bạn vui lòng nhập thông tin sản phẩm thủ công.");
+      toast.error("Không kết nối được để đọc link. Bạn có thể nhập thông tin sản phẩm thủ công.");
     } finally {
       setIsScraping(false);
     }
@@ -208,12 +210,12 @@ export default function OrderCalculator() {
       if (data.success && data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        alert(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        toast.error(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
         setIsRedirecting(false);
       }
     } catch (err) {
       console.error("[VNPAY REDIRECT]", err);
-      alert("Lỗi kết nối. Vui lòng thử lại.");
+      toast.error("Lỗi kết nối. Vui lòng thử lại.");
       setIsRedirecting(false);
     }
   };
@@ -223,15 +225,15 @@ export default function OrderCalculator() {
     if (isSubmitting) return;
 
     if ((!productUrl || productUrl.trim() === "") && !productId) {
-      alert("Vui lòng dán link sản phẩm (Bước 1)!");
+      toast.warning("Vui lòng dán link sản phẩm trước.");
       return;
     }
     if (!productName || productName.trim() === "") {
-      alert("Vui lòng nhập tên sản phẩm (Bước 2)!");
+      toast.warning("Vui lòng nhập tên sản phẩm.");
       return;
     }
     if (!customerName || !customerPhone || !customerAddress) {
-      alert("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ nhận hàng!");
+      toast.warning("Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ giao hàng.");
       return;
     }
 
@@ -272,11 +274,11 @@ export default function OrderCalculator() {
       if (res.ok && data.success) {
         setOrderSuccessData(data.order);
       } else {
-        alert("Có lỗi khi tạo đơn: " + (data.error || "Vui lòng thử lại"));
+        toast.error(data.error || "Có lỗi khi tạo đơn. Vui lòng thử lại.");
       }
     } catch (err) {
       console.error(err);
-      alert("Lỗi kết nối máy chủ. Vui lòng thử lại!");
+      toast.error("Lỗi kết nối máy chủ. Vui lòng thử lại.");
     } finally {
       setIsSubmitting(false);
     }

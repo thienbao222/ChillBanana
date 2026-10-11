@@ -1,42 +1,50 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Sparkles,
   Zap,
   ShoppingBag,
   ShoppingCart
 } from "lucide-react";
-import { CURATED_PRODUCTS } from "@/lib/data";
 import { CuratedProduct } from "@/types";
 import { useCart } from "@/context/CartContext";
+import { useToast } from "@/context/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function CuratedProducts() {
   const { addToCart } = useCart();
+  const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  const [products, setProducts] = useState<CuratedProduct[]>(CURATED_PRODUCTS);
+  const [products, setProducts] = useState<CuratedProduct[]>([]);
   const [exchangeRate, setExchangeRate] = useState<number>(172);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+
+  const fetchProducts = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const res = await fetch("/api/products", { cache: "no-store" });
+      const data = await res.json();
+      if (!res.ok || !Array.isArray(data.products)) {
+        throw new Error(data.error || "Không thể tải danh sách sản phẩm.");
+      }
+      setProducts(data.products);
+      if (Number.isFinite(data.exchangeRate) && data.exchangeRate > 0) {
+        setExchangeRate(data.exchangeRate);
+      }
+    } catch {
+      setLoadError(true);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        const res = await fetch("/api/products");
-        const data = await res.json();
-        if (res.ok && data.products && data.products.length > 0) {
-          setProducts(data.products);
-          if (data.exchangeRate) {
-            setExchangeRate(data.exchangeRate);
-          }
-        }
-      } catch (err) {
-        // use fallback CURATED_PRODUCTS
-      }
-    };
-    fetchProducts();
-  }, []);
+    void fetchProducts();
+  }, [fetchProducts]);
 
   const filteredProducts = selectedCategory === "all"
     ? products
@@ -62,6 +70,22 @@ export default function CuratedProducts() {
     }
   };
 
+  const handleAddToCart = (product: CuratedProduct) => {
+    if (product.stockSlots < 1) return;
+    const added = addToCart({
+      id: product.id,
+      name: product.name,
+      priceJpy: product.priceJpy,
+      priceVnd: product.priceVnd || Math.round(product.priceJpy * exchangeRate),
+      weightKg: product.weightKg,
+      imageUrl: product.imageUrl,
+      originalStore: product.originalStore,
+      category: product.category,
+      stockSlots: product.stockSlots,
+    });
+    if (added) toast.success("Đã thêm sản phẩm vào giỏ hàng.");
+  };
+
   return (
     <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
@@ -73,13 +97,13 @@ export default function CuratedProducts() {
         >
           <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-800 bg-banana-100 px-3 py-1 rounded-full uppercase tracking-wider mb-2 border border-banana-200">
             <Sparkles className="w-3.5 h-3.5 text-banana-600" />
-            <span>Sản Phẩm Có Sẵn Tại Shop • Giao Ngay 24H</span>
+            <span>Sản phẩm có sẵn tại kho</span>
           </div>
           <h2 className="text-2xl sm:text-3xl font-serif font-bold text-navy-900">
             Sản Phẩm Có Sẵn Tại Kho ChillBanana
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-2xl">
-            Các mặt hàng nội địa Nhật tuyển chọn chính hãng, đã có sẵn tại kho Hà Nội &amp; TP.HCM. Đặt mua nhận hàng ngay trong 24h - 48h, không cần chờ thời gian gom đơn từ Nhật!
+            Sản phẩm được cập nhật theo tồn kho hiện tại. Thời gian giao dự kiến sẽ được xác nhận theo địa chỉ nhận hàng và phương thức vận chuyển.
           </p>
         </motion.div>
 
@@ -145,12 +169,39 @@ export default function CuratedProducts() {
       </div>
 
       {/* Product Cards Grid */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6" aria-label="Đang tải sản phẩm">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-80 rounded-3xl border border-slate-200 bg-white p-4 animate-pulse">
+              <div className="h-40 rounded-2xl bg-slate-100" />
+              <div className="mt-5 h-3 w-1/3 rounded bg-slate-100" />
+              <div className="mt-3 h-4 w-4/5 rounded bg-slate-100" />
+              <div className="mt-8 h-8 rounded bg-slate-100" />
+            </div>
+          ))}
+        </div>
+      ) : loadError ? (
+        <div className="rounded-3xl border border-rose-200 bg-rose-50 px-6 py-10 text-center" role="alert">
+          <p className="font-bold text-rose-900">Chưa tải được danh sách sản phẩm.</p>
+          <p className="mt-1 text-sm text-rose-700">Vui lòng thử lại sau ít phút.</p>
+          <button onClick={() => void fetchProducts()} className="mt-4 rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
+            Thử tải lại
+          </button>
+        </div>
+      ) : filteredProducts.length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center">
+          <p className="font-bold text-navy-900">{products.length === 0 ? "Danh mục sản phẩm đang được cập nhật." : "Chưa có sản phẩm trong danh mục này."}</p>
+          <p className="mt-1 text-sm text-slate-500">Bạn có thể dùng công cụ báo giá để gửi link sản phẩm cần mua hộ.</p>
+        </div>
+      ) : (
       <motion.div 
         layout 
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
       >
         <AnimatePresence>
-          {filteredProducts.map((product, idx) => (
+          {filteredProducts.map((product, idx) => {
+            const inStock = product.stockSlots > 0;
+            return (
             <motion.div
               layout
               initial={{ opacity: 0, scale: 0.9 }}
@@ -175,14 +226,14 @@ export default function CuratedProducts() {
                       🔥 HOT DEAL
                     </span>
                   )}
-                  <span className="bg-emerald-700/90 backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg">
-                    ⚡ Sẵn Hàng
+                  <span className={`${inStock ? "bg-emerald-700/90" : "bg-slate-600/90"} backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg`}>
+                    {inStock ? "⚡ Sẵn Hàng" : "Tạm hết hàng"}
                   </span>
                 </div>
 
                 {/* Số lượng còn lại */}
                 <div className="absolute bottom-2.5 right-2.5 bg-navy-950/85 backdrop-blur-sm text-banana-300 text-[11px] font-bold px-2 py-0.5 rounded-lg">
-                  Còn {product.stockSlots}
+                  {inStock ? `Còn ${product.stockSlots}` : "Hết hàng"}
                 </div>
               </div>
 
@@ -214,8 +265,8 @@ export default function CuratedProducts() {
                 {/* Price & Action */}
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <div>
-                    <p className="text-[11px] text-slate-400 font-medium line-through decoration-slate-300">
-                      {product.priceJpy.toLocaleString()} ¥
+                    <p className="text-[11px] text-slate-400 font-medium">
+                      Giá tham khảo tại Nhật: {product.priceJpy.toLocaleString()} ¥
                     </p>
                     <p className="text-base font-bold text-banana-700 font-serif">
                       {(product.priceVnd || Math.round(product.priceJpy * exchangeRate)).toLocaleString("vi-VN")} <span className="text-xs">đ</span>
@@ -224,29 +275,19 @@ export default function CuratedProducts() {
 
                   <div className="flex items-center space-x-1.5">
                     <button
-                      onClick={() =>
-                        addToCart({
-                          id: product.id,
-                          name: product.name,
-                          priceJpy: product.priceJpy,
-                          priceVnd: product.priceVnd || Math.round(product.priceJpy * exchangeRate),
-                          weightKg: product.weightKg,
-                          imageUrl: product.imageUrl,
-                          originalStore: product.originalStore,
-                          category: product.category,
-                          stockSlots: product.stockSlots,
-                        })
-                      }
-                      className="p-2.5 rounded-xl bg-banana-50 hover:bg-banana-500 text-banana-800 hover:text-navy-950 border border-banana-200 transition-colors"
-                      title="Thêm vào giỏ hàng"
+                      onClick={() => handleAddToCart(product)}
+                      disabled={!inStock}
+                      className="p-2.5 rounded-xl bg-banana-50 hover:bg-banana-500 text-banana-800 hover:text-navy-950 border border-banana-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-banana-50"
+                      title={inStock ? "Thêm vào giỏ hàng" : "Sản phẩm đã hết hàng"}
                     >
                       <ShoppingCart className="w-4 h-4" />
                     </button>
 
                     <button
                       onClick={() => handleOrderThis(product)}
-                      className="px-3 py-2 rounded-xl bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center gap-1"
-                      title="Tính giá và đặt ngay"
+                      disabled={!inStock}
+                      className="px-3 py-2 rounded-xl bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy-900"
+                      title={inStock ? "Tính giá và đặt ngay" : "Sản phẩm đã hết hàng"}
                     >
                       <ShoppingBag className="w-3.5 h-3.5" />
                       <span>Mua ngay</span>
@@ -255,9 +296,11 @@ export default function CuratedProducts() {
                 </div>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </AnimatePresence>
       </motion.div>
+      )}
     </section>
   );
 }

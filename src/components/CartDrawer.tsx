@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 import {
   X,
   Trash2,
@@ -33,6 +34,7 @@ export default function CartDrawer() {
   } = useCart();
 
   const { customer, openAuthModal } = useAuth();
+  const { toast } = useToast();
 
   // Checkout form fields
   const [showCheckout, setShowCheckout] = useState(false);
@@ -74,12 +76,12 @@ export default function CartDrawer() {
       if (data.success && data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        alert(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        toast.error(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
         setIsRedirecting(false);
       }
     } catch (err) {
       console.error("[VNPAY REDIRECT]", err);
-      alert("Lỗi kết nối. Vui lòng thử lại.");
+      toast.error("Lỗi kết nối. Vui lòng thử lại.");
       setIsRedirecting(false);
     }
   };
@@ -90,7 +92,7 @@ export default function CartDrawer() {
     if (items.length === 0) return;
 
     if (!customerName || !customerPhone || !customerAddress) {
-      alert("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng.");
+      toast.warning("Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ giao hàng.");
       return;
     }
 
@@ -114,7 +116,7 @@ export default function CartDrawer() {
       });
 
       if (hasMissingUrl) {
-        alert("Có món bên ngoài hệ thống trong giỏ hàng chưa có link sản phẩm. Vui lòng kiểm tra lại.");
+        toast.warning("Có sản phẩm mua hộ chưa có đường dẫn. Vui lòng kiểm tra lại giỏ hàng.");
         setIsSubmitting(false);
         return;
       }
@@ -152,11 +154,11 @@ export default function CartDrawer() {
         clearCart();
         setShowCheckout(false);
       } else {
-        alert(data.error || "Không thể khởi tạo đơn hàng. Vui lòng thử lại.");
+        toast.error(data.error || "Không thể khởi tạo đơn hàng. Vui lòng thử lại.");
       }
     } catch (err) {
       console.error(err);
-      alert("Lỗi kết nối máy chủ khi tạo đơn hàng.");
+      toast.error("Lỗi kết nối máy chủ khi tạo đơn hàng.");
     } finally {
       setIsSubmitting(false);
     }

@@ -22,10 +22,12 @@ import {
 import TrackingStepper from "@/components/TrackingStepper";
 import { StoredOrder } from "@/types";
 import { useAuth } from "@/context/AuthContext";
+import { useToast } from "@/context/ToastContext";
 
 function TrackingContent() {
   const searchParams = useSearchParams();
   const { customer } = useAuth();
+  const { toast } = useToast();
 
   const [searchCode, setSearchCode] = useState("");
   const [order, setOrder] = useState<StoredOrder | null>(null);
@@ -45,18 +47,6 @@ function TrackingContent() {
 
   // Trạng thái thanh toán VNPAY trả về
   const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | "pending" | null>(null);
-
-  useEffect(() => {
-    const code = searchParams.get("orderCode");
-    const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | null;
-    if (code) {
-      setSearchCode(code);
-      fetchOrder(code);
-    }
-    if (payment) {
-      setPaymentStatus(payment);
-    }
-  }, [searchParams]);
 
   const fetchOrder = async (code: string) => {
     if (!code.trim()) return;
@@ -100,6 +90,8 @@ function TrackingContent() {
 
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("orderCode");
+    const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | "pending" | null;
+    if (payment) setPaymentStatus(payment);
     if (codeParam) {
       setSearchCode(codeParam);
       fetchOrder(codeParam);
@@ -150,11 +142,7 @@ function TrackingContent() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        alert(
-          cancelTargetOrder.status === "PENDING_DEPOSIT"
-            ? `Đã hủy đơn hàng #${cancelTargetOrder.orderCode} thành công!`
-            : `Đã gửi yêu cầu hủy đơn #${cancelTargetOrder.orderCode} đến bộ phận chăm sóc khách hàng!`
-        );
+        toast.success(`Đã hủy đơn hàng #${cancelTargetOrder.orderCode} thành công.`);
         setCancelTargetOrder(null);
         if (order && order.orderCode === cancelTargetOrder.orderCode) {
           fetchOrder(order.orderCode);
@@ -163,10 +151,10 @@ function TrackingContent() {
           fetchMyOrders();
         }
       } else {
-        alert("Lỗi khi hủy đơn: " + (data.error || "Vui lòng thử lại sau."));
+        toast.error(data.error || "Không thể hủy đơn hàng. Vui lòng thử lại.");
       }
     } catch {
-      alert("Lỗi kết nối máy chủ");
+      toast.error("Không kết nối được máy chủ. Vui lòng thử lại.");
     } finally {
       setIsCancelling(false);
     }
