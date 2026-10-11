@@ -141,11 +141,11 @@ export default function CustomersTab({ onViewOrders, onViewAiTrends }: Customers
               </div>
 
               <div className="bg-white p-4 rounded-3xl border border-slate-200 shadow-sm">
-                <div className="text-[10px] font-bold text-banana-700 uppercase tracking-wider mb-1">💰 Doanh Số</div>
+                <div className="text-[10px] font-bold text-banana-700 uppercase tracking-wider mb-1">💰 Doanh Thu Đã Thu</div>
                 <div className="text-lg font-bold text-banana-600 font-mono">
                   {((customerStats?.totalRevenueVnd ?? customers.reduce((acc, c) => acc + (c.totalSpentVnd || 0), 0)) / 1_000_000).toFixed(1)}M
                 </div>
-                <div className="text-[10px] text-slate-400 mt-0.5">VNĐ tích lũy</div>
+                <div className="text-[10px] text-slate-400 mt-0.5">VNĐ từ đơn đã thanh toán</div>
               </div>
             </div>
 
@@ -198,7 +198,7 @@ export default function CustomersTab({ onViewOrders, onViewAiTrends }: Customers
                       <th className="p-4">Thông Tin Liên Hệ</th>
                       <th className="p-4 text-center">Đơn Hàng</th>
                       <th className="p-4 text-center">Lịch Sử Chat AI</th>
-                      <th className="p-4">Tổng Chi Tiêu</th>
+                      <th className="p-4">Đã Thanh Toán</th>
                       <th className="p-4">Hoạt Động Gần Nhất</th>
                       <th className="p-4 pr-6 text-right">Thao Tác</th>
                     </tr>
@@ -314,7 +314,7 @@ export default function CustomersTab({ onViewOrders, onViewAiTrends }: Customers
                               )}
                             </td>
 
-                            {/* Cột 6: Tổng chi tiêu */}
+                            {/* Cột 6: Tổng tiền đã thanh toán */}
                             <td className="p-4 font-mono font-bold text-navy-900 text-xs">
                               {c.customerType !== "CHAT_LEAD"
                                 ? (c.totalSpentVnd || 0).toLocaleString("vi-VN") + " đ"

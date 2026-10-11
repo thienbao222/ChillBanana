@@ -4,6 +4,10 @@ import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";
 
+function isPaymentRecorded(paymentStatus: string) {
+  return paymentStatus === "DEPOSITED_50" || paymentStatus === "PAID_100";
+}
+
 export async function GET(req: NextRequest) {
   try {
     const isAdmin = isAdminRequest(req);
@@ -138,7 +142,10 @@ export async function GET(req: NextRequest) {
 
       const orderCount = userOrders.length;
       if (orderCount > 0) registeredWithOrders++;
-      const totalSpentVnd = userOrders.reduce((sum, o) => sum + (o.totalVnd || 0), 0);
+      const totalSpentVnd = userOrders.reduce(
+        (sum, order) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
+        0
+      );
       totalRevenueVnd += totalSpentVnd;
       const latestOrder = userOrders[0] || null;
 
@@ -168,7 +175,10 @@ export async function GET(req: NextRequest) {
     // ====== 7. Enrich khách vãng lai đặt đơn ======
     const enrichedGuestOrders = Array.from(guestOrderMap.values()).map((g: any) => {
       const orderCount = g.orders.length;
-      const totalSpentVnd = g.orders.reduce((sum: number, o: any) => sum + (o.totalVnd || 0), 0);
+      const totalSpentVnd = g.orders.reduce(
+        (sum: number, order: any) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
+        0
+      );
       totalRevenueVnd += totalSpentVnd;
       const latestOrder = g.orders[0] || null;
 
