@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGeminiAgent } from "@/lib/gemini-agent";
 import { prisma } from "@/lib/prisma";
+import { getCustomerFromRequest } from "@/lib/auth-session";
 import { AIPersonality } from "@/types";
+import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -35,7 +37,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { message, personality = "omotenashi", history = [], sessionId, customer } = body;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return NextResponse.json({ error: "Dữ liệu tin nhắn không hợp lệ." }, { status: 400 });
+    }
+    const { message, personality = "omotenashi", history = [] } = body;
 
     // Input validation
     if (!message || typeof message !== "string" || message.trim().length === 0) {
@@ -51,15 +56,34 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Use IP-based session fallback instead of shared "default-session"
-    const resolvedSessionId = sessionId && sessionId !== "default-session"
-      ? String(sessionId).slice(0, 100)
-      : `ip-${ip}-${Date.now()}`;
+    const customerSession = getCustomerFromRequest(req);
+    const sessionCookieName = "cb_chat_session";
+    let resolvedSessionId = req.cookies.get(sessionCookieName)?.value || "";
+    if (!/^cbchat_[a-f0-9-]{36}$/.test(resolvedSessionId)) {
+      resolvedSessionId = `cbchat_${randomUUID()}`;
+    }
+
+    // A browser-provided session ID is not an identity credential. Bind the
+    // server-issued cookie to its owner and rotate it if another account uses it.
+    const existingChatSession = await prisma.chatSession.findUnique({
+      where: { sessionId: resolvedSessionId },
+      select: { customerId: true },
+    });
+    if (existingChatSession?.customerId && existingChatSession.customerId !== customerSession?.id) {
+      resolvedSessionId = `cbchat_${randomUUID()}`;
+    }
 
     const selectedPersonality: AIPersonality = personality === "vietnamese" ? "vietnamese" : "omotenashi";
+    const validHistory = Array.isArray(history)
+      ? history.slice(-8).filter((entry: any) =>
+          entry && typeof entry === "object" &&
+          ["user", "model", "assistant"].includes(entry.role) &&
+          typeof entry.text === "string"
+        ).map((entry: any) => ({ role: entry.role, text: entry.text.slice(0, 2000) }))
+      : [];
 
     // 1. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
-    const reply = await askGeminiAgent(message, selectedPersonality, history);
+    const reply = await askGeminiAgent(message, selectedPersonality, validHistory);
 
     // 2. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();
@@ -84,11 +108,27 @@ export async function POST(req: NextRequest) {
       : msgLower.includes("?") || msgLower.includes("hỏi") || msgLower.includes("tư vấn") ? "inquiry"
       : "positive";
 
-    let customerId = customer?.id || null;
+    let customerId = customerSession?.id || null;
     let customerType = customerId ? "REGISTERED" : "ANONYMOUS_GUEST";
-    let customerName = customer?.name || null;
-    let customerEmail = customer?.email || null;
-    let customerPhone = customer?.phone || null;
+    let customerName: string | null = null;
+    let customerEmail: string | null = customerSession?.email || null;
+    let customerPhone: string | null = null;
+
+    if (customerId) {
+      const customerProfile = await prisma.customer.findUnique({
+        where: { id: customerId },
+        select: { name: true, email: true, phone: true },
+      });
+      if (customerProfile) {
+        customerName = customerProfile.name;
+        customerEmail = customerProfile.email;
+        customerPhone = customerProfile.phone;
+      } else {
+        customerId = null;
+        customerEmail = null;
+        customerType = "ANONYMOUS_GUEST";
+      }
+    }
 
     if (!customerEmail) {
       const emailMatch = message.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/);
@@ -149,12 +189,20 @@ export async function POST(req: NextRequest) {
       console.warn("Could not save chat interaction to database:", saveErr);
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       reply,
       personality: selectedPersonality,
       sessionId: resolvedSessionId,
     });
+    response.cookies.set(sessionCookieName, resolvedSessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 30,
+    });
+    return response;
   } catch (error) {
     console.error("ChillBanana Gemini AI Error:", error);
     return NextResponse.json(

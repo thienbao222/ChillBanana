@@ -10,7 +10,6 @@ import {
   Loader2
 } from "lucide-react";
 import { AIPersonality } from "@/types";
-import { useAuth } from "@/context/AuthContext";
 
 interface Message {
   id: string;
@@ -49,10 +48,8 @@ function ChatImage({ url, alt }: { url: string; alt: string }) {
 }
 
 export default function AIChatBot() {
-  const { customer } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [personality, setPersonality] = useState<AIPersonality>("omotenashi");
-  const [sessionId, setSessionId] = useState<string>("");
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
@@ -65,16 +62,6 @@ export default function AIChatBot() {
       time: "Vừa xong",
     },
   ]);
-
-  useEffect(() => {
-    // Khởi tạo hoặc khôi phục sessionId
-    let sid = localStorage.getItem("chillbanana_chat_session_id");
-    if (!sid) {
-      sid = "session-" + Date.now() + "-" + Math.random().toString(36).substring(2, 7);
-      localStorage.setItem("chillbanana_chat_session_id", sid);
-    }
-    setSessionId(sid);
-  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -171,14 +158,7 @@ export default function AIChatBot() {
         body: JSON.stringify({
           message: enrichedQuery,
           personality,
-          sessionId,
           history: conversationHistory,
-          customer: customer ? {
-            id: customer.id,
-            name: customer.name,
-            email: customer.email,
-            phone: customer.phone,
-          } : null,
         }),
       });
 
@@ -250,7 +230,7 @@ export default function AIChatBot() {
       const res = await fetch("/api/ai/image-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData, sessionId }),
+        body: JSON.stringify({ imageData }),
       });
 
       const data = await res.json();

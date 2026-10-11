@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
+import { recentVietnamDateKeys, vietnamDateKey, vietnamDayEnd, vietnamDayStart } from "@/lib/vietnam-time";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,17 @@ export async function GET(req: NextRequest) {
     // === Build date range filter ===
     const dateFilter: { gte?: Date; lte?: Date } = {};
     if (dateFrom) {
-      dateFilter.gte = new Date(dateFrom + "T00:00:00.000Z");
+      const start = vietnamDayStart(dateFrom);
+      if (!start) return NextResponse.json({ error: "Ngày bắt đầu không hợp lệ." }, { status: 400 });
+      dateFilter.gte = start;
     }
     if (dateTo) {
-      const toDate = new Date(dateTo + "T23:59:59.999Z");
+      const toDate = vietnamDayEnd(dateTo);
+      if (!toDate) return NextResponse.json({ error: "Ngày kết thúc không hợp lệ." }, { status: 400 });
       dateFilter.lte = toDate;
+    }
+    if (dateFilter.gte && dateFilter.lte && dateFilter.gte > dateFilter.lte) {
+      return NextResponse.json({ error: "Khoảng ngày không hợp lệ." }, { status: 400 });
     }
 
     // === Build customer type filter ===
@@ -127,16 +134,11 @@ export async function GET(req: NextRequest) {
     };
 
     // 4. Sessions theo ngày (7 ngày gần nhất hoặc trong range)
-    const now = new Date();
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().slice(0, 10);
-    });
+    const last7Days = recentVietnamDateKeys(7);
 
     const dailySessions = last7Days.map((dateStr) => {
       const daySessions = sessions.filter(
-        (s) => new Date(s.createdAt).toISOString().slice(0, 10) === dateStr
+        (s) => vietnamDateKey(new Date(s.createdAt)) === dateStr
       );
       return {
         date: dateStr,

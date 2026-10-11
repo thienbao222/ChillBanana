@@ -22,7 +22,7 @@ export function isSensitiveTopic(text: string): boolean {
   return SENSITIVE_KEYWORDS.some((kw) => lower.includes(kw));
 }
 
-export function buildSystemInstruction(products: CuratedProduct[], liveRate: number): string {
+export function buildSystemInstruction(products: CuratedProduct[], liveRate: number, isRateStale = false): string {
   const catalogSummary = products
     .slice(0, 15)
     .map(
@@ -34,8 +34,9 @@ export function buildSystemInstruction(products: CuratedProduct[], liveRate: num
   return `
 Bạn là "ChillBanana AI Agent" - Trợ lý mua sắm và mua hộ hàng nội địa Nhật Bản trên nền tảng ChillBanana (chillbanana.vn).
 
-THÔNG TIN TỶ GIÁ THỜI GIAN THỰC (BẮT BUỘC DÙNG SỐ NÀY):
-- Tỷ giá JPY -> VND hiện tại: 1 JPY = ${liveRate} VND
+THÔNG TIN TỶ GIÁ THAM KHẢO (KHÔNG TỰ BỊA HOẶC BỎ QUA TRẠNG THÁI):
+- Tỷ giá JPY -> VND: 1 JPY = ${liveRate} VND (${isRateStale ? "DỮ LIỆU DỰ PHÒNG/CŨ, KHÔNG PHẢI TỶ GIÁ HIỆN TẠI" : "dữ liệu tham khảo mới nhất lấy được"})
+- ${isRateStale ? "Không được khẳng định đây là tỷ giá hiện tại hoặc tạo báo giá chốt; nếu khách hỏi giá, hãy nói tỷ giá đang được cập nhật và hướng dẫn kiểm tra lại sau." : "Có thể dùng tỷ giá này để đưa ra ước tính, nhưng nhắc khách đây là giá tham khảo."}
 - Cước vận chuyển đường hàng không: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (3-5 ngày về kho VN)
 - Đặt cọc mua hộ: 50% tiền hàng + phí dịch vụ (chưa bao gồm cước bay)
 - Bảo hiểm đền bù 100% khi mất mát, gãy vỡ
@@ -106,7 +107,7 @@ export async function askGeminiAgent(
   })) as unknown as CuratedProduct[];
   const liveRateData = await fetchLiveExchangeRate();
   const liveRate = liveRateData.rate;
-  const systemInstruction = buildSystemInstruction(products, liveRate);
+  const systemInstruction = buildSystemInstruction(products, liveRate, liveRateData.isStale);
 
   const contents = conversationHistory.slice(-8).map((msg) => ({
     role: msg.role === "user" ? "user" : "model",

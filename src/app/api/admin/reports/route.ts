@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isAdminRequest } from "@/lib/auth-session";
 import { prisma } from "@/lib/prisma";
+import { recentVietnamDateKeys, vietnamDateKey } from "@/lib/vietnam-time";
 
 export const dynamic = "force-dynamic";
 
@@ -70,7 +71,9 @@ export async function GET(req: NextRequest) {
           };
         }
         productSalesMap[key].count++;
-        productSalesMap[key].totalRevenue += o.depositAmountVnd;
+        if (o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED") {
+          productSalesMap[key].totalRevenue += o.depositAmountVnd;
+        }
       });
 
     const topProducts = Object.values(productSalesMap)
@@ -105,18 +108,13 @@ export async function GET(req: NextRequest) {
     }));
 
     // ====== 6. Doanh thu 7 ngày gần nhất ======
-    const now = new Date();
-    const last7Days = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(now);
-      d.setDate(d.getDate() - (6 - i));
-      return d.toISOString().slice(0, 10);
-    });
+    const last7Days = recentVietnamDateKeys(7);
 
     const dailyRevenue = last7Days.map((dateStr) => {
       const dayOrders = orders.filter(
         (o) =>
           o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED" &&
-          o.createdAt.toISOString().slice(0, 10) === dateStr
+          vietnamDateKey(o.createdAt) === dateStr
       );
       return {
         date: dateStr,
@@ -134,10 +132,14 @@ export async function GET(req: NextRequest) {
     orders.filter(o => o.status !== "CANCELLED").forEach(o => {
       if (o.customerType === "REGISTERED") {
         registeredCount++;
-        registeredRevenue += o.depositAmountVnd;
+        if (o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED") {
+          registeredRevenue += o.depositAmountVnd;
+        }
       } else {
         guestCount++;
-        guestRevenue += o.depositAmountVnd;
+        if (o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED") {
+          guestRevenue += o.depositAmountVnd;
+        }
       }
     });
 
