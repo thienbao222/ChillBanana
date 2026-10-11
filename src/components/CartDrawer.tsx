@@ -74,7 +74,7 @@ export default function CartDrawer() {
       if (data.success && data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        alert("Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        alert(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
         setIsRedirecting(false);
       }
     } catch (err) {
@@ -101,9 +101,20 @@ export default function CartDrawer() {
         .map((it) => `${it.name} (x${it.quantity})`)
         .join(", ");
 
-      const primaryUrl = items[0]?.originalUrl;
-      if (!primaryUrl || primaryUrl.trim() === "") {
-        alert("Có món trong giỏ hàng chưa có link sản phẩm. Vui lòng dùng công cụ tính giá để dán link trước khi đặt.");
+      let primaryUrl = "";
+      const hasMissingUrl = items.some(it => {
+        const isExternal = !it.id || it.id.startsWith("calc-");
+        if (isExternal && !it.originalUrl?.trim()) {
+          return true; // Missing URL for external item
+        }
+        if (isExternal && !primaryUrl && it.originalUrl) {
+          primaryUrl = it.originalUrl.trim(); // Grab the first external URL for the payload
+        }
+        return false;
+      });
+
+      if (hasMissingUrl) {
+        alert("Có món bên ngoài hệ thống trong giỏ hàng chưa có link sản phẩm. Vui lòng kiểm tra lại.");
         setIsSubmitting(false);
         return;
       }
@@ -113,7 +124,7 @@ export default function CartDrawer() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName,
-          customerEmail: customerEmail || "khachhang@chillbanana.vn",
+          customerEmail,
           customerPhone,
           customerAddress,
           customerNote: customerNote ? `[Đơn Giỏ Hàng]: ${customerNote}` : `[Đơn Giỏ Hàng: ${items.length} món]`,
@@ -129,8 +140,9 @@ export default function CartDrawer() {
           totalVnd,
           depositAmountVnd: deposit50Vnd,
           depositPercent: 50,
-          paymentMethod: "VIETQR",
+          paymentMethod: "VNPAY",
           isGroupBuy: false,
+          items: items.map(it => ({ id: it.id, name: it.name, quantity: it.quantity, priceJpy: it.priceJpy, weightKg: it.weightKg })),
         }),
       });
 

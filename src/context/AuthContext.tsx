@@ -15,6 +15,7 @@ interface AuthResponse {
   success: boolean;
   message?: string;
   stitched?: { orders: number; sessions: number };
+  requiresEmailVerification?: boolean;
 }
 
 interface AuthContextType {
@@ -74,12 +75,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCustomer(data.customer);
+        if (data.customer) setCustomer(data.customer);
+        else setCustomer(null);
         // Keep modal open briefly to show stitching success message
         if (!data.stitched || data.stitched.orders === 0) {
           setIsAuthModalOpen(false);
         }
-        return { success: true, message: data.message, stitched: data.stitched };
+        return { success: true, message: data.message, stitched: data.stitched, requiresEmailVerification: data.requiresEmailVerification };
       }
       return { success: false, message: data.error || "Đăng nhập thất bại" };
     } catch (err: any) {
@@ -96,12 +98,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        setCustomer(data.customer);
+        if (data.customer) setCustomer(data.customer);
+        else setCustomer(null);
         // Keep modal open briefly to show stitching success message
         if (!data.stitched || data.stitched.orders === 0) {
           setIsAuthModalOpen(false);
         }
-        return { success: true, message: data.message, stitched: data.stitched };
+        return { success: true, message: data.message, stitched: data.stitched, requiresEmailVerification: data.requiresEmailVerification };
       }
       return { success: false, message: data.error || "Đăng ký thất bại" };
     } catch (err: any) {

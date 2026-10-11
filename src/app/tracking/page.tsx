@@ -20,7 +20,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import TrackingStepper from "@/components/TrackingStepper";
-import { StoredOrder } from "@/lib/order-store";
+import { StoredOrder } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 
 function TrackingContent() {
@@ -44,7 +44,7 @@ function TrackingContent() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Trạng thái thanh toán VNPAY trả về
-  const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | "pending" | null>(null);
 
   useEffect(() => {
     const code = searchParams.get("orderCode");
@@ -211,6 +211,18 @@ function TrackingContent() {
           </button>
         </div>
       )}
+      {paymentStatus === "pending" && (
+        <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-300 rounded-2xl text-sm text-blue-900 shadow">
+          <AlertCircle className="w-6 h-6 text-blue-600 shrink-0" />
+          <div>
+            <p className="font-bold">Đang đối soát giao dịch</p>
+            <p className="text-xs text-blue-700">VNPAY chưa xác nhận xong. Vui lòng chờ ít phút và kiểm tra lại trạng thái đơn trước khi thanh toán lần nữa.</p>
+          </div>
+          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-blue-600 hover:text-blue-900">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Top Tabs Switcher (Khi khách hàng đã đăng nhập) */}
       {customer && (
@@ -326,14 +338,18 @@ function TrackingContent() {
                       {/* Thanh toán */}
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          item.paymentStatus === "UNPAID"
+                          item.paymentStatus === "REFUNDED"
+                            ? "bg-slate-100 text-slate-600"
+                            : item.paymentStatus === "UNPAID"
                             ? "bg-slate-100 text-slate-600"
                             : item.paymentStatus === "DEPOSITED_50"
                             ? "bg-amber-100 text-amber-800"
                             : "bg-emerald-100 text-emerald-800"
                         }`}
                       >
-                        {item.paymentStatus === "UNPAID"
+                        {item.paymentStatus === "REFUNDED"
+                          ? "Đã hoàn tiền"
+                          : item.paymentStatus === "UNPAID"
                           ? "Chờ cọc"
                           : item.paymentStatus === "DEPOSITED_50"
                           ? "Đã cọc 50%"
@@ -363,7 +379,7 @@ function TrackingContent() {
                       <span>Xem Hành Trình</span>
                     </button>
 
-                    {item.status !== "CANCELLED" && item.status !== "COMPLETED" && (
+                    {item.canCancel && (
                       <button
                         onClick={() => openCustomerCancelModal(item)}
                         className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all flex items-center space-x-1"
@@ -482,7 +498,9 @@ function TrackingContent() {
                       </span>
                     ) : (
                       <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                        {order.paymentStatus === "PAID_100"
+                        {order.paymentStatus === "REFUNDED"
+                          ? "Đã hoàn tiền"
+                          : order.paymentStatus === "PAID_100"
                           ? "Đã thanh toán 100%"
                           : order.paymentStatus === "DEPOSITED_50"
                           ? "Đã cọc 50%"
@@ -491,13 +509,13 @@ function TrackingContent() {
                     )}
 
                     {/* Nút Hủy Đơn Hàng Dành Cho Khách */}
-                    {order.status !== "CANCELLED" && order.status !== "COMPLETED" && (
+                    {order.canCancel && (
                       <button
                         onClick={() => openCustomerCancelModal(order)}
                         className="inline-flex items-center space-x-1.5 px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-full transition-colors"
                       >
                         <Ban className="w-3.5 h-3.5 text-rose-600" />
-                        <span>{order.status === "PENDING_DEPOSIT" ? "Hủy Đơn Hàng" : "Yêu Cầu Hủy & Hoàn Cọc"}</span>
+                        <span>Hủy Đơn Hàng</span>
                       </button>
                     )}
                   </div>
@@ -610,11 +628,6 @@ function TrackingContent() {
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t space-y-1">
-                      <span className="text-slate-400">Người nhận & Địa chỉ:</span>
-                      <p className="font-bold text-slate-800">{order.customerName} - {order.customerPhone}</p>
-                      <p className="text-slate-600">{order.customerAddress}</p>
-                    </div>
                   </div>
                 </div>
 

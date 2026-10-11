@@ -15,7 +15,8 @@ export async function POST(req: NextRequest) {
   try {
     // Lấy tất cả khách hàng đã đăng ký
     const allCustomers = await prisma.customer.findMany({
-      select: { id: true, email: true, phone: true },
+      where: { emailVerifiedAt: { not: null } },
+      select: { id: true, email: true },
     });
 
     let totalOrdersStitched = 0;
@@ -23,23 +24,12 @@ export async function POST(req: NextRequest) {
 
     for (const customer of allCustomers) {
       const cleanEmail = customer.email.toLowerCase().trim();
-      const cleanPhone = customer.phone?.trim() || null;
-
       // Stitch đơn hàng theo email
       const emailOrderUpdate = await prisma.order.updateMany({
         where: { customerEmail: cleanEmail, customerId: null },
         data: { customerId: customer.id, customerType: "REGISTERED" },
       });
       totalOrdersStitched += emailOrderUpdate.count;
-
-      // Stitch đơn hàng theo phone
-      if (cleanPhone) {
-        const phoneOrderUpdate = await prisma.order.updateMany({
-          where: { customerPhone: cleanPhone, customerId: null },
-          data: { customerId: customer.id, customerType: "REGISTERED" },
-        });
-        totalOrdersStitched += phoneOrderUpdate.count;
-      }
 
       // Stitch chat sessions theo email
       const emailSessionUpdate = await prisma.chatSession.updateMany({
@@ -48,14 +38,7 @@ export async function POST(req: NextRequest) {
       });
       totalSessionsStitched += emailSessionUpdate.count;
 
-      // Stitch chat sessions theo phone
-      if (cleanPhone) {
-        const phoneSessionUpdate = await prisma.chatSession.updateMany({
-          where: { customerPhone: cleanPhone, customerId: null },
-          data: { customerId: customer.id, customerType: "REGISTERED" },
-        });
-        totalSessionsStitched += phoneSessionUpdate.count;
-      }
+      // BẢO MẬT: Bỏ qua Stitch theo SĐT vì chưa có cơ chế xác minh SMS OTP.
     }
 
     console.log(`[StitchAll] Hoàn thành: ${totalOrdersStitched} đơn + ${totalSessionsStitched} chat đã được gán.`);

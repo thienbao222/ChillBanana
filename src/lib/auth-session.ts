@@ -33,6 +33,9 @@ function resolveSecret(
   warnedRef: { warned: boolean }
 ): string {
   if (envValue) return envValue;
+  if (isProd) {
+    throw new Error(`[SECURITY] ${envName} bắt buộc phải được cấu hình trong production.`);
+  }
   if (!warnedRef.warned) {
     warnedRef.warned = true;
     console.error(
@@ -134,12 +137,55 @@ export function isAdminRequest(req: NextRequest): boolean {
 // ---------------------------------------------------------------------------
 
 export function hashCustomerPassword(password: string): string {
-  return crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest("hex");
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `scrypt$${salt}$${hash}`;
+}
+
+export function verifyCustomerPassword(password: string, storedHash: string): { valid: boolean; needsRehash: boolean } {
+  if (storedHash.startsWith("scrypt$")) {
+    const [, salt, expectedHex] = storedHash.split("$");
+    if (!salt || !expectedHex) return { valid: false, needsRehash: false };
+    const actual = crypto.scryptSync(password, salt, 64);
+    const expected = Buffer.from(expectedHex, "hex");
+    return {
+      valid: actual.length === expected.length && crypto.timingSafeEqual(actual, expected),
+      needsRehash: false,
+    };
+  }
+
+  // Hashes created by the previous version are upgraded after a successful login.
+  const legacy = crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest();
+  const expected = Buffer.from(storedHash, "hex");
+  return {
+    valid: legacy.length === expected.length && crypto.timingSafeEqual(legacy, expected),
+    needsRehash: true,
+  };
 }
 
 export function createCustomerSessionToken(data: { id: string; email: string }): string {
-  const payload = JSON.stringify(data);
+  const payload = JSON.stringify({ ...data, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 });
   return encodeToken(payload, sign(getCustomerSecret(), payload));
+}
+
+export function createCustomerEmailVerificationToken(data: { id: string; email: string }): string {
+  const payload = JSON.stringify({ ...data, purpose: "verify-email", exp: Date.now() + 1000 * 60 * 60 * 24 });
+  return encodeToken(payload, sign(getCustomerSecret(), payload));
+}
+
+export function verifyCustomerEmailVerificationToken(token: string): { id: string; email: string } | null {
+  const decoded = decodeToken(token);
+  if (!decoded) return null;
+  const expected = sign(getCustomerSecret(), decoded.payloadStr);
+  if (!safeEqual(expected, decoded.signature)) return null;
+  try {
+    const payload = JSON.parse(decoded.payloadStr);
+    if (payload.purpose !== "verify-email" || typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
+    if (typeof payload.id !== "string" || typeof payload.email !== "string") return null;
+    return { id: payload.id, email: payload.email };
+  } catch {
+    return null;
+  }
 }
 
 export function verifyCustomerSessionToken(token: string): { id: string; email: string } | null {
@@ -149,7 +195,7 @@ export function verifyCustomerSessionToken(token: string): { id: string; email: 
   if (!safeEqual(expected, decoded.signature)) return null;
   try {
     const payload = JSON.parse(decoded.payloadStr);
-    if (!payload?.id || !payload?.email) return null;
+    if (!payload?.id || !payload?.email || typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
     return { id: payload.id, email: payload.email };
   } catch {
     return null;

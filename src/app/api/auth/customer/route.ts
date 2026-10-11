@@ -3,9 +3,11 @@ import { prisma } from "@/lib/prisma";
 import {
   CUSTOMER_COOKIE_NAME,
   hashCustomerPassword as hashPassword,
+  verifyCustomerPassword,
   createCustomerSessionToken as signSession,
   verifyCustomerSessionToken as verifySession,
 } from "@/lib/auth-session";
+import { sendCustomerEmailVerification } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +32,13 @@ export async function GET(req: NextRequest) {
         phone: true,
         address: true,
         createdAt: true,
+        emailVerifiedAt: true,
       },
     });
 
-    return NextResponse.json({ customer: customer || null });
+    if (!customer?.emailVerifiedAt) return NextResponse.json({ customer: null });
+    const { emailVerifiedAt, ...safeCustomer } = customer;
+    return NextResponse.json({ customer: safeCustomer });
   } catch (error) {
     console.error("Auth GET error:", error);
     return NextResponse.json({ customer: null });
@@ -47,19 +52,35 @@ export async function POST(req: NextRequest) {
 
     // 1. ĐĂNG KÝ (REGISTER)
     if (action === "register") {
-      if (!email || !password || !name) {
+      if (typeof email !== "string" || typeof password !== "string" || typeof name !== "string" || !email.trim() || password.length < 8 || password.length > 256 || !name.trim() || name.length > 120 || (phone !== undefined && typeof phone !== "string") || (address !== undefined && typeof address !== "string")) {
         return NextResponse.json(
-          { error: "Vui lòng điền đầy đủ Họ tên, Email và Mật khẩu." },
+          { error: "Vui lòng điền họ tên, email hợp lệ và mật khẩu tối thiểu 8 ký tự." },
           { status: 400 }
         );
       }
 
       const cleanEmail = email.toLowerCase().trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return NextResponse.json({ error: "Địa chỉ email không hợp lệ." }, { status: 400 });
+      }
       const existing = await prisma.customer.findUnique({
         where: { email: cleanEmail },
       });
 
       if (existing) {
+        if (!existing.emailVerifiedAt && verifyCustomerPassword(password, existing.passwordHash).valid) {
+          try {
+            await sendCustomerEmailVerification(existing);
+            return NextResponse.json({
+              success: true,
+              requiresEmailVerification: true,
+              message: "Tài khoản đang chờ xác minh. Chúng tôi đã gửi lại liên kết xác minh tới email của bạn.",
+            });
+          } catch (error) {
+            console.error("[CustomerRegistration] Không thể gửi lại email xác minh:", error);
+            return NextResponse.json({ error: "Chưa gửi được email xác minh. Vui lòng thử lại sau." }, { status: 503 });
+          }
+        }
         return NextResponse.json(
           { error: "Email này đã được đăng ký. Vui lòng đăng nhập hoặc dùng email khác." },
           { status: 400 }
@@ -83,105 +104,27 @@ export async function POST(req: NextRequest) {
           createdAt: true,
         },
       });
-
-      const sessionToken = signSession({ id: customer.id, email: customer.email });
-
-      // ============================================================
-      // SPRINT 4 — IDENTITY STITCHING
-      // Tự động gán đơn hàng cũ & phiên chat cũ cho tài khoản mới
-      // Dựa theo email (và phone nếu có)
-      // ============================================================
-      let stitchedOrders = 0;
-      let stitchedSessions = 0;
       try {
-        const phoneVal = phone ? phone.trim() : null;
-
-        // Gán đơn hàng cũ của khách vãng lai (cùng email)
-        const orderUpdate = await prisma.order.updateMany({
-          where: {
-            customerEmail: cleanEmail,
-            customerId: null,  // Chưa được gán cho tài khoản nào
-          },
-          data: {
-            customerId: customer.id,
-            customerType: "REGISTERED",
-          },
-        });
-        stitchedOrders += orderUpdate.count;
-
-        // Gán thêm theo số điện thoại nếu có
-        if (phoneVal) {
-          const phoneOrderUpdate = await prisma.order.updateMany({
-            where: {
-              customerPhone: phoneVal,
-              customerId: null,
-            },
-            data: {
-              customerId: customer.id,
-              customerType: "REGISTERED",
-            },
-          });
-          stitchedOrders += phoneOrderUpdate.count;
-        }
-
-        // Gán phiên chat AI cũ (cùng email)
-        const sessionUpdate = await prisma.chatSession.updateMany({
-          where: {
-            customerEmail: cleanEmail,
-            customerId: null,
-          },
-          data: {
-            customerId: customer.id,
-            customerType: "REGISTERED",
-          },
-        });
-        stitchedSessions += sessionUpdate.count;
-
-        // Gán phiên chat theo số điện thoại nếu có
-        if (phoneVal) {
-          const phoneSessionUpdate = await prisma.chatSession.updateMany({
-            where: {
-              customerPhone: phoneVal,
-              customerId: null,
-            },
-            data: {
-              customerId: customer.id,
-              customerType: "REGISTERED",
-            },
-          });
-          stitchedSessions += phoneSessionUpdate.count;
-        }
-
-        if (stitchedOrders > 0 || stitchedSessions > 0) {
-          console.log(`[IdentityStitching] Tài khoản ${cleanEmail}: Gán ${stitchedOrders} đơn hàng + ${stitchedSessions} phiên chat cũ.`);
-        }
+        await sendCustomerEmailVerification(customer);
       } catch (stitchErr) {
-        console.warn("[IdentityStitching] Lỗi khi gán dữ liệu cũ:", stitchErr);
+        await prisma.customer.delete({ where: { id: customer.id } });
+        console.error("[CustomerRegistration] Không thể gửi email xác minh:", stitchErr);
+        return NextResponse.json(
+          { error: "Chưa gửi được email xác minh. Vui lòng thử lại sau hoặc liên hệ hỗ trợ." },
+          { status: 503 }
+        );
       }
 
-      const response = NextResponse.json({
+      return NextResponse.json({
         success: true,
-        message: stitchedOrders > 0
-          ? `Đăng ký thành công! Chúng tôi đã tự động khôi phục ${stitchedOrders} đơn hàng trước đây của bạn.`
-          : "Đăng ký tài khoản thành công!",
-        customer,
-        stitched: { orders: stitchedOrders, sessions: stitchedSessions },
+        requiresEmailVerification: true,
+        message: "Tài khoản đã được tạo. Hãy mở email và nhấn liên kết xác minh để kích hoạt tài khoản.",
       });
-
-      response.cookies.set(CUSTOMER_COOKIE_NAME, sessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 60 * 60 * 24 * 30, // 30 days
-        path: "/",
-      });
-
-      return response;
     }
 
     // 2. ĐĂNG NHẬP (LOGIN)
     if (action === "login") {
-      if (!email || !password) {
+      if (typeof email !== "string" || typeof password !== "string" || !email.trim() || password.length > 256) {
         return NextResponse.json(
           { error: "Vui lòng nhập Email và Mật khẩu." },
           { status: 400 }
@@ -200,12 +143,29 @@ export async function POST(req: NextRequest) {
         );
       }
 
-      const hash = hashPassword(password);
-      if (customer.passwordHash !== hash) {
+      const passwordCheck = verifyCustomerPassword(password, customer.passwordHash);
+      if (!passwordCheck.valid) {
         return NextResponse.json(
           { error: "Tài khoản hoặc mật khẩu không chính xác." },
           { status: 401 }
         );
+      }
+
+      if (!customer.emailVerifiedAt) {
+        try {
+          await sendCustomerEmailVerification(customer);
+        } catch (error) {
+          console.error("[CustomerLogin] Không thể gửi email xác minh:", error);
+          return NextResponse.json({ error: "Chưa gửi được email xác minh. Vui lòng thử lại sau." }, { status: 503 });
+        }
+        return NextResponse.json({ error: "Tài khoản chưa xác minh. Chúng tôi đã gửi liên kết kích hoạt tới email của bạn." }, { status: 403 });
+      }
+
+      if (passwordCheck.needsRehash) {
+        await prisma.customer.update({
+          where: { id: customer.id },
+          data: { passwordHash: hashPassword(password) },
+        });
       }
 
       const sessionToken = signSession({ id: customer.id, email: customer.email });
@@ -223,13 +183,7 @@ export async function POST(req: NextRequest) {
         });
         loginStitchedOrders = loginOrderUpdate.count;
 
-        if (customer.phone) {
-          const phoneLoginUpdate = await prisma.order.updateMany({
-            where: { customerPhone: customer.phone, customerId: null },
-            data: { customerId: customer.id, customerType: "REGISTERED" },
-          });
-          loginStitchedOrders += phoneLoginUpdate.count;
-        }
+        // BẢO MẬT: Chỉ gán theo email đã xác nhận (chưa có SMS OTP nên không tự động gán theo SĐT)
 
         const loginSessionUpdate = await prisma.chatSession.updateMany({
           where: { customerEmail: cleanEmail, customerId: null },

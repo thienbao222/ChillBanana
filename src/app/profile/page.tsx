@@ -179,8 +179,8 @@ export default function ProfilePage() {
                                   <div className={`w-2 h-2 rounded-full ${
                                     order.paymentStatus === 'UNPAID' ? 'bg-amber-400' : 'bg-emerald-500'
                                   }`} />
-                                  <span className={order.paymentStatus === 'UNPAID' ? 'text-amber-700' : 'text-emerald-700'}>
-                                    {order.paymentStatus === 'UNPAID' ? 'Chờ cọc (50%)' : 'Đã cọc'}
+                                  <span className={order.paymentStatus === 'REFUNDED' ? 'text-slate-600' : order.paymentStatus === 'UNPAID' ? 'text-amber-700' : 'text-emerald-700'}>
+                                    {order.paymentStatus === 'REFUNDED' ? 'Đã hoàn tiền' : order.paymentStatus === 'UNPAID' ? 'Chờ cọc (50%)' : 'Đã cọc'}
                                   </span>
                                 </div>
                               </div>

@@ -1,23 +1,23 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { 
-  Calculator, 
-  ArrowRight, 
-  ExternalLink, 
-  Sparkles, 
-  AlertCircle, 
-  CheckCircle2, 
-  Users, 
-  ShieldCheck, 
-  Info, 
+import {
+  Calculator,
+  ArrowRight,
+  ExternalLink,
+  Sparkles,
+  AlertCircle,
+  CheckCircle2,
+  Users,
+  ShieldCheck,
+  Info,
   RefreshCw,
   Activity
 } from "lucide-react";
-import { 
-  AIR_SHIPPING_PER_KG, 
-  MIN_ORDER_THRESHOLD_VND, 
-  calculateOrderPrice 
+import {
+  AIR_SHIPPING_PER_KG,
+  MIN_ORDER_THRESHOLD_VND,
+  calculateOrderPrice
 } from "@/lib/data";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
@@ -41,6 +41,7 @@ export default function OrderCalculator() {
   };
 
   const [productUrl, setProductUrl] = useState("");
+  const [productId, setProductId] = useState<string | null>(null);
   const [productName, setProductName] = useState("");
   const [productImage, setProductImage] = useState("");
   const [detectedStore, setDetectedStore] = useState("");
@@ -52,7 +53,7 @@ export default function OrderCalculator() {
   const [isScraping, setIsScraping] = useState(false);
   const [scrapeSuccess, setScrapeSuccess] = useState(false);
   const [isPriceLocked, setIsPriceLocked] = useState(false);
-  
+
   // Tỷ giá thời gian thực tế
   const [exchangeRate, setExchangeRate] = useState<number>(172);
   const [rateLoading, setRateLoading] = useState(false);
@@ -77,6 +78,7 @@ export default function OrderCalculator() {
       const urlToScrape = urlParams.get("url");
       if (urlToScrape) {
         setProductUrl(urlToScrape);
+        setProductId(null);
         // Tự động cuộn xuống phần calculator
         const el = document.getElementById("calculator");
         if (el) el.scrollIntoView({ behavior: "smooth" });
@@ -118,6 +120,7 @@ export default function OrderCalculator() {
 
     const handleSelectProduct = (e: any) => {
       if (e.detail) {
+        if (e.detail.id) setProductId(e.detail.id);
         if (e.detail.name) setProductName(e.detail.name);
         if (e.detail.priceJpy) {
           setPriceJpy(e.detail.priceJpy);
@@ -146,6 +149,7 @@ export default function OrderCalculator() {
 
     setIsScraping(true);
     setScrapeSuccess(false);
+    setProductId(null);
 
     try {
       const res = await fetch("/api/scrape-link", {
@@ -204,7 +208,7 @@ export default function OrderCalculator() {
       if (data.success && data.paymentUrl) {
         window.location.href = data.paymentUrl;
       } else {
-        alert("Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
+        alert(data.error || "Không thể tạo link thanh toán VNPAY. Vui lòng thử lại.");
         setIsRedirecting(false);
       }
     } catch (err) {
@@ -218,7 +222,7 @@ export default function OrderCalculator() {
     e.preventDefault();
     if (isSubmitting) return;
 
-    if (!productUrl || productUrl.trim() === "") {
+    if ((!productUrl || productUrl.trim() === "") && !productId) {
       alert("Vui lòng dán link sản phẩm (Bước 1)!");
       return;
     }
@@ -235,10 +239,10 @@ export default function OrderCalculator() {
     try {
       const orderPayload = {
         customerName,
-        customerEmail: customerEmail || "khachhang@chillbanana.vn",
+        customerEmail,
         customerPhone,
         customerAddress,
-        originalUrl: productUrl,
+        originalUrl: productUrl || "",
         productName: productName,
         category,
         priceJpy,
@@ -249,10 +253,13 @@ export default function OrderCalculator() {
         shippingFeeVnd: calc.shippingFeeVnd,
         totalVnd: calc.totalVnd,
         depositAmountVnd: depositChoice === "50" ? calc.deposit50Vnd : calc.baseOrderCostVnd,
-        paymentMethod: "VIETQR",
+        paymentMethod: "VNPAY",
         isGroupBuy,
         customerNote,
         direction,
+        items: productId
+          ? [{ id: productId, name: productName, quantity: 1, priceJpy, weightKg }]
+          : [{ id: "calc-" + Date.now(), name: productName, quantity: 1, priceJpy, weightKg }],
       };
 
       const res = await fetch("/api/orders", {
@@ -333,7 +340,7 @@ export default function OrderCalculator() {
                 Tự động lấy Tên, Ảnh & Giá Yên
               </span>
             </div>
-            
+
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
                 <input
@@ -551,8 +558,8 @@ export default function OrderCalculator() {
           {/* Hạn mức tối thiểu & Gộp đơn */}
           <div className="pt-3 border-t border-slate-100">
             <div className={`p-4 rounded-2xl border transition-all ${
-              calc.isUnderMinOrder 
-                ? "bg-amber-50 border-amber-300" 
+              calc.isUnderMinOrder
+                ? "bg-amber-50 border-amber-300"
                 : "bg-emerald-50/70 border-emerald-300"
             }`}>
               <div className="flex items-start space-x-3">

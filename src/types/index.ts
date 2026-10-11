@@ -8,7 +8,7 @@ export type OrderStatus =
   | "COMPLETED"        // Giao hàng thành công
   | "CANCELLED";       // Đã hủy đơn hàng
 
-export type PaymentStatus = "UNPAID" | "DEPOSITED_50" | "PAID_100";
+export type PaymentStatus = "UNPAID" | "DEPOSITED_50" | "PAID_100" | "REFUNDED";
 export type PaymentMethod = "VIETQR" | "VNPAY" | "MOMO" | "COD";
 export type AIPersonality = "omotenashi" | "vietnamese";
 
@@ -107,4 +107,45 @@ export interface AdminAuthSession {
   username: string;
   name: string;
   role: string;
+}
+
+export interface StoredOrder {
+  id: string;
+  orderCode: string;
+  customerName: string;
+  customerEmail: string;
+  customerPhone: string;
+  customerAddress: string;
+  originalUrl: string;
+  productName: string;
+  category: string;
+  priceJpy: number;
+  weightKg: number;
+  exchangeRate: number;
+  productPriceVnd: number;
+  serviceFeeVnd: number;
+  shippingFeeVnd: number;
+  totalVnd: number;
+  depositAmountVnd: number;
+  paymentStatus: PaymentStatus;
+  paymentMethod: string;
+  isGroupBuy: boolean;
+  groupBuyCode?: string;
+  status: OrderStatus;
+  jpDomesticTrack?: string;
+  vnDomesticTrack?: string;
+  customerNote?: string;
+  adminNote?: string;
+  trackingLogs: {
+    id: string;
+    status: OrderStatus;
+    title: string;
+    description: string;
+    location: string;
+    createdAt: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+  isPriceVerified?: boolean;
+  canCancel?: boolean;
 }

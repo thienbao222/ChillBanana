@@ -46,6 +46,7 @@ export default function CuratedProducts() {
     window.dispatchEvent(
       new CustomEvent("chillbanana:select_product", {
         detail: {
+          id: product.id,
           name: product.name,
           priceJpy: product.priceJpy,
           weightKg: product.weightKg,

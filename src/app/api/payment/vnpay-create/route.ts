@@ -22,7 +22,7 @@ function buildQueryString(params: Record<string, string>) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { orderCode, orderInfo } = body; // No longer trust 'amount' from client
+    const { orderCode } = body;
 
     if (!orderCode) {
       return NextResponse.json({ error: 'Thiếu mã đơn hàng' }, { status: 400 });
@@ -33,15 +33,24 @@ export async function POST(req: NextRequest) {
     if (!order) {
       return NextResponse.json({ error: 'Không tìm thấy đơn hàng.' }, { status: 404 });
     }
-    if (order.paymentStatus !== 'UNPAID') {
-      return NextResponse.json({ error: 'Đơn hàng này đã được thanh toán cọc rồi.' }, { status: 400 });
+    if (order.paymentStatus !== 'UNPAID' || order.status !== "PENDING_DEPOSIT") {
+      return NextResponse.json({ error: 'Đơn hàng này không còn ở trạng thái chờ thanh toán.' }, { status: 400 });
+    }
+    if (!order.isPriceVerified) {
+      return NextResponse.json({ error: 'Đơn hàng đang chờ quản trị viên xác minh giá và cước phí. Vui lòng quay lại thanh toán sau.' }, { status: 403 });
+    }
+    if (order.depositAmountVnd <= 0) {
+      return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
     }
 
     const amount = order.depositAmountVnd; // Server-side computed amount
 
-    const tmnCode = process.env.VNPAY_TMN_CODE!;
-    const hashSecret = process.env.VNPAY_HASH_SECRET!;
-    const vnpUrl = process.env.VNPAY_URL!;
+    const tmnCode = process.env.VNPAY_TMN_CODE;
+    const hashSecret = process.env.VNPAY_HASH_SECRET;
+    const vnpUrl = process.env.VNPAY_URL;
+    if (!tmnCode || !hashSecret || !vnpUrl) {
+      return NextResponse.json({ error: "Cổng thanh toán chưa được cấu hình đầy đủ." }, { status: 503 });
+    }
 
     // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
     const baseUrl =
@@ -77,6 +86,8 @@ export async function POST(req: NextRequest) {
     // VNPAY yêu cầu số tiền * 100 (đơn vị: đồng -> làm tròn)
     const amountInt = Math.round(Number(amount));
 
+    const forwardedIp = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+    const clientIp = forwardedIp || req.headers.get("x-real-ip") || "127.0.0.1";
     const params: Record<string, string> = {
       vnp_Version: "2.1.0",
       vnp_Command: "pay",
@@ -84,9 +95,9 @@ export async function POST(req: NextRequest) {
       vnp_Amount: String(amountInt * 100),
       vnp_CreateDate: createDate,
       vnp_CurrCode: "VND",
-      vnp_IpAddr: "127.0.0.1",
+      vnp_IpAddr: clientIp,
       vnp_Locale: "vn",
-      vnp_OrderInfo: orderInfo || `Dat coc don hang ${orderCode}`,
+      vnp_OrderInfo: `Dat coc don hang ${orderCode}`,
       vnp_OrderType: "other",
       vnp_ReturnUrl: returnUrl,
       vnp_TxnRef: orderCode,

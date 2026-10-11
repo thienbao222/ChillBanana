@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/lib/product-store";
 import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
 import { isAdminRequest } from "@/lib/auth-session";
 
@@ -16,37 +15,12 @@ export async function GET(req: NextRequest) {
     const rateData = await fetchLiveExchangeRate();
     const liveRate = rateData.roundedRate || 172;
 
-    // 1. Lấy từ CSDL Prisma SQLite
-    try {
-      const dbProducts = await prisma.product.findMany({
-        where: category && category !== "all" ? { category } : undefined,
-        orderBy: { createdAt: "desc" },
-      });
+    const dbProducts = await prisma.product.findMany({
+      where: category && category !== "all" ? { category } : undefined,
+      orderBy: { createdAt: "desc" },
+    });
 
-      if (dbProducts && dbProducts.length > 0) {
-        const liveProducts = dbProducts.map((p) => ({
-          ...p,
-          priceVnd: Math.round(p.priceJpy * liveRate),
-        }));
-
-        return NextResponse.json({
-          success: true,
-          count: liveProducts.length,
-          exchangeRate: liveRate,
-          products: liveProducts,
-        });
-      }
-    } catch (dbErr) {
-      console.warn("Truy vấn sản phẩm từ Prisma thất bại:", dbErr);
-    }
-
-    // 2. Fallback
-    let products = getAllProducts();
-    if (category && category !== "all") {
-      products = products.filter((p) => p.category === category);
-    }
-
-    const liveProducts = products.map((p) => ({
+    const liveProducts = dbProducts.map((p) => ({
       ...p,
       priceVnd: Math.round(p.priceJpy * liveRate),
     }));
@@ -58,6 +32,7 @@ export async function GET(req: NextRequest) {
       products: liveProducts,
     });
   } catch (error) {
+    console.error("Lỗi tải danh sách sản phẩm:", error);
     return NextResponse.json(
       { success: false, error: "Lỗi tải danh sách sản phẩm." },
       { status: 500 }
@@ -73,51 +48,50 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    if (!body.name || !body.priceJpy) {
-      return NextResponse.json(
-        { success: false, error: "Tên sản phẩm và Giá Yên (JPY) là bắt buộc." },
-        { status: 400 }
-      );
+    const priceJpy = body.priceJpy === undefined ? 3000 : Number(body.priceJpy);
+    const weightKg = body.weightKg === undefined ? 0.4 : Number(body.weightKg);
+    const stockSlots = body.stockSlots === undefined ? 10 : Number(body.stockSlots);
+    if (!Number.isSafeInteger(priceJpy) || priceJpy < 1 || !Number.isFinite(weightKg) || weightKg <= 0 || weightKg > 100 || !Number.isSafeInteger(stockSlots) || stockSlots < 0) {
+      return NextResponse.json({ success: false, error: "Giá, cân nặng hoặc tồn kho không hợp lệ." }, { status: 400 });
     }
+    const rateData = await fetchLiveExchangeRate();
+    const liveRate = rateData.roundedRate || 172;
+    const priceVnd = Math.round(priceJpy * liveRate);
 
-    const newProd = createProduct({
-      name: body.name,
-      category: body.category || "cosmetics",
-      priceJpy: Number(body.priceJpy),
-      weightKg: Number(body.weightKg) || 0.4,
-      imageUrl: body.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
-      description: body.description || "Sản phẩm nội địa Nhật Bản chính hãng.",
-      originalStore: body.originalStore || "Amazon JP",
-      stockSlots: Number(body.stockSlots) || 10,
-      isHot: Boolean(body.isHot),
-      featuredNote: body.featuredNote || "",
-      voltageNote: body.voltageNote || undefined,
-    });
+    const slug = (body.name || "san-pham-moi")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/(^-|-$)+/g, "") + "-" + Math.floor(100 + Math.random() * 900);
+
+    const categoryNames: Record<string, string> = {
+      cosmetics: "Mỹ Phẩm & Chăm Sóc Da",
+      health: "Thực Phẩm Chức Năng",
+      gadgets: "Gia Dụng & Điện Tử Mini",
+      anime: "Anime, Manga & Sưu Tầm",
+    };
 
     // Lưu vào CSDL Prisma SQLite
-    try {
-      await prisma.product.create({
-        data: {
-          id: newProd.id,
-          name: newProd.name,
-          slug: newProd.slug,
-          category: newProd.category,
-          categoryName: newProd.categoryName,
-          priceJpy: newProd.priceJpy,
-          priceVnd: newProd.priceVnd,
-          weightKg: newProd.weightKg,
-          imageUrl: newProd.imageUrl,
-          description: newProd.description,
-          originalStore: newProd.originalStore,
-          stockSlots: newProd.stockSlots,
-          isHot: newProd.isHot,
-          featuredNote: newProd.featuredNote,
-          voltageNote: newProd.voltageNote,
-        },
-      });
-    } catch (dbErr) {
-      console.warn("Lưu sản phẩm vào Prisma thất bại:", dbErr);
-    }
+    const newProd = await prisma.product.create({
+      data: {
+        id: "prod-" + Date.now(),
+        name: body.name || "Sản phẩm nội địa Nhật",
+        slug,
+        category: (body.category as string) || "cosmetics",
+        categoryName: categoryNames[body.category || ""] || "Hàng Nội Địa Nhật",
+        priceJpy,
+        priceVnd,
+        weightKg,
+        imageUrl: body.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+        description: body.description || "Sản phẩm nội địa Nhật Bản chính hãng.",
+        originalStore: body.originalStore || "Amazon JP",
+        stockSlots,
+        isHot: Boolean(body.isHot),
+        featuredNote: body.featuredNote || "",
+        voltageNote: body.voltageNote || undefined,
+      },
+    });
 
     return NextResponse.json({
       success: true,
@@ -152,53 +126,56 @@ export async function PUT(req: NextRequest) {
     const rateData = await fetchLiveExchangeRate();
     const liveRate = rateData.roundedRate || 172;
 
-    let updated: any = null;
-
-    // 1. Cập nhật trong Prisma SQLite
-    try {
-      const priceJpy = data.priceJpy !== undefined ? Number(data.priceJpy) : undefined;
-      const priceVnd = priceJpy !== undefined ? Math.round(priceJpy * liveRate) : undefined;
-
-      updated = await prisma.product.update({
-        where: { id },
-        data: {
-          ...(data.name && { name: data.name }),
-          ...(data.category && { category: data.category }),
-          ...(data.categoryName && { categoryName: data.categoryName }),
-          ...(priceJpy !== undefined && { priceJpy, priceVnd }),
-          ...(data.weightKg !== undefined && { weightKg: Number(data.weightKg) }),
-          ...(data.imageUrl && { imageUrl: data.imageUrl }),
-          ...(data.description && { description: data.description }),
-          ...(data.originalStore && { originalStore: data.originalStore }),
-          ...(data.stockSlots !== undefined && { stockSlots: Number(data.stockSlots) }),
-          ...(data.isHot !== undefined && { isHot: Boolean(data.isHot) }),
-          ...(data.featuredNote !== undefined && { featuredNote: data.featuredNote }),
-          ...(data.voltageNote !== undefined && { voltageNote: data.voltageNote }),
-        },
-      });
-
-      // Đồng bộ vào RAM store nếu có
-      updateProduct(id, data);
-    } catch (dbErr) {
-      // 2. Fallback sang RAM store
-      updated = updateProduct(id, data);
+    const priceJpy = data.priceJpy !== undefined ? Number(data.priceJpy) : undefined;
+    const weightKg = data.weightKg !== undefined ? Number(data.weightKg) : undefined;
+    const stockSlots = data.stockSlots !== undefined ? Number(data.stockSlots) : undefined;
+    if (
+      (priceJpy !== undefined && (!Number.isSafeInteger(priceJpy) || priceJpy < 1)) ||
+      (weightKg !== undefined && (!Number.isFinite(weightKg) || weightKg <= 0 || weightKg > 100)) ||
+      (stockSlots !== undefined && (!Number.isSafeInteger(stockSlots) || stockSlots < 0))
+    ) {
+      return NextResponse.json({ success: false, error: "Giá, cân nặng hoặc tồn kho không hợp lệ." }, { status: 400 });
     }
+    const priceVnd = priceJpy !== undefined ? Math.round(priceJpy * liveRate) : undefined;
 
-    if (!updated) {
-      return NextResponse.json(
-        { success: false, error: "Không tìm thấy sản phẩm cần cập nhật." },
-        { status: 404 }
-      );
+    const categoryNames: Record<string, string> = {
+      cosmetics: "Mỹ Phẩm & Chăm Sóc Da",
+      health: "Thực Phẩm Chức Năng",
+      gadgets: "Gia Dụng & Điện Tử Mini",
+      anime: "Anime, Manga & Sưu Tầm",
+    };
+
+    let updateData: any = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.category !== undefined) {
+      updateData.category = data.category;
+      updateData.categoryName = categoryNames[data.category as string] || data.category;
     }
+    if (priceJpy !== undefined) updateData.priceJpy = priceJpy;
+    if (priceVnd !== undefined) updateData.priceVnd = priceVnd;
+    if (weightKg !== undefined) updateData.weightKg = weightKg;
+    if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
+    if (data.description !== undefined) updateData.description = data.description;
+    if (data.originalStore !== undefined) updateData.originalStore = data.originalStore;
+    if (stockSlots !== undefined) updateData.stockSlots = stockSlots;
+    if (data.isHot !== undefined) updateData.isHot = Boolean(data.isHot);
+    if (data.featuredNote !== undefined) updateData.featuredNote = data.featuredNote;
+    if (data.voltageNote !== undefined) updateData.voltageNote = data.voltageNote;
+
+    const updated = await prisma.product.update({
+      where: { id },
+      data: updateData,
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Cập nhật sản phẩm thành công!",
+      message: "Cập nhật thành công!",
       product: updated,
     });
   } catch (error) {
+    console.error("Lỗi cập nhật sản phẩm:", error);
     return NextResponse.json(
-      { success: false, error: "Không thể cập nhật sản phẩm." },
+      { success: false, error: "Lỗi khi cập nhật sản phẩm." },
       { status: 500 }
     );
   }
@@ -220,30 +197,16 @@ export async function DELETE(req: NextRequest) {
       );
     }
 
-    let deleted = false;
-
-    // 1. Xóa trong Prisma SQLite
-    try {
-      await prisma.product.delete({ where: { id } });
-      deleted = true;
-      deleteProduct(id);
-    } catch (dbErr) {
-      // 2. Fallback sang RAM store
-      deleted = deleteProduct(id);
-    }
-
-    if (!deleted) {
-      return NextResponse.json(
-        { success: false, error: "Không tìm thấy sản phẩm cần xóa." },
-        { status: 404 }
-      );
-    }
+    await prisma.product.delete({
+      where: { id },
+    });
 
     return NextResponse.json({
       success: true,
-      message: "Đã xóa sản phẩm thành công.",
+      message: "Đã xóa sản phẩm.",
     });
   } catch (error) {
+    console.error("Lỗi xóa sản phẩm:", error);
     return NextResponse.json(
       { success: false, error: "Lỗi khi xóa sản phẩm." },
       { status: 500 }

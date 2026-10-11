@@ -68,7 +68,7 @@ export default function ProductsTab() {
       name: prod.name, category: prod.category, priceJpy: prod.priceJpy,
       weightKg: prod.weightKg, imageUrl: prod.imageUrl,
       description: prod.description || "", originalStore: prod.originalStore || "Amazon JP",
-      stockSlots: prod.stockSlots || 10, isHot: Boolean(prod.isHot),
+      stockSlots: prod.stockSlots ?? 10, isHot: Boolean(prod.isHot),
       featuredNote: prod.featuredNote || "", voltageNote: prod.voltageNote || "",
     });
     setIsProductModalOpen(true);

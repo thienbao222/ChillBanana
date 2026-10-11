@@ -1,8 +1,8 @@
 import { AIPersonality, CuratedProduct } from "@/types";
 import { AIR_SHIPPING_PER_KG } from "./data";
-import { getAllProducts } from "./product-store";
 import { fetchLiveExchangeRate } from "./exchange-rate";
 import { chatKeyPool } from "./api-key-manager";
+import { prisma } from "./prisma";
 
 export interface GeminiAgentMessage {
   role: "user" | "model" | "assistant";
@@ -100,7 +100,10 @@ export async function askGeminiAgent(
       ? "Phong cách: Omotenashi Nhật Bản - Kính cẩn, lễ phép, chu đáo, xưng Em, gọi Quý khách."
       : "Phong cách: Thân thiện Chill Việt Nam - Vui vẻ, gần gũi, xưng Em, gọi Anh/Chị/Bạn, nhiệt tình mách mẹo săn deal, tư vấn sale hời.";
 
-  const products = getAllProducts();
+  const products = (await prisma.product.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 30, // Limit context to 30 products to avoid huge prompt
+  })) as unknown as CuratedProduct[];
   const liveRateData = await fetchLiveExchangeRate();
   const liveRate = liveRateData.rate;
   const systemInstruction = buildSystemInstruction(products, liveRate);

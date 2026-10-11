@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 
     // Doanh thu thực thu = tổng depositAmountVnd của đơn đã thanh toán
     const actualRevenue = orders
-      .filter((o) => o.paymentStatus !== "UNPAID")
+      .filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
       .reduce((acc, o) => acc + o.depositAmountVnd, 0);
 
     // Tổng giá trị đơn dự kiến (bao gồm cả chưa thanh toán)
@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       other: { count: 0, revenue: 0 },
     };
     orders
-      .filter((o) => o.paymentStatus !== "UNPAID")
+      .filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
       .forEach((o) => {
         const cat = o.category in categoryRevMap ? o.category : "other";
         categoryRevMap[cat].count++;
@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
     const dailyRevenue = last7Days.map((dateStr) => {
       const dayOrders = orders.filter(
         (o) =>
-          o.paymentStatus !== "UNPAID" &&
+          o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED" &&
           o.createdAt.toISOString().slice(0, 10) === dateStr
       );
       return {

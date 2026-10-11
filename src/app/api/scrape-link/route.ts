@@ -186,10 +186,12 @@ export async function POST(req: NextRequest) {
             priceJpy = parseInt(amazonWhole[1].replace(/,/g, ""), 10);
           } else if (offscreen && offscreen[1]) {
             const val = parseFloat(offscreen[1].replace(/,/g, ""));
-            priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
+            const isUsd = offscreen[0].includes("$") || urlLower.includes("amazon.com") && !urlLower.includes("amazon.co.jp");
+            priceJpy = isUsd ? Math.round(val * 155) : Math.round(val);
           } else if (jsonPrice && jsonPrice[1]) {
             const val = parseFloat(jsonPrice[1]);
-            priceJpy = val < 500 ? Math.round(val * 155) : Math.round(val);
+            const isUsd = urlLower.includes("amazon.com") && !urlLower.includes("amazon.co.jp");
+            priceJpy = isUsd ? Math.round(val * 155) : Math.round(val);
           }
         }
       }

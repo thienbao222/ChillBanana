@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
 
     const totalRevenue = orders.reduce((acc, o) => acc + o.totalVnd, 0);
     const depositedRevenue = orders
-      .filter((o) => o.paymentStatus !== "UNPAID")
+      .filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
       .reduce((acc, o) => acc + o.depositAmountVnd, 0);
 
     const productCounts: Record<string, number> = {};

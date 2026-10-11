@@ -89,14 +89,14 @@ export async function GET(req: NextRequest) {
 
     // 13. Tổng doanh thu (đơn đã cọc/thanh toán)
     const revenueResult = await prisma.order.aggregate({
-      where: { paymentStatus: { not: "UNPAID" } },
+      where: { paymentStatus: { notIn: ["UNPAID", "REFUNDED"] } },
       _sum: { depositAmountVnd: true },
     });
     const totalRevenue = revenueResult._sum.depositAmountVnd || 0;
 
     // 14. Doanh thu từ khách đăng ký
     const registeredRevenueResult = await prisma.order.aggregate({
-      where: { customerType: "REGISTERED", paymentStatus: { not: "UNPAID" } },
+      where: { customerType: "REGISTERED", paymentStatus: { notIn: ["UNPAID", "REFUNDED"] } },
       _sum: { depositAmountVnd: true },
     });
     const registeredRevenue = registeredRevenueResult._sum.depositAmountVnd || 0;
@@ -145,10 +145,11 @@ export async function GET(req: NextRequest) {
       },
     ];
 
-    // 16. Retention — khách quay lại lần 2+
-    const repeatCustomers = await prisma.customer.count({
-      where: { orders: { some: {} } },
+    const customersWithOrderCounts = await prisma.customer.findMany({
+      select: { _count: { select: { orders: true } } },
+      where: { orders: { some: {} } }
     });
+    const repeatCustomers = customersWithOrderCounts.filter(c => c._count.orders >= 2).length;
 
     // 17. AI Chat → Mua hàng conversion rate (tổng quát)
     const chatToOrderRate = totalChatSessions > 0

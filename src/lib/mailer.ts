@@ -1,4 +1,5 @@
 import nodemailer from "nodemailer";
+import { createCustomerEmailVerificationToken } from "@/lib/auth-session";
 
 function getBaseUrl(): string {
   // 1. Ưu tiên APP_URL do người dùng cài đặt
@@ -18,6 +19,16 @@ function getBaseUrl(): string {
 
   // 4. Môi trường Local development
   return "http://localhost:3000";
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[char]!);
 }
 
 // Cấu hình transporter Nodemailer cho ChillBanana
@@ -43,6 +54,21 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: user && pass ? { user, pass } : undefined,
+  });
+}
+
+export async function sendCustomerEmailVerification(customer: { id: string; email: string; name: string }) {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    throw new Error("SMTP_USER và SMTP_PASS phải được cấu hình để gửi email xác minh.");
+  }
+  const token = createCustomerEmailVerificationToken({ id: customer.id, email: customer.email });
+  const verificationUrl = `${getBaseUrl()}/api/auth/customer/verify?token=${encodeURIComponent(token)}`;
+  const name = escapeHtml(customer.name);
+  await getTransporter().sendMail({
+    from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
+    to: customer.email,
+    subject: "[ChillBanana] Xác minh địa chỉ email",
+    html: `<p>Xin chào ${name},</p><p>Để kích hoạt tài khoản và kết nối các đơn hàng cũ của bạn, vui lòng xác minh email trong vòng 24 giờ:</p><p><a href="${verificationUrl}">Xác minh email</a></p><p>Nếu bạn không tạo tài khoản này, hãy bỏ qua email.</p>`,
   });
 }
 

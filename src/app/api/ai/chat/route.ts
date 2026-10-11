@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGeminiAgent } from "@/lib/gemini-agent";
-import { saveChatInteraction } from "@/lib/chat-store";
 import { prisma } from "@/lib/prisma";
 import { AIPersonality } from "@/types";
 
@@ -107,8 +106,6 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      saveChatInteraction(resolvedSessionId, message, reply, selectedPersonality);
-
       await prisma.chatSession.upsert({
         where: { sessionId: resolvedSessionId },
         update: {
