@@ -64,6 +64,13 @@ Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển độn
 - Đã tối ưu ảnh production xuống khoảng 5.2 MB, kiểm tra TypeScript và production build thành công.
 - Cần kiểm tra trực quan trên website local và sau deploy Vercel; xác nhận quyền sử dụng hình ảnh nhân vật/tài nguyên nếu phát hành công khai.
 
+### Nâng cấp trải nghiệm pet trên website
+
+- Dùng thêm animation `move` và `ask-alt`; Neo tự đi chuyển nhẹ trong vùng góc dưới màn hình, thỉnh thoảng chào và hiện lời mời hỗ trợ.
+- Hover vào Neo kích hoạt động tác chào; nhấn Neo mở chatbot. Khi chatbot mở, nhân vật vẫn xuất hiện ở phần đầu khung chat.
+- Có nút ẩn pet và nút hiện lại; các chuyển động tự phát dừng khi người dùng bật `prefers-reduced-motion`.
+- Đây là mô phỏng pet bằng sprite sheet và chuyển động CSS trong viewport website. Chuyển động của nhân vật vẫn giới hạn theo các khung hình đã xuất; muốn xoay người, nhìn theo con trỏ, cử động từng bộ phận hoặc phản ứng tùy ý như model rig thì cần model Live2D/Spine có rig và các animation tương ứng.
+
 ## Trạng thái hiện tại
 
-Preview cũ và các khung tách của bản Ludo có watermark vẫn nằm local trong `NeoUniverse/`, không được tích hợp. Bản NeoV2 đã được tối ưu và tích hợp vào mã chatbot; thay đổi đang chờ commit/push để Vercel triển khai.
+Preview cũ và các khung tách của bản Ludo có watermark vẫn nằm local trong `NeoUniverse/`, không được tích hợp. Bản NeoV2 đã được tối ưu và tích hợp vào widget tư vấn; các thay đổi được đẩy lên GitHub để Vercel triển khai.

@@ -5,10 +5,12 @@ import { useEffect, useState } from "react";
 export type NeoUniverseAnimation =
   | "analyze"
   | "ask"
+  | "ask-alt"
   | "confirm"
   | "explain"
   | "idle"
   | "listen"
+  | "move"
   | "product"
   | "recommend";
 
@@ -20,10 +22,12 @@ type Props = {
 const SPRITES: Record<NeoUniverseAnimation, string> = {
   analyze: "/neo-universe/analyze.webp",
   ask: "/neo-universe/ask.webp",
+  "ask-alt": "/neo-universe/ask-alt.webp",
   confirm: "/neo-universe/confirm.webp",
   explain: "/neo-universe/explain.webp",
   idle: "/neo-universe/idle.webp",
   listen: "/neo-universe/listen.webp",
+  move: "/neo-universe/move.webp",
   product: "/neo-universe/product.webp",
   recommend: "/neo-universe/recommend.webp",
 };

@@ -65,6 +65,10 @@ export default function AIChatBot() {
   ]);
   const [showGreetingAnimation, setShowGreetingAnimation] = useState(false);
   const hasShownGreetingAnimationRef = useRef(false);
+  const [petVisible, setPetVisible] = useState(true);
+  const [ambientAnimation, setAmbientAnimation] = useState<NeoUniverseAnimation>("idle");
+  const [ambientHint, setAmbientHint] = useState("");
+  const [petOffset, setPetOffset] = useState({ x: 0, y: 0 });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -85,6 +89,46 @@ export default function AIChatBot() {
     window.setTimeout(() => setShowGreetingAnimation(false), 2200);
   }, [isOpen]);
 
+  // Neo has small autonomous moments while idle. These use the movement and
+  // alternate greeting sheets already included in NeoV2, and pause for reduced motion.
+  useEffect(() => {
+    if (isOpen || !petVisible || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+    const hints = ["Neo có thể giúp bạn tìm món hàng Nhật đó!", "Chạm vào Neo để bắt đầu tư vấn nhé.", "Neo đang ở đây nếu bạn cần hỗ trợ."];
+    let actionTimer = 0;
+    let settleTimer = 0;
+    let hintTimer = 0;
+    let stopped = false;
+
+    const scheduleAction = () => {
+      actionTimer = window.setTimeout(() => {
+        if (stopped) return;
+        const nextX = Math.round((Math.random() - 0.72) * 104);
+        const nextY = Math.round((Math.random() - 0.75) * 62);
+        setPetOffset({ x: nextX, y: nextY });
+        setAmbientAnimation("move");
+
+        if (Math.random() > 0.45) {
+          setAmbientHint(hints[Math.floor(Math.random() * hints.length)]);
+          hintTimer = window.setTimeout(() => setAmbientHint(""), 3200);
+        }
+
+        settleTimer = window.setTimeout(() => {
+          setAmbientAnimation("idle");
+          scheduleAction();
+        }, 2100);
+      }, 7000 + Math.random() * 7000);
+    };
+
+    scheduleAction();
+    return () => {
+      stopped = true;
+      window.clearTimeout(actionTimer);
+      window.clearTimeout(settleTimer);
+      window.clearTimeout(hintTimer);
+    };
+  }, [isOpen, petVisible]);
+
   const latestAssistantMessage = [...messages].reverse().find(
     (message) => message.sender === "bot" && message.id !== "welcome-1"
   );
@@ -95,7 +139,7 @@ export default function AIChatBot() {
     return "explain";
   };
   const petAnimation: NeoUniverseAnimation = !isOpen
-    ? "idle"
+    ? ambientAnimation
     : showGreetingAnimation
       ? "ask"
       : imageAnalyzing || loading
@@ -460,23 +504,35 @@ export default function AIChatBot() {
   return (
     <>
       {/* Floating Toggle Button */}
-      {!isOpen && <button
-        id="ai-chat-toggle-btn"
-        onClick={() => setIsOpen((open) => !open)}
-        className="fixed bottom-3 right-3 sm:bottom-5 sm:right-5 z-50 flex flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
-        aria-label={isOpen ? "Đóng tư vấn AI" : "Mở tư vấn AI cùng Neo Universe"}
-      >
-        <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
-          <NeoUniverseSprite animation={petAnimation} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)]" />
-          <span className="absolute right-0 top-2 flex h-4 w-4">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
-            <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
-          </span>
-        </span>
-        <span className="-mt-1 rounded-full border border-white/80 bg-navy-950/95 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg sm:text-[11px]">
-          NEO · AI TƯ VẤN
-        </span>
-      </button>}
+      {!isOpen && (petVisible ? (
+        <div className="pointer-events-none fixed bottom-3 right-3 z-50 sm:bottom-5 sm:right-5" style={{ transform: `translate(${petOffset.x}px, ${petOffset.y}px)`, transition: "transform 1.4s cubic-bezier(.2,.8,.2,1)" }}>
+          {ambientHint && <div className="absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{ambientHint}</div>}
+          <button
+            id="ai-chat-toggle-btn"
+            onClick={() => { setAmbientHint(""); setIsOpen(true); }}
+            onPointerEnter={() => { if (ambientAnimation === "idle") setAmbientAnimation("ask-alt"); setAmbientHint("Neo có thể giúp gì cho bạn?"); }}
+            onPointerLeave={() => { setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
+            className="group pointer-events-auto flex flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+            aria-label="Mở tư vấn AI cùng Neo Universe"
+          >
+            <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
+              <NeoUniverseSprite animation={petAnimation} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)] group-hover:drop-shadow-[0_8px_12px_rgba(15,23,42,0.38)]" />
+              <span className="absolute right-0 top-2 flex h-4 w-4">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
+              </span>
+            </span>
+            <span className="-mt-1 rounded-full border border-white/80 bg-navy-950/95 px-2.5 py-1 text-[10px] font-extrabold tracking-wide text-white shadow-lg sm:text-[11px]">
+              NEO · AI TƯ VẤN
+            </span>
+          </button>
+          <button type="button" onClick={() => { setPetVisible(false); setAmbientHint(""); }} className="pointer-events-auto absolute right-0 top-0 flex h-6 w-6 translate-x-1 -translate-y-1 items-center justify-center rounded-full border border-slate-200 bg-white/95 text-slate-500 opacity-70 shadow transition-opacity hover:text-red-600 hover:opacity-100 focus:opacity-100" aria-label="Ẩn Neo Universe">
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-50 rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
+      ))}
 
       {/* Chat Window Panel */}
       {isOpen && (
@@ -486,8 +542,8 @@ export default function AIChatBot() {
           <div className="bg-navy-900 text-white p-4 border-b border-slate-800">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center space-x-2.5">
-                <div className="w-9 h-9 rounded-2xl bg-banana-500 flex items-center justify-center text-lg shadow">
-                  🍌
+                <div className="w-10 h-10 rounded-2xl bg-banana-500/15 flex items-center justify-center overflow-hidden shadow">
+                  <NeoUniverseSprite animation={petAnimation} className="h-full w-full" />
                 </div>
                 <div>
                   <h3 className="text-sm font-bold font-serif flex items-center">
