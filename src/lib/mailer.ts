@@ -145,6 +145,57 @@ export async function sendOrderCreatedEmail(order: any) {
   }
 }
 
+/** Gửi báo giá đã được admin xác nhận; trả false khi không thể gửi thật. */
+export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
+  if (!order.customerEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.warn("[Mailer] Không gửi email duyệt giá: thiếu email khách hàng hoặc cấu hình SMTP.");
+    return false;
+  }
+
+  const trackingUrl = `${getBaseUrl()}/tracking?orderCode=${encodeURIComponent(order.orderCode)}`;
+  const money = (value: number) => Number(value || 0).toLocaleString("vi-VN");
+  const customerName = escapeHtml(String(order.customerName || "Quý khách"));
+  const productName = escapeHtml(String(order.productName || "Sản phẩm"));
+  const orderCode = escapeHtml(String(order.orderCode));
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;color:#1e293b;line-height:1.6">
+      <div style="background:#0f172a;color:#fbbf24;padding:24px;text-align:center;border-radius:16px 16px 0 0">
+        <h1 style="margin:0">🍌 ChillBanana</h1><p style="margin:6px 0 0;color:#cbd5e1">Báo giá đơn hàng đã được xác nhận</p>
+      </div>
+      <div style="padding:24px;border:1px solid #e2e8f0;border-radius:0 0 16px 16px">
+        <p>Xin chào <strong>${customerName}</strong>,</p>
+        <p>ChillBanana đã kiểm tra và xác nhận báo giá cho yêu cầu mua hộ của bạn.</p>
+        <div style="background:#fffbeb;border-left:4px solid #f59e0b;padding:16px;margin:20px 0">
+          <p><strong>Mã đơn:</strong> #${orderCode}</p>
+          <p><strong>Sản phẩm:</strong> ${productName}</p>
+          <p><strong>Giá tại Nhật:</strong> ${money(order.priceJpy)} ¥</p>
+          <p><strong>Quy đổi sản phẩm:</strong> ${money(order.productPriceVnd)} đ</p>
+          <p><strong>Phí dịch vụ:</strong> ${money(order.serviceFeeVnd)} đ</p>
+          <p><strong>Phí vận chuyển tạm tính:</strong> ${money(order.shippingFeeVnd)} đ${order.weightKg ? ` (${escapeHtml(String(order.weightKg))} kg)` : " (chưa cân)"}</p>
+          <p><strong>Tổng tạm tính:</strong> ${money(order.totalVnd)} đ</p>
+          <p style="font-size:18px;color:#b45309"><strong>Tiền cọc cần thanh toán:</strong> ${money(order.depositAmountVnd)} đ</p>
+        </div>
+        <p>Vui lòng kiểm tra lại thông tin và tiến hành đặt cọc trên trang theo dõi đơn hàng.</p>
+        <p style="text-align:center;margin:28px 0"><a href="${trackingUrl}" style="background:#0f172a;color:#fbbf24;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Xem báo giá và đơn hàng</a></p>
+        <p style="font-size:12px;color:#64748b">Nếu bạn không tạo yêu cầu này, vui lòng bỏ qua email và liên hệ bộ phận hỗ trợ.</p>
+      </div>
+    </div>`;
+
+  try {
+    await getTransporter().sendMail({
+      from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
+      to: order.customerEmail,
+      subject: `[ChillBanana] Báo giá đơn #${order.orderCode} đã được xác nhận`,
+      html,
+    });
+    console.log(`[Mailer] Đã gửi email duyệt giá cho đơn #${order.orderCode}.`);
+    return true;
+  } catch (error) {
+    console.error(`[Mailer] Gửi email duyệt giá thất bại cho đơn #${order.orderCode}:`, error);
+    return false;
+  }
+}
+
 /**
  * 2. Email xác nhận thanh toán đặt cọc thành công (Qua VNPAY hoặc Admin duyệt)
  */

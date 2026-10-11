@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
+import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
 import { isNextOrderStatus } from "@/lib/order-policy";
 
@@ -129,6 +129,7 @@ export async function PATCH(
 
     const isAdminUser = isAdmin(req);
     const customerInfo = getCustomerFromRequest(req);
+    const priceWasJustApproved = isAdminUser && isPriceVerified === true && !existingOrder.isPriceVerified;
 
     if (!isAdminUser) {
       if (!customerInfo) {
@@ -307,7 +308,13 @@ export async function PATCH(
           include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
         });
 
-    // Gửi email thông báo cập nhật trạng thái
+    // Duyệt báo giá cần email riêng, có kết quả để giao diện báo chính xác cho admin.
+    // Các thay đổi trạng thái khác tiếp tục gửi email cập nhật tiến độ như trước.
+    if (priceWasJustApproved) {
+      const emailSent = await sendPriceApprovedEmail(updated);
+      return NextResponse.json({ success: true, order: updated, emailSent });
+    }
+
     sendOrderStatusUpdateEmail(updated, logTitle, logDescription).catch(
       (err) => console.warn("Lỗi gửi email cập nhật đơn hàng:", err)
     );
