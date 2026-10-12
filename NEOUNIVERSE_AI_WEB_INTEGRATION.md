@@ -30,6 +30,7 @@ Nhân vật dự kiến: **Neo Universe** trong *Umamusume*.
 - Đã tạo script `scripts/prepare-neov2-assets.py` để cắt/chuẩn hóa từng frame vào cùng lưới, resize và xuất WebP.
 - Tài nguyên production: `public/neo-universe/`; gồm 10 sprite sheet WebP và manifest, tổng khoảng 5.2 MB (giảm từ khoảng 60 MB PNG nguồn).
 - Component phát frame: `src/components/NeoUniverseSprite.tsx`; dùng `requestAnimationFrame` và thời gian thực để phát đủ 36 frame trong 3 giây (khoảng 83,33 ms/frame), chờ ảnh WebP giải mã trước khi bắt đầu để tránh khựng ở frame đầu.
+- Widget đang liên kết đủ cả 10 sheet NeoV2: Analyze, hai biến thể Ask, Confirm, Di chuyển, Product presentation, Explain, Idle/Waiting, Recommend và Signal Received. Hai sheet Ask được chọn ngẫu nhiên mỗi lần chào, rê chuột vào pet hoặc khi phản hồi cần hỏi lại; Idle và Signal Received được dùng riêng cho trạng thái chờ và lắng nghe.
 - Đã tích hợp vào nút nổi của `src/components/AIChatBot.tsx`; animation đổi theo chat và nội dung phản hồi.
 - Đã chạy `npm run build` thành công sau tích hợp.
 
