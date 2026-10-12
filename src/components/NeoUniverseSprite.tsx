@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 
 export type NeoUniverseAnimation =
   | "analyze"
-  | "ask"
+  | "ask-alt"
   | "confirm"
   | "explain"
   | "idle"
@@ -23,7 +23,7 @@ type Props = {
 
 const SPRITES: Record<NeoUniverseAnimation, string> = {
   analyze: "/neo-universe/analyze.webp",
-  ask: "/neo-universe/ask.webp",
+  "ask-alt": "/neo-universe/ask-alt.webp",
   confirm: "/neo-universe/confirm.webp",
   explain: "/neo-universe/explain.webp",
   idle: "/neo-universe/idle.webp",

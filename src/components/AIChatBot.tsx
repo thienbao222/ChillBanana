@@ -368,13 +368,13 @@ export default function AIChatBot() {
     if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
     if (/đề xuất|gợi ý|nên chọn|phù hợp nhất|khuyên chọn/i.test(text)) return "recommend";
     if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "presentation";
-    if (/\?\s*$/.test(text.trim())) return "ask";
+    if (/\?\s*$/.test(text.trim())) return "ask-alt";
     return "explain";
   };
   const petAnimation: NeoUniverseAnimation = (() => {
     if (!isOpen && !petConversationOpen) return ambientAnimation;
-    if (petConversationOpen && showPetGreeting) return "ask";
-    if (isOpen && showGreetingAnimation) return "ask";
+    if (petConversationOpen && showPetGreeting) return "ask-alt";
+    if (isOpen && showGreetingAnimation) return "ask-alt";
     if (imageAnalyzing || loading) return "analyze";
     if (inputMessage.trim()) return "listen";
     return latestAssistantMessage ? responseAnimation(latestAssistantMessage.text) : "listen";
@@ -870,8 +870,8 @@ export default function AIChatBot() {
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
             onPointerCancel={handlePetPointerUp}
-            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
-            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask" ? "idle" : current); setAmbientHint(""); }}
+            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
+            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
             className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"

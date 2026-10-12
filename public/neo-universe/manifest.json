@@ -8,9 +8,9 @@
     "frameCount": 36
   },
   {
-    "id": "ask",
+    "id": "ask-alt",
     "label": "Hỏi nhu cầu",
-    "src": "/neo-universe/ask.webp",
+    "src": "/neo-universe/ask-alt.webp",
     "columns": 6,
     "rows": 6,
     "frameCount": 36
