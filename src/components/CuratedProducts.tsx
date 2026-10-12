@@ -46,6 +46,18 @@ export default function CuratedProducts() {
     void fetchProducts();
   }, [fetchProducts]);
 
+  useEffect(() => {
+    const handleGalaxyCategory = (event: Event) => {
+      const category = (event as CustomEvent<{ category?: string }>).detail?.category;
+      if (category === "all" || ["cosmetics", "health", "gadgets", "anime"].includes(category ?? "")) {
+        setSelectedCategory(category ?? "all");
+      }
+    };
+
+    window.addEventListener("chillbanana:filter_products", handleGalaxyCategory);
+    return () => window.removeEventListener("chillbanana:filter_products", handleGalaxyCategory);
+  }, []);
+
   const filteredProducts = selectedCategory === "all"
     ? products
     : products.filter((p) => p.category === selectedCategory);
@@ -117,6 +129,7 @@ export default function CuratedProducts() {
         >
           <button
             onClick={() => setSelectedCategory("all")}
+            aria-pressed={selectedCategory === "all"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "all"
                 ? "bg-navy-900 text-white shadow-sm"
@@ -127,6 +140,7 @@ export default function CuratedProducts() {
           </button>
           <button
             onClick={() => setSelectedCategory("cosmetics")}
+            aria-pressed={selectedCategory === "cosmetics"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "cosmetics"
                 ? "bg-white text-pink-600 shadow-sm"
@@ -137,6 +151,7 @@ export default function CuratedProducts() {
           </button>
           <button
             onClick={() => setSelectedCategory("health")}
+            aria-pressed={selectedCategory === "health"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "health"
                 ? "bg-white text-emerald-600 shadow-sm"
@@ -147,6 +162,7 @@ export default function CuratedProducts() {
           </button>
           <button
             onClick={() => setSelectedCategory("gadgets")}
+            aria-pressed={selectedCategory === "gadgets"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "gadgets"
                 ? "bg-white text-banana-700 shadow-sm"
@@ -157,6 +173,7 @@ export default function CuratedProducts() {
           </button>
           <button
             onClick={() => setSelectedCategory("anime")}
+            aria-pressed={selectedCategory === "anime"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "anime"
                 ? "bg-white text-purple-600 shadow-sm"

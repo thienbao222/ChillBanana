@@ -1,122 +1,171 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, ChevronDown, Menu, Orbit, ShoppingCart, Sparkles, UserRound, X } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowUpRight,
+  Calculator,
+  ChevronDown,
+  Compass,
+  Menu,
+  PackageSearch,
+  ShoppingCart,
+  Sparkles,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useCart } from "@/context/CartContext";
 import styles from "@/styles/GalaxyHome.module.css";
 
 const destinations = [
-  { href: "#calculator", label: "Báo giá mua hộ", detail: "Ước tính chi phí đơn hàng" },
-  { href: "#categories", label: "Khám phá danh mục", detail: "Tìm nhóm hàng phù hợp" },
-  { href: "#products", label: "Sản phẩm nổi bật", detail: "Hàng đang có tại kho" },
-  { href: "#benefits", label: "Dịch vụ ChillBanana", detail: "Cách chúng tôi hỗ trợ bạn" },
-];
+  { id: "quote", href: "#calculator", label: "Báo giá mua hộ", detail: "Ước tính chi phí từ link", icon: Calculator },
+  { id: "categories", href: "#categories", label: "Khám phá danh mục", detail: "Tìm nhóm hàng phù hợp", icon: Compass },
+  { id: "products", href: "#products", label: "Sản phẩm tại kho", detail: "Xem hàng đang được đăng", icon: Sparkles },
+  { id: "tracking", href: "/tracking", label: "Tra cứu đơn hàng", detail: "Kiểm tra trạng thái đơn", icon: PackageSearch },
+] as const;
+
+const openNeo = () => {
+  const toggle = document.getElementById("ai-chat-toggle-btn");
+  if (toggle instanceof HTMLButtonElement) {
+    toggle.click();
+    return;
+  }
+
+  const showNeo = Array.from(document.querySelectorAll("button")).find(
+    (button) => button.getAttribute("aria-label") === "Hiện lại Neo Universe",
+  );
+  if (showNeo instanceof HTMLButtonElement) {
+    showNeo.click();
+    window.requestAnimationFrame(() => document.getElementById("ai-chat-toggle-btn")?.click());
+  }
+};
 
 export default function GalaxyHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
+  const brandButtonRef = useRef<HTMLButtonElement>(null);
   const { totalItems, openCart } = useCart();
   const { customer, openAuthModal } = useAuth();
 
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && menuOpen) {
         setMenuOpen(false);
-        setMobileOpen(false);
+        brandButtonRef.current?.focus();
       }
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, []);
+    const closeOnOutsidePress = (event: PointerEvent) => {
+      if (event.target instanceof Node && !headerRef.current?.contains(event.target)) setMenuOpen(false);
+    };
 
-  const closeMenus = () => {
-    setMenuOpen(false);
-    setMobileOpen(false);
+    window.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOnOutsidePress);
+    return () => {
+      window.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOnOutsidePress);
+    };
+  }, [menuOpen]);
+
+  const closeMenu = () => setMenuOpen(false);
+  const goToNeo = () => {
+    closeMenu();
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    document.getElementById("assistant")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "center" });
+    openNeo();
   };
 
   return (
-    <header className={styles.header}>
+    <header ref={headerRef} className={styles.header}>
       <div className={styles.headerInner}>
         <button
+          ref={brandButtonRef}
           type="button"
           className={styles.brandButton}
           aria-expanded={menuOpen}
           aria-controls="galaxy-navigation"
+          aria-label={`${menuOpen ? "Đóng" : "Mở"} điều hướng Banana Galaxy`}
           onClick={() => setMenuOpen((open) => !open)}
         >
-          <span className={styles.brandSun}><span>🍌</span></span>
+          <span className={styles.brandSun} aria-hidden="true"><span>🍌</span></span>
           <span className={styles.brandCopy}>
             <span className={styles.brandName}>Chill<span>Banana</span></span>
             <span className={styles.brandTagline}>BANANA GALAXY</span>
           </span>
-          <ChevronDown className={`${styles.brandChevron} ${menuOpen ? styles.chevronOpen : ""}`} size={16} />
+          <ChevronDown className={`${styles.brandChevron} ${menuOpen ? styles.chevronOpen : ""}`} size={16} aria-hidden="true" />
         </button>
 
-        <nav className={styles.desktopNav} aria-label="Điều hướng Banana Galaxy">
-          {destinations.slice(0, 3).map((item) => (
-            <a key={item.href} href={item.href} className={styles.navLink}>{item.label}</a>
-          ))}
+        <nav className={styles.desktopNav} aria-label="Điều hướng nhanh">
+          <a href="#calculator" className={styles.navLink}>Báo giá</a>
+          <a href="#categories" className={styles.navLink}>Danh mục</a>
+          <Link href="/tracking" className={styles.navLink}>Tra cứu đơn hàng</Link>
         </nav>
 
         <div className={styles.headerActions}>
           <button type="button" onClick={openCart} className={styles.iconButton} aria-label={`Mở giỏ hàng${totalItems ? `, ${totalItems} sản phẩm` : ""}`}>
-            <ShoppingCart size={17} />
+            <ShoppingCart size={17} aria-hidden="true" />
             <span className={styles.cartLabel}>Giỏ hàng</span>
             {totalItems > 0 && <span className={styles.cartCount}>{totalItems > 99 ? "99+" : totalItems}</span>}
           </button>
           {customer ? (
-            <Link href="/profile" className={`${styles.iconButton} ${styles.accountButton}`}>
-              <UserRound size={17} />
+            <Link href="/profile" className={`${styles.iconButton} ${styles.accountButton}`} aria-label={`Hồ sơ của ${customer.name}`}>
+              <UserRound size={17} aria-hidden="true" />
               <span>{customer.name.split(" ")[0]}</span>
             </Link>
           ) : (
             <button type="button" onClick={() => openAuthModal("login")} className={`${styles.iconButton} ${styles.accountButton}`}>
-              <UserRound size={17} />
+              <UserRound size={17} aria-hidden="true" />
               <span>Tài khoản</span>
             </button>
           )}
-          <Link href="/" className={styles.oldSiteButton} onClick={closeMenus}>
-            <ArrowLeft size={15} />
+          <Link href="/" className={styles.oldSiteButton} onClick={closeMenu}>
+            <ArrowLeft size={15} aria-hidden="true" />
             <span>Giao diện cũ</span>
           </Link>
           <button
             type="button"
             className={styles.mobileMenuButton}
-            aria-label={mobileOpen ? "Đóng menu" : "Mở menu"}
-            aria-expanded={mobileOpen}
-            onClick={() => setMobileOpen((open) => !open)}
+            aria-label={menuOpen ? "Đóng điều hướng" : "Mở điều hướng"}
+            aria-expanded={menuOpen}
+            aria-controls="galaxy-navigation"
+            onClick={() => setMenuOpen((open) => !open)}
           >
-            {mobileOpen ? <X size={21} /> : <Menu size={21} />}
+            {menuOpen ? <X size={21} aria-hidden="true" /> : <Menu size={21} aria-hidden="true" />}
           </button>
         </div>
       </div>
 
       {menuOpen && (
-        <div id="galaxy-navigation" className={styles.planetMenu}>
-          <div className={styles.menuSun}><Orbit size={20} /><span>Điều hướng</span></div>
-          <div className={styles.planetLinks}>
-            {destinations.map((item, index) => (
-              <a key={item.href} href={item.href} className={styles.planetLink} onClick={closeMenus}>
-                <span className={`${styles.planetIcon} ${styles[`planet${index + 1}`]}`}><Sparkles size={15} /></span>
-                <span><strong>{item.label}</strong><small>{item.detail}</small></span>
-                <ArrowUpRight size={15} className={styles.planetArrow} />
-              </a>
-            ))}
+        <div id="galaxy-navigation" className={styles.planetMenu} role="region" aria-label="Điều hướng hệ hành tinh">
+          <div className={styles.menuHeading}>
+            <div><span className={styles.menuEyebrow}>SOLAR SYSTEM NAVIGATION</span><strong>Chọn điểm đến của bạn</strong></div>
+            <button type="button" className={styles.closeMenuButton} onClick={closeMenu} aria-label="Đóng menu điều hướng"><X size={17} /></button>
           </div>
-          <Link href="/" className={styles.menuOldLink} onClick={closeMenus}>Quay về giao diện cũ <ArrowLeft size={14} /></Link>
+          <div className={styles.solarMap}>
+            <span className={`${styles.solarOrbit} ${styles.solarOrbitOne}`} aria-hidden="true" />
+            <span className={`${styles.solarOrbit} ${styles.solarOrbitTwo}`} aria-hidden="true" />
+            <span className={`${styles.solarOrbit} ${styles.solarOrbitThree}`} aria-hidden="true" />
+            <a href="#top" className={styles.solarSun} onClick={closeMenu} aria-label="Về đầu trang ChillBanana"><span>🍌</span></a>
+            {destinations.map((item, index) => {
+              const Icon = item.icon;
+              const className = `${styles.planetLink} ${styles[`planetPosition${index + 1}`]}`;
+              return (
+                <Link key={item.id} href={item.href} className={className} onClick={closeMenu}>
+                  <span className={`${styles.planetIcon} ${styles[`planet${index + 1}`]}`}><Icon size={15} aria-hidden="true" /></span>
+                  <span className={styles.planetText}><strong>{item.label}</strong><small>{item.detail}</small></span>
+                  <ArrowUpRight size={14} className={styles.planetArrow} aria-hidden="true" />
+                </Link>
+              );
+            })}
+            <button type="button" className={`${styles.planetLink} ${styles.planetAssistant}`} onClick={goToNeo}>
+              <span className={`${styles.planetIcon} ${styles.planet5}`}><Sparkles size={15} aria-hidden="true" /></span>
+              <span className={styles.planetText}><strong>Trò chuyện với Neo</strong><small>Hỏi về sản phẩm và quy trình</small></span>
+              <ArrowUpRight size={14} className={styles.planetArrow} aria-hidden="true" />
+            </button>
+          </div>
+          <div className={styles.menuFooter}><span>Vẫn có thể quay lại giao diện quen thuộc</span><Link href="/" onClick={closeMenu}>Giao diện cũ <ArrowLeft size={13} /></Link></div>
         </div>
-      )}
-
-      {mobileOpen && (
-        <nav className={styles.mobileNav} aria-label="Điều hướng di động">
-          {destinations.map((item) => (
-            <a key={item.href} href={item.href} onClick={closeMenus}>{item.label}<ArrowUpRight size={15} /></a>
-          ))}
-          <button type="button" onClick={() => { closeMenus(); openCart(); }}><ShoppingCart size={16} />Giỏ hàng{totalItems > 0 ? ` (${totalItems})` : ""}</button>
-          <Link href="/" onClick={closeMenus}><ArrowLeft size={16} />Quay về giao diện cũ</Link>
-        </nav>
       )}
     </header>
   );
