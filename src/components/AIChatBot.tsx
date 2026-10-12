@@ -20,10 +20,12 @@ interface Message {
   sender: "user" | "bot";
   text: string;
   isGuardrail?: boolean;
+  imagePreviewUrl?: string;
   time: string;
 }
 
 type AskAnimation = Extract<NeoUniverseAnimation, "ask" | "ask-alt">;
+type PendingImage = { file: File; previewUrl: string };
 
 const pickAskAnimation = (): AskAnimation => Math.random() < 0.5 ? "ask" : "ask-alt";
 
@@ -61,7 +63,11 @@ export default function AIChatBot() {
   const [inputMessage, setInputMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
+  const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
+  const [imageInputError, setImageInputError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingImageRef = useRef<PendingImage | null>(null);
+  const imagePreviewUrlsRef = useRef(new Set<string>());
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome-1",
@@ -96,6 +102,11 @@ export default function AIChatBot() {
   petPositionRef.current = petPosition;
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => () => {
+    imagePreviewUrlsRef.current.forEach((url) => URL.revokeObjectURL(url));
+    imagePreviewUrlsRef.current.clear();
+  }, []);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -396,7 +407,7 @@ export default function AIChatBot() {
 
   const handleSendMessage = async (textToSend?: string) => {
     const query = textToSend || inputMessage;
-    if (!query.trim() || loading) return;
+    if (!query.trim() || loading || imageAnalyzing) return;
 
     const userMsg: Message = {
       id: "user-" + Date.now(),
@@ -491,94 +502,181 @@ export default function AIChatBot() {
     }
   };
 
-  // Handler phân tích ảnh sản phẩm bằng AI Vision
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || imageAnalyzing) return;
-    // Reset input
-    if (fileInputRef.current) fileInputRef.current.value = "";
-
-    // Validate
-    if (!file.type.startsWith("image/")) {
-      alert("Vui lòng chọn file ảnh (JPG, PNG, WebP)");
+  const selectImageFile = (file: File) => {
+    if (loading || imageAnalyzing) return;
+    const supportedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!supportedTypes.includes(file.type.toLowerCase())) {
+      setImageInputError("Neo hỗ trợ ảnh JPG, PNG, WebP hoặc GIF. Hãy thử chụp màn hình ảnh cần tìm.");
       return;
     }
     if (file.size > 10 * 1024 * 1024) {
-      alert("File ảnh quá lớn (tối đa 10MB)");
+      setImageInputError("Ảnh gốc tối đa 10 MB. Bạn có thể chụp màn hình riêng vùng sản phẩm rồi dán lại.");
       return;
     }
 
-    setImageAnalyzing(true);
+    const previous = pendingImageRef.current;
+    if (previous) {
+      URL.revokeObjectURL(previous.previewUrl);
+      imagePreviewUrlsRef.current.delete(previous.previewUrl);
+    }
+    const next = { file, previewUrl: URL.createObjectURL(file) };
+    imagePreviewUrlsRef.current.add(next.previewUrl);
+    pendingImageRef.current = next;
+    setPendingImage(next);
+    setImageInputError("");
+  };
 
-    // Add user message with image indicator
-    const userMsg: Message = {
+  const clearPendingImage = () => {
+    const current = pendingImageRef.current;
+    if (current) {
+      URL.revokeObjectURL(current.previewUrl);
+      imagePreviewUrlsRef.current.delete(current.previewUrl);
+    }
+    pendingImageRef.current = null;
+    setPendingImage(null);
+    setImageInputError("");
+  };
+
+  const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) selectImageFile(file);
+    event.currentTarget.value = "";
+  };
+
+  const handleClipboardPaste = (event: React.ClipboardEvent<HTMLElement>) => {
+    const imageItem = Array.from(event.clipboardData.items).find(
+      (item) => item.kind === "file" && item.type.startsWith("image/")
+    );
+    const file = imageItem?.getAsFile();
+    if (!file) return;
+    event.preventDefault();
+    selectImageFile(file);
+  };
+
+  const compressImageForVision = async (file: File): Promise<string> => {
+    const sourceUrl = URL.createObjectURL(file);
+    try {
+      const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () => reject(new Error("Không đọc được ảnh. Hãy chọn một ảnh khác."));
+        element.src = sourceUrl;
+      });
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Trình duyệt không thể xử lý ảnh này.");
+
+      const qualities = [0.86, 0.78, 0.7, 0.62, 0.55];
+      let maxDimension = 1600;
+      let compressed: Blob | null = null;
+      for (const quality of qualities) {
+        const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
+        canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+        context.clearRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(image, 0, 0, canvas.width, canvas.height);
+        compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
+        if (compressed && compressed.size <= 3 * 1024 * 1024) break;
+        maxDimension = Math.round(maxDimension * 0.82);
+      }
+      if (!compressed || compressed.size > 3 * 1024 * 1024) {
+        throw new Error("Không thể giảm ảnh xuống dung lượng hỗ trợ. Hãy chọn ảnh nhỏ hoặc chụp riêng sản phẩm.");
+      }
+
+      return await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error("Không thể chuẩn bị ảnh để gửi."));
+        reader.readAsDataURL(compressed);
+      });
+    } finally {
+      URL.revokeObjectURL(sourceUrl);
+    }
+  };
+
+  const analyzeProductImage = async (file: File, question: string, previewUrl: string) => {
+    setImageAnalyzing(true);
+    setImageInputError("");
+    setMessages((previous) => [...previous, {
       id: "user-img-" + Date.now(),
       sender: "user",
-      text: `📸 Đã gửi ảnh sản phẩm: ${file.name}`,
+      text: question ? `🔎 Tìm sản phẩm từ ảnh\n${question}` : "🔎 Tìm sản phẩm có hình ảnh tương tự",
+      imagePreviewUrl: previewUrl,
       time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-    };
-    setMessages((prev) => [...prev, userMsg]);
+    }]);
 
     try {
-      // Convert to base64
-      const reader = new FileReader();
-      const imageData = await new Promise<string>((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-
+      const imageData = await compressImageForVision(file);
       const res = await fetch("/api/ai/image-analyze", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageData }),
+        body: JSON.stringify({ imageData, question }),
       });
-
-      const data = await res.json();
-
-      if (res.ok && data.success && data.analysis) {
-        const a = data.analysis;
-        let replyText = `### 🔍 Kết Quả Phân Tích Ảnh (AI Vision)\n\n`;
-        if (a.nameJp) replyText += `**Tên tiếng Nhật:** ${a.nameJp}\n`;
-        if (a.nameVi) replyText += `**Tên tiếng Việt:** ${a.nameVi}\n`;
-        if (a.estimatedPriceJpy) replyText += `**Giá ước tính:** ~¥${a.estimatedPriceJpy.toLocaleString()}\n`;
-        if (a.category) {
-          const catName = a.category === "cosmetics" ? "Mỹ phẩm" :
-            a.category === "health" ? "Thực phẩm CN" :
-            a.category === "gadgets" ? "Gia dụng/Điện tử" :
-            a.category === "anime" ? "Anime/Mô hình" : "Khác";
-          replyText += `**Danh mục:** ${catName}\n`;
-        }
-        if (a.voltageWarning) replyText += `\n⚠️ **Cảnh báo điện áp:** Sản phẩm sử dụng nguồn 100V nội địa Nhật — cần mua kèm biến áp 220V→100V!\n`;
-        if (a.riskNotes) replyText += `\n🛡️ **Lưu ý:** ${a.riskNotes}\n`;
-        if (a.description) replyText += `\n${a.description}\n`;
-        if (a.searchKeywords?.length > 0) {
-          replyText += `\n**Từ khóa tìm kiếm trên sàn Nhật:**\n`;
-          a.searchKeywords.forEach((kw: string) => {
-            replyText += `- [Tìm "${kw}" trên Amazon JP](https://www.amazon.co.jp/s?k=${encodeURIComponent(kw)})\n`;
-          });
-        }
-        replyText += `\n💡 *Để đặt hàng, hãy copy link sản phẩm từ kết quả tìm kiếm trên và dán vào ô "Dán Link Tính Giá" ở đầu trang!*`;
-
-        setMessages((prev) => [...prev, {
-          id: "bot-img-" + Date.now(),
-          sender: "bot",
-          text: replyText,
-          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        }]);
-      } else {
-        throw new Error(data.error || "Không thể phân tích ảnh");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.success || !data.analysis) {
+        throw new Error(data.error || "Neo chưa phân tích được ảnh này. Vui lòng thử lại.");
       }
-    } catch (err) {
-      setMessages((prev) => [...prev, {
+
+      const analysis = data.analysis;
+      const categoryName: Record<string, string> = {
+        cosmetics: "Mỹ phẩm",
+        health: "Thực phẩm bổ sung / chăm sóc sức khỏe",
+        gadgets: "Gia dụng / điện tử",
+        anime: "Anime / mô hình",
+        other: "Khác",
+      };
+      let replyText = "### 🔎 Gợi ý tìm sản phẩm từ ảnh\n\n";
+      if (analysis.nameJp) replyText += `**Tên đọc được bằng tiếng Nhật:** ${analysis.nameJp}\n`;
+      if (analysis.nameVi) replyText += `**Nhận diện sơ bộ:** ${analysis.nameVi}\n`;
+      if (typeof analysis.visiblePriceJpy === "number") replyText += `**Giá nhìn thấy trong ảnh:** ¥${analysis.visiblePriceJpy.toLocaleString("ja-JP")} (chưa xác minh giá hiện tại)\n`;
+      if (analysis.category) replyText += `**Danh mục:** ${categoryName[analysis.category] || "Khác"}\n`;
+      if (analysis.voltageWarning) replyText += "\n⚠️ Ảnh có dấu hiệu ghi 100V/AC100V. Hãy kiểm tra nhãn điện áp và dùng biến áp phù hợp trước khi sử dụng tại Việt Nam.\n";
+      if (analysis.riskNotes) replyText += `\n**Lưu ý từ ảnh:** ${analysis.riskNotes}\n`;
+      if (analysis.description) replyText += `\n${analysis.description}\n`;
+
+      const searchKeywords: string[] = Array.isArray(analysis.searchKeywords) ? analysis.searchKeywords : [];
+      if (searchKeywords.length) {
+        replyText += "\n**Tìm theo từ khóa trên sàn Nhật:**\n";
+        searchKeywords.forEach((keyword) => {
+          const encoded = encodeURIComponent(keyword);
+          replyText += `- **${keyword}** — [Amazon JP](https://www.amazon.co.jp/s?k=${encoded}) · [Mercari](https://jp.mercari.com/search?keyword=${encoded}) · [Rakuten](https://search.rakuten.co.jp/search/mall/${encoded}/)\n`;
+        });
+      } else {
+        replyText += "\nNeo chưa đọc đủ tên hoặc đặc điểm để tạo từ khóa đáng tin cậy. Bạn hãy gửi ảnh rõ phần nhãn/model hoặc nhập thêm tên sản phẩm nhé.\n";
+      }
+      replyText += "\n*Đây là gợi ý từ nội dung nhìn thấy trong ảnh, không phải tìm kiếm ảnh ngược hay xác nhận sản phẩm trùng khớp. Neo không thể xác nhận tồn kho, hàng chính hãng hoặc giá hiện hành từ ảnh. Hãy mở kết quả sàn để tự kiểm tra rồi gửi link vào ô tính giá nếu muốn mua hộ.*";
+
+      setMessages((previous) => [...previous, {
+        id: "bot-img-" + Date.now(),
+        sender: "bot",
+        text: replyText,
+        time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+      }]);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Neo chưa phân tích được ảnh này. Vui lòng thử ảnh khác.";
+      setMessages((previous) => [...previous, {
         id: "err-img-" + Date.now(),
         sender: "bot",
-        text: "Xin lỗi, em chưa phân tích được ảnh này. Quý khách thử chụp lại ảnh rõ hơn hoặc gửi link sản phẩm trực tiếp ạ! 🍌",
+        text: `Xin lỗi, ${message}`,
         time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       }]);
     } finally {
       setImageAnalyzing(false);
     }
+  };
+
+  const submitComposer = () => {
+    if (loading || imageAnalyzing) return;
+    const image = pendingImageRef.current;
+    if (!image) {
+      void handleSendMessage();
+      return;
+    }
+
+    pendingImageRef.current = null;
+    setPendingImage(null);
+    setInputMessage("");
+    void analyzeProductImage(image.file, inputMessage.trim(), image.previewUrl);
   };
   const parseInlineFormatting = (text: string) => {
     // Keep URL query strings intact (for example %E9..., &, + and # in marketplace searches).
@@ -736,8 +834,34 @@ export default function AIChatBot() {
     { label: "✈ Tiết kiệm cước Gộp Đơn", query: "Tính năng gộp đơn Group Buy tiết kiệm 25% cước bay thế nào?" },
   ];
 
+  const pendingImagePreview = (
+    <>
+      {pendingImage && (
+        <div className="mb-2 flex items-center gap-2.5 rounded-xl border border-banana-200 bg-banana-50/70 p-2">
+          <img src={pendingImage.previewUrl} alt="Ảnh sản phẩm chờ gửi" className="h-12 w-12 shrink-0 rounded-lg border border-white bg-white object-cover" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-xs font-semibold text-navy-900">Ảnh đã sẵn sàng để tìm</p>
+            <p className="text-[10px] leading-4 text-slate-600">Neo sẽ đọc dấu hiệu và gợi ý từ khóa trên sàn Nhật.</p>
+          </div>
+          <button type="button" onClick={clearPendingImage} className="rounded-full p-1.5 text-slate-500 hover:bg-white hover:text-rose-600" aria-label="Bỏ ảnh đính kèm" title="Bỏ ảnh">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {imageInputError && <p role="alert" className="mb-2 text-[11px] font-medium text-rose-600">{imageInputError}</p>}
+    </>
+  );
+
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={handleImageUpload}
+        aria-label="Chọn ảnh sản phẩm để tìm"
+      />
       {/* Floating Toggle Button */}
       {!isOpen && (petVisible ? (
         <div
@@ -771,6 +895,7 @@ export default function AIChatBot() {
             <section
               role="dialog"
               aria-label="Trò chuyện trực tiếp với Neo Universe"
+              onPaste={handleClipboardPaste}
               className="pointer-events-auto fixed z-[10000] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
               style={{ left: petConversationPosition.left, top: petConversationPosition.top, width: petConversationPosition.width }}
             >
@@ -792,6 +917,7 @@ export default function AIChatBot() {
                 {messages.slice(-5).map((message) => (
                   <div key={message.id} className={`flex ${message.sender === "user" ? "justify-end" : "justify-start"}`}>
                     <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
+                      {message.imagePreviewUrl && <img src={message.imagePreviewUrl} alt="Ảnh sản phẩm người dùng gửi" className="mb-2 max-h-36 max-w-full rounded-lg object-contain" />}
                       <div className="break-words">{renderMessageContent(message)}</div>
                     </div>
                   </div>
@@ -801,24 +927,30 @@ export default function AIChatBot() {
 
               {!messages.some((message) => message.sender === "user") && (
                 <div className="flex flex-wrap gap-1.5 border-t border-slate-100 bg-white px-3 py-2">
-                  <button type="button" onClick={() => handleSendMessage("Tôi muốn tìm một sản phẩm Nhật, Neo có thể tư vấn không?")} className="rounded-full border border-banana-200 bg-banana-50 px-2.5 py-1 text-[10px] font-semibold text-navy-800 hover:bg-banana-100">Tìm sản phẩm Nhật</button>
-                  <button type="button" onClick={() => handleSendMessage("Đồ điện 100V của Nhật dùng ở Việt Nam thế nào?")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100">Hỏi về điện 100V</button>
+                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Tôi muốn tìm một sản phẩm Nhật, Neo có thể tư vấn không?")} className="rounded-full border border-banana-200 bg-banana-50 px-2.5 py-1 text-[10px] font-semibold text-navy-800 hover:bg-banana-100 disabled:opacity-40">Tìm sản phẩm Nhật</button>
+                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Đồ điện 100V của Nhật dùng ở Việt Nam thế nào?")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40">Hỏi về điện 100V</button>
                 </div>
               )}
 
-              <form onSubmit={(event) => { event.preventDefault(); handleSendMessage(); }} className="flex items-center gap-2 border-t border-slate-100 bg-white p-2.5">
+              <div className="border-t border-slate-100 bg-white p-2.5">
+                {pendingImagePreview}
+                <form onSubmit={(event) => { event.preventDefault(); submitComposer(); }} className="flex items-center gap-2">
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={loading || imageAnalyzing} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-banana-300 hover:bg-banana-50 disabled:opacity-40" aria-label="Chọn hoặc dán ảnh sản phẩm" title="Chọn ảnh hoặc Ctrl+V để dán ảnh">
+                  <ImagePlus className="h-4 w-4" />
+                </button>
                 <input
                   value={inputMessage}
                   onChange={(event) => setInputMessage(event.target.value)}
-                  placeholder="Nhắn trực tiếp với Neo…"
+                  placeholder={pendingImage ? "Hỏi thêm về sản phẩm trong ảnh…" : "Nhắn hoặc dán ảnh để tìm sản phẩm…"}
                   aria-label="Tin nhắn gửi Neo Universe"
                   className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none placeholder:text-slate-400 focus:border-banana-400 focus:ring-2 focus:ring-banana-100"
-                  disabled={loading}
+                  disabled={loading || imageAnalyzing}
                 />
-                <button type="submit" disabled={loading || !inputMessage.trim()} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-banana-500 text-navy-950 hover:bg-banana-400 disabled:cursor-not-allowed disabled:opacity-50" aria-label="Gửi tin nhắn cho Neo">
-                  <Send className="h-4 w-4" />
+                <button type="submit" disabled={loading || imageAnalyzing || (!inputMessage.trim() && !pendingImage)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-banana-500 text-navy-950 hover:bg-banana-400 disabled:cursor-not-allowed disabled:opacity-50" aria-label={pendingImage ? "Tìm sản phẩm từ ảnh" : "Gửi tin nhắn cho Neo"}>
+                  {imageAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                 </button>
-              </form>
+                </form>
+              </div>
             </section>
           )}
           <div className="pointer-events-auto mt-0.5 flex justify-center gap-2">
@@ -839,7 +971,7 @@ export default function AIChatBot() {
 
       {/* Chat Window Panel */}
       {isOpen && (
-        <div className="fixed bottom-20 right-2 sm:right-6 z-[9999] w-[96vw] sm:w-[500px] h-[640px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div onPaste={handleClipboardPaste} className="fixed bottom-20 right-2 sm:right-6 z-[9999] w-[96vw] sm:w-[500px] h-[640px] max-h-[85vh] bg-white rounded-3xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-5 duration-200">
           
           {/* Header */}
           <div className="bg-navy-900 text-white p-4 border-b border-slate-800">
@@ -920,6 +1052,7 @@ export default function AIChatBot() {
                       : "bg-white border border-slate-200 text-slate-800 rounded-tl-none"
                   }`}
                 >
+                  {msg.imagePreviewUrl && <img src={msg.imagePreviewUrl} alt="Ảnh sản phẩm người dùng gửi" className="mb-2 max-h-64 max-w-full rounded-xl object-contain" />}
                   {msg.isGuardrail && (
                     <div className="flex items-center space-x-1 text-[10px] font-bold text-amber-800 mb-1">
                       <ShieldAlert className="w-3 h-3 text-amber-600" />
@@ -960,8 +1093,9 @@ export default function AIChatBot() {
             {quickPrompts.map((p, idx) => (
               <button
                 key={idx}
+                disabled={loading || imageAnalyzing || Boolean(pendingImage)}
                 onClick={() => handleSendMessage(p.query)}
-                className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-banana-50 hover:text-banana-800 text-slate-700 text-[11px] font-semibold rounded-xl border border-slate-200 transition-colors"
+                className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-banana-50 hover:text-banana-800 text-slate-700 text-[11px] font-semibold rounded-xl border border-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {p.label}
               </button>
@@ -970,18 +1104,11 @@ export default function AIChatBot() {
 
           {/* Input Box */}
           <div className="p-3 bg-white border-t border-slate-200">
-            {/* Hidden file input */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageUpload}
-            />
+            {pendingImagePreview}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                handleSendMessage();
+                submitComposer();
               }}
               className="flex items-center space-x-2"
             >
@@ -990,7 +1117,8 @@ export default function AIChatBot() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={imageAnalyzing || loading}
                 className="p-2.5 bg-slate-100 hover:bg-banana-100 disabled:opacity-40 text-slate-600 hover:text-banana-700 rounded-2xl transition-all shrink-0"
-                title="Gửi ảnh sản phẩm để AI nhận diện"
+                title="Chọn ảnh hoặc Ctrl+V để tìm sản phẩm trên sàn Nhật"
+                aria-label="Chọn hoặc dán ảnh sản phẩm"
               >
                 {imageAnalyzing ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -1003,15 +1131,18 @@ export default function AIChatBot() {
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 placeholder={
-                  personality === "omotenashi"
-                    ? "Kính mời Quý khách nhập câu hỏi tư vấn..."
-                    : "Hỏi em về size đồ, điện 100V, cước gộp nha..."
+                  pendingImage
+                    ? "Có thể hỏi thêm về sản phẩm trong ảnh..."
+                    : personality === "omotenashi"
+                    ? "Hỏi Neo hoặc Ctrl+V dán ảnh sản phẩm..."
+                    : "Nhắn Neo hoặc dán ảnh để tìm hàng Nhật..."
                 }
                 className="flex-1 px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-2xl text-xs focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white transition-all"
+                disabled={loading || imageAnalyzing}
               />
               <button
                 type="submit"
-                disabled={loading || !inputMessage.trim()}
+                disabled={loading || imageAnalyzing || (!inputMessage.trim() && !pendingImage)}
                 className="p-2.5 bg-banana-500 hover:bg-banana-600 disabled:opacity-40 text-navy-950 rounded-2xl shadow transition-all"
               >
                 <Send className="w-4 h-4" />

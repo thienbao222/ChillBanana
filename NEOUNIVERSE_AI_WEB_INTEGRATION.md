@@ -72,6 +72,7 @@ Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển độn
 - Hover vào Neo kích hoạt động tác chào; nhấn Neo mở hội thoại thu gọn ngay cạnh nhân vật. Người dùng gửi tin nhắn, dùng gợi ý nhanh và nhận trả lời qua cùng API `/api/ai/chat` với lịch sử hội thoại hiện tại; nội dung phản hồi được gõ dần trong bong bóng chat và có thể chuyển sang khung chat đầy đủ.
 - Animation đổi theo lúc chờ, nghe, xử lý và loại câu trả lời; khi nhập tin nhắn Neo chuyển sang trạng thái lắng nghe.
 - Bong bóng thoại nổi có hiệu ứng gõ chữ, hiển thị gợi ý khi rê chuột/di chuyển và tóm tắt câu trả lời mới nhất sau khi đóng chat.
+- Cả hội thoại mini và khung chat lớn đều nhận ảnh bằng nút chọn tệp hoặc Ctrl+V; ảnh được xem trước, có thể bỏ trước khi gửi, được nén ở trình duyệt để phù hợp giới hạn request của Vercel. AI Vision chỉ đọc dấu hiệu trong ảnh rồi tạo từ khóa tìm trên Amazon JP, Mercari và Rakuten; không xác nhận kết quả trùng ảnh, tồn kho, tính chính hãng hoặc giá hiện hành.
 - Khi cuộn trang, Neo bước nhẹ theo hướng vào trong viewport và hiện lời nhắc; kích thước màn hình thay đổi thì vị trí của Neo được giới hạn lại trong viewport.
 - Overlay dùng `pointer-events-none` ở nền và chỉ bật nhận thao tác tại nhân vật, các nút điều khiển, hộp thoại; z-index đặt cao để nổi trên nội dung trang.
 - Khi khung chat đầy đủ mở, nhân vật vẫn xuất hiện ở phần đầu khung chat.
