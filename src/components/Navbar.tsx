@@ -44,6 +44,13 @@ export default function Navbar() {
             <span className="text-slate-300">
               Hotline: <strong className="text-banana-400">1900 6868</strong> (8h-22h)
             </span>
+            <Link
+              href="/galaxy"
+              className="hidden sm:inline-flex items-center gap-1 rounded-lg border border-indigo-300/30 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-indigo-100 transition-colors hover:bg-white/10"
+            >
+              <Sparkles className="h-3 w-3 text-banana-300" />
+              Giao diện mới
+            </Link>
             <Link 
               href="/admin/login" 
               className="inline-flex items-center text-banana-300 hover:text-white transition-colors"
@@ -267,6 +274,14 @@ export default function Navbar() {
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
             Cẩm Nang Hàng Nhật
+          </Link>
+          <Link
+            href="/galaxy"
+            onClick={() => setMobileMenuOpen(false)}
+            className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 font-bold text-indigo-800 hover:bg-indigo-100"
+          >
+            <Sparkles className="h-4 w-4" />
+            Trải nghiệm giao diện Galaxy mới
           </Link>
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (
