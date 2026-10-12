@@ -67,7 +67,7 @@ Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển độn
 
 ### Nâng cấp trải nghiệm pet trên website
 
-- Dùng thêm animation `move` và `ask-alt`; Neo tự đi đến các vị trí ngẫu nhiên trong viewport, thỉnh thoảng chào và hiện lời mời hỗ trợ.
+- Dùng animation `move` khi di chuyển và `ask` để Neo chào, hỏi nhu cầu. Sprite `ask` dùng biến thể hợp lệ, không dùng sheet có lỗi hình ảnh.
 - Có thể kéo Neo bằng chuột hoặc cảm ứng đến vị trí tùy ý trong cửa sổ; vị trí được lưu trên thiết bị. Có nút tạm dừng/tiếp tục đi dạo, đưa Neo về góc mặc định, ẩn và hiện lại.
 - Hover vào Neo kích hoạt động tác chào; nhấn Neo mở hội thoại thu gọn ngay cạnh nhân vật. Người dùng gửi tin nhắn, dùng gợi ý nhanh và nhận trả lời qua cùng API `/api/ai/chat` với lịch sử hội thoại hiện tại; nội dung phản hồi được gõ dần trong bong bóng chat và có thể chuyển sang khung chat đầy đủ.
 - Animation đổi theo lúc chờ, nghe, xử lý và loại câu trả lời; khi nhập tin nhắn Neo chuyển sang trạng thái lắng nghe.

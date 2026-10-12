@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Sparkles,
   Send,
@@ -24,10 +24,7 @@ interface Message {
   time: string;
 }
 
-type AskAnimation = Extract<NeoUniverseAnimation, "ask" | "ask-alt">;
 type PendingImage = { file: File; previewUrl: string };
-
-const pickAskAnimation = (): AskAnimation => Math.random() < 0.5 ? "ask" : "ask-alt";
 
 // Subcomponent hiển thị ảnh chat thông minh, tự động fallback nếu link ảnh lỗi/chặn
 function ChatImage({ url, alt }: { url: string; alt: string }) {
@@ -80,7 +77,6 @@ export default function AIChatBot() {
   const [petVisible, setPetVisible] = useState(true);
   const [petConversationOpen, setPetConversationOpen] = useState(false);
   const [showPetGreeting, setShowPetGreeting] = useState(false);
-  const [askAnimation, setAskAnimation] = useState<AskAnimation>("ask");
   const [petConversationPosition, setPetConversationPosition] = useState<{ left: number; top: number; width: number } | null>(null);
   const [ambientAnimation, setAmbientAnimation] = useState<NeoUniverseAnimation>("idle");
   const [ambientHint, setAmbientHint] = useState("");
@@ -123,7 +119,6 @@ export default function AIChatBot() {
       setShowGreetingAnimation(false);
       return;
     }
-    setAskAnimation(pickAskAnimation());
     setShowGreetingAnimation(true);
     const timer = window.setTimeout(() => setShowGreetingAnimation(false), 2200);
     return () => window.clearTimeout(timer);
@@ -134,7 +129,6 @@ export default function AIChatBot() {
       setShowPetGreeting(false);
       return;
     }
-    setAskAnimation(pickAskAnimation());
     setShowPetGreeting(true);
     const timer = window.setTimeout(() => setShowPetGreeting(false), 1500);
     return () => window.clearTimeout(timer);
@@ -374,14 +368,13 @@ export default function AIChatBot() {
     if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
     if (/đề xuất|gợi ý|nên chọn|phù hợp nhất|khuyên chọn/i.test(text)) return "recommend";
     if (/sản phẩm|mặt hàng|giá ước tính|tìm kiếm trên amazon|mercari/i.test(text)) return "presentation";
-    if (/\?\s*$/.test(text.trim())) return responseAskAnimation;
+    if (/\?\s*$/.test(text.trim())) return "ask";
     return "explain";
   };
-  const responseAskAnimation = useMemo(pickAskAnimation, [latestAssistantMessage?.id]);
   const petAnimation: NeoUniverseAnimation = (() => {
     if (!isOpen && !petConversationOpen) return ambientAnimation;
-    if (petConversationOpen && showPetGreeting) return askAnimation;
-    if (isOpen && showGreetingAnimation) return askAnimation;
+    if (petConversationOpen && showPetGreeting) return "ask";
+    if (isOpen && showGreetingAnimation) return "ask";
     if (imageAnalyzing || loading) return "analyze";
     if (inputMessage.trim()) return "listen";
     return latestAssistantMessage ? responseAnimation(latestAssistantMessage.text) : "listen";
@@ -877,8 +870,8 @@ export default function AIChatBot() {
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
             onPointerCancel={handlePetPointerUp}
-            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation(pickAskAnimation()); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
-            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask" || current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
+            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
+            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask" ? "idle" : current); setAmbientHint(""); }}
             className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"

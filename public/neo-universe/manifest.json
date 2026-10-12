@@ -16,14 +16,6 @@
     "frameCount": 36
   },
   {
-    "id": "ask-alt",
-    "label": "Hỏi nhu cầu · biến thể",
-    "src": "/neo-universe/ask-alt.webp",
-    "columns": 6,
-    "rows": 6,
-    "frameCount": 36
-  },
-  {
     "id": "confirm",
     "label": "Xác nhận đơn",
     "src": "/neo-universe/confirm.webp",
