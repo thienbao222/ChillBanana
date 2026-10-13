@@ -6,12 +6,13 @@ import { getRecordedPaymentStatus } from "@/lib/payment-policy";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!isAdminRequest(req)) {
     return NextResponse.json({ error: "Bạn cần đăng nhập quản trị để xác nhận thanh toán." }, { status: 401 });
   }
 
   try {
+    const { id: orderId } = await params;
     const body = await req.json();
     const amountVnd = Number(body?.amountVnd);
     const reference = typeof body?.reference === "string" ? body.reference.trim() : "";
@@ -20,7 +21,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     const existingOrder = await prisma.order.findFirst({
-      where: { OR: [{ orderCode: params.id }, { id: params.id }] },
+      where: { OR: [{ orderCode: orderId }, { id: orderId }] },
       select: { id: true, orderCode: true, status: true, paymentStatus: true, isPriceVerified: true, depositAmountVnd: true, depositPercent: true, reservationExpiresAt: true },
     });
     if (!existingOrder) return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
