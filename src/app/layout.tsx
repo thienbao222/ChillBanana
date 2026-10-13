@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "@/styles/website-preferences.css";
 import { AuthProvider } from "@/context/AuthContext";
 import LayoutWrapper from "@/components/LayoutWrapper";
 

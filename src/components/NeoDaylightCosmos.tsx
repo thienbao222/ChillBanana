@@ -9,12 +9,15 @@ import { useAuth } from "@/context/AuthContext";
 import CuratedProducts from "@/components/CuratedProducts";
 import WhyChooseUs from "@/components/WhyChooseUs";
 import NewsCorner from "@/components/NewsCorner";
+import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
+import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart } = useCart();
   const { customer, openAuthModal } = useAuth();
   const [showMini, setShowMini] = useState(false);
-  const [calmMode, setCalmMode] = useState(false);
+  const { preferences } = useWebsitePreferences();
+  const t = useWebsiteText();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -48,8 +51,13 @@ export default function NeoDaylightCosmos() {
 
   // Parallax pointermove & scroll listeners
   useEffect(() => {
+    if (!preferences.effectsEnabled) {
+      document.documentElement.style.setProperty("--px", "0");
+      document.documentElement.style.setProperty("--py", "0");
+      return;
+    }
+
     const handleMove = (e: MouseEvent) => {
-      if (calmMode) return;
       document.documentElement.style.setProperty("--px", (e.clientX / window.innerWidth - 0.5).toString());
       document.documentElement.style.setProperty("--py", (e.clientY / window.innerHeight - 0.5).toString());
     };
@@ -65,7 +73,7 @@ export default function NeoDaylightCosmos() {
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("scroll", handleScroll);
     };
-  }, [calmMode]);
+  }, [preferences.effectsEnabled]);
 
   // Fetch tỷ giá live từ API
   useEffect(() => {
@@ -129,7 +137,7 @@ export default function NeoDaylightCosmos() {
   const scrollToSection = (id: string) => {
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: calmMode ? "auto" : "smooth", block: "start" });
+      el.scrollIntoView({ behavior: preferences.effectsEnabled ? "smooth" : "auto", block: "start" });
     }
   };
 
@@ -278,7 +286,7 @@ export default function NeoDaylightCosmos() {
   };
 
   return (
-    <div className={`cosmos-root ${calmMode ? "calm" : ""}`}>
+    <div className={`cosmos-root ${preferences.effectsEnabled ? "" : "calm"}`}>
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
         <div className="sun par" style={{ "--k": 6 } as any} />
@@ -320,7 +328,7 @@ export default function NeoDaylightCosmos() {
       <header id="hd">
         <div className="top">
           {/* Cụm Quỹ Đạo Hành Tinh (Cluster Nav) */}
-          <nav className="card cluster" aria-label="Danh mục chính">
+          <nav className="card cluster" aria-label={t("Danh mục chính")}>
             <Link className="logo" href="/" aria-label="ChillBanana - trang chủ">
               <svg viewBox="0 0 64 64" aria-hidden="true">
                 <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
@@ -332,7 +340,7 @@ export default function NeoDaylightCosmos() {
             <div className="ring r1" style={{ "--c": "#f2c21b", "--n": 0 } as any}>
               <div className="spin">
                 <a className="pl" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
-                  <i><svg><use href="#i-link" /></svg></i>Dán Link Tính Giá
+                  <i><svg><use href="#i-link" /></svg></i>{t("Dán Link Tính Giá")}
                 </a>
               </div>
             </div>
@@ -341,7 +349,7 @@ export default function NeoDaylightCosmos() {
             <div className="ring r2" style={{ "--c": "#4aaee0", "--n": 1 } as any}>
               <div className="spin">
                 <a className="pl" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }}>
-                  <i><svg><use href="#i-bag" /></svg></i>Sản Phẩm Có Sẵn
+                  <i><svg><use href="#i-bag" /></svg></i>{t("Sản Phẩm Có Sẵn")}
                 </a>
               </div>
             </div>
@@ -350,7 +358,7 @@ export default function NeoDaylightCosmos() {
             <div className="ring r3" style={{ "--c": "#a58bff", "--n": 2 } as any}>
               <div className="spin">
                 <Link className="pl" href="/tracking">
-                  <i><svg><use href="#i-box" /></svg></i>Tra Cứu Đơn Hàng
+                  <i><svg><use href="#i-box" /></svg></i>{t("Tra Cứu Đơn Hàng")}
                 </Link>
               </div>
             </div>
@@ -359,7 +367,7 @@ export default function NeoDaylightCosmos() {
             <div className="ring r4" style={{ "--c": "#4fcf9b", "--n": 3 } as any}>
               <div className="spin">
                 <a className="pl" href="#news" onClick={(e) => { e.preventDefault(); scrollToSection("news"); }}>
-                  <i><svg><use href="#i-book" /></svg></i>Cẩm Nang Hàng Nhật
+                  <i><svg><use href="#i-book" /></svg></i>{t("Cẩm Nang Hàng Nhật")}
                 </a>
               </div>
             </div>
@@ -384,41 +392,42 @@ export default function NeoDaylightCosmos() {
               </div>
               <div className="flex flex-wrap items-center justify-end gap-3">
                 <Link className="admin" href="/admin/login">
-                  Admin Portal
+                  {t("Admin Portal")}
                 </Link>
                 <Link
                   href="/classic"
                   className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/75 px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
                 >
                   <ArrowLeft className="h-3.5 w-3.5" />
-                  <span>Về giao diện cũ</span>
+                  <span>{t("Về giao diện cũ")}</span>
                 </Link>
               </div>
             </div>
 
             <div className="acct">
               <button className="chip" onClick={openCart}>
-                Giỏ hàng
+                {t("Giỏ hàng")}
                 <span className="badge">{totalItems}</span>
               </button>
               {customer ? (
                 <Link href="/profile" className="chip" title={customer.email}>
-                  👤 {customer.name || "Tài khoản"}
+                  👤 {customer.name || t("Tài khoản")}
                 </Link>
               ) : (
                 <button className="chip" onClick={() => openAuthModal("login")}>
-                  Đăng nhập ▾
+                {t("Đăng nhập ▾")}
                 </button>
               )}
+              <WebsitePreferencesTrigger />
               <button className="cta" onClick={() => scrollToSection("quote")}>
-                Đặt Mua Hộ Ngay
+                {t("Đặt Mua Hộ Ngay")}
               </button>
             </div>
 
             <div className="stats">
               <div className="stat">
                 <b>{rateLabel}</b>
-                1 JPY · Tỷ giá live
+                {t("1 JPY · Tỷ giá live")}
               </div>
               <div className="stat">
                 <b>100%</b>
@@ -434,22 +443,22 @@ export default function NeoDaylightCosmos() {
       </header>
 
       {/* Thanh Mini Header khi cuộn chuột xuống */}
-      <nav className={`mini ${showMini ? "on" : ""}`} id="mini" aria-label="Điều hướng nhanh">
+      <nav className={`mini ${showMini ? "on" : ""}`} id="mini" aria-label={t("Điều hướng nhanh")}>
         <Link className="mlogo" href="/" aria-label="ChillBanana" />
-        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }} title="Dán Link Tính Giá" style={{ "--c": "#f2c21b" } as any}>
+        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }} title={t("Dán Link Tính Giá")} style={{ "--c": "#f2c21b" } as any}>
           <i><svg><use href="#i-link" /></svg></i>
         </a>
         <a className="mp" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} title="Sản Phẩm Có Sẵn" style={{ "--c": "#4aaee0" } as any}>
           <i><svg><use href="#i-bag" /></svg></i>
         </a>
-        <Link className="mp" href="/tracking" title="Tra Cứu Đơn Hàng" style={{ "--c": "#a58bff" } as any}>
+        <Link className="mp" href="/tracking" title={t("Tra Cứu Đơn Hàng")} style={{ "--c": "#a58bff" } as any}>
           <i><svg><use href="#i-box" /></svg></i>
         </Link>
-        <a className="mp" href="#news" onClick={(e) => { e.preventDefault(); scrollToSection("news"); }} title="Cẩm Nang Hàng Nhật" style={{ "--c": "#4fcf9b" } as any}>
+        <a className="mp" href="#news" onClick={(e) => { e.preventDefault(); scrollToSection("news"); }} title={t("Cẩm Nang Hàng Nhật")} style={{ "--c": "#4fcf9b" } as any}>
           <i><svg><use href="#i-book" /></svg></i>
         </a>
         <button className="cta" onClick={() => scrollToSection("quote")}>
-          Đặt Mua Hộ Ngay
+          {t("Đặt Mua Hộ Ngay")}
         </button>
       </nav>
 
@@ -458,18 +467,20 @@ export default function NeoDaylightCosmos() {
         {/* HERO SECTION */}
         <section className="hero">
           <div>
-            <span className="tag">Mua Hàng Nhật Chuẩn – Thư Thái Cùng ChillBanana · JP</span>
-            <h1>Ủy Thác Mua Hộ Hàng Nhật <u>Tự Động Bóc Tách Link</u> &amp; <em>ChillBanana AI</em></h1>
+            <span className="tag">{t("Mua Hàng Nhật Chuẩn – Thư Thái Cùng ChillBanana · JP")}</span>
+            <h1>{t("Ủy Thác Mua Hộ Hàng Nhật ")}<u>{t("Tự Động Bóc Tách Link")}</u> &amp; <em>{t("ChillBanana AI")}</em></h1>
             <p className="lead">
-              Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo Auctions</b> — hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <b>tỷ giá ngân hàng trực tiếp</b>, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn 24/7 và giải pháp <b>Gộp đơn tiết kiệm 25% cước</b>.
+              {preferences.language === "ja"
+                ? "Amazon JP、Mercari、Rakuten、Yahoo Auctionsの商品リンクを貼り付けると、実際の円価格と銀行為替レートに基づく費用を自動で計算します。ChillBanana AIが24時間サポートし、まとめ買いで送料を節約できます。"
+                : <>Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo Auctions</b> — hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <b>tỷ giá ngân hàng trực tiếp</b>, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn 24/7 và giải pháp <b>Gộp đơn tiết kiệm 25% cước</b>.</>}
             </p>
             <div className="trust">
-              <span><svg><use href="#i-ok" /></svg>Cam kết 100% chính hãng nội địa Nhật</span>
-              <span><svg><use href="#i-ok" /></svg>Tỷ giá cập nhật liên tục theo thời gian thực</span>
-              <span><svg><use href="#i-ok" /></svg>Bảo hiểm đền bù 100% khi mất mát, bể vỡ</span>
+              <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "日本国内正規品をお届け" : "Cam kết 100% chính hãng nội địa Nhật"}</span>
+              <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "為替レートを随時更新" : "Tỷ giá cập nhật liên tục theo thời gian thực"}</span>
+              <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "紛失・破損時は補償" : "Bảo hiểm đền bù 100% khi mất mát, bể vỡ"}</span>
             </div>
             <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
-              Dán Link Tính Giá Tự Động <svg><use href="#i-arrow" /></svg>
+              {t("Dán Link Tính Giá Tự Động")} <svg><use href="#i-arrow" /></svg>
             </a>
           </div>
 
@@ -511,8 +522,8 @@ export default function NeoDaylightCosmos() {
         {/* QUOTE SECTION (DÁN LINK & TÍNH GIÁ) */}
         <section className="sec" id="quote">
           <div className="center">
-            <span className="tag">Công Cụ Tự Động Bóc Tách Link &amp; Báo Giá Trọn Gói</span>
-            <h2>Dán Link Nhật - ChillBanana Báo Giá Trong 3 Giây</h2>
+            <span className="tag">{t("Công Cụ Tự Động Bóc Tách Link & Báo Giá Trọn Gói")}</span>
+            <h2>{t("Dán Link Nhật - ChillBanana Báo Giá Trong 3 Giây")}</h2>
             <p className="sub">
               Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo Auctions... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
             </p>
@@ -524,7 +535,7 @@ export default function NeoDaylightCosmos() {
               aria-selected={activeTab === "JP_VN"}
               onClick={() => setActiveTab("JP_VN")}
             >
-              JP → VN · Mua Hàng Từ Nhật Về Việt Nam
+              {t("JP → VN · Mua Hàng Từ Nhật Về Việt Nam")}
             </button>
             <button
               role="tab"
@@ -534,7 +545,7 @@ export default function NeoDaylightCosmos() {
                 showToast("Chiều VN → JP hiện đang tiếp nhận qua hotline 1900 6868 & tư vấn viên trực tiếp!");
               }}
             >
-              VN → JP · Gửi Quà / Hàng Sang Nhật Bản
+              {t("VN → JP · Gửi Quà / Hàng Sang Nhật Bản")}
             </button>
           </div>
 
@@ -543,13 +554,13 @@ export default function NeoDaylightCosmos() {
             <form className="card form" onSubmit={(e) => e.preventDefault()}>
               <div className="f">
                 <label htmlFor="u">
-                  1. Dán đường dẫn link sản phẩm Nhật Bản <em>Tự động lấy Tên, Ảnh &amp; Giá Yên</em>
+                  {t("1. Dán đường dẫn link sản phẩm Nhật Bản")} <em>{t("Tự động lấy Tên, Ảnh & Giá Yên")}</em>
                 </label>
                 <div className="in">
                   <input
                     id="u"
                     inputMode="url"
-                    placeholder="https://www.amazon.co.jp/... hoặc https://jp.mercari.com/..."
+                    placeholder={t("https://www.amazon.co.jp/... hoặc https://jp.mercari.com/...")}
                     value={inputUrl}
                     onChange={(e) => setInputUrl(e.target.value)}
                   />
@@ -559,7 +570,7 @@ export default function NeoDaylightCosmos() {
                     disabled={isScanning}
                     onClick={handleScanLink}
                   >
-                    {isScanning ? "Đang quét..." : "Quét Link Tự Động"}
+                    {isScanning ? t("Đang quét...") : t("Quét Link Tự Động")}
                   </button>
                 </div>
               </div>
@@ -585,21 +596,21 @@ export default function NeoDaylightCosmos() {
 
               <div className="fg">
                 <div className="f">
-                  <label htmlFor="n">2. Tên sản phẩm (hiển thị trên đơn)</label>
+                  <label htmlFor="n">{t("2. Tên sản phẩm (hiển thị trên đơn)")}</label>
                   <input
                     id="n"
-                    placeholder="VD: Kem chống nắng Anessa / Mô hình Gundam"
+                    placeholder={t("VD: Kem chống nắng Anessa / Mô hình Gundam")}
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                   />
                 </div>
                 <div className="f">
-                  <label htmlFor="c">3. Danh mục hàng hóa</label>
+                  <label htmlFor="c">{t("3. Danh mục hàng hóa")}</label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="cosmetics">Mỹ Phẩm &amp; Chăm Sóc Da</option>
-                    <option value="health">Thực Phẩm Chức Năng</option>
-                    <option value="gadgets">Gia Dụng &amp; Điện Tử Mini</option>
-                    <option value="anime">Anime, Figure &amp; Sưu Tầm</option>
+                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da")}</option>
+                    <option value="health">{t("Thực Phẩm Chức Năng")}</option>
+                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini")}</option>
+                    <option value="anime">{t("Anime, Figure & Sưu Tầm")}</option>
                   </select>
                 </div>
               </div>
@@ -607,7 +618,7 @@ export default function NeoDaylightCosmos() {
               <div className="fg">
                 <div className="f">
                   <label htmlFor="y">
-                    4. Giá gốc tại Nhật (¥ Yên) <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ</em>
+                    {t("4. Giá gốc tại Nhật (¥ Yên)")} <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ</em>
                   </label>
                   <input
                     id="y"
@@ -617,9 +628,9 @@ export default function NeoDaylightCosmos() {
                   />
                 </div>
                 <div className="f">
-                  <label>5. Trọng lượng kiện hàng <em>Cân đo thực tế tại kho</em></label>
+                  <label>{t("5. Trọng lượng kiện hàng")} <em>{t("Cân đo thực tế tại kho")}</em></label>
                   <div className="box">
-                    Hệ thống <b>không áp đặt số kg mặc định</b> vào tiền cọc. Kiện hàng về kho Tokyo sẽ được cân đo chính xác theo gram để bảo đảm công bằng nhất.
+                    {t("Hệ thống không áp đặt số kg mặc định vào tiền cọc. Kiện hàng về kho Tokyo sẽ được cân đo chính xác theo gram để bảo đảm công bằng nhất.")}
                   </div>
                 </div>
               </div>
@@ -631,8 +642,8 @@ export default function NeoDaylightCosmos() {
                   onChange={(e) => setIsGroupBuy(e.target.checked)}
                 />
                 <span>
-                  <b>Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!</b><br />
-                  Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước vận chuyển cho kiện &lt; 0.5kg)
+                  <b>{t("Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!")}</b><br />
+                  {t("Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước vận chuyển cho kiện < 0.5kg)")}
                 </span>
               </label>
             </form>
@@ -640,35 +651,35 @@ export default function NeoDaylightCosmos() {
             {/* Bảng kê chi phí trọn gói */}
             <aside className="sheet" aria-label="Bảng kê chi phí">
               <div className="sh">
-                <h3>Bảng kê chi phí trọn gói</h3>
+                <h3>{t("Bảng kê chi phí trọn gói")}</h3>
                 <span>1 JPY = {exchangeRate} đ</span>
               </div>
               <div className="row">
-                <span>Tiền hàng gốc ({priceJpy.toLocaleString("vi-VN")} ¥):</span>
+                <span>{t("Tiền hàng gốc")} ({priceJpy.toLocaleString("vi-VN")} ¥):</span>
                 <b>{productPriceVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>Phí mua hộ &amp; bảo hiểm (4%):</span>
+                <span>{t("Phí mua hộ & bảo hiểm (4%):")}</span>
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>Cước bay quốc tế:</span>
-                <b className="ok">{isGroupBuy ? "Ưu đãi Mua Chung (-25%)" : "Cân đo thực tế khi về kho (0 đ)"}</b>
+                <span>{t("Cước bay quốc tế:")}</span>
+                <b className="ok">{isGroupBuy ? t("Ưu đãi Mua Chung (-25%)") : t("Cân đo thực tế khi về kho (0 đ)")}</b>
               </div>
               <div className="row">
-                <span>Phụ phí hải quan &amp; đóng gói:</span>
-                <b className="ok">0 đ (Miễn phí)</b>
+                <span>{t("Phụ phí hải quan & đóng gói:")}</span>
+                <b className="ok">{t("0 đ (Miễn phí)")}</b>
               </div>
               <div className="total">
-                <span>Tiền Hàng &amp; Phí Mua Hộ:</span>
+                <span>{t("Tiền Hàng & Phí Mua Hộ:")}</span>
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
               </div>
               <div className="dep">
-                <span>Ước tính thanh toán ({depositChoice}%):<small>Chờ ChillBanana duyệt giá trước khi thanh toán</small></span>
+                <span>{preferences.language === "ja" ? `お支払い予定額（${depositChoice}%）：` : `Ước tính thanh toán (${depositChoice}%):`}<small>{t("Chờ ChillBanana duyệt giá trước khi thanh toán")}</small></span>
                 <b>{depositVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <p className="n1">
-                <b>Chuẩn quốc tế:</b> Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!
+                <b>{t("Chuẩn quốc tế:")}</b> {t("Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!")}
               </p>
 
               {!showOrderForm && !createdOrder && (
@@ -677,17 +688,17 @@ export default function NeoDaylightCosmos() {
                     className="btn2"
                     type="button"
                     onClick={handleAddToCart}
-                    title="Gom vào giỏ hàng để đặt nhiều món cùng lúc"
+                    title={t("Gom vào giỏ hàng để đặt nhiều món cùng lúc")}
                   >
                     <ShoppingCart className="w-4 h-4 inline mr-1" />
-                    Thêm Vào Giỏ Hàng
+                    {t("Thêm Vào Giỏ Hàng")}
                   </button>
                   <button
                     className="cta"
                     type="button"
                     onClick={() => {
                       if (!inputUrl.trim()) {
-                        showToast("Vui lòng dán link sản phẩm trước.");
+                        showToast(t("Vui lòng dán link sản phẩm trước."));
                         scrollToSection("quote");
                         return;
                       }
@@ -695,7 +706,7 @@ export default function NeoDaylightCosmos() {
                       setTimeout(() => scrollToSection("order-form"), 150);
                     }}
                   >
-                    Đặt Cọc &amp; Mua Ngay <svg><use href="#i-arrow" /></svg>
+                    {t("Đặt Cọc & Mua Ngay")} <svg><use href="#i-arrow" /></svg>
                   </button>
                 </div>
               )}
@@ -712,29 +723,29 @@ export default function NeoDaylightCosmos() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem" }}>
                   <h3 style={{ fontSize: "1.25rem", fontWeight: 800 }}>
-                    Thông tin giao nhận &amp; Đặt cọc
+                    {t("Thông tin giao nhận & Đặt cọc")}
                   </h3>
                   <button
                     type="button"
                     onClick={() => setShowOrderForm(false)}
                     style={{ background: "none", border: "none", color: "var(--muted)", cursor: "pointer", fontSize: "0.85rem" }}
                   >
-                    ✕ Đóng form
+                    {t("✕ Đóng form")}
                   </button>
                 </div>
 
                 <div className="fg">
                   <div className="f">
-                    <label>Họ và tên người nhận *</label>
+                    <label>{t("Họ và tên người nhận *")}</label>
                     <input
-                      placeholder="Nguyễn Văn A"
+                      placeholder={t("Nguyễn Văn A")}
                       value={custName}
                       onChange={(e) => setCustName(e.target.value)}
                       required
                     />
                   </div>
                   <div className="f">
-                    <label>Số điện thoại nhận hàng *</label>
+                    <label>{t("Số điện thoại nhận hàng *")}</label>
                     <input
                       placeholder="0901 234 567"
                       value={custPhone}
@@ -745,9 +756,9 @@ export default function NeoDaylightCosmos() {
                 </div>
 
                 <div className="f">
-                  <label>Địa chỉ nhận hàng tại Việt Nam *</label>
+                  <label>{t("Địa chỉ nhận hàng tại Việt Nam *")}</label>
                   <input
-                    placeholder="Số nhà, tên đường, Phường/Xã, Quận/Huyện, Tỉnh/TP"
+                    placeholder={t("Số nhà, tên đường, Phường/Xã, Quận/Huyện, Tỉnh/TP")}
                     value={custAddress}
                     onChange={(e) => setCustAddress(e.target.value)}
                     required
@@ -991,19 +1002,6 @@ export default function NeoDaylightCosmos() {
           </svg>
         </button>
       </aside>
-
-      {/* Nút bật/tắt hiệu ứng chuyển động */}
-      <button
-        className="fxbtn"
-        id="fx"
-        aria-pressed={!calmMode}
-        onClick={() => {
-          setCalmMode(!calmMode);
-          showToast(!calmMode ? "Đã tắt hiệu ứng chuyển động" : "Đã bật hiệu ứng chuyển động");
-        }}
-      >
-        ✨ Hiệu ứng: {!calmMode ? "Bật" : "Tắt"}
-      </button>
 
       {/* Toast thông báo popup */}
       <div className={`toast ${toastMsg ? "on" : ""}`} role="status">

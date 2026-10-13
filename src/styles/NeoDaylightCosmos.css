@@ -22,7 +22,7 @@
   margin: 0;
   min-height: 100vh;
   color: var(--ink);
-  font: 16px/1.6 "Nunito", "Segoe UI", system-ui, sans-serif;
+  font: 1rem/1.6 "Nunito", "Segoe UI", system-ui, sans-serif;
   background: linear-gradient(180deg, #dff3ff 0%, #bfe4fb 40%, #e6f5ff 72%, #fff3c0 100%) fixed;
   overflow-x: hidden;
   position: relative;
@@ -1633,6 +1633,89 @@
 
   .cosmos-root .track-card {
     padding: 20px 16px;
+  }
+}
+
+/* Visitor appearance preferences: dark palette for both the storefront and tracking. */
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root {
+  color-scheme: dark;
+  --ink: #e7effb;
+  --muted: #adbed5;
+  --blue: #65bce8;
+  --blue-d: #79c7ee;
+  --glass: rgba(19, 32, 51, 0.86);
+  --line: rgba(151, 180, 211, 0.26);
+  --shadow: 0 12px 38px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, #0b1423 0%, #102038 45%, #142437 74%, #25263a 100%) fixed;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .pl,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .stat,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .chip,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .paste,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-shortcut,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-card,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-item,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-stepper-box,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .tabs,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .chips {
+  color: var(--ink);
+  border-color: var(--line);
+  background-color: rgba(21, 36, 57, 0.9);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-card,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-item {
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.24);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .pl[aria-current] {
+  background: #493d1d;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-search input,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .f input,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .f select {
+  color: var(--ink);
+  border-color: #405470;
+  background-color: #17263a;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .f select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23e7effb' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-search input::placeholder,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .paste input::placeholder {
+  color: #9cafc8;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .track-search input:focus {
+  background-color: #1c2d44;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .hc,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .tag,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .box {
+  color: var(--ink);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .hc b {
+  border-color: var(--line);
+}
+
+html[data-site-preferences-active="true"][data-site-effects="off"] .site-pref-panel {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cosmos-root *,
+  .cosmos-root *::before,
+  .cosmos-root *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }
 

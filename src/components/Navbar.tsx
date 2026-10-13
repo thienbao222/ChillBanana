@@ -19,6 +19,8 @@ import {
 import LiveRateWidget from "./LiveRateWidget";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
+import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
+import { useWebsiteText } from "@/context/WebsitePreferencesContext";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -31,6 +33,7 @@ export default function Navbar() {
 
   const { totalItems, openCart } = useCart();
   const { customer, openAuthModal, logout } = useAuth();
+  const t = useWebsiteText();
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200 shadow-sm">
@@ -43,7 +46,7 @@ export default function Navbar() {
             <span className="hidden md:inline text-slate-500">|</span>
             <span className="hidden md:inline text-slate-300 flex items-center">
               <ShieldCheck className="w-3.5 h-3.5 mr-1 text-emerald-400" />
-              Bảo hiểm hàng hóa 100% – Cam kết nội địa Nhật chính hãng
+              {t("Bảo hiểm hàng hóa 100% – Cam kết nội địa Nhật chính hãng")}
             </span>
           </div>
           <div className="flex items-center space-x-4">
@@ -55,14 +58,14 @@ export default function Navbar() {
               className="hidden sm:inline-flex items-center gap-1 rounded-lg border border-indigo-300/30 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-indigo-100 transition-colors hover:bg-white/10"
             >
               <Sparkles className="h-3 w-3 text-banana-300" />
-              Giao diện NeoDay
+              {t("Giao diện NeoDay")}
             </Link>
             <Link 
               href="/admin/login" 
               className="inline-flex items-center text-banana-300 hover:text-white transition-colors"
             >
               <LayoutDashboard className="w-3 h-3 mr-1" />
-              Admin Portal
+              {t("Admin Portal")}
             </Link>
           </div>
         </div>
@@ -86,7 +89,7 @@ export default function Navbar() {
                 </span>
               </div>
               <p className="text-[11px] text-slate-500 hidden sm:block">
-                Mua hàng Nhật chuẩn – Thư thái & Thảnh thơi
+                {t("Mua hàng Nhật chuẩn – Thư thái & Thảnh thơi")}
               </p>
             </div>
           </Link>
@@ -98,28 +101,32 @@ export default function Navbar() {
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors flex items-center"
             >
               <SendHorizontal className="w-4 h-4 mr-1.5 text-banana-600" />
-              Dán Link Tính Giá
+              {t("Dán Link Tính Giá")}
             </Link>
             <Link
               href={categoriesHref}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors"
             >
-              4 Danh Mục Hot
+              {t("4 Danh Mục Hot")}
             </Link>
             <Link
               href="/tracking"
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors flex items-center"
             >
               <PackageSearch className="w-4 h-4 mr-1.5 text-blue-600" />
-              Tra Cứu Đơn Hàng
+              {t("Tra Cứu Đơn Hàng")}
             </Link>
             <Link
               href={newsHref}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors"
             >
-              Cẩm Nang Hàng Nhật
+              {t("Cẩm Nang Hàng Nhật")}
             </Link>
           </nav>
+
+          <div className="hidden md:flex lg:hidden">
+            <WebsitePreferencesTrigger />
+          </div>
 
           {/* Action CTA: Cart, Customer Auth, AI & Order Now */}
           <div className="hidden lg:flex items-center space-x-3">
@@ -130,7 +137,7 @@ export default function Navbar() {
               title="Mở giỏ hàng"
             >
               <ShoppingCart className="w-4 h-4 text-navy-900" />
-              <span className="text-xs font-bold hidden xl:inline">Giỏ hàng</span>
+              <span className="text-xs font-bold hidden xl:inline">{t("Giỏ hàng")}</span>
               {totalItems > 0 && (
                 <span className="w-5 h-5 rounded-full bg-rose-500 text-white text-[11px] font-extrabold flex items-center justify-center animate-in zoom-in-75">
                   {totalItems > 99 ? "99+" : totalItems}
@@ -196,7 +203,7 @@ export default function Navbar() {
                 className="inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-navy-900 border border-slate-200 hover:bg-banana-50 hover:border-banana-300 transition-all gap-1.5"
               >
                 <User className="w-3.5 h-3.5 text-navy-800" />
-                <span>Đăng Nhập</span>
+              <span>{t("Đăng Nhập")}</span>
               </button>
             )}
 
@@ -209,14 +216,16 @@ export default function Navbar() {
               className="inline-flex items-center px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-banana-50 to-amber-100 text-banana-800 border border-banana-300/80 hover:shadow transition-all"
             >
               <Sparkles className="w-3.5 h-3.5 mr-1.5 text-banana-600 animate-pulse" />
-              ChillBanana AI
+              {t("ChillBanana AI")}
             </button>
+
+            <WebsitePreferencesTrigger />
 
             <Link
               href={calculatorHref}
               className="inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold bg-navy-900 text-white hover:bg-slate-800 shadow-md transition-all"
             >
-              Đặt Mua Hộ Ngay
+              {t("Đặt Mua Hộ Ngay")}
             </Link>
           </div>
 
@@ -257,14 +266,14 @@ export default function Navbar() {
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
             <SendHorizontal className="w-4 h-4 mr-2 text-banana-600" />
-            Dán Link Tính Giá Mua Hộ
+            {t("Dán Link Tính Giá Mua Hộ")}
           </Link>
           <Link
             href={categoriesHref}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
-            4 Danh Mục Chủ Lực
+            {t("4 Danh Mục Chủ Lực")}
           </Link>
           <Link
             href="/tracking"
@@ -272,14 +281,14 @@ export default function Navbar() {
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
             <PackageSearch className="w-4 h-4 mr-2 text-blue-600" />
-            Tra Cứu Đơn Hàng (7 Bước)
+            {t("Tra Cứu Đơn Hàng (7 Bước)")}
           </Link>
           <Link
             href={newsHref}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
-            Cẩm Nang Hàng Nhật
+            {t("Cẩm Nang Hàng Nhật")}
           </Link>
           <Link
             href="/"
@@ -287,8 +296,9 @@ export default function Navbar() {
             className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 font-bold text-indigo-800 hover:bg-indigo-100"
           >
             <Sparkles className="h-4 w-4" />
-            Giao diện chính NeoDay
+            {t("Giao diện chính NeoDay")}
           </Link>
+          <WebsitePreferencesTrigger className="w-full" onOpen={() => setMobileMenuOpen(false)} />
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (
               <div className="flex flex-col gap-2 p-2.5 bg-slate-100 rounded-xl">
@@ -304,7 +314,7 @@ export default function Navbar() {
                     }}
                     className="text-xs text-rose-600 font-bold px-2 py-1 bg-white rounded-lg border border-slate-200 shadow-sm"
                   >
-                    Đăng xuất
+                    {t("Đăng xuất")}
                   </button>
                 </div>
                 <Link
@@ -325,7 +335,7 @@ export default function Navbar() {
                 className="w-full flex items-center justify-center py-2.5 bg-banana-500 text-navy-950 font-bold rounded-xl text-xs"
               >
                 <User className="w-3.5 h-3.5 mr-1.5" />
-                Đăng Nhập / Đăng Ký
+                  {t("Đăng Nhập / Đăng Ký")}
               </button>
             )}
             <Link

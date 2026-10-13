@@ -26,6 +26,8 @@ import { StoredOrder } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import { useCart } from "@/context/CartContext";
+import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
+import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
 import "@/styles/NeoDaylightCosmos.css";
 
 function TrackingCosmosContent() {
@@ -34,7 +36,8 @@ function TrackingCosmosContent() {
   const { totalItems, openCart } = useCart();
   const { toast } = useToast();
 
-  const [calmMode, setCalmMode] = useState(false);
+  const { preferences } = useWebsitePreferences();
+  const t = useWebsiteText();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const [searchCode, setSearchCode] = useState("");
@@ -63,15 +66,20 @@ function TrackingCosmosContent() {
 
   // Parallax pointermove listeners
   useEffect(() => {
+    if (!preferences.effectsEnabled) {
+      document.documentElement.style.setProperty("--px", "0");
+      document.documentElement.style.setProperty("--py", "0");
+      return;
+    }
+
     const handleMove = (e: MouseEvent) => {
-      if (calmMode) return;
       document.documentElement.style.setProperty("--px", (e.clientX / window.innerWidth - 0.5).toString());
       document.documentElement.style.setProperty("--py", (e.clientY / window.innerHeight - 0.5).toString());
     };
 
     window.addEventListener("pointermove", handleMove, { passive: true });
     return () => window.removeEventListener("pointermove", handleMove);
-  }, [calmMode]);
+  }, [preferences.effectsEnabled]);
 
   // Fetch tỷ giá live
   useEffect(() => {
@@ -235,7 +243,7 @@ function TrackingCosmosContent() {
   };
 
   return (
-    <div className={`cosmos-root ${calmMode ? "calm" : ""}`}>
+    <div className={`cosmos-root ${preferences.effectsEnabled ? "" : "calm"}`}>
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
         <div className="sun par" style={{ "--k": 6 } as any} />
@@ -270,10 +278,10 @@ function TrackingCosmosContent() {
 
       <div className="track-wrap">
         {/* Lối tắt về giao diện NeoDay chính. */}
-        <nav className="track-shortcuts" aria-label="Chuyển giao diện">
+        <nav className="track-shortcuts" aria-label={t("Chuyển giao diện")}>
           <Link href="/" className="track-shortcut">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Về giao diện NeoDay</span>
+            <span>{t("Về giao diện NeoDay")}</span>
           </Link>
         </nav>
 
@@ -289,16 +297,17 @@ function TrackingCosmosContent() {
             <div>
               <b style={{ fontSize: "1.1rem", fontFamily: "'Baloo 2', sans-serif", color: "var(--ink)" }}>ChillBanana</b>
               <span className="jp" style={{ marginLeft: "6px" }}>JP ⇄ VN</span>
-              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--muted)" }}>Theo Dõi Vận Tải Thời Gian Thực</p>
+              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--muted)" }}>{t("Theo Dõi Vận Tải Thời Gian Thực")}</p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <WebsitePreferencesTrigger />
             <div className="track-badge track-badge-gold hidden sm:inline-flex">
               1 JPY = {exchangeRate.toLocaleString("vi-VN")} đ
             </div>
             <button className="chip" onClick={openCart} style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}>
-              Giỏ hàng
+              {t("Giỏ hàng")}
               <span className="badge" style={{ marginLeft: "6px", background: "var(--banana)", color: "var(--ink)", padding: "1px 6px", borderRadius: "999px", fontSize: "0.7rem", fontWeight: 800 }}>{totalItems}</span>
             </button>
             {customer ? (
@@ -315,10 +324,10 @@ function TrackingCosmosContent() {
 
         {/* Hero Section */}
         <div className="track-hero">
-          <span className="tag">HỆ THỐNG THEO DÕI VẬN TẢI CHILLBANANA · TOKYO ⇄ VIỆT NAM</span>
-          <h1>Tra Cứu &amp; Quản Lý Đơn Hàng Mua Hộ</h1>
+          <span className="tag">{t("HỆ THỐNG THEO DÕI VẬN TẢI CHILLBANANA · TOKYO ⇄ VIỆT NAM")}</span>
+          <h1>{t("Tra Cứu & Quản Lý Đơn Hàng Mua Hộ")}</h1>
           <p className="sub" style={{ maxWidth: "620px" }}>
-            Theo dõi chi tiết 7 chặng vận chuyển từ Tokyo về tận tay bạn tại Việt Nam. Quản lý trạng thái đơn hàng, kiểm tra cước bay và hỗ trợ hủy đơn linh hoạt.
+            {t("Theo dõi chi tiết 7 chặng vận chuyển từ Tokyo về tận tay bạn tại Việt Nam. Quản lý trạng thái đơn hàng, kiểm tra cước bay và hỗ trợ hủy đơn linh hoạt.")}
           </p>
         </div>
 
@@ -328,8 +337,8 @@ function TrackingCosmosContent() {
             <div className="flex items-center gap-3">
               <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
               <div>
-                <p className="font-bold text-emerald-950">Thanh toán qua VNPAY thành công! 🎉</p>
-                <p className="text-xs text-emerald-700">Giao dịch đã được xác nhận. Tiến độ xử lý đơn được cập nhật bên dưới.</p>
+                <p className="font-bold text-emerald-950">{t("Thanh toán qua VNPAY thành công! 🎉")}</p>
+                <p className="text-xs text-emerald-700">{t("Giao dịch đã được xác nhận. Tiến độ xử lý đơn được cập nhật bên dưới.")}</p>
               </div>
               <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-700 hover:text-emerald-950">
                 <X className="w-4 h-4" />
@@ -342,8 +351,8 @@ function TrackingCosmosContent() {
             <div className="flex items-center gap-3">
               <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
               <div>
-                <p className="font-bold text-rose-950">Thanh toán chưa hoàn tất</p>
-                <p className="text-xs text-rose-700">Giao dịch bị hủy hoặc chưa hoàn tất. Đơn vẫn được lưu; bạn có thể thử thanh toán lại từ trang này.</p>
+                <p className="font-bold text-rose-950">{t("Thanh toán chưa hoàn tất")}</p>
+                <p className="text-xs text-rose-700">{t("Giao dịch bị hủy hoặc chưa hoàn tất. Đơn vẫn được lưu; bạn có thể thử thanh toán lại từ trang này.")}</p>
               </div>
               <button onClick={() => setPaymentStatus(null)} className="ml-auto text-rose-700 hover:text-rose-950">
                 <X className="w-4 h-4" />
@@ -362,7 +371,7 @@ function TrackingCosmosContent() {
                 onClick={() => setActiveTab("my_orders")}
               >
                 <ShoppingBag className="w-4 h-4 inline mr-1.5" />
-                Đơn Hàng Của Tôi ({myOrders.length})
+                {t("Đơn Hàng Của Tôi")} ({myOrders.length})
               </button>
               <button
                 role="tab"
@@ -370,7 +379,7 @@ function TrackingCosmosContent() {
                 onClick={() => setActiveTab("search")}
               >
                 <Search className="w-4 h-4 inline mr-1.5" />
-                Tra Cứu Mã Đơn Khác
+                {t("Tra Cứu Mã Đơn Khác")}
               </button>
             </div>
           </div>
@@ -384,11 +393,11 @@ function TrackingCosmosContent() {
             <div className="track-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <h2 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
-                  <span>Quản Lý Đơn Hàng Của {customer.name}</span>
-                  <span className="track-badge track-badge-gold">Thành viên VIP</span>
+                  <span>{preferences.language === "ja" ? `${t("Quản Lý Đơn Hàng Của")} ${customer.name}` : `Quản Lý Đơn Hàng Của ${customer.name}`}</span>
+                  <span className="track-badge track-badge-gold">{t("Thành viên VIP")}</span>
                 </h2>
                 <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
-                  Theo dõi danh sách đơn mua hộ từ các sàn Nhật Bản, kiểm tra tiến độ giao vận và chủ động hủy đơn khi cần.
+                  {preferences.language === "ja" ? "日本の通販サイトから購入した商品の一覧、配送状況を確認し、必要に応じて注文をキャンセルできます。" : "Theo dõi danh sách đơn mua hộ từ các sàn Nhật Bản, kiểm tra tiến độ giao vận và chủ động hủy đơn khi cần."}
                 </p>
               </div>
               <button
@@ -397,25 +406,25 @@ function TrackingCosmosContent() {
                 style={{ padding: "8px 16px", fontSize: "0.8rem", alignSelf: "flex-start" }}
               >
                 <RefreshCw className={`w-3.5 h-3.5 inline mr-1.5 ${loadingMyOrders ? "animate-spin" : ""}`} />
-                <span>Làm mới danh sách</span>
+                <span>{t("Làm mới danh sách")}</span>
               </button>
             </div>
 
             {loadingMyOrders ? (
               <div className="track-card text-center py-12">
                 <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-500 mb-2" />
-                <p style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Đang đồng bộ danh sách đơn hàng từ máy chủ...</p>
+                <p style={{ fontSize: "0.85rem", color: "var(--muted)" }}>{t("Đang đồng bộ danh sách đơn hàng từ máy chủ...")}</p>
               </div>
             ) : myOrders.length === 0 ? (
               <div className="track-card text-center py-12 space-y-3">
                 <div style={{ fontSize: "2.5rem" }}>🛍️</div>
-                <h3 style={{ fontSize: "1.1rem", fontWeight: 800 }}>Bạn chưa có đơn hàng nào</h3>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800 }}>{t("Bạn chưa có đơn hàng nào")}</h3>
                 <p style={{ fontSize: "0.82rem", color: "var(--muted)", maxWidth: "420px", margin: "0 auto" }}>
-                  Dán link sản phẩm từ Amazon JP, Mercari hoặc Rakuten vào công cụ tính giá tự động để tạo đơn mua hộ đầu tiên!
+                  {preferences.language === "ja" ? "Amazon JP、Mercari、Rakutenの商品リンクを見積もりツールに貼り付けて、最初の購入代行注文を作成しましょう。" : "Dán link sản phẩm từ Amazon JP, Mercari hoặc Rakuten vào công cụ tính giá tự động để tạo đơn mua hộ đầu tiên!"}
                 </p>
                 <div style={{ paddingTop: "8px" }}>
                   <Link href="/#quote" className="cta" style={{ textDecoration: "none", display: "inline-flex" }}>
-                    Dán Link Mua Hộ Ngay <svg><use href="#i-arrow" /></svg>
+                    {t("Dán Link Tính Giá Tự Động")} <svg><use href="#i-arrow" /></svg>
                   </Link>
                 </div>
               </div>
@@ -434,9 +443,9 @@ function TrackingCosmosContent() {
 
                         {/* Trạng thái đơn hàng */}
                         {item.status === "CANCELLED" ? (
-                          <span className="track-badge track-badge-rose">✕ Đã Hủy</span>
+                          <span className="track-badge track-badge-rose">✕ {t("Đã Hủy")}</span>
                         ) : item.status === "COMPLETED" ? (
-                          <span className="track-badge track-badge-green">✓ Hoàn Tất</span>
+                          <span className="track-badge track-badge-green">✓ {t("Hoàn Tất")}</span>
                         ) : (
                           <span className="track-badge track-badge-blue">{item.status}</span>
                         )}
@@ -454,12 +463,12 @@ function TrackingCosmosContent() {
                           }`}
                         >
                           {item.paymentStatus === "REFUNDED"
-                            ? "Đã hoàn tiền"
+                            ? t("Đã hoàn tiền")
                             : item.paymentStatus === "UNPAID"
-                            ? "Chờ cọc"
+                            ? t("Chờ cọc")
                             : item.paymentStatus === "DEPOSITED_50"
-                            ? "Đã cọc 50%"
-                            : "Đã TT 100%"}
+                            ? t("Đã cọc 50%")
+                            : t("Đã TT 100%")}
                         </span>
                       </div>
 
@@ -468,8 +477,8 @@ function TrackingCosmosContent() {
                           {item.productName}
                         </h4>
                         <p style={{ fontSize: "0.78rem", color: "var(--muted)", margin: "4px 0 0" }}>
-                          Tổng chi phí: <strong style={{ color: "var(--ink)", fontFamily: "monospace" }}>{item.totalVnd.toLocaleString("vi-VN")} đ</strong>
-                          {" "}(Thanh toán {item.depositPercent || 50}%: <b style={{ color: "#d97706" }}>{item.depositAmountVnd.toLocaleString("vi-VN")} đ</b>)
+                          {t("Tổng chi phí:")} <strong style={{ color: "var(--ink)", fontFamily: "monospace" }}>{item.totalVnd.toLocaleString("vi-VN")} đ</strong>
+                          {preferences.language === "ja" ? `（${item.depositPercent || 50}%を支払う場合：` : ` (Thanh toán ${item.depositPercent || 50}%: `}<b style={{ color: "#d97706" }}>{item.depositAmountVnd.toLocaleString("vi-VN")} đ</b>{preferences.language === "ja" ? "）" : ")"}
                         </p>
                       </div>
                     </div>
@@ -485,7 +494,7 @@ function TrackingCosmosContent() {
                         style={{ padding: "8px 18px", fontSize: "0.78rem" }}
                       >
                         <PackageSearch className="w-3.5 h-3.5 inline mr-1" />
-                        <span>Xem Hành Trình</span>
+                        <span>{t("Xem Hành Trình")}</span>
                       </button>
 
                       {item.canCancel && (
@@ -495,7 +504,7 @@ function TrackingCosmosContent() {
                           style={{ padding: "8px 14px", fontSize: "0.78rem", color: "#c01048", borderColor: "#fecdd6" }}
                         >
                           <Ban className="w-3.5 h-3.5 inline mr-1" />
-                          <span>Hủy Đơn</span>
+                          <span>{t("Hủy Đơn")}</span>
                         </button>
                       )}
                     </div>
@@ -519,7 +528,7 @@ function TrackingCosmosContent() {
                   type="text"
                   value={searchCode}
                   onChange={(e) => setSearchCode(e.target.value)}
-                  placeholder="Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)"
+                  placeholder={t("Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)")}
                 />
               </div>
               <button
@@ -528,7 +537,7 @@ function TrackingCosmosContent() {
                 className="cta"
                 style={{ padding: "12px 24px", fontSize: "0.88rem", flexShrink: 0 }}
               >
-                {loading ? "Đang tìm..." : "Tra Cứu"} <svg><use href="#i-arrow" /></svg>
+                {loading ? t("Đang tìm...") : t("Tra Cứu")} <svg><use href="#i-arrow" /></svg>
               </button>
             </form>
 
@@ -575,7 +584,7 @@ function TrackingCosmosContent() {
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/60 gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className="track-badge track-badge-gold">Đơn Mua Hộ</span>
+                        <span className="track-badge track-badge-gold">{t("Đơn Mua Hộ")}</span>
                         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, fontFamily: "monospace", color: "var(--ink)" }}>
                           {order.orderCode}
                         </h2>
@@ -594,17 +603,17 @@ function TrackingCosmosContent() {
 
                       {order.status === "CANCELLED" ? (
                         <span className="track-badge track-badge-rose">
-                          <Ban className="w-3 h-3 mr-1" /> Đã Hủy
+                          <Ban className="w-3 h-3 mr-1" /> {t("Đã Hủy")}
                         </span>
                       ) : (
                         <span className="track-badge track-badge-blue">
                           {order.paymentStatus === "REFUNDED"
-                            ? "Đã hoàn tiền"
+                            ? t("Đã hoàn tiền")
                             : order.paymentStatus === "PAID_100"
-                            ? "Đã thanh toán 100%"
+                            ? t("Đã thanh toán 100%")
                             : order.paymentStatus === "DEPOSITED_50"
-                            ? "Đã cọc 50%"
-                            : "Chờ đặt cọc"}
+                            ? t("Đã cọc 50%")
+                            : t("Chờ đặt cọc")}
                         </span>
                       )}
 
@@ -615,7 +624,7 @@ function TrackingCosmosContent() {
                           style={{ padding: "6px 14px", fontSize: "0.75rem", color: "#c01048", borderColor: "#fecdd6" }}
                         >
                           <Ban className="w-3.5 h-3.5 inline mr-1 text-rose-600" />
-                          <span>Hủy Đơn Hàng</span>
+                          <span>{t("Hủy Đơn Hàng")}</span>
                         </button>
                       )}
                     </div>
@@ -624,7 +633,7 @@ function TrackingCosmosContent() {
                   {/* Stepper 7 Bước */}
                   <div>
                     <h3 style={{ fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", margin: "0 0 16px" }}>
-                      Tiến Độ Vận Tải Quốc Tế &amp; Nội Địa (7 Chặng)
+                      {t("Tiến Độ Vận Tải Quốc Tế & Nội Địa (7 Chặng)")}
                     </h3>
                     <div className="track-stepper-box">
                       <TrackingStepper currentStatus={order.status} />
@@ -638,7 +647,7 @@ function TrackingCosmosContent() {
                         <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
                           <span style={{ fontSize: "1.5rem" }}>🇯🇵</span>
                           <div>
-                            <small style={{ color: "var(--muted)", display: "block" }}>Vận đơn nội địa Nhật Bản:</small>
+                            <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn nội địa Nhật Bản:")}</small>
                             <b style={{ fontFamily: "monospace", fontSize: "0.9rem" }}>{order.jpDomesticTrack}</b>
                           </div>
                         </div>
@@ -647,7 +656,7 @@ function TrackingCosmosContent() {
                         <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
                           <span style={{ fontSize: "1.5rem" }}>🇻🇳</span>
                           <div>
-                            <small style={{ color: "var(--muted)", display: "block" }}>Vận đơn giao hàng tại Việt Nam:</small>
+                            <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn giao hàng tại Việt Nam:")}</small>
                             <b style={{ fontFamily: "monospace", fontSize: "0.9rem", color: "#167a48" }}>{order.vnDomesticTrack}</b>
                           </div>
                         </div>
@@ -661,40 +670,40 @@ function TrackingCosmosContent() {
                   {/* Cột Trái: Chi tiết kiện hàng & Tài chính */}
                   <div className="lg:col-span-7 track-card space-y-4">
                     <h3 style={{ fontSize: "1rem", fontWeight: 800, margin: 0, paddingBottom: "12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
-                      Chi Tiết Kiện Hàng &amp; Chi Phí
+                      {t("Chi Tiết Kiện Hàng & Chi Phí")}
                     </h3>
 
                     <div style={{ fontSize: "0.85rem", lineHeight: 1.8 }}>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Tên sản phẩm:</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Tên sản phẩm:")}</span>
                         <b style={{ textAlign: "right", maxWidth: "60%" }}>{order.productName}</b>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Giá gốc tại Nhật:</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Giá gốc tại Nhật:")}</span>
                         <b>{order.priceJpy?.toLocaleString("vi-VN")} ¥</b>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Tỷ giá áp dụng:</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Tỷ giá áp dụng:")}</span>
                         <span>1 JPY = {order.exchangeRate} đ</span>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Tiền hàng quy đổi:</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Tiền hàng quy đổi:")}</span>
                         <b>{order.productPriceVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Phí mua hộ &amp; bảo hiểm (4%):</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Phí mua hộ & bảo hiểm (4%):")}</span>
                         <b>{order.serviceFeeVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                       <div className="flex justify-between py-1 border-b border-slate-100">
-                        <span style={{ color: "var(--muted)" }}>Cước bay quốc tế:</span>
+                        <span style={{ color: "var(--muted)" }}>{t("Cước bay quốc tế:")}</span>
                         <b style={{ color: "#167a48" }}>{order.isGroupBuy ? "Ưu đãi Gộp Đơn (-25%)" : "Cân đo thực tế khi về kho"}</b>
                       </div>
                       <div className="flex justify-between py-2 border-b border-slate-200">
-                        <span style={{ fontWeight: 800 }}>Tổng tiền hàng:</span>
+                        <span style={{ fontWeight: 800 }}>{t("Tổng tiền hàng:")}</span>
                         <b style={{ fontSize: "1.1rem", color: "var(--ink)" }}>{order.totalVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                       <div className="flex justify-between py-2" style={{ background: "rgba(248,219,85,0.2)", padding: "10px 14px", borderRadius: "14px" }}>
-                        <span style={{ fontWeight: 800, color: "#8a5a00" }}>{order.isPriceVerified ? `Số tiền cần thanh toán (${order.depositPercent || 50}%):` : "Mức thanh toán tạm tính:"}</span>
+                        <span style={{ fontWeight: 800, color: "#8a5a00" }}>{order.isPriceVerified ? `${t("Số tiền cần thanh toán")} (${order.depositPercent || 50}%):` : t("Mức thanh toán tạm tính:")}</span>
                         <b style={{ fontSize: "1.15rem", color: "#8a5a00" }}>{order.depositAmountVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                     </div>
@@ -860,19 +869,6 @@ function TrackingCosmosContent() {
           </svg>
         </button>
       </aside>
-
-      {/* Nút công tắc hiệu ứng */}
-      <button
-        className="fxbtn"
-        id="fx"
-        aria-pressed={!calmMode}
-        onClick={() => {
-          setCalmMode(!calmMode);
-          showToast(!calmMode ? "Đã tắt hiệu ứng chuyển động" : "Đã bật hiệu ứng chuyển động");
-        }}
-      >
-        ✨ Hiệu ứng: {!calmMode ? "Bật" : "Tắt"}
-      </button>
 
       {/* Toast thông báo popup */}
       <div className={`toast ${toastMsg ? "on" : ""}`} role="status">
