@@ -64,7 +64,7 @@ export default function Footer() {
             </h4>
             <ul className="space-y-2 text-slate-300">
               <li>
-                <Link href="/#calculator" className="hover:text-banana-400 transition-colors">
+                <Link href="/#quote" className="hover:text-banana-400 transition-colors">
                   ➔ Công cụ bóc tách link &amp; tính giá tự động
                 </Link>
               </li>
@@ -74,7 +74,7 @@ export default function Footer() {
                 </Link>
               </li>
               <li>
-                <Link href="/#categories" className="hover:text-banana-400 transition-colors">
+                <Link href="/#hot" className="hover:text-banana-400 transition-colors">
                   ➔ 4 Danh mục hàng Nhật nội địa hot
                 </Link>
               </li>

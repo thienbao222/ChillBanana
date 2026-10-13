@@ -91,6 +91,33 @@ export default function NeoDaylightCosmos() {
     }
   }, [customer]);
 
+  useEffect(() => {
+    const handleSelectProduct = (event: Event) => {
+      const product = (event as CustomEvent<{
+        name?: string;
+        priceJpy?: number;
+        imageUrl?: string;
+        originalStore?: string;
+        category?: string;
+      }>).detail;
+
+      if (!product) return;
+      if (product.name) setProductName(product.name);
+      if (typeof product.priceJpy === "number" && product.priceJpy > 0) setPriceJpy(product.priceJpy);
+      if (product.imageUrl) setProductImage(product.imageUrl);
+      if (product.originalStore) setDetectedStore(product.originalStore);
+      if (product.category) setCategory(product.category);
+
+      // A catalog item has no order URL, so do not reuse an unrelated old link.
+      setInputUrl("");
+      setShowOrderForm(false);
+      setCreatedOrder(null);
+    };
+
+    window.addEventListener("chillbanana:select_product", handleSelectProduct);
+    return () => window.removeEventListener("chillbanana:select_product", handleSelectProduct);
+  }, []);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     if (toastTimer.current) clearTimeout(toastTimer.current);
@@ -288,14 +315,14 @@ export default function NeoDaylightCosmos() {
         </defs>
       </svg>
 
-      {/* Thanh điều hướng nhanh quay về giao diện gốc */}
+      {/* Lối tắt sang giao diện cũ */}
       <div className="fixed top-2 left-4 z-50">
         <Link
-          href="/"
+          href="/classic"
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold shadow-lg backdrop-blur border border-white/20 transition-all hover:scale-105"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Về giao diện gốc</span>
+          <span>Về giao diện cũ</span>
         </Link>
       </div>
 
@@ -897,7 +924,7 @@ export default function NeoDaylightCosmos() {
         {/* SẢN PHẨM CÓ SẴN TỪ DB NEON */}
         <section className="sec" id="stock" style={{ scrollMarginTop: "90px" }}>
           {/* CuratedProducts tự fetch /api/products và quản lý giỏ hàng */}
-          <CuratedProducts />
+          <CuratedProducts quoteSectionId="quote" quoteHref="#quote" />
         </section>
 
         {/* 4 DANH MỤC HOT */}

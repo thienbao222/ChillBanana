@@ -237,18 +237,18 @@ function TrackingCosmosContent() {
       </svg>
 
       <div className="track-wrap">
-        {/* Chuyển sang giao diện cũ; logo trong header dẫn về Neo Cosmos. */}
+        {/* Lối tắt sang giao diện cũ; logo trong header về giao diện NeoDay chính. */}
         <nav className="track-shortcuts" aria-label="Chuyển giao diện">
-          <Link href="/" className="track-shortcut">
+          <Link href="/classic" className="track-shortcut">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Về giao diện gốc</span>
+            <span>Về giao diện cũ</span>
           </Link>
         </nav>
 
         {/* Header Bar của trang tra cứu phong cách Cosmos */}
         <header className="track-nav">
           <div className="flex items-center gap-3">
-            <Link className="logo" href="/galaxy" aria-label="ChillBanana - Neo Cosmos">
+            <Link className="logo" href="/" aria-label="ChillBanana - NeoDay">
               <svg viewBox="0 0 64 64" aria-hidden="true" style={{ width: "100%", height: "100%" }}>
                 <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
                 <path d="M50 16l3-3" stroke="#8a5a00" strokeWidth="3" strokeLinecap="round" />
@@ -382,7 +382,7 @@ function TrackingCosmosContent() {
                   Dán link sản phẩm từ Amazon JP, Mercari hoặc Rakuten vào công cụ tính giá tự động để tạo đơn mua hộ đầu tiên!
                 </p>
                 <div style={{ paddingTop: "8px" }}>
-                  <Link href="/galaxy#quote" className="cta" style={{ textDecoration: "none", display: "inline-flex" }}>
+                  <Link href="/#quote" className="cta" style={{ textDecoration: "none", display: "inline-flex" }}>
                     Dán Link Mua Hộ Ngay <svg><use href="#i-arrow" /></svg>
                   </Link>
                 </div>
@@ -527,7 +527,7 @@ function TrackingCosmosContent() {
                   Nhập mã đơn hàng của bạn vào ô tìm kiếm phía trên để theo dõi từng chặng di chuyển thực tế từ kho Tokyo về đến tận cửa nhà bạn tại Việt Nam.
                 </p>
                 <div style={{ paddingTop: "8px" }}>
-                  <Link href="/galaxy#quote" className="btn2" style={{ textDecoration: "none", display: "inline-flex" }}>
+                  <Link href="/#quote" className="btn2" style={{ textDecoration: "none", display: "inline-flex" }}>
                     Tạo Đơn Hàng Mới Tại Neo Cosmos <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
                   </Link>
                 </div>

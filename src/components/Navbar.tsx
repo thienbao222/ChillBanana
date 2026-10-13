@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { 
   PackageSearch, 
   Sparkles, 
@@ -20,6 +21,11 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 
 export default function Navbar() {
+  const pathname = usePathname();
+  const isClassicRoute = pathname === "/classic";
+  const calculatorHref = isClassicRoute ? "/classic#calculator" : "/#quote";
+  const categoriesHref = isClassicRoute ? "/classic#categories" : "/#hot";
+  const newsHref = isClassicRoute ? "/classic#news" : "/#news";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
 
@@ -45,11 +51,11 @@ export default function Navbar() {
               Hotline: <strong className="text-banana-400">1900 6868</strong> (8h-22h)
             </span>
             <Link
-              href="/galaxy"
+              href="/"
               className="hidden sm:inline-flex items-center gap-1 rounded-lg border border-indigo-300/30 bg-white/5 px-2.5 py-1 text-[11px] font-bold text-indigo-100 transition-colors hover:bg-white/10"
             >
               <Sparkles className="h-3 w-3 text-banana-300" />
-              Giao diện mới
+              Giao diện NeoDay
             </Link>
             <Link 
               href="/admin/login" 
@@ -88,14 +94,14 @@ export default function Navbar() {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-1 lg:space-x-2">
             <Link
-              href="/#calculator"
+              href={calculatorHref}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors flex items-center"
             >
               <SendHorizontal className="w-4 h-4 mr-1.5 text-banana-600" />
               Dán Link Tính Giá
             </Link>
             <Link
-              href="/#categories"
+              href={categoriesHref}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors"
             >
               4 Danh Mục Hot
@@ -108,7 +114,7 @@ export default function Navbar() {
               Tra Cứu Đơn Hàng
             </Link>
             <Link
-              href="/#news"
+              href={newsHref}
               className="px-3.5 py-2 text-sm font-medium text-slate-700 hover:text-banana-600 hover:bg-banana-50 rounded-xl transition-colors"
             >
               Cẩm Nang Hàng Nhật
@@ -207,7 +213,7 @@ export default function Navbar() {
             </button>
 
             <Link
-              href="/#calculator"
+              href={calculatorHref}
               className="inline-flex items-center px-4 py-2.5 rounded-xl text-xs font-bold bg-navy-900 text-white hover:bg-slate-800 shadow-md transition-all"
             >
               Đặt Mua Hộ Ngay
@@ -246,7 +252,7 @@ export default function Navbar() {
       {mobileMenuOpen && (
         <div className="md:hidden bg-white border-b border-slate-200 px-4 pt-2 pb-4 space-y-2 shadow-lg">
           <Link
-            href="/#calculator"
+            href={calculatorHref}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
@@ -254,7 +260,7 @@ export default function Navbar() {
             Dán Link Tính Giá Mua Hộ
           </Link>
           <Link
-            href="/#categories"
+            href={categoriesHref}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
@@ -269,19 +275,19 @@ export default function Navbar() {
             Tra Cứu Đơn Hàng (7 Bước)
           </Link>
           <Link
-            href="/#news"
+            href={newsHref}
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center px-3 py-2.5 rounded-xl text-slate-700 hover:bg-banana-50 hover:text-banana-600"
           >
             Cẩm Nang Hàng Nhật
           </Link>
           <Link
-            href="/galaxy"
+            href="/"
             onClick={() => setMobileMenuOpen(false)}
             className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 font-bold text-indigo-800 hover:bg-indigo-100"
           >
             <Sparkles className="h-4 w-4" />
-            Trải nghiệm giao diện mới (Neo Cosmos)
+            Giao diện chính NeoDay
           </Link>
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (

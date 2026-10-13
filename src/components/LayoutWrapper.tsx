@@ -14,7 +14,7 @@ import ToastContainer from "@/components/ToastContainer";
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
-  const isCosmosRoute = pathname === "/galaxy" || pathname === "/tracking";
+  const isCosmosRoute = pathname === "/" || pathname === "/galaxy" || pathname === "/tracking";
 
   if (isAdminRoute) {
     return <>{children}</>;

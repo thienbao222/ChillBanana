@@ -437,7 +437,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                             </p>
                             <div className="pt-1">
                               <Link
-                                href="/#calculator"
+                                href="/#quote"
                                 target="_blank"
                                 className="inline-flex items-center space-x-1.5 px-4 py-2 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all"
                               >

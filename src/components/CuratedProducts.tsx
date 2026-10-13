@@ -12,7 +12,15 @@ import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 
-export default function CuratedProducts() {
+type CuratedProductsProps = {
+  quoteSectionId?: string;
+  quoteHref?: string;
+};
+
+export default function CuratedProducts({
+  quoteSectionId = "calculator",
+  quoteHref = "#calculator",
+}: CuratedProductsProps) {
   const { addToCart } = useCart();
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
@@ -72,11 +80,12 @@ export default function CuratedProducts() {
           weightKg: product.weightKg,
           imageUrl: product.imageUrl,
           originalStore: product.originalStore,
+          category: product.category,
         },
       })
     );
 
-    const calcSection = document.getElementById("calculator");
+    const calcSection = document.getElementById(quoteSectionId);
     if (calcSection) {
       calcSection.scrollIntoView({ behavior: "smooth" });
     }
@@ -209,7 +218,7 @@ export default function CuratedProducts() {
         <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center">
           <p className="font-bold text-navy-900">{products.length === 0 ? "Hiện chưa có sản phẩm được đăng bán." : "Chưa có sản phẩm trong danh mục này."}</p>
           <p className="mt-1 text-sm text-slate-500">Bạn có thể dùng công cụ báo giá để gửi link sản phẩm cần mua hộ.</p>
-          <a href="#calculator" className="mt-4 inline-flex rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800">
+          <a href={quoteHref} className="mt-4 inline-flex rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800">
             Gửi link sản phẩm cần mua
           </a>
         </div>
