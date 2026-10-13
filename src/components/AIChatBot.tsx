@@ -135,6 +135,15 @@ export default function AIChatBot() {
   }, [petConversationOpen]);
 
   useEffect(() => {
+    const handleOpen = () => {
+      setPetVisible(true);
+      setIsOpen(true);
+    };
+    window.addEventListener("open-ai-chat", handleOpen);
+    return () => window.removeEventListener("open-ai-chat", handleOpen);
+  }, []);
+
+  useEffect(() => {
     try {
       const saved = window.localStorage.getItem("neo-universe-pet-position");
       if (saved) {

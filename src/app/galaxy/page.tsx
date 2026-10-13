@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import GalaxyStorefront from "@/components/GalaxyStorefront";
+import NeoDaylightCosmos from "@/components/NeoDaylightCosmos";
 
 export const metadata: Metadata = {
-  title: "Banana Galaxy | ChillBanana",
-  description: "Khám phá giao diện mua hộ hàng Nhật mới của ChillBanana.",
+  title: "Neo Daylight Cosmos v8 | ChillBanana",
+  description: "Khám phá giao diện mua hộ hàng Nhật mới Neo Daylight Cosmos của ChillBanana.",
 };
 
 export default function GalaxyPage() {
-  return <GalaxyStorefront />;
+  return <NeoDaylightCosmos />;
 }

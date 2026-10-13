@@ -281,7 +281,7 @@ export default function Navbar() {
             className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-2.5 font-bold text-indigo-800 hover:bg-indigo-100"
           >
             <Sparkles className="h-4 w-4" />
-            Trải nghiệm giao diện Galaxy mới
+            Trải nghiệm giao diện mới (Neo Cosmos)
           </Link>
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (
