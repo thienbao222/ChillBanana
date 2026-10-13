@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { MotionConfig } from "framer-motion";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink, QrCode, CreditCard, ShoppingCart } from "lucide-react";
 import "@/styles/NeoDaylightCosmos.css";
@@ -286,6 +287,7 @@ export default function NeoDaylightCosmos() {
   };
 
   return (
+  <MotionConfig reducedMotion={preferences.effectsEnabled ? "never" : "always"}>
     <div className={`cosmos-root ${preferences.effectsEnabled ? "" : "calm"}`}>
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
@@ -1008,5 +1010,6 @@ export default function NeoDaylightCosmos() {
         {toastMsg}
       </div>
     </div>
+  </MotionConfig>
   );
 }

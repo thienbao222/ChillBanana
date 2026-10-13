@@ -1709,9 +1709,9 @@ html[data-site-preferences-active="true"][data-site-effects="off"] .site-pref-pa
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cosmos-root *,
-  .cosmos-root *::before,
-  .cosmos-root *::after {
+  html:not([data-site-effects="on"]) .cosmos-root *,
+  html:not([data-site-effects="on"]) .cosmos-root *::before,
+  html:not([data-site-effects="on"]) .cosmos-root *::after {
     scroll-behavior: auto !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
