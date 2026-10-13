@@ -1,9 +1,3 @@
 {
-  "buildCommand": "npm run vercel-build",
-  "crons": [
-    {
-      "path": "/api/cron/expire-order-reservations",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  "buildCommand": "npm run vercel-build"
 }
