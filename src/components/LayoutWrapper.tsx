@@ -10,6 +10,8 @@ import AuthModal from "@/components/AuthModal";
 import { CartProvider } from "@/context/CartContext";
 import { ToastProvider } from "@/context/ToastContext";
 import ToastContainer from "@/components/ToastContainer";
+import WebsitePreferencesPanel from "@/components/WebsitePreferencesPanel";
+import { WebsitePreferencesProvider } from "@/context/WebsitePreferencesContext";
 
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -21,17 +23,20 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   }
 
   return (
-    <ToastProvider>
-      <CartProvider>
-        {!isCosmosRoute && <Navbar />}
-        {isCosmosRoute ? children : <main className="flex-grow">{children}</main>}
-        {!isCosmosRoute && <Footer />}
-        <AIChatBot />
-        <CartDrawer />
-        <AuthModal />
-        <ToastContainer />
-      </CartProvider>
-    </ToastProvider>
+    <WebsitePreferencesProvider>
+      <ToastProvider>
+        <CartProvider>
+          {!isCosmosRoute && <Navbar />}
+          {isCosmosRoute ? children : <main className="flex-grow">{children}</main>}
+          {!isCosmosRoute && <Footer />}
+          <AIChatBot />
+          <CartDrawer />
+          <AuthModal />
+          <ToastContainer />
+          <WebsitePreferencesPanel />
+        </CartProvider>
+      </ToastProvider>
+    </WebsitePreferencesProvider>
   );
 }
 

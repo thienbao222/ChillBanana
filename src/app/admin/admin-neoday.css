@@ -384,3 +384,41 @@
     font-size: 11px;
   }
 }
+
+/* Increase small admin text for easier reading across tables and forms. */
+.admin-neoday {
+  font-size: 16px;
+}
+
+.admin-neoday-userbar,
+.admin-neoday-action,
+.admin-neoday-logout,
+.admin-neoday-mode,
+.admin-neoday-tab {
+  font-size: 14px;
+}
+
+.admin-neoday-portal,
+.admin-neoday-role,
+.admin-neoday-kanban-pill {
+  font-size: 12px;
+}
+
+.admin-neoday-workspace-label {
+  font-size: 15px;
+}
+
+.admin-neoday-main :is([class~="text-[9px]"], [class~="text-[10px]"]) {
+  font-size: 12px !important;
+  line-height: 1.4;
+}
+
+.admin-neoday-main :is([class~="text-[11px]"], [class~="text-xs"]) {
+  font-size: 14px !important;
+  line-height: 1.45;
+}
+
+.admin-neoday-main [class~="text-sm"] {
+  font-size: 16px !important;
+  line-height: 1.5;
+}

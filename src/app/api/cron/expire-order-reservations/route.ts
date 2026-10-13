@@ -91,5 +91,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ success: true, found: expiredOrders.length, released, conflicts, errors });
+  const success = errors === 0;
+  return NextResponse.json(
+    { success, found: expiredOrders.length, released, conflicts, errors },
+    { status: success ? 200 : 500 }
+  );
 }
