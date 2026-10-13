@@ -164,11 +164,6 @@ export const DEFAULT_WEBSITE_PREFERENCES: WebsitePreferences = {
   textSize: "normal",
 };
 
-function getDefaultWebsitePreferences(): WebsitePreferences {
-  const prefersReducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
-  return { ...DEFAULT_WEBSITE_PREFERENCES, effectsEnabled: !prefersReducedMotion };
-}
-
 type PreferencesContextValue = {
   preferences: WebsitePreferences;
   updatePreferences: (patch: Partial<WebsitePreferences>) => void;
@@ -236,9 +231,7 @@ export function WebsitePreferencesProvider({ children }: { children: React.React
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
       if (stored) setPreferences(normalizePreferences(JSON.parse(stored)));
-      else setPreferences(getDefaultWebsitePreferences());
     } catch {
-      setPreferences(getDefaultWebsitePreferences());
       try {
         window.localStorage.removeItem(STORAGE_KEY);
       } catch {
@@ -272,7 +265,7 @@ export function WebsitePreferencesProvider({ children }: { children: React.React
   const updatePreferences = useCallback((patch: Partial<WebsitePreferences>) => {
     setPreferences((current) => normalizePreferences({ ...current, ...patch }));
   }, []);
-  const resetPreferences = useCallback(() => setPreferences(getDefaultWebsitePreferences()), []);
+  const resetPreferences = useCallback(() => setPreferences(DEFAULT_WEBSITE_PREFERENCES), []);
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
 

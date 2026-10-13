@@ -238,22 +238,62 @@
   top: calc(var(--cy) - var(--r));
   width: calc(var(--r) * 2);
   height: calc(var(--r) * 2);
-  border: 1.5px dashed rgba(43, 127, 176, 0.45);
+  border: 1px solid rgba(43, 127, 176, 0.16);
+  border-color: color-mix(in srgb, var(--c) 20%, transparent);
   border-radius: 50%;
+  box-shadow: 0 0 18px rgba(90, 186, 230, 0.06);
+  box-shadow: 0 0 20px color-mix(in srgb, var(--c) 9%, transparent);
   pointer-events: none;
   animation: cosmosRingin 1.1s var(--ease) both;
   animation-delay: calc(var(--n) * 120ms);
+}
+
+.cosmos-root .ring::before,
+.cosmos-root .ring::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.cosmos-root .ring::before {
+  inset: 11% -4%;
+  border: 1px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.62);
+  border-right-color: rgba(90, 186, 230, 0.3);
+  border-left-color: rgba(164, 139, 250, 0.18);
+  border-top-color: color-mix(in srgb, var(--c) 48%, white);
+  border-right-color: color-mix(in srgb, var(--c) 34%, transparent);
+  border-left-color: color-mix(in srgb, var(--c) 22%, transparent);
+  border-radius: 50%;
+  transform: rotate(var(--orbit-tilt, -16deg)) scaleY(var(--orbit-squash, 0.72));
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.46));
+  opacity: 0.82;
+}
+
+.cosmos-root .ring::after {
+  left: var(--sat-x, 50%);
+  top: var(--sat-y, 8%);
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 18%, rgba(255, 255, 255, 0.74) 38%, transparent 76%);
+  background: radial-gradient(circle, #fff 0 18%, color-mix(in srgb, var(--c) 82%, white) 38%, transparent 76%);
+  box-shadow: 0 0 9px rgba(255, 255, 255, 0.72);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--c) 74%, white);
+  transform: translate(-50%, -50%);
+  animation: cosmosTw 3.5s ease-in-out infinite;
+  animation-delay: calc(var(--n) * -0.6s);
 }
 
 @keyframes cosmosRingin {
   from { opacity: 0; scale: 0.6; }
 }
 
-.cosmos-root .r1 { --r: 216px; --af: 3.72deg; }
-.cosmos-root .r2 { --r: 172px; --af: 23.29deg; }
-.cosmos-root .r3 { --r: 150px; --af: 54.41deg; }
-.cosmos-root .r4 { --r: 194px; --af: 65.12deg; }
-.cosmos-root .r5 { --r: 238px; --af: 75.12deg; }
+.cosmos-root .r1 { --r: 216px; --af: 3.72deg; --orbit-tilt: -23deg; --orbit-squash: 0.68; --sat-x: 83%; --sat-y: 17%; }
+.cosmos-root .r2 { --r: 172px; --af: 23.29deg; --orbit-tilt: 18deg; --orbit-squash: 0.76; --sat-x: 18%; --sat-y: 29%; }
+.cosmos-root .r3 { --r: 150px; --af: 54.41deg; --orbit-tilt: -31deg; --orbit-squash: 0.7; --sat-x: 78%; --sat-y: 78%; }
+.cosmos-root .r4 { --r: 194px; --af: 65.12deg; --orbit-tilt: 27deg; --orbit-squash: 0.8; --sat-x: 19%; --sat-y: 74%; }
+.cosmos-root .r5 { --r: 238px; --af: 75.12deg; --orbit-tilt: -12deg; --orbit-squash: 0.64; --sat-x: 49%; --sat-y: 6%; }
 
 @keyframes cosmosSway {
   from { transform: rotate(calc(var(--af) - 0.5deg)); }
