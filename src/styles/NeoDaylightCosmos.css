@@ -1355,12 +1355,40 @@
    Tracking page Cosmos styles
    ========================================================================== */
 .cosmos-root .track-wrap {
-  max-width: 1200px;
-  width: 95%;
+  max-width: 1168px;
+  width: min(calc(100% - 32px), 1168px);
   margin: 0 auto;
-  padding: 32px 16px 80px;
+  padding: 24px 0 80px;
   position: relative;
   z-index: 2;
+}
+
+.cosmos-root .track-shortcuts {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.cosmos-root .track-shortcut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 800;
+  text-decoration: none;
+  box-shadow: 0 4px 14px rgba(60, 120, 170, 0.08);
+  transition: background 0.2s var(--ease), transform 0.2s var(--ease);
+}
+
+.cosmos-root .track-shortcut:hover {
+  background: #fff;
+  transform: translateY(-1px);
 }
 
 .cosmos-root .track-nav {
@@ -1370,6 +1398,19 @@
   margin-bottom: 24px;
   gap: 12px;
   flex-wrap: wrap;
+  padding: 0;
+}
+
+.cosmos-root .track-nav .logo {
+  position: relative;
+  left: auto;
+  top: auto;
+  --lr: 24px;
+  display: grid;
+  flex: 0 0 48px;
+  width: 48px;
+  height: 48px;
+  place-items: center;
 }
 
 .cosmos-root .track-hero {
@@ -1472,25 +1513,57 @@
 }
 
 .cosmos-root .track-search {
-  max-width: 680px;
+  width: min(100%, 760px);
+  max-width: 760px;
   margin: 0 auto;
   display: flex;
+  align-items: stretch;
   gap: 12px;
 }
 
+.cosmos-root .track-search-field {
+  position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.cosmos-root .track-search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  color: var(--muted);
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
 .cosmos-root .track-search input {
-  flex: 1;
+  display: block;
+  width: 100%;
+  min-width: 0;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   border: 2px solid rgba(255, 255, 255, 0.95);
   border-radius: 22px;
-  padding: 14px 20px 14px 44px;
+  padding: 14px 18px 14px 46px;
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--ink);
   outline: none;
   transition: all 0.25s var(--ease);
   box-shadow: 0 4px 18px rgba(60, 120, 170, 0.08);
+}
+
+.cosmos-root .track-search button {
+  min-height: 52px;
+  white-space: nowrap;
+}
+
+.cosmos-root .track-search-hint {
+  max-width: 760px;
+  margin-left: auto !important;
+  margin-right: auto !important;
 }
 
 .cosmos-root .track-search input:focus {
@@ -1529,5 +1602,37 @@
   background: var(--blue);
   border: 2px solid #fff;
   box-shadow: 0 0 8px var(--blue);
+}
+
+@media (max-width: 560px) {
+  .cosmos-root .track-wrap {
+    width: min(calc(100% - 24px), 1168px);
+    padding-top: 18px;
+  }
+
+  .cosmos-root .track-shortcuts {
+    margin-bottom: 10px;
+  }
+
+  .cosmos-root .track-nav {
+    align-items: flex-start;
+  }
+
+  .cosmos-root .track-search {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .cosmos-root .track-search button {
+    width: 100%;
+  }
+
+  .cosmos-root .track-search-hint {
+    padding: 0 4px;
+  }
+
+  .cosmos-root .track-card {
+    padding: 20px 16px;
+  }
 }
 

@@ -236,28 +236,19 @@ function TrackingCosmosContent() {
         </defs>
       </svg>
 
-      {/* Thanh điều hướng nhanh trên cùng */}
-      <div className="fixed top-2 left-4 z-50 flex items-center gap-2">
-        <Link
-          href="/galaxy"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold shadow-lg backdrop-blur border border-white/20 transition-all hover:scale-105"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Về Neo Cosmos</span>
-        </Link>
-        <Link
-          href="/"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 hover:bg-white text-slate-800 text-xs font-bold shadow-sm backdrop-blur border border-slate-300 transition-all"
-        >
-          <span>Trang gốc</span>
-        </Link>
-      </div>
-
       <div className="track-wrap">
+        {/* Chuyển sang giao diện cũ; logo trong header dẫn về Neo Cosmos. */}
+        <nav className="track-shortcuts" aria-label="Chuyển giao diện">
+          <Link href="/" className="track-shortcut">
+            <ArrowLeft className="w-3.5 h-3.5" />
+            <span>Về giao diện gốc</span>
+          </Link>
+        </nav>
+
         {/* Header Bar của trang tra cứu phong cách Cosmos */}
         <header className="track-nav">
           <div className="flex items-center gap-3">
-            <Link className="logo" href="/galaxy" aria-label="ChillBanana - Neo Cosmos" style={{ display: "inline-block", width: "48px", height: "48px" }}>
+            <Link className="logo" href="/galaxy" aria-label="ChillBanana - Neo Cosmos">
               <svg viewBox="0 0 64 64" aria-hidden="true" style={{ width: "100%", height: "100%" }}>
                 <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
                 <path d="M50 16l3-3" stroke="#8a5a00" strokeWidth="3" strokeLinecap="round" />
@@ -490,12 +481,15 @@ function TrackingCosmosContent() {
           <div className="space-y-6">
             {/* Thanh Search Bar phong cách Cosmos */}
             <form onSubmit={handleSearchSubmit} className="track-search">
-              <input
-                type="text"
-                value={searchCode}
-                onChange={(e) => setSearchCode(e.target.value)}
-                placeholder="Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)"
-              />
+              <div className="track-search-field">
+                <Search className="track-search-icon" aria-hidden="true" />
+                <input
+                  type="text"
+                  value={searchCode}
+                  onChange={(e) => setSearchCode(e.target.value)}
+                  placeholder="Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)"
+                />
+              </div>
               <button
                 type="submit"
                 disabled={loading}
@@ -506,13 +500,13 @@ function TrackingCosmosContent() {
               </button>
             </form>
 
-            <p style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", margin: "8px 0 0" }}>
+            <p className="track-search-hint" style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", margin: "8px 0 0" }}>
               Mã đơn hàng có cấu trúc <strong style={{ fontFamily: "monospace", color: "var(--ink)" }}>CB-2026-XXXX</strong> được tạo khi bạn bấm Đặt cọc trên hệ thống.
             </p>
 
             {/* Error display */}
             {error && (
-              <div className="track-card max-w-2xl mx-auto" style={{ background: "#ffeef0", borderColor: "#fecdd6", padding: "16px" }}>
+              <div className="track-card max-w-3xl mx-auto" style={{ background: "#ffeef0", borderColor: "#fecdd6", padding: "16px" }}>
                 <div className="flex items-center gap-2 text-rose-800 text-xs font-bold">
                   <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
                   <span>{error}</span>
@@ -522,7 +516,7 @@ function TrackingCosmosContent() {
 
             {/* Welcome guidance khi chưa tra cứu */}
             {!order && !loading && !error && (
-              <div className="track-card max-w-2xl mx-auto text-center py-12 space-y-4">
+              <div className="track-card max-w-3xl mx-auto text-center py-12 space-y-4">
                 <div style={{ width: "64px", height: "64px", borderRadius: "20px", background: "#fff8d6", color: "#8a5a00", display: "grid", placeItems: "center", margin: "0 auto", fontSize: "1.8rem" }}>
                   📦
                 </div>
