@@ -13,10 +13,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderCode = params.id;
+    const { id: orderCode } = await params;
 
     const dbOrder = await prisma.order.findFirst({
       where: { orderCode },
@@ -78,10 +78,10 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const orderCode = params.id;
+    const { id: orderCode } = await params;
     const body = await req.json();
 
     let {
