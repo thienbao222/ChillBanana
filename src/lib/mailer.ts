@@ -83,6 +83,14 @@ export async function sendOrderCreatedEmail(order: any) {
 
   const baseUrl = getBaseUrl();
   const trackingUrl = `${baseUrl}/tracking?orderCode=${order.orderCode}`;
+  const orderCode = escapeHtml(String(order.orderCode || ""));
+  const customerName = escapeHtml(String(order.customerName || "Quý khách"));
+  const productName = escapeHtml(String(order.productName || "Sản phẩm"));
+  const isPriceVerified = order.isPriceVerified === true;
+  const depositPercent = order.depositPercent === 100 ? 100 : 50;
+  const paymentInstructions = isPriceVerified
+    ? `<div style="background-color:#F8FAFC;border:1px solid #E2E8F0;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#475569"><p style="margin:0 0 8px;font-weight:bold;color:#0F172A">💳 Hướng dẫn thanh toán:</p><p style="margin:4px 0">• Thanh toán tự động bằng VNPAY trên trang theo dõi đơn hàng.</p><p style="margin:4px 0">• Nếu chuyển khoản VietQR, ghi đúng mã đơn: <strong style="color:#B45309">${orderCode}</strong>. Nhân viên sẽ xác nhận sau khi đối chiếu giao dịch.</p></div>`
+    : `<div style="background-color:#FFF7ED;border:1px solid #FED7AA;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#7C2D12"><p style="margin:0 0 8px;font-weight:bold">Đơn hàng đang chờ ChillBanana kiểm tra và xác nhận báo giá.</p><p style="margin:4px 0">Vui lòng chưa thanh toán. Khi báo giá được duyệt, chúng tôi sẽ gửi thông báo và cập nhật hướng dẫn thanh toán trên trang theo dõi đơn hàng.</p></div>`;
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
@@ -92,23 +100,18 @@ export async function sendOrderCreatedEmail(order: any) {
       </div>
       
       <div style="padding: 32px 28px; color: #1E293B; line-height: 1.6;">
-        <p style="font-size: 15px;">Kính chào <strong>${order.customerName}</strong>,</p>
+        <p style="font-size: 15px;">Kính chào <strong>${customerName}</strong>,</p>
         <p style="font-size: 14px; color: #475569;">ChillBanana đã tiếp nhận yêu cầu mua hộ hàng Nhật của Quý khách với thông tin chi tiết:</p>
         
         <div style="background-color: #FEFCE8; border-left: 4px solid #F59E0B; padding: 18px; margin: 20px 0; border-radius: 10px;">
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Mã đơn hàng:</strong> <span style="color: #B45309; font-weight: bold; font-size: 16px; font-family: monospace;">${order.orderCode}</span></p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Sản phẩm:</strong> ${order.productName}</p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Mã đơn hàng:</strong> <span style="color: #B45309; font-weight: bold; font-size: 16px; font-family: monospace;">${orderCode}</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Sản phẩm:</strong> ${productName}</p>
           <p style="margin: 6px 0; font-size: 14px;"><strong>Giá gốc tại Nhật:</strong> ${order.priceJpy?.toLocaleString()} ¥</p>
           <p style="margin: 6px 0; font-size: 14px;"><strong>Tổng giá trị đơn (VND):</strong> <strong>${order.totalVnd?.toLocaleString("vi-VN")} đ</strong></p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Tiền cọc cần thanh toán (50%):</strong> <span style="color: #D97706; font-weight: bold; font-size: 16px;">${order.depositAmountVnd?.toLocaleString("vi-VN")} đ</span></p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Trạng thái:</strong> <span style="color: #D97706; font-weight: 600;">Chờ đặt cọc</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>${isPriceVerified ? `Số tiền cần thanh toán (${depositPercent}%):` : `Mức thanh toán tạm tính (${depositPercent}%):`}</strong> <span style="color: #D97706; font-weight: bold; font-size: 16px;">${order.depositAmountVnd?.toLocaleString("vi-VN")} đ</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Trạng thái:</strong> <span style="color: #D97706; font-weight: 600;">${isPriceVerified ? "Chờ thanh toán" : "Chờ xác nhận báo giá"}</span></p>
         </div>
-        
-        <div style="background-color: #F8FAFC; border: 1px solid #E2E8F0; padding: 16px; border-radius: 12px; margin: 20px 0; font-size: 13px; color: #475569;">
-          <p style="margin: 0 0 8px 0; font-weight: bold; color: #0F172A;">💳 Hướng dẫn thanh toán cọc:</p>
-          <p style="margin: 4px 0;">• <strong>Cổng VNPAY:</strong> Quý khách có thể bấm nút "Thanh toán cọc qua VNPAY" trực tiếp trên website để thanh toán tự động.</p>
-          <p style="margin: 4px 0;">• <strong>Chuyển khoản VietQR:</strong> Nội dung chuyển khoản ghi đúng mã đơn: <strong style="color: #B45309;">${order.orderCode}</strong></p>
-        </div>
+        ${paymentInstructions}
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${trackingUrl}" style="background-color: #0F172A; color: #FBBF24; padding: 14px 32px; text-decoration: none; border-radius: 14px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(15, 23, 42, 0.2);">
@@ -133,7 +136,7 @@ export async function sendOrderCreatedEmail(order: any) {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
         to: order.customerEmail,
-        subject: `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${order.productName}`,
+        subject: `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${String(order.productName || "Sản phẩm").slice(0, 100)}`,
         html,
       });
       console.log(`[Mailer] ✅ Đã gửi email xác nhận tạo đơn tới ${order.customerEmail}`);
@@ -173,7 +176,7 @@ export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
           <p><strong>Phí dịch vụ:</strong> ${money(order.serviceFeeVnd)} đ</p>
           <p><strong>Phí vận chuyển tạm tính:</strong> ${money(order.shippingFeeVnd)} đ${order.weightKg ? ` (${escapeHtml(String(order.weightKg))} kg)` : " (chưa cân)"}</p>
           <p><strong>Tổng tạm tính:</strong> ${money(order.totalVnd)} đ</p>
-          <p style="font-size:18px;color:#b45309"><strong>Tiền cọc cần thanh toán:</strong> ${money(order.depositAmountVnd)} đ</p>
+          <p style="font-size:18px;color:#b45309"><strong>${order.depositPercent === 100 ? "Số tiền thanh toán (100%)" : "Tiền cọc cần thanh toán (50%)"}:</strong> ${money(order.depositAmountVnd)} đ</p>
         </div>
         <p>Vui lòng kiểm tra lại thông tin và tiến hành đặt cọc trên trang theo dõi đơn hàng.</p>
         <p style="text-align:center;margin:28px 0"><a href="${trackingUrl}" style="background:#0f172a;color:#fbbf24;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Xem báo giá và đơn hàng</a></p>
@@ -197,7 +200,7 @@ export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
 }
 
 /**
- * 2. Email xác nhận thanh toán đặt cọc thành công (Qua VNPAY hoặc Admin duyệt)
+ * 2. Email xác nhận thanh toán thành công (VNPAY hoặc nhân viên xác nhận chuyển khoản)
  */
 export async function sendPaymentSuccessEmail(order: any) {
   if (!order.customerEmail) {
@@ -207,29 +210,34 @@ export async function sendPaymentSuccessEmail(order: any) {
 
   const baseUrl = getBaseUrl();
   const trackingUrl = `${baseUrl}/tracking?orderCode=${order.orderCode}`;
+  const customerName = escapeHtml(String(order.customerName || "Quý khách"));
+  const productName = escapeHtml(String(order.productName || "Sản phẩm"));
+  const orderCode = escapeHtml(String(order.orderCode || ""));
+  const isFullPayment = order.paymentStatus === "PAID_100";
+  const paymentTitle = isFullPayment ? "Thanh Toán 100% Thành Công!" : "Đặt Cọc 50% Thành Công!";
+  const paymentMethod = order.paymentMethod === "VNPAY" ? "Cổng thanh toán VNPAY" : "Chuyển khoản ngân hàng đã được xác nhận";
+  const isPurchasing = order.status === "PURCHASING_JP";
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
       <div style="background: linear-gradient(135deg, #065F46 0%, #0F172A 100%); color: white; padding: 28px; text-align: center;">
-        <h1 style="margin: 0; font-size: 26px; color: #34D399; font-family: Georgia, serif;">✅ Đặt Cọc Thành Công!</h1>
-        <p style="margin: 8px 0 0 0; font-size: 14px; color: #A7F3D0;">ChillBanana đã nhận được tiền cọc cho đơn #${order.orderCode}</p>
+        <h1 style="margin: 0; font-size: 26px; color: #34D399; font-family: Georgia, serif;">✅ ${paymentTitle}</h1>
+        <p style="margin: 8px 0 0 0; font-size: 14px; color: #A7F3D0;">ChillBanana đã nhận được thanh toán cho đơn #${orderCode}</p>
       </div>
       
       <div style="padding: 32px 28px; color: #1E293B; line-height: 1.6;">
-        <p style="font-size: 15px;">Kính chào <strong>${order.customerName}</strong>,</p>
-        <p style="font-size: 14px; color: #475569;">Giao dịch thanh toán tiền cọc của Quý khách đã được hệ thống xác nhận thành công:</p>
+        <p style="font-size: 15px;">Kính chào <strong>${customerName}</strong>,</p>
+        <p style="font-size: 14px; color: #475569;">Giao dịch thanh toán của Quý khách đã được xác nhận thành công:</p>
         
         <div style="background-color: #ECFDF5; border-left: 4px solid #10B981; padding: 18px; margin: 20px 0; border-radius: 10px;">
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Mã đơn hàng:</strong> <span style="color: #065F46; font-weight: bold; font-size: 16px; font-family: monospace;">${order.orderCode}</span></p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Sản phẩm:</strong> ${order.productName}</p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Số tiền cọc đã nhận:</strong> <span style="color: #059669; font-weight: bold; font-size: 16px;">${order.depositAmountVnd?.toLocaleString("vi-VN")} đ</span></p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Phương thức:</strong> Cổng thanh toán VNPAY</p>
-          <p style="margin: 6px 0; font-size: 14px;"><strong>Tiến độ hiện tại:</strong> <span style="background-color: #10B981; color: white; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold;">Đang mua hàng tại Tokyo</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Mã đơn hàng:</strong> <span style="color: #065F46; font-weight: bold; font-size: 16px; font-family: monospace;">${orderCode}</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Sản phẩm:</strong> ${productName}</p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Số tiền đã nhận:</strong> <span style="color: #059669; font-weight: bold; font-size: 16px;">${order.depositAmountVnd?.toLocaleString("vi-VN")} đ</span></p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Phương thức:</strong> ${paymentMethod}</p>
+          <p style="margin: 6px 0; font-size: 14px;"><strong>Tiến độ hiện tại:</strong> <span style="background-color: #10B981; color: white; padding: 2px 8px; border-radius: 6px; font-size: 12px; font-weight: bold;">${isPurchasing ? "Đang mua hàng tại Tokyo" : "Chờ nhân viên bắt đầu xử lý"}</span></p>
         </div>
         
-        <p style="font-size: 14px; color: #334155;">
-          🚀 Nhân viên văn phòng ChillBanana tại Tokyo đang tiến hành order hàng trực tiếp từ người bán/sàn Nhật Bản. Quý khách có thể theo dõi tiến độ kiện hàng qua đường link dưới đây:
-        </p>
+        <p style="font-size: 14px; color: #334155;">${isPurchasing ? "Nhân viên ChillBanana đang tiến hành đặt hàng tại Nhật. Quý khách có thể theo dõi tiến độ qua đường link dưới đây:" : "Nhân viên ChillBanana sẽ kiểm tra giao dịch và cập nhật bước mua hàng trên trang theo dõi đơn."}</p>
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${trackingUrl}" style="background-color: #059669; color: white; padding: 14px 32px; text-decoration: none; border-radius: 14px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 10px rgba(5, 150, 105, 0.25);">
@@ -254,7 +262,7 @@ export async function sendPaymentSuccessEmail(order: any) {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
         to: order.customerEmail,
-        subject: `[ChillBanana] ✅ Xác nhận đặt cọc thành công đơn hàng #${order.orderCode}`,
+        subject: `[ChillBanana] ✅ Xác nhận thanh toán thành công đơn hàng #${order.orderCode}`,
         html,
       });
       console.log(`[Mailer] ✅ Đã gửi email xác nhận thanh toán cọc tới ${order.customerEmail}`);

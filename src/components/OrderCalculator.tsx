@@ -203,7 +203,7 @@ export default function OrderCalculator() {
         body: JSON.stringify({
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
-          orderInfo: `Dat coc 50% don hang ${order.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
         }),
       });
       const data = await res.json();
@@ -254,7 +254,7 @@ export default function OrderCalculator() {
         serviceFeeVnd: calc.serviceFeeVnd,
         shippingFeeVnd: calc.shippingFeeVnd,
         totalVnd: calc.totalVnd,
-        depositAmountVnd: depositChoice === "50" ? calc.deposit50Vnd : calc.baseOrderCostVnd,
+        depositPercent: Number(depositChoice),
         paymentMethod: "VNPAY",
         isGroupBuy,
         customerNote,
@@ -650,7 +650,7 @@ export default function OrderCalculator() {
               </div>
             </div>
 
-            {/* Tổng tiền & Đặt cọc 50% */}
+            {/* Tổng tiền & Mức thanh toán đã chọn */}
             <div className="mt-6 pt-5 border-t border-white/15">
               <div className="flex justify-between items-baseline">
                 <span className="text-sm font-bold text-slate-200">Tiền Hàng &amp; Phí Mua Hộ:</span>
@@ -663,11 +663,11 @@ export default function OrderCalculator() {
 
               <div className="mt-2.5 flex justify-between items-center text-xs bg-white/10 p-3 rounded-2xl">
                 <div>
-                  <span className="text-slate-200 font-bold block">Tiền đặt cọc trước (50%):</span>
-                  <span className="text-[10px] text-emerald-400 font-medium">✓ 50% Tiền Hàng + Phí Mua Hộ</span>
+                  <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : "Đặt cọc 50%:"}</span>
+                  <span className="text-[10px] text-emerald-400 font-medium">{depositChoice}% tiền hàng + phí mua hộ</span>
                 </div>
                 <strong className="text-banana-300 text-sm sm:text-base font-mono">
-                  {calc.deposit50Vnd.toLocaleString("vi-VN")} đ
+                  {(depositChoice === "50" ? calc.deposit50Vnd : calc.baseOrderCostVnd).toLocaleString("vi-VN")} đ
                 </strong>
               </div>
 
@@ -877,7 +877,7 @@ export default function OrderCalculator() {
                           className="mr-2 text-banana-600"
                         />
                         <div>
-                          <p className="text-xs font-bold text-slate-800">Thanh toán 100% Tiền Hàng</p>
+                          <p className="text-xs font-bold text-slate-800">Thanh toán 100% tiền hàng + phí mua hộ</p>
                           <p className="text-[11px] text-banana-800 font-bold">
                             {calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ
                           </p>
@@ -932,40 +932,17 @@ export default function OrderCalculator() {
                   </p>
                 </div>
 
-                {/* Thông tin cọc & VNPAY */}
+                {/* Thông tin thanh toán */}
                 <div className="p-4 bg-slate-50 rounded-3xl border border-slate-200 max-w-sm mx-auto">
                   <div className="mt-3 text-xs space-y-2 text-slate-600 text-left bg-white p-3 rounded-xl border border-emerald-100 shadow-sm">
                     <div className="flex justify-between items-center">
-                      <span>Số tiền cọc 50%:</span>
+                      <span>{orderSuccessData.isPriceVerified ? `Số tiền cần thanh toán (${orderSuccessData.depositPercent}%):` : "Mức thanh toán tạm tính:"}</span>
                       <strong className="text-banana-700 font-bold text-sm">{orderSuccessData.depositAmountVnd.toLocaleString("vi-VN")} đ</strong>
                     </div>
-                    <div className="flex justify-between items-center">
-                      <span>Phương thức:</span>
-                      <span className="font-bold text-blue-700">VNPAY Sandbox</span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 italic mt-2 border-t pt-2 border-slate-100">
-                      * Nhấn nút bên dưới để thanh toán qua cổng VNPAY. Đơn hàng sẽ tự động xác nhận sau khi thanh toán thành công.
-                    </p>
+                    {orderSuccessData.isPriceVerified ? <p className="text-[11px] text-slate-500 italic mt-2 border-t pt-2 border-slate-100">Thanh toán qua VNPAY để hệ thống tự xác nhận. Nếu chuyển khoản VietQR, nhân viên sẽ đối chiếu giao dịch.</p> : <p className="text-[11px] text-amber-700 italic mt-2 border-t pt-2 border-slate-100">Đơn hàng cần được duyệt báo giá trước. Vui lòng chưa thanh toán; số tiền cuối cùng sẽ được cập nhật trên trang theo dõi.</p>}
                   </div>
 
-                  {/* Nút thanh toán VNPAY */}
-                  <button
-                    onClick={() => handleVnpayPayment(orderSuccessData)}
-                    disabled={isRedirecting}
-                    className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-                  >
-                    {isRedirecting ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Đang chuyển đến VNPAY...
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="w-4 h-4" />
-                        Thanh Toán Cọc Qua VNPAY
-                      </>
-                    )}
-                  </button>
+                  {orderSuccessData.isPriceVerified && <button onClick={() => handleVnpayPayment(orderSuccessData)} disabled={isRedirecting} className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60">{isRedirecting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Đang chuyển đến VNPAY...</> : <><ExternalLink className="w-4 h-4" />Thanh Toán Qua VNPAY</>}</button>}
                 </div>
 
                 <div className="flex space-x-3 pt-2">

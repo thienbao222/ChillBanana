@@ -16,7 +16,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await confirmVnpayPayment(orderCode, params.get("vnp_Amount") || "");
+    const result = await confirmVnpayPayment(
+      orderCode,
+      params.get("vnp_Amount") || "",
+      params.get("vnp_TransactionNo")
+    );
     switch (result.result) {
       case "confirmed":
         return NextResponse.json({ RspCode: "00", Message: "Confirm Success" });

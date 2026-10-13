@@ -231,13 +231,14 @@ export default function NeoDaylightCosmos() {
           weightKg,
           category,
           isGroupBuy,
+          depositPercent: Number(depositChoice),
           items: [],
         }),
       });
       const data = await res.json();
       if (res.ok && data.success && data.order) {
         setCreatedOrder(data.order);
-        showToast("Tạo đơn hàng thành công! Vui lòng chọn phương thức thanh toán tiền cọc.");
+        showToast(data.order.isPriceVerified ? "Tạo đơn thành công. Bạn có thể thanh toán ngay." : "Đơn đã được tạo và đang chờ xác nhận báo giá trước khi thanh toán.");
       } else {
         showToast(data.error || "Đặt cọc thất bại. Vui lòng kiểm tra lại thông tin.");
       }
@@ -260,7 +261,7 @@ export default function NeoDaylightCosmos() {
         body: JSON.stringify({
           orderCode: createdOrder.orderCode,
           amount: createdOrder.depositAmountVnd || depositVnd,
-          orderInfo: `Dat coc don hang ${createdOrder.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${createdOrder.depositPercent || 50}% don hang ${createdOrder.orderCode} - ChillBanana`,
         }),
       });
       const data = await res.json();
@@ -314,17 +315,6 @@ export default function NeoDaylightCosmos() {
           <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
         </defs>
       </svg>
-
-      {/* Lối tắt sang giao diện cũ */}
-      <div className="fixed top-2 left-4 z-50">
-        <Link
-          href="/classic"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold shadow-lg backdrop-blur border border-white/20 transition-all hover:scale-105"
-        >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Về giao diện cũ</span>
-        </Link>
-      </div>
 
       {/* HEADER: Logo cụm hành tinh & quỹ đạo */}
       <header id="hd">
@@ -392,9 +382,18 @@ export default function NeoDaylightCosmos() {
                 <span className="jp">JP ⇄ VN</span>
                 <small>Mua hàng Nhật chuẩn – Thư thái &amp; Thảnh thơi</small>
               </div>
-              <Link className="admin" href="/admin/login">
-                Admin Portal
-              </Link>
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <Link className="admin" href="/admin/login">
+                  Admin Portal
+                </Link>
+                <Link
+                  href="/classic"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/75 px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5" />
+                  <span>Về giao diện cũ</span>
+                </Link>
+              </div>
             </div>
 
             <div className="acct">
@@ -665,7 +664,7 @@ export default function NeoDaylightCosmos() {
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
               </div>
               <div className="dep">
-                <span>Tiền đặt cọc trước ({depositChoice}%):<small>✓ {depositChoice}% Tiền Hàng + Phí Mua Hộ</small></span>
+                <span>Ước tính thanh toán ({depositChoice}%):<small>Chờ ChillBanana duyệt giá trước khi thanh toán</small></span>
                 <b>{depositVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <p className="n1">
@@ -826,11 +825,16 @@ export default function NeoDaylightCosmos() {
                     Mã Đơn: <span style={{ color: "var(--blue-d)" }}>{createdOrder.orderCode}</span>
                   </h3>
                   <p style={{ color: "var(--muted)", fontSize: "0.85rem", marginTop: "4px" }}>
-                    Số tiền cọc cần thanh toán: <b style={{ color: "#d97706", fontSize: "1.1rem" }}>{(createdOrder.depositAmountVnd || depositVnd).toLocaleString("vi-VN")} đ</b>
+                    {createdOrder.isPriceVerified ? "Số tiền cần thanh toán:" : "Mức thanh toán tạm tính (chưa phải số tiền cần thanh toán):"} <b style={{ color: "#d97706", fontSize: "1.1rem" }}>{(createdOrder.depositAmountVnd || depositVnd).toLocaleString("vi-VN")} đ</b>
                   </p>
                 </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "1.5rem" }}>
+                {!createdOrder.isPriceVerified ? (
+                  <div style={{ padding: "16px", borderRadius: "16px", background: "#fff7ed", border: "1px solid #fed7aa", color: "#7c2d12", textAlign: "center", marginBottom: "1.5rem" }}>
+                    Báo giá đang chờ ChillBanana kiểm tra. Vui lòng chưa chuyển khoản. Khi được duyệt, bạn có thể thanh toán an toàn từ trang theo dõi đơn.
+                    <Link href={`/tracking?orderCode=${createdOrder.orderCode}`} style={{ display: "block", marginTop: "10px", color: "#075985", fontWeight: 800 }}>Theo dõi trạng thái báo giá →</Link>
+                  </div>
+                ) : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "1.5rem" }}>
                   {/* Nút thanh toán VNPAY */}
                   <button
                     type="button"
@@ -880,10 +884,10 @@ export default function NeoDaylightCosmos() {
                     <span>Tra Cứu Đơn Hàng</span>
                     <small style={{ fontSize: "0.7rem", fontWeight: 600 }}>Theo dõi tiến độ bay Tokyo → VN</small>
                   </Link>
-                </div>
+                </div>}
 
                 {/* Khối VietQR chuyển khoản */}
-                <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "1.2rem", textAlign: "center" }}>
+                {createdOrder.isPriceVerified && <div style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "1.2rem", textAlign: "center" }}>
                   <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ink)", marginBottom: "8px" }}>
                     Hoặc chuyển khoản trực tiếp qua VietQR Napas 247:
                   </p>
@@ -899,7 +903,7 @@ export default function NeoDaylightCosmos() {
                     Chủ TK: <b>CHILLBANANA VIETNAM</b><br />
                     Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
                   </div>
-                </div>
+                </div>}
 
                 <div style={{ textAlign: "center", marginTop: "1.2rem" }}>
                   <button

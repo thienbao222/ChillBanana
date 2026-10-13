@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
 import { isNextOrderStatus } from "@/lib/order-policy";
+import { getDepositAmount, getRecordedPaymentStatus } from "@/lib/payment-policy";
 
 function isAdmin(req: NextRequest): boolean {
   return isAdminRequest(req);
@@ -33,8 +34,11 @@ export async function GET(
         shippingFeeVnd: true,
         totalVnd: true,
         depositAmountVnd: true,
+        depositPercent: true,
         paymentStatus: true,
         paymentMethod: true,
+        isPriceVerified: true,
+        reservationExpiresAt: true,
         isGroupBuy: true,
         groupBuyCode: true,
         status: true,
@@ -108,8 +112,8 @@ export async function PATCH(
     if (status === "CANCELLED" && action !== "cancel") {
       return NextResponse.json({ error: "Hãy dùng thao tác hủy đơn để hoàn kho và ghi nhận lý do hủy." }, { status: 400 });
     }
-    if (paymentStatus !== undefined && !["UNPAID", "DEPOSITED_50", "PAID_100", "REFUNDED"].includes(paymentStatus)) {
-      return NextResponse.json({ error: "Trạng thái thanh toán không hợp lệ." }, { status: 400 });
+    if (paymentStatus !== undefined && !(action === "cancel" && paymentStatus === "REFUNDED")) {
+      return NextResponse.json({ error: "Trạng thái thanh toán chỉ được thay đổi trong thao tác xác nhận hoàn tiền khi hủy đơn." }, { status: 400 });
     }
 
     // Tìm đơn hàng trong Prisma — kèm OrderItems để hoàn kho khi hủy
@@ -146,6 +150,10 @@ export async function PATCH(
         { error: `Đơn hàng đã ${existingOrder.status === "COMPLETED" ? "hoàn tất" : "hủy"}, không thể thay đổi trạng thái.` },
         { status: 400 }
       );
+    }
+
+    if (existingOrder.paymentStatus !== "UNPAID" && (isPriceVerified !== undefined || [priceJpy, productPriceVnd, serviceFeeVnd, shippingFeeVnd, totalVnd, depositAmountVnd].some((value) => value !== undefined))) {
+      return NextResponse.json({ error: "Không thể thay đổi báo giá sau khi đơn đã được thanh toán." }, { status: 409 });
     }
 
     if (!isAdminUser) {
@@ -188,10 +196,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Cần xác minh báo giá trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
     }
     if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP") {
-      const paymentStatusForTransition = isAdminUser && paymentStatus !== undefined
-        ? paymentStatus
-        : existingOrder.paymentStatus;
-      if (paymentStatusForTransition !== "DEPOSITED_50" && paymentStatusForTransition !== "PAID_100") {
+      if (existingOrder.paymentStatus !== "DEPOSITED_50" && existingOrder.paymentStatus !== "PAID_100") {
         return NextResponse.json({ error: "Cần xác nhận đã nhận tiền cọc trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
       }
     }
@@ -223,9 +228,6 @@ export async function PATCH(
 
     if (isAdminUser) {
       if (paymentStatus !== undefined) {
-        if (paymentStatus === "REFUNDED" && action !== "cancel") {
-          return NextResponse.json({ error: "Chỉ ghi nhận hoàn tiền trong thao tác hủy đơn." }, { status: 400 });
-        }
         updateData.paymentStatus = paymentStatus;
       }
       if (isPriceVerified !== undefined) {
@@ -255,7 +257,14 @@ export async function PATCH(
         updateData.serviceFeeVnd = finalServiceFeeVnd;
         updateData.shippingFeeVnd = finalShippingFeeVnd;
         updateData.totalVnd = finalTotalVnd;
-        updateData.depositAmountVnd = Math.round((finalProductPriceVnd + finalServiceFeeVnd) * 0.5);
+        updateData.depositAmountVnd = getDepositAmount(
+          finalProductPriceVnd + finalServiceFeeVnd,
+          existingOrder.depositPercent === 100 ? 100 : 50
+        );
+        if (existingOrder.orderItems.some((item) => item.itemType === "CATALOG" && item.productId)) {
+          // Start the customer payment hold only once a mixed catalog/quote order is payable.
+          updateData.reservationExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+        }
       } else {
         if ([priceJpy, productPriceVnd, serviceFeeVnd, shippingFeeVnd, totalVnd, depositAmountVnd].some((value) => value !== undefined)) {
           return NextResponse.json({ error: "Báo giá phải được cập nhật đồng thời với thao tác duyệt giá." }, { status: 400 });
@@ -292,6 +301,12 @@ export async function PATCH(
                   data: { stockSlots: { increment: item.quantity } },
                 });
               }
+            }
+            if (existingOrder.orderItems.some((item) => item.itemType === "CATALOG" && item.productId)) {
+              await tx.order.update({
+                where: { id: existingOrder.id },
+                data: { reservationReleasedAt: new Date(), reservationExpiresAt: null },
+              });
             }
           }
           await tx.trackingLog.create({

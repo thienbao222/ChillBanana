@@ -132,6 +132,13 @@ export function isAdminRequest(req: NextRequest): boolean {
   return verifyAdminSessionToken(cookie).valid;
 }
 
+export function getAdminUsernameFromRequest(req: NextRequest): string | null {
+  const cookie = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!cookie) return null;
+  const session = verifyAdminSessionToken(cookie);
+  return session.valid && typeof session.username === "string" ? session.username : null;
+}
+
 // ---------------------------------------------------------------------------
 // CUSTOMER
 // ---------------------------------------------------------------------------

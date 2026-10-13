@@ -46,6 +46,7 @@ model Order {
   shippingFeeVnd   Int           // Cước bay quốc tế (185.000đ/kg)
   totalVnd         Int           // Tổng giá trị đơn hàng
   depositAmountVnd Int           // Số tiền đã thanh toán/đặt cọc
+  depositPercent   Int           @default(50) // 50 hoặc 100; áp dụng cho tiền hàng + phí mua hộ
   paymentStatus    String        @default("UNPAID") // UNPAID, DEPOSITED_50, PAID_100, REFUNDED
   paymentMethod    String        @default("VIETQR") // VIETQR, VNPAY, MOMO, COD
 
@@ -66,12 +67,33 @@ model Order {
 
   trackingLogs     TrackingLog[]
   orderItems       OrderItem[]
+  paymentTransactions PaymentTransaction[]
+  reservationExpiresAt DateTime?
+  reservationReleasedAt DateTime?
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
 
   @@index([customerType])
   @@index([customerId])
   @@index([customerEmail])
+  @@index([status, paymentStatus, reservationExpiresAt])
+}
+
+model PaymentTransaction {
+  id                    String   @id @default(cuid())
+  orderId               String
+  order                 Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider              String   // VNPAY | MANUAL_BANK_TRANSFER
+  amountVnd             Int
+  status                String   @default("CONFIRMED") // CONFIRMED | REFUNDED
+  providerTransactionId String?
+  reference             String?
+  confirmedByAdmin      String?
+  confirmedAt           DateTime @default(now())
+  createdAt             DateTime @default(now())
+
+  @@unique([provider, providerTransactionId])
+  @@index([orderId, createdAt])
 }
 
 // Dòng chi tiết từng sản phẩm trong đơn — cho phép hoàn kho khi hủy đơn

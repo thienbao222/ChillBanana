@@ -63,6 +63,10 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [priceApprovalJpy, setPriceApprovalJpy] = useState("");
   const [priceApprovalWeight, setPriceApprovalWeight] = useState("");
   const [isApprovingPrice, setIsApprovingPrice] = useState(false);
+  const [paymentRecordOrder, setPaymentRecordOrder] = useState<StoredOrder | null>(null);
+  const [paymentAmountVnd, setPaymentAmountVnd] = useState("");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
 
   // Sync external search term
   useEffect(() => {
@@ -194,7 +198,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
           action: "cancel",
           by: "ADMIN",
           reason: finalReason,
-          paymentStatus: refundDeposit ? "REFUNDED" : cancelModalOrder.paymentStatus,
+          ...(refundDeposit ? { paymentStatus: "REFUNDED" } : {}),
         }),
       });
 
@@ -262,19 +266,61 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     }
   };
 
+  const openPaymentRecordModal = (order: StoredOrder) => {
+    setPaymentRecordOrder(order);
+    setPaymentAmountVnd(String(order.depositAmountVnd));
+    setPaymentReference("");
+  };
+
+  const handleRecordPayment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!paymentRecordOrder) return;
+    const order = paymentRecordOrder;
+    const amountVnd = Number(paymentAmountVnd);
+    const reference = paymentReference.trim();
+    if (!Number.isSafeInteger(amountVnd) || amountVnd !== order.depositAmountVnd) {
+      adminToast.error(`Số tiền phải khớp với ${order.depositAmountVnd.toLocaleString("vi-VN")} đ.`);
+      return;
+    }
+    if (reference.length < 4 || reference.length > 120) {
+      adminToast.error("Mã tham chiếu cần có từ 4 đến 120 ký tự.");
+      return;
+    }
+
+    setIsRecordingPayment(true);
+    try {
+      const res = await fetch(`/api/admin/orders/${order.orderCode}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountVnd, reference }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setPaymentRecordOrder(null);
+        adminToast.success(`Đã ghi nhận thanh toán đơn #${order.orderCode}. Tiếp theo, bấm “Bắt đầu mua hàng”.`);
+        fetchOrders();
+      } else {
+        adminToast.error(data.error || "Không thể ghi nhận thanh toán.");
+      }
+    } catch {
+      adminToast.error("Lỗi kết nối máy chủ");
+    } finally {
+      setIsRecordingPayment(false);
+    }
+  };
+
   const quickMoveStatus = async (
     orderCode: string,
     nextStatus: OrderStatus,
     title: string,
     desc: string,
-    loc: string,
-    paymentStatus?: "DEPOSITED_50"
+    loc: string
   ) => {
     try {
       const res = await fetch(`/api/orders/${orderCode}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, title, description: desc, location: loc, ...(paymentStatus ? { paymentStatus } : {}) }),
+        body: JSON.stringify({ status: nextStatus, title, description: desc, location: loc }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -626,8 +672,8 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                       <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
                         <div className="flex justify-between items-start">
                           <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
-                          <span className="bg-rose-50 text-rose-700 text-[10px] font-bold px-2 py-0.5 rounded border border-rose-200">
-                            Chưa Cọc
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ord.paymentStatus === "UNPAID" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                            {ord.paymentStatus === "PAID_100" ? "Đã thanh toán 100%" : ord.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : ord.paymentStatus === "REFUNDED" ? "Đã hoàn tiền" : "Chưa thanh toán"}
                           </span>
                         </div>
                         <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
@@ -640,17 +686,19 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         </div>
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
-                            onClick={() => quickMoveStatus(
-                              ord.orderCode,
-                              "PURCHASING_JP",
-                              "Đã nhận cọc - Đang mua hàng tại Tokyo",
-                              "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
-                              "Tokyo, Nhật Bản",
-                              ord.paymentStatus === "UNPAID" ? "DEPOSITED_50" : undefined
-                            )}
-                            className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            onClick={() => ord.paymentStatus === "UNPAID"
+                              ? openPaymentRecordModal(ord)
+                              : quickMoveStatus(
+                                  ord.orderCode,
+                                  "PURCHASING_JP",
+                                  "Đã nhận cọc - Đang mua hàng tại Tokyo",
+                                  "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
+                                  "Tokyo, Nhật Bản"
+                                )}
+                            disabled={!ord.isPriceVerified || (ord.paymentStatus !== "UNPAID" && !["DEPOSITED_50", "PAID_100"].includes(ord.paymentStatus))}
+                            className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <span>Xác nhận cọc &amp; Mua</span>
+                            <span>{ord.paymentStatus === "UNPAID" ? (ord.isPriceVerified ? "Ghi nhận chuyển khoản" : "Duyệt giá trước khi nhận cọc") : "Bắt đầu mua hàng"}</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           {!ord.isPriceVerified && (
@@ -1038,8 +1086,8 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                   <div className="flex justify-between gap-3 font-bold text-slate-900"><span>Tổng tạm tính</span><span>{approvalTotalVnd.toLocaleString("vi-VN")} đ</span></div>
                 </div>
                 <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
-                  <span className="text-sm font-bold text-amber-800">Tiền cọc (50% tiền hàng + phí dịch vụ)</span>
-                  <strong className="text-lg text-amber-700">{Math.round((approvalProductVnd + approvalServiceVnd) * 0.5).toLocaleString("vi-VN")} đ</strong>
+                  <span className="text-sm font-bold text-amber-800">{priceApprovalOrder.depositPercent === 100 ? "Thanh toán ngay (100% tiền hàng + phí dịch vụ)" : "Tiền cọc (50% tiền hàng + phí dịch vụ)"}</span>
+                  <strong className="text-lg text-amber-700">{(priceApprovalOrder.depositPercent === 100 ? approvalProductVnd + approvalServiceVnd : Math.round((approvalProductVnd + approvalServiceVnd) * 0.5)).toLocaleString("vi-VN")} đ</strong>
                 </div>
               </div>
 
@@ -1058,6 +1106,36 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                   className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
                   <CheckCircle2 className="w-4 h-4" />{isApprovingPrice ? "Đang duyệt và gửi email..." : "Duyệt giá & gửi xác nhận"}
                 </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {paymentRecordOrder && (
+        <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-emerald-700 to-teal-600 px-6 py-5 text-white">
+              <button type="button" onClick={() => setPaymentRecordOrder(null)} disabled={isRecordingPayment} aria-label="Đóng" className="float-right text-white/80 hover:text-white disabled:opacity-50"><X className="w-5 h-5" /></button>
+              <h3 className="text-xl font-bold">Ghi nhận chuyển khoản</h3>
+              <p className="text-sm text-white/80 mt-1">Đơn #{paymentRecordOrder.orderCode} · {paymentRecordOrder.customerName}</p>
+            </div>
+            <form onSubmit={handleRecordPayment} className="p-6 space-y-4">
+              <div className="rounded-xl bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-950">
+                Đối chiếu giao dịch ngân hàng trước khi xác nhận. Số tiền cần nhận: <strong>{paymentRecordOrder.depositAmountVnd.toLocaleString("vi-VN")} đ</strong> ({paymentRecordOrder.depositPercent}%).
+              </div>
+              <div>
+                <label htmlFor="manual-payment-amount" className="block text-sm font-bold text-slate-700 mb-1">Số tiền đã nhận (VND)</label>
+                <input id="manual-payment-amount" type="number" min="1" step="1" required value={paymentAmountVnd} onChange={(e) => setPaymentAmountVnd(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" />
+              </div>
+              <div>
+                <label htmlFor="manual-payment-reference" className="block text-sm font-bold text-slate-700 mb-1">Mã tham chiếu / mã giao dịch ngân hàng</label>
+                <input id="manual-payment-reference" type="text" minLength={4} maxLength={120} required value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} className="w-full rounded-xl border border-slate-300 px-3 py-2.5" placeholder="Ví dụ: FT26123456789" />
+              </div>
+              <p className="text-xs text-slate-500">Sau khi ghi nhận, trạng thái mua hàng chưa tự chuyển. Nhân viên có thể kiểm tra lần cuối rồi bấm “Bắt đầu mua hàng”.</p>
+              <div className="flex justify-end gap-2 pt-1">
+                <button type="button" disabled={isRecordingPayment} onClick={() => setPaymentRecordOrder(null)} className="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-bold disabled:opacity-50">Để sau</button>
+                <button type="submit" disabled={isRecordingPayment || Number(paymentAmountVnd) !== paymentRecordOrder.depositAmountVnd || paymentReference.trim().length < 4} className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold disabled:opacity-50">{isRecordingPayment ? "Đang ghi nhận..." : "Xác nhận đã nhận tiền"}</button>
               </div>
             </form>
           </div>
@@ -1229,7 +1307,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                 <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1.5">
                   <div className="font-bold text-amber-800 flex items-center space-x-1.5">
                     <AlertCircle className="w-4 h-4 text-amber-600" />
-                    <span>Đơn hàng đã có tiền cọc ({cancelModalOrder.depositAmountVnd.toLocaleString("vi-VN")} đ)</span>
+                    <span>Đơn hàng đã nhận thanh toán ({cancelModalOrder.depositAmountVnd.toLocaleString("vi-VN")} đ)</span>
                   </div>
                   <label className="flex items-center space-x-2 text-slate-700 cursor-pointer pt-1">
                     <input
@@ -1239,7 +1317,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                       className="rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
                     />
                     <span className="font-semibold text-xs">
-                      Xác nhận đã hoàn trả tiền cọc cho khách hàng (Chuyển trạng thái thanh toán về Chưa cọc)
+                      Xác nhận đã hoàn trả khoản tiền đã nhận cho khách hàng (ghi nhận trạng thái Đã hoàn tiền)
                     </span>
                   </label>
                 </div>
@@ -1353,7 +1431,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
               <div className="flex justify-between text-slate-600">
                 <span>Số tiền đã đặt cọc:</span>
                 <span className="font-mono font-bold text-emerald-700">
-                  - {packingSlipOrder.depositAmountVnd?.toLocaleString()} đ ({packingSlipOrder.paymentStatus === "PAID_100" ? "Đã trả 100%" : "Đã cọc 50%"})
+                  - {packingSlipOrder.depositAmountVnd?.toLocaleString()} đ ({packingSlipOrder.paymentStatus === "PAID_100" ? "Đã trả 100%" : packingSlipOrder.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : "Chưa thanh toán"})
                 </span>
               </div>
               <div className="flex justify-between text-navy-950 font-bold text-sm pt-1 border-t">

@@ -39,18 +39,44 @@ export async function POST(req: NextRequest) {
     if (!order.isPriceVerified) {
       return NextResponse.json({ error: 'Đơn hàng đang chờ quản trị viên xác minh giá và cước phí. Vui lòng quay lại thanh toán sau.' }, { status: 403 });
     }
+    const now = new Date();
+    if (order.reservationExpiresAt && order.reservationExpiresAt <= now) {
+      return NextResponse.json({ error: "Thời gian giữ hàng đã hết. Vui lòng liên hệ ChillBanana để kiểm tra lại tồn kho trước khi thanh toán." }, { status: 409 });
+    }
     if (order.depositAmountVnd <= 0) {
       return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
     }
-
-    const amount = order.depositAmountVnd; // Server-side computed amount
-
     const tmnCode = process.env.VNPAY_TMN_CODE;
     const hashSecret = process.env.VNPAY_HASH_SECRET;
     const vnpUrl = process.env.VNPAY_URL;
     if (!tmnCode || !hashSecret || !vnpUrl) {
       return NextResponse.json({ error: "Cổng thanh toán chưa được cấu hình đầy đủ." }, { status: 503 });
     }
+
+    // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer.
+    if (order.reservationExpiresAt) {
+      const paymentWindowExpiresAt = new Date(now.getTime() + 17 * 60 * 1000);
+      if (order.reservationExpiresAt < paymentWindowExpiresAt) {
+        const extended = await prisma.order.updateMany({
+          where: {
+            id: order.id,
+            status: "PENDING_DEPOSIT",
+            paymentStatus: "UNPAID",
+            isPriceVerified: true,
+            AND: [
+              { reservationExpiresAt: order.reservationExpiresAt },
+              { reservationExpiresAt: { gt: now } },
+            ],
+          },
+          data: { reservationExpiresAt: paymentWindowExpiresAt },
+        });
+        if (extended.count !== 1) {
+          return NextResponse.json({ error: "Đơn vừa hết thời gian giữ hàng hoặc được xử lý ở yêu cầu khác. Vui lòng tải lại trang theo dõi." }, { status: 409 });
+        }
+      }
+    }
+
+    const amount = order.depositAmountVnd; // Server-side computed amount
 
     // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
     const baseUrl =
@@ -60,7 +86,6 @@ export async function POST(req: NextRequest) {
 
     const returnUrl = `${baseUrl}/api/payment/vnpay-return`;
 
-    const now = new Date();
     // Múi giờ Vietnam (GMT+7)
     const formatter = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Asia/Ho_Chi_Minh",
@@ -97,7 +122,7 @@ export async function POST(req: NextRequest) {
       vnp_CurrCode: "VND",
       vnp_IpAddr: clientIp,
       vnp_Locale: "vn",
-      vnp_OrderInfo: `Dat coc don hang ${orderCode}`,
+      vnp_OrderInfo: `Thanh toan don hang ${orderCode}`,
       vnp_OrderType: "other",
       vnp_ReturnUrl: returnUrl,
       vnp_TxnRef: orderCode,

@@ -21,6 +21,7 @@ import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
 import { AdminAiModuleId } from "@/lib/admin-ai/definitions";
+import "./admin-neoday.css";
 
 function AdminDashboardPageInner() {
   const router = useRouter();
@@ -78,9 +79,9 @@ function AdminDashboardPageInner() {
 
   if (authChecking) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white text-xs">
+      <div className="admin-neoday min-h-screen flex items-center justify-center text-xs">
         <div className="flex items-center space-x-2">
-          <RefreshCw className="w-5 h-5 animate-spin text-banana-400" />
+          <RefreshCw className="w-5 h-5 animate-spin text-sky-700" />
           <span>Đang xác thực quyền quản trị...</span>
         </div>
       </div>
@@ -88,129 +89,81 @@ function AdminDashboardPageInner() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-navy-950 font-sans">
+    <div className="admin-neoday min-h-screen">
+      <header className="admin-neoday-header sticky top-0 z-30">
+        <div className="admin-neoday-topbar">
+          <Link href="/admin" className="admin-neoday-brand" aria-label="ChillBanana Admin Portal">
+            <span className="admin-neoday-logo" aria-hidden="true">🍌</span>
+            <span className="admin-neoday-brand-name">Chill<span>Banana</span></span>
+            <span className="admin-neoday-portal">Admin Portal</span>
+          </Link>
 
-      {/* Admin Top Header */}
-      <header className="bg-navy-900 text-white border-b border-navy-800 sticky top-0 z-30 shadow-md">
-        <div className="w-full px-4 sm:px-8 lg:px-12 h-16 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Link href="/admin" className="flex items-center space-x-2">
-              <span className="text-2xl">🍌</span>
-              <span className="font-serif font-bold text-lg text-white">
-                Chill<span className="text-banana-400">Banana</span>{" "}
-                <span className="text-xs font-sans font-normal text-banana-200 bg-navy-800 px-2 py-0.5 rounded-full ml-1">Admin Portal</span>
-              </span>
-            </Link>
-
-            <span className="text-slate-600 hidden sm:inline">|</span>
-
-            {/* Bộ Chuyển Đổi 2 Giao Diện */}
-            <div className="flex items-center bg-navy-950 p-1 rounded-xl border border-navy-800">
-              <button
-                onClick={() => setAdminViewMode("dashboard")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  adminViewMode === "dashboard"
-                    ? "bg-banana-500 text-navy-950 shadow"
-                    : "text-slate-300 hover:text-white"
-                }`}
-                title="Giao diện 1: Bảng điều khiển phân tích & quản trị tổng quan"
-              >
-                <LayoutDashboard className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Giao Diện Dashboard</span>
-              </button>
-
-              <button
-                onClick={() => setAdminViewMode("operations")}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center space-x-1.5 ${
-                  adminViewMode === "operations"
-                    ? "bg-banana-500 text-navy-950 shadow"
-                    : "text-slate-300 hover:text-white"
-                }`}
-                title="Giao diện 2: Bàn tác nghiệp kho vận & xử lý đơn hàng Kanban"
-              >
-                <Columns className="w-3.5 h-3.5" />
-                <span className="hidden md:inline">Bàn Tác Nghiệp Kho (Kanban)</span>
-              </button>
-            </div>
-
-            {/* Desktop Tab Nav */}
-            {adminViewMode === "dashboard" && (
-              <nav className="hidden 2xl:flex items-center space-x-2 text-xs border-l border-navy-800 pl-3">
-                {[
-                  { key: "orders",    icon: <Package className="w-3.5 h-3.5" />,     label: "Đơn Hàng" },
-                  { key: "customers", icon: <Users className="w-3.5 h-3.5" />,       label: "Khách Hàng" },
-                  { key: "products",  icon: <ShoppingBag className="w-3.5 h-3.5" />, label: "Sản Phẩm" },
-                  { key: "analytics", icon: <BarChart3 className="w-3.5 h-3.5" />, label: "Phân tích & AI" },
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key as typeof activeTab)}
-                    className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center space-x-1.5 ${
-                      activeTab === tab.key
-                        ? "bg-slate-800 text-white border border-slate-700 shadow"
-                        : "text-slate-400 hover:text-white"
-                    }`}
-                  >
-                    {tab.icon}
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
-              </nav>
-            )}
-          </div>
-
-          {/* Right side: user info + links */}
-          <div className="flex items-center space-x-4 text-xs">
-            <div className="hidden md:flex items-center space-x-2 text-slate-300">
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+          <div className="admin-neoday-userbar">
+            <div className="admin-neoday-user">
+              <ShieldCheck className="h-4 w-4" />
               <span>{currentUser?.name || "Admin"}</span>
-              <span className="text-[10px] bg-navy-800 text-banana-400 px-2 py-0.5 rounded font-mono">
-                {currentUser?.role || "SUPER_ADMIN"}
-              </span>
+              <span className="admin-neoday-role">{currentUser?.role || "SUPER_ADMIN"}</span>
             </div>
-
-            <Link
-              href="/"
-              target="_blank"
-              className="text-slate-300 hover:text-white flex items-center space-x-1 transition-colors"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Xem Web</span>
+            <Link href="/" target="_blank" className="admin-neoday-action">
+              <ExternalLink className="h-4 w-4" />
+              <span>Xem Web</span>
             </Link>
-
-            <button
-              onClick={handleLogout}
-              className="px-3 py-1.5 bg-rose-950/80 hover:bg-rose-900 text-rose-200 border border-rose-800/80 rounded-xl transition-colors flex items-center space-x-1 font-bold"
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              <span>Đăng Xuất</span>
+            <button onClick={handleLogout} className="admin-neoday-logout">
+              <LogOut className="h-4 w-4" />
+              <span>Đăng xuất</span>
             </button>
           </div>
         </div>
 
-        {/* Mobile Tab Bar */}
-        <div className="2xl:hidden flex border-t border-navy-800 text-xs">
-          {[
-            { key: "orders",    label: "Đơn Hàng" },
-            { key: "customers", label: "Khách Hàng" },
-            { key: "products",  label: "Sản Phẩm" },
-            { key: "analytics", label: "Phân tích & AI" },
-          ].map((tab) => (
+        <div className="admin-neoday-navrow">
+          <div className="admin-neoday-modes" aria-label="Chế độ quản trị">
             <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`flex-1 py-2 text-center font-bold ${
-                activeTab === tab.key ? "bg-banana-500 text-navy-950" : "text-slate-300"
-              }`}
+              onClick={() => setAdminViewMode("dashboard")}
+              className={`admin-neoday-mode ${adminViewMode === "dashboard" ? "is-active" : ""}`}
+              title="Bảng điều khiển tổng quan"
             >
-              {tab.label}
+              <LayoutDashboard className="h-4 w-4" />
+              <span>Dashboard</span>
             </button>
-          ))}
+            <button
+              onClick={() => setAdminViewMode("operations")}
+              className={`admin-neoday-mode ${adminViewMode === "operations" ? "is-active" : ""}`}
+              title="Bàn tác nghiệp đơn hàng Kanban"
+            >
+              <Columns className="h-4 w-4" />
+              <span>Tác nghiệp</span>
+            </button>
+          </div>
+
+          {adminViewMode === "dashboard" ? (
+            <nav className="admin-neoday-tabs" aria-label="Khu vực quản trị">
+              {[
+                { key: "orders", icon: <Package className="h-4 w-4" />, label: "Đơn hàng" },
+                { key: "customers", icon: <Users className="h-4 w-4" />, label: "Khách hàng" },
+                { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
+                { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
+              ].map((tab) => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as typeof activeTab)}
+                  className={`admin-neoday-tab ${activeTab === tab.key ? "is-active" : ""}`}
+                >
+                  {tab.icon}<span>{tab.label}</span>
+                </button>
+              ))}
+            </nav>
+          ) : (
+            <div className="admin-neoday-workspace-label">
+              <Columns className="h-4 w-4" />
+              <span>Bàn tác nghiệp đơn hàng</span>
+              <span className="admin-neoday-kanban-pill">Kanban</span>
+            </div>
+          )}
         </div>
       </header>
 
       {/* Main Admin Workspace */}
-      <main className="w-full px-4 sm:px-8 lg:px-12 py-6">
+      <main className="admin-neoday-main">
 
         {/* OrderManagementTab handles both Dashboard Orders tab and Kanban Operations view */}
         <OrderManagementTab

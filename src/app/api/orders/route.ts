@@ -4,6 +4,7 @@ import { sendOrderCreatedEmail } from "@/lib/mailer";
 import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
 import { MIN_ORDER_THRESHOLD_VND } from "@/lib/order-policy";
+import { getDepositAmount, parseDepositPercent } from "@/lib/payment-policy";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +61,10 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    const depositPercent = body.depositPercent === undefined ? 50 : parseDepositPercent(body.depositPercent);
+    if (depositPercent === null) {
+      return NextResponse.json({ error: "Mức đặt cọc chỉ được chọn 50% hoặc 100%." }, { status: 400 });
+    }
     if (typeof body.customerName !== "string" || !body.customerName.trim() || typeof body.customerPhone !== "string" || !body.customerPhone.trim() || typeof body.customerAddress !== "string" || !body.customerAddress.trim()) {
       return NextResponse.json(
         { error: "Vui lòng cung cấp đầy đủ thông tin khách hàng." },
@@ -319,11 +324,11 @@ export async function POST(req: NextRequest) {
 
         const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
 
-        const baseCost = baseOrderCostVnd;
-        const clientDeposit = Number(body.depositAmountVnd) || 0;
-        const depositAmountVnd = (clientDeposit >= baseCost && baseCost > 0)
-          ? baseCost
-          : Math.round(baseCost * 0.5);
+        const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
+        const hasCatalogReservation = orderItemsData.some((item) => item.itemType === "CATALOG");
+        const reservationExpiresAt = hasCatalogReservation && isOnlyCatalogItems
+          ? new Date(Date.now() + 30 * 60 * 1000)
+          : null;
 
         // Tạo đơn hàng + OrderItems trong cùng một transaction
         return await tx.order.create({
@@ -346,6 +351,7 @@ export async function POST(req: NextRequest) {
             shippingFeeVnd,
             totalVnd,
             depositAmountVnd,
+            depositPercent,
             paymentStatus: "UNPAID",
             paymentMethod: body.paymentMethod === "VNPAY" ? "VNPAY" : "VIETQR",
             isGroupBuy: !!body.isGroupBuy,
@@ -355,6 +361,7 @@ export async function POST(req: NextRequest) {
             adminNote: body.adminNote || null,
             isPriceVerified: isOnlyCatalogItems,
             priceVerifiedAt: isOnlyCatalogItems ? new Date() : null,
+            reservationExpiresAt,
             orderItems: {
               create: orderItemsData,
             },

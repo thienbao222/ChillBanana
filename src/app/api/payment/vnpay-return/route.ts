@@ -17,7 +17,11 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const result = await confirmVnpayPayment(orderCode, params.get("vnp_Amount") || "");
+    const result = await confirmVnpayPayment(
+      orderCode,
+      params.get("vnp_Amount") || "",
+      params.get("vnp_TransactionNo")
+    );
     const payment = result.result === "confirmed" || result.result === "already_paid" ? "success" : "invalid";
     return NextResponse.redirect(`${getAppUrl()}/tracking?orderCode=${encodeURIComponent(orderCode)}&payment=${payment}`);
   } catch (error) {

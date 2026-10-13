@@ -69,7 +69,7 @@ export default function CartDrawer() {
         body: JSON.stringify({
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
-          orderInfo: `Dat coc 50% don hang ${order.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
         }),
       });
       const data = await res.json();
@@ -140,7 +140,6 @@ export default function CartDrawer() {
           serviceFeeVnd,
           shippingFeeVnd,
           totalVnd,
-          depositAmountVnd: deposit50Vnd,
           depositPercent: 50,
           paymentMethod: "VNPAY",
           isGroupBuy: false,
@@ -211,41 +210,36 @@ export default function CartDrawer() {
                 </strong>
               </p>
 
-              {/* Thông tin cọc */}
+              {/* Thông tin thanh toán */}
               <div className="mt-4 p-3 bg-white rounded-2xl border border-emerald-200 shadow-sm text-left text-xs space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Số tiền cọc 50%:</span>
+                  <span className="text-slate-500">{orderResult.isPriceVerified ? "Số tiền cần thanh toán (50%):" : "Mức thanh toán tạm tính:"}</span>
                   <strong className="text-banana-600 text-sm">
                     {orderResult.depositAmountVnd?.toLocaleString()} đ
                   </strong>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Phương thức:</span>
-                  <span className="font-semibold text-blue-700">VNPAY Sandbox</span>
-                </div>
-                <p className="text-[11px] text-slate-500 italic">
-                  * Nhấn nút bên dưới để thanh toán qua cổng VNPAY. Đơn hàng sẽ tự động xác nhận sau khi thanh toán thành công.
-                </p>
-              </div>
-
-              {/* Nút thanh toán VNPAY */}
-              <button
-                onClick={() => handleVnpayPayment(orderResult)}
-                disabled={isRedirecting}
-                className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
-              >
-                {isRedirecting ? (
+                {orderResult.isPriceVerified ? (
                   <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Đang chuyển đến VNPAY...
+                    <div className="flex justify-between">
+                      <span className="text-slate-500">Phương thức:</span>
+                      <span className="font-semibold text-blue-700">VNPAY / VietQR</span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 italic">Thanh toán qua VNPAY để hệ thống tự xác nhận; chuyển khoản VietQR sẽ được nhân viên đối chiếu.</p>
                   </>
                 ) : (
-                  <>
-                    <ExternalLink className="w-4 h-4" />
-                    Thanh Toán Cọc Qua VNPAY
-                  </>
+                  <p className="text-[11px] text-amber-700 italic">ChillBanana cần duyệt báo giá trước. Vui lòng chưa thanh toán; trạng thái và số tiền cuối cùng sẽ được cập nhật trong trang theo dõi đơn.</p>
                 )}
-              </button>
+              </div>
+
+              {orderResult.isPriceVerified && (
+                <button
+                  onClick={() => handleVnpayPayment(orderResult)}
+                  disabled={isRedirecting}
+                  className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60"
+                >
+                  {isRedirecting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Đang chuyển đến VNPAY...</> : <><ExternalLink className="w-4 h-4" />Thanh Toán Qua VNPAY</>}
+                </button>
+              )}
 
               <div className="mt-3 flex gap-2">
                 <a

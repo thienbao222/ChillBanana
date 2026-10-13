@@ -127,6 +127,7 @@ export interface StoredOrder {
   shippingFeeVnd: number;
   totalVnd: number;
   depositAmountVnd: number;
+  depositPercent: 50 | 100;
   paymentStatus: PaymentStatus;
   paymentMethod: string;
   isGroupBuy: boolean;
@@ -147,5 +148,6 @@ export interface StoredOrder {
   createdAt: string;
   updatedAt: string;
   isPriceVerified?: boolean;
+  reservationExpiresAt?: string | null;
   canCancel?: boolean;
 }

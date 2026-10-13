@@ -1,0 +1,386 @@
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+
+.admin-neoday {
+  --admin-ink: #16284a;
+  --admin-muted: #5b6e8f;
+  --admin-blue: #5abae6;
+  --admin-blue-dark: #2b7fb0;
+  --admin-banana: #f8db55;
+  min-height: 100vh;
+  color: var(--admin-ink);
+  background: linear-gradient(180deg, #dff3ff 0%, #bfe4fb 38%, #e6f5ff 72%, #fff3c0 100%) fixed;
+  font-family: "Nunito", "Segoe UI", system-ui, sans-serif;
+}
+
+.admin-neoday * {
+  box-sizing: border-box;
+}
+
+.admin-neoday :focus-visible {
+  outline: 3px solid var(--admin-blue-dark);
+  outline-offset: 3px;
+}
+
+.admin-neoday-header {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(242, 250, 255, 0.86);
+  box-shadow: 0 8px 28px rgba(60, 120, 170, 0.15);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.admin-neoday-topbar,
+.admin-neoday-navrow {
+  width: min(100% - 48px, 1680px);
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.admin-neoday-topbar {
+  min-height: 68px;
+}
+
+.admin-neoday-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--admin-ink);
+  text-decoration: none;
+}
+
+.admin-neoday-logo {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 15px;
+  background: linear-gradient(145deg, #fff4b9, #f8db55);
+  box-shadow: 0 5px 14px rgba(227, 169, 18, 0.2);
+  font-size: 23px;
+}
+
+.admin-neoday-brand-name {
+  white-space: nowrap;
+  font-family: "Baloo 2", "Nunito", sans-serif;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.admin-neoday-brand-name span {
+  color: var(--admin-blue-dark);
+}
+
+.admin-neoday-portal,
+.admin-neoday-role,
+.admin-neoday-kanban-pill {
+  border: 1px solid rgba(90, 186, 230, 0.24);
+  border-radius: 999px;
+  background: rgba(90, 186, 230, 0.12);
+  color: #286b91;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  padding: 4px 9px;
+  white-space: nowrap;
+}
+
+.admin-neoday-userbar,
+.admin-neoday-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.admin-neoday-userbar {
+  color: #405779;
+  font-size: 12px;
+}
+
+.admin-neoday-user {
+  gap: 7px;
+}
+
+.admin-neoday-user > svg {
+  color: #2c9b75;
+}
+
+.admin-neoday-role {
+  padding: 3px 8px;
+  color: #916e09;
+  border-color: rgba(248, 219, 85, 0.48);
+  background: rgba(248, 219, 85, 0.22);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.admin-neoday-action,
+.admin-neoday-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 1px solid rgba(43, 127, 176, 0.2);
+  border-radius: 14px;
+  color: #286b91;
+  background: rgba(255, 255, 255, 0.62);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+  transition: background 160ms ease, transform 160ms ease, box-shadow 160ms ease;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-neoday-action:hover {
+  background: white;
+  box-shadow: 0 4px 12px rgba(43, 127, 176, 0.12);
+  transform: translateY(-1px);
+}
+
+.admin-neoday-logout {
+  border-color: rgba(217, 91, 91, 0.25);
+  color: #a34242;
+  background: rgba(255, 245, 245, 0.72);
+}
+
+.admin-neoday-logout:hover {
+  background: #fff0ef;
+}
+
+.admin-neoday-navrow {
+  min-height: 58px;
+  justify-content: flex-start;
+  gap: 20px;
+  border-top: 1px solid rgba(43, 127, 176, 0.1);
+}
+
+.admin-neoday-modes,
+.admin-neoday-tabs {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.admin-neoday-modes {
+  padding: 4px;
+  border: 1px solid rgba(43, 127, 176, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.admin-neoday-mode,
+.admin-neoday-tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: #59708f;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.admin-neoday-mode:hover,
+.admin-neoday-tab:hover {
+  color: var(--admin-ink);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.admin-neoday-mode.is-active {
+  border-color: rgba(255, 255, 255, 0.95);
+  color: var(--admin-ink);
+  background: linear-gradient(135deg, #fff4b9, var(--admin-banana));
+  box-shadow: 0 3px 10px rgba(227, 169, 18, 0.18);
+}
+
+.admin-neoday-tabs {
+  min-width: 0;
+  padding-left: 16px;
+  border-left: 1px solid rgba(43, 127, 176, 0.16);
+}
+
+.admin-neoday-tab.is-active {
+  border-color: rgba(255, 255, 255, 0.95);
+  color: #1e628a;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 4px 12px rgba(60, 120, 170, 0.12);
+}
+
+.admin-neoday-workspace-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  color: #355675;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-neoday-kanban-pill {
+  color: #286b91;
+  background: rgba(90, 186, 230, 0.14);
+}
+
+.admin-neoday-main {
+  width: min(100% - 48px, 1680px);
+  min-height: calc(100vh - 126px);
+  margin-inline: auto;
+  padding-block: 26px 48px;
+}
+
+.admin-neoday-main .bg-white {
+  border-color: rgba(255, 255, 255, 0.88);
+  background-color: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 10px 30px rgba(60, 120, 170, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 {
+  background: linear-gradient(125deg, rgba(255, 255, 255, 0.9), rgba(221, 242, 255, 0.88));
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 30px rgba(60, 120, 170, 0.15);
+  color: var(--admin-ink);
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 .text-white {
+  color: var(--admin-ink);
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 .text-slate-400 {
+  color: var(--admin-muted);
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 [class~="bg-banana-500/20"] {
+  border-color: rgba(227, 169, 18, 0.28);
+  background: rgba(248, 219, 85, 0.3);
+  color: #765b04;
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 input {
+  border-color: rgba(43, 127, 176, 0.25);
+  background: rgba(255, 255, 255, 0.78);
+  color: var(--admin-ink);
+}
+
+.admin-neoday-main .bg-gradient-to-r.from-slate-900 input::placeholder {
+  color: #7585a0;
+}
+
+.admin-neoday-main h1,
+.admin-neoday-main h2,
+.admin-neoday-main h3 {
+  font-family: "Baloo 2", "Nunito", sans-serif;
+}
+
+@media (max-width: 760px) {
+  .admin-neoday-topbar,
+  .admin-neoday-navrow,
+  .admin-neoday-main {
+    width: min(100% - 28px, 1680px);
+  }
+
+  .admin-neoday-topbar {
+    min-height: 62px;
+    gap: 8px;
+  }
+
+  .admin-neoday-brand {
+    gap: 6px;
+  }
+
+  .admin-neoday-logo {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    font-size: 20px;
+  }
+
+  .admin-neoday-brand-name {
+    font-size: 17px;
+  }
+
+  .admin-neoday-portal,
+  .admin-neoday-user,
+  .admin-neoday-action span,
+  .admin-neoday-logout span {
+    display: none;
+  }
+
+  .admin-neoday-userbar {
+    gap: 6px;
+  }
+
+  .admin-neoday-action,
+  .admin-neoday-logout {
+    width: 36px;
+    min-height: 36px;
+    padding: 0;
+  }
+
+  .admin-neoday-navrow {
+    min-height: 56px;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .admin-neoday-navrow::-webkit-scrollbar,
+  .admin-neoday-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .admin-neoday-modes {
+    flex-shrink: 0;
+  }
+
+  .admin-neoday-mode {
+    min-height: 36px;
+    padding-inline: 9px;
+  }
+
+  .admin-neoday-tabs {
+    flex: 1 0 auto;
+    overflow-x: auto;
+    padding-left: 8px;
+  }
+
+  .admin-neoday-tab {
+    min-height: 36px;
+    gap: 6px;
+    padding-inline: 9px;
+  }
+
+  .admin-neoday-main {
+    min-height: calc(100vh - 118px);
+    padding-block: 18px 32px;
+  }
+}
+
+@media (max-width: 390px) {
+  .admin-neoday-brand-name {
+    font-size: 15px;
+  }
+
+  .admin-neoday-mode,
+  .admin-neoday-tab {
+    gap: 5px;
+    padding-inline: 7px;
+    font-size: 11px;
+  }
+}
