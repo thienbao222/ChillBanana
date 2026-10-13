@@ -292,21 +292,25 @@ export default function NeoDaylightCosmos() {
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
         <div className="sun par" style={{ "--k": 6 } as any} />
-        <div className="cloud par" style={{ "--k": 12, left: "-6vw", top: "14vh" } as any} />
-        <div className="cloud par" style={{ "--k": 18, left: "44vw", top: "52vh", animationDuration: "80s" } as any} />
+        <div className="cloud cloud--cyan par" style={{ "--k": 12, left: "-5vw", top: "12vh" } as any} />
+        <div className="cloud cloud--violet par" style={{ "--k": 18, left: "28vw", top: "35vh", animationDuration: "74s" } as any} />
+        <div className="cloud cloud--rose par" style={{ "--k": 10, left: "69vw", top: "18vh", animationDuration: "68s" } as any} />
+        <div className="cloud cloud--mint par" style={{ "--k": 16, left: "58vw", top: "61vh", animationDuration: "82s" } as any} />
+        <div className="cloud cloud--blue par" style={{ "--k": 14, left: "4vw", top: "72vh", animationDuration: "76s" } as any} />
+        <div className="cloud cloud--peach par" style={{ "--k": 20, left: "37vw", top: "83vh", animationDuration: "88s" } as any} />
         <div id="sparks">
-          {Array.from({ length: 18 }).map((_, i) => (
+          {Array.from({ length: 42 }).map((_, i) => (
             <div
               key={i}
               className="sp"
               style={{
-                left: `${(i * 17) % 100}%`,
-                top: `${(i * 23) % 95}%`,
-                width: `${8 + (i % 8)}px`,
-                height: `${8 + (i % 8)}px`,
-                animationDelay: `-${(i * 0.4).toFixed(1)}s`,
+                left: `${(i * 37 + 11) % 100}%`,
+                top: `${(i * 61 + 7) % 96}%`,
+                width: `${3 + (i % 5)}px`,
+                height: `${3 + (i % 5)}px`,
+                animationDelay: `-${(i * 0.27).toFixed(1)}s`,
                 animationDuration: `${2.5 + (i % 4)}s`,
-                background: i % 4 ? "#fff" : "#f8db55",
+                background: ["#fff9df", "#9ce8ff", "#ffc4e0", "#d5c5ff", "#ffe58a"][i % 5],
               }}
             />
           ))}

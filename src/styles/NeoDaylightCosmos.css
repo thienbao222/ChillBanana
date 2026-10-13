@@ -82,18 +82,29 @@
 
 .cosmos-root .cloud {
   position: absolute;
-  width: 38vw;
-  height: 12vw;
+  width: clamp(130px, 24vw, 340px);
+  height: clamp(64px, 8vw, 120px);
   border-radius: 50%;
-  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(255, 255, 255, 0));
-  filter: blur(6px);
+  background:
+    radial-gradient(ellipse at 35% 52%, rgba(var(--cloud-rgb), 0.42), rgba(var(--cloud-rgb), 0.15) 40%, transparent 76%),
+    radial-gradient(ellipse at 68% 46%, rgba(var(--cloud-rgb), 0.24), transparent 72%);
+  filter: blur(9px) saturate(1.16);
+  opacity: 0.78;
   animation: cosmosSlide 60s linear infinite alternate;
 }
+
+.cosmos-root .cloud--cyan { --cloud-rgb: 89, 198, 255; }
+.cosmos-root .cloud--violet { --cloud-rgb: 164, 139, 250; }
+.cosmos-root .cloud--rose { --cloud-rgb: 255, 145, 198; }
+.cosmos-root .cloud--mint { --cloud-rgb: 112, 224, 194; }
+.cosmos-root .cloud--blue { --cloud-rgb: 117, 162, 255; }
+.cosmos-root .cloud--peach { --cloud-rgb: 255, 194, 128; }
 
 .cosmos-root .sp {
   position: absolute;
   background: #fff;
   clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%);
+  filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.78));
   animation: cosmosTw 3.5s ease-in-out infinite;
 }
 
