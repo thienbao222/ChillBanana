@@ -288,7 +288,7 @@ export default function NeoDaylightCosmos() {
 
   return (
   <MotionConfig reducedMotion={preferences.effectsEnabled ? "never" : "always"}>
-    <div className={`cosmos-root ${preferences.effectsEnabled ? "" : "calm"}`}>
+    <div className={`cosmos-root cosmos-home ${preferences.effectsEnabled ? "" : "calm"}`}>
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
         <div className="sun par" style={{ "--k": 6 } as any} />
@@ -298,23 +298,27 @@ export default function NeoDaylightCosmos() {
         <div className="cloud cloud--mint par" style={{ "--k": 16, left: "58vw", top: "61vh", animationDuration: "82s" } as any} />
         <div className="cloud cloud--blue par" style={{ "--k": 14, left: "4vw", top: "72vh", animationDuration: "76s" } as any} />
         <div className="cloud cloud--peach par" style={{ "--k": 20, left: "37vw", top: "83vh", animationDuration: "88s" } as any} />
+        <div className="cloud cloud--banana par" style={{ "--k": 9, left: "23vw", top: "54vh", animationDuration: "96s" } as any} />
+        <div className="cloud cloud--coral par" style={{ "--k": 17, left: "81vw", top: "82vh", animationDuration: "84s" } as any} />
         <div id="sparks">
-          {Array.from({ length: 42 }).map((_, i) => (
+          {Array.from({ length: 72 }).map((_, i) => (
             <div
               key={i}
               className="sp"
               style={{
-                left: `${(i * 37 + 11) % 100}%`,
-                top: `${(i * 61 + 7) % 96}%`,
-                width: `${3 + (i % 5)}px`,
-                height: `${3 + (i % 5)}px`,
+                left: `${((i * 61.8034) + 11) % 100}%`,
+                top: `${((i * 37.211) + ((i % 5) * 7.3) + 7) % 96}%`,
+                width: `${2 + ((i * 7) % 6)}px`,
+                height: `${2 + ((i * 7) % 6)}px`,
                 animationDelay: `-${(i * 0.27).toFixed(1)}s`,
                 animationDuration: `${2.5 + (i % 4)}s`,
-                background: ["#fff9df", "#9ce8ff", "#ffc4e0", "#d5c5ff", "#ffe58a"][i % 5],
+                background: ["#fff9df", "#9ce8ff", "#ffc4e0", "#d5c5ff", "#ffe58a", "#a5f4de", "#ffffff"][i % 7],
               }}
             />
           ))}
         </div>
+        <div className="comet comet--banana" />
+        <div className="comet comet--cyan" />
       </div>
 
       {/* SVG Icon Definitions */}
