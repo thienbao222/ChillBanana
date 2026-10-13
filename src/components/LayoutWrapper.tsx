@@ -14,7 +14,7 @@ import ToastContainer from "@/components/ToastContainer";
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
-  const isGalaxyRoute = pathname === "/galaxy";
+  const isCosmosRoute = pathname === "/galaxy" || pathname === "/tracking";
 
   if (isAdminRoute) {
     return <>{children}</>;
@@ -23,9 +23,9 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   return (
     <ToastProvider>
       <CartProvider>
-        {!isGalaxyRoute && <Navbar />}
-        {isGalaxyRoute ? children : <main className="flex-grow">{children}</main>}
-        {!isGalaxyRoute && <Footer />}
+        {!isCosmosRoute && <Navbar />}
+        {isCosmosRoute ? children : <main className="flex-grow">{children}</main>}
+        {!isCosmosRoute && <Footer />}
         <AIChatBot />
         <CartDrawer />
         <AuthModal />

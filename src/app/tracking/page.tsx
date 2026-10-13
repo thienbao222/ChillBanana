@@ -8,7 +8,6 @@ import Link from "next/link";
 import {
   PackageSearch,
   Search,
-  MapPin,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -17,17 +16,25 @@ import {
   Ban,
   X,
   ShoppingBag,
-  RefreshCw
+  RefreshCw,
+  ArrowLeft,
+  Truck
 } from "lucide-react";
 import TrackingStepper from "@/components/TrackingStepper";
 import { StoredOrder } from "@/types";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { useCart } from "@/context/CartContext";
+import "@/styles/NeoDaylightCosmos.css";
 
-function TrackingContent() {
+function TrackingCosmosContent() {
   const searchParams = useSearchParams();
-  const { customer } = useAuth();
+  const { customer, openAuthModal } = useAuth();
+  const { totalItems, openCart } = useCart();
   const { toast } = useToast();
+
+  const [calmMode, setCalmMode] = useState(false);
+  const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const [searchCode, setSearchCode] = useState("");
   const [order, setOrder] = useState<StoredOrder | null>(null);
@@ -48,6 +55,42 @@ function TrackingContent() {
   // Trạng thái thanh toán VNPAY trả về
   const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | "pending" | null>(null);
 
+  // Tỷ giá live
+  const [exchangeRate, setExchangeRate] = useState<number>(172);
+
+  // Parallax pointermove listeners
+  useEffect(() => {
+    const handleMove = (e: MouseEvent) => {
+      if (calmMode) return;
+      document.documentElement.style.setProperty("--px", (e.clientX / window.innerWidth - 0.5).toString());
+      document.documentElement.style.setProperty("--py", (e.clientY / window.innerHeight - 0.5).toString());
+    };
+
+    window.addEventListener("pointermove", handleMove, { passive: true });
+    return () => window.removeEventListener("pointermove", handleMove);
+  }, [calmMode]);
+
+  // Fetch tỷ giá live
+  useEffect(() => {
+    fetch("/api/exchange-rate")
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.data?.roundedRate) {
+          setExchangeRate(Number(data.data.roundedRate));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const showToast = (msg: string) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 2500);
+  };
+
+  const handleOpenAIChat = () => {
+    window.dispatchEvent(new CustomEvent("open-ai-chat"));
+  };
+
   const fetchOrder = async (code: string) => {
     if (!code.trim()) return;
     setLoading(true);
@@ -61,7 +104,7 @@ function TrackingContent() {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
         setOrder(null);
       }
-    } catch (err) {
+    } catch {
       setError("Lỗi kết nối máy chủ. Vui lòng thử lại!");
       setOrder(null);
     } finally {
@@ -73,8 +116,8 @@ function TrackingContent() {
     if (!customer?.email && !customer?.phone) return;
     setLoadingMyOrders(true);
     try {
-      const q = customer.email 
-        ? `email=${encodeURIComponent(customer.email)}` 
+      const q = customer.email
+        ? `email=${encodeURIComponent(customer.email)}`
         : `phone=${encodeURIComponent(customer.phone!)}`;
       const res = await fetch(`/api/orders?${q}`);
       const data = await res.json();
@@ -97,7 +140,6 @@ function TrackingContent() {
       fetchOrder(codeParam);
       setActiveTab("search");
     } else if (customer) {
-      // Nếu khách đã đăng nhập và không có param tra cứu thì mở Đơn hàng của tôi
       setActiveTab("my_orders");
     }
   }, [searchParams, customer]);
@@ -161,647 +203,644 @@ function TrackingContent() {
   };
 
   return (
-    <div className="space-y-8">
-      {/* Banner kết quả thanh toán VNPAY */}
-      {paymentStatus === "success" && (
-        <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-300 rounded-2xl text-sm text-emerald-900 shadow">
-          <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
-          <div>
-            <p className="font-bold">Thanh toán thành công qua VNPAY! 🎉</p>
-            <p className="text-xs text-emerald-700">Cọc 50% của bạn đã được xác nhận. Đội ngũ Tokyo sẽ tiến hành mua hàng ngay!</p>
-          </div>
-          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-600 hover:text-emerald-900">
-            <X className="w-4 h-4" />
-          </button>
+    <div className={`cosmos-root ${calmMode ? "calm" : ""}`}>
+      {/* Nền trời vũ trụ ban ngày */}
+      <div className="sky" aria-hidden="true">
+        <div className="sun par" style={{ "--k": 6 } as any} />
+        <div className="cloud par" style={{ "--k": 12, left: "-6vw", top: "14vh" } as any} />
+        <div className="cloud par" style={{ "--k": 18, left: "44vw", top: "52vh", animationDuration: "80s" } as any} />
+        <div id="sparks">
+          {Array.from({ length: 18 }).map((_, i) => (
+            <div
+              key={i}
+              className="sp"
+              style={{
+                left: `${(i * 17) % 100}%`,
+                top: `${(i * 23) % 95}%`,
+                width: `${8 + (i % 8)}px`,
+                height: `${8 + (i % 8)}px`,
+                animationDelay: `-${(i * 0.4).toFixed(1)}s`,
+                animationDuration: `${2.5 + (i % 4)}s`,
+                background: i % 4 ? "#fff" : "#f8db55",
+              }}
+            />
+          ))}
         </div>
-      )}
-      {paymentStatus === "failed" && (
-        <div className="flex items-center gap-3 p-4 bg-rose-50 border border-rose-300 rounded-2xl text-sm text-rose-900 shadow">
-          <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
-          <div>
-            <p className="font-bold">Thanh toán chưa hoàn tất</p>
-            <p className="text-xs text-rose-700">Giao dịch bị hủy hoặc thất bại. Đơn hàng của bạn vẫn còn đó — bạn có thể thử thanh toán lại.</p>
-          </div>
-          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-rose-600 hover:text-rose-900">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      {paymentStatus === "invalid" && (
-        <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-300 rounded-2xl text-sm text-amber-900 shadow">
-          <AlertCircle className="w-6 h-6 text-amber-600 shrink-0" />
-          <div>
-            <p className="font-bold">Phản hồi thanh toán không hợp lệ</p>
-            <p className="text-xs text-amber-700">Chữ ký xác thực từ VNPAY không khớp. Vui lòng liên hệ bộ phận hỗ trợ.</p>
-          </div>
-          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-amber-600 hover:text-amber-900">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
-      {paymentStatus === "pending" && (
-        <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-300 rounded-2xl text-sm text-blue-900 shadow">
-          <AlertCircle className="w-6 h-6 text-blue-600 shrink-0" />
-          <div>
-            <p className="font-bold">Đang đối soát giao dịch</p>
-            <p className="text-xs text-blue-700">VNPAY chưa xác nhận xong. Vui lòng chờ ít phút và kiểm tra lại trạng thái đơn trước khi thanh toán lần nữa.</p>
-          </div>
-          <button onClick={() => setPaymentStatus(null)} className="ml-auto text-blue-600 hover:text-blue-900">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      </div>
 
-      {/* Top Tabs Switcher (Khi khách hàng đã đăng nhập) */}
-      {customer && (
-        <div className="flex justify-center">
-          <div className="inline-flex p-1 bg-slate-200/80 rounded-2xl border border-slate-300 shadow-inner">
-            <button
-              onClick={() => setActiveTab("my_orders")}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
-                activeTab === "my_orders"
-                  ? "bg-white text-navy-950 shadow-sm"
-                  : "text-slate-600 hover:text-navy-950"
-              }`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5 text-banana-600" />
-              <span>Đơn Hàng Của Tôi ({myOrders.length})</span>
-            </button>
-            <button
-              onClick={() => setActiveTab("search")}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-2 ${
-                activeTab === "search"
-                  ? "bg-white text-navy-950 shadow-sm"
-                  : "text-slate-600 hover:text-navy-950"
-              }`}
-            >
-              <Search className="w-3.5 h-3.5 text-slate-500" />
-              <span>Tra Cứu Mã Đơn Khác</span>
-            </button>
-          </div>
-        </div>
-      )}
+      {/* SVG Icon Definitions */}
+      <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
+        <defs>
+          <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10" /></symbol>
+          <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+        </defs>
+      </svg>
 
-      {/* ========================================================== */}
-      {/* TAB 1: ĐƠN HÀNG CỦA TÔI (MY ORDERS CRM FOR CUSTOMERS) */}
-      {/* ========================================================== */}
-      {customer && activeTab === "my_orders" && (
-        <div className="max-w-5xl mx-auto space-y-6">
-          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      {/* Thanh điều hướng nhanh trên cùng */}
+      <div className="fixed top-2 left-4 z-50 flex items-center gap-2">
+        <Link
+          href="/galaxy"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 hover:bg-slate-900 text-white text-xs font-bold shadow-lg backdrop-blur border border-white/20 transition-all hover:scale-105"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          <span>Về Neo Cosmos</span>
+        </Link>
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 hover:bg-white text-slate-800 text-xs font-bold shadow-sm backdrop-blur border border-slate-300 transition-all"
+        >
+          <span>Trang gốc</span>
+        </Link>
+      </div>
+
+      <div className="track-wrap">
+        {/* Header Bar của trang tra cứu phong cách Cosmos */}
+        <header className="track-nav">
+          <div className="flex items-center gap-3">
+            <Link className="logo" href="/galaxy" aria-label="ChillBanana - Neo Cosmos" style={{ display: "inline-block", width: "48px", height: "48px" }}>
+              <svg viewBox="0 0 64 64" aria-hidden="true" style={{ width: "100%", height: "100%" }}>
+                <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
+                <path d="M50 16l3-3" stroke="#8a5a00" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            </Link>
             <div>
-              <h2 className="text-xl font-bold font-serif text-navy-900 flex items-center space-x-2">
-                <span>Quản Lý Đơn Hàng Của {customer.name}</span>
-                <span className="text-xs bg-banana-100 text-banana-900 px-2.5 py-0.5 rounded-full font-sans font-bold">
-                  Thành viên
-                </span>
-              </h2>
-              <p className="text-xs text-slate-500 mt-1">
-                Theo dõi toàn bộ đơn mua hộ từ Nhật Bản, kiểm tra tiến độ giao vận và chủ động hủy đơn khi cần.
-              </p>
+              <b style={{ fontSize: "1.1rem", fontFamily: "'Baloo 2', sans-serif", color: "var(--ink)" }}>ChillBanana</b>
+              <span className="jp" style={{ marginLeft: "6px" }}>JP ⇄ VN</span>
+              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--muted)" }}>Theo Dõi Vận Tải Thời Gian Thực</p>
             </div>
-            <button
-              onClick={fetchMyOrders}
-              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center space-x-1.5 transition-all self-start sm:self-auto"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loadingMyOrders ? "animate-spin" : ""}`} />
-              <span>Làm mới</span>
-            </button>
           </div>
 
-          {loadingMyOrders ? (
-            <div className="py-12 text-center text-slate-400 text-xs">
-              <RefreshCw className="w-6 h-6 animate-spin mx-auto text-banana-500 mb-2" />
-              Đang tải danh sách đơn hàng của bạn...
+          <div className="flex items-center gap-2">
+            <div className="track-badge track-badge-gold hidden sm:inline-flex">
+              1 JPY = {exchangeRate.toLocaleString("vi-VN")} đ
             </div>
-          ) : myOrders.length === 0 ? (
-            <div className="bg-white rounded-3xl p-12 border border-slate-200 text-center shadow-sm space-y-3">
-              <div className="w-14 h-14 bg-slate-100 rounded-2xl flex items-center justify-center mx-auto text-2xl">
-                🛍️
-              </div>
-              <h3 className="font-bold text-navy-900 text-sm">Bạn chưa có đơn hàng nào</h3>
-              <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Dán link sản phẩm từ Mercari, Amazon JP hoặc Rakuten vào công cụ tính giá để tạo đơn mua hộ đầu tiên!
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/#calculator"
-                  className="inline-flex items-center space-x-2 px-5 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all"
-                >
-                  <span>Tạo Đơn Hàng Ngay</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {myOrders.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-white rounded-3xl p-5 border border-slate-200 shadow-sm hover:shadow-md transition-all flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
-                  <div className="space-y-2 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-mono font-bold text-navy-900 text-sm">
-                        #{item.orderCode}
-                      </span>
-                      <span className="text-[11px] text-slate-400">
-                        {new Date(item.createdAt).toLocaleDateString("vi-VN")}
-                      </span>
-                      
-                      {/* Trạng thái đơn */}
-                      {item.status === "CANCELLED" ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
-                          ✕ Đã Hủy
-                        </span>
-                      ) : item.status === "COMPLETED" ? (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                          ✓ Hoàn Tất
-                        </span>
-                      ) : (
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-banana-100 text-banana-900 border border-banana-200">
-                          {item.status}
-                        </span>
-                      )}
+            <button className="chip" onClick={openCart} style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}>
+              Giỏ hàng
+              <span className="badge" style={{ marginLeft: "6px", background: "var(--banana)", color: "var(--ink)", padding: "1px 6px", borderRadius: "999px", fontSize: "0.7rem", fontWeight: 800 }}>{totalItems}</span>
+            </button>
+            {customer ? (
+              <Link href="/profile" className="chip" style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, textDecoration: "none", color: "var(--ink)" }}>
+                👤 {customer.name || "Tài khoản"}
+              </Link>
+            ) : (
+              <button className="chip" onClick={() => openAuthModal("login")} style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}>
+                Đăng nhập
+              </button>
+            )}
+          </div>
+        </header>
 
-                      {/* Thanh toán */}
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          item.paymentStatus === "REFUNDED"
-                            ? "bg-slate-100 text-slate-600"
-                            : item.paymentStatus === "UNPAID"
-                            ? "bg-slate-100 text-slate-600"
-                            : item.paymentStatus === "DEPOSITED_50"
-                            ? "bg-amber-100 text-amber-800"
-                            : "bg-emerald-100 text-emerald-800"
-                        }`}
-                      >
-                        {item.paymentStatus === "REFUNDED"
-                          ? "Đã hoàn tiền"
-                          : item.paymentStatus === "UNPAID"
-                          ? "Chờ cọc"
-                          : item.paymentStatus === "DEPOSITED_50"
-                          ? "Đã cọc 50%"
-                          : "Đã TT 100%"}
-                      </span>
-                    </div>
-
-                    <div>
-                      <h4 className="font-bold text-slate-900 text-sm">{item.productName}</h4>
-                      <p className="text-xs text-slate-500 mt-0.5">
-                        Tổng tiền: <strong className="text-navy-900 font-mono">{item.totalVnd.toLocaleString("vi-VN")} đ</strong> 
-                        {" "}(Tiền cọc: {item.depositAmountVnd.toLocaleString("vi-VN")} đ)
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
-                    <button
-                      onClick={() => {
-                        setOrder(item);
-                        setSearchCode(item.orderCode);
-                        setActiveTab("search");
-                      }}
-                      className="px-4 py-2 bg-navy-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-sm transition-all flex items-center space-x-1.5"
-                    >
-                      <PackageSearch className="w-3.5 h-3.5" />
-                      <span>Xem Hành Trình</span>
-                    </button>
-
-                    {item.canCancel && (
-                      <button
-                        onClick={() => openCustomerCancelModal(item)}
-                        className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all flex items-center space-x-1"
-                      >
-                        <Ban className="w-3.5 h-3.5" />
-                        <span>Hủy Đơn</span>
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Hero Section */}
+        <div className="track-hero">
+          <span className="tag">HỆ THỐNG THEO DÕI VẬN TẢI CHILLBANANA · TOKYO ⇄ VIỆT NAM</span>
+          <h1>Tra Cứu &amp; Quản Lý Đơn Hàng Mua Hộ</h1>
+          <p className="sub" style={{ maxWidth: "620px" }}>
+            Theo dõi chi tiết 7 chặng vận chuyển từ Tokyo về tận tay bạn tại Việt Nam. Quản lý trạng thái đơn hàng, kiểm tra cước bay và hỗ trợ hủy đơn linh hoạt.
+          </p>
         </div>
-      )}
 
-      {/* ========================================================== */}
-      {/* TAB 2: TRA CỨU THEO MÃ ĐƠN HÀNG (SEARCH VIEW) */}
-      {/* ========================================================== */}
-      {(!customer || activeTab === "search") && (
-        <>
-          {/* Search Bar */}
-          <div className="max-w-2xl mx-auto">
-            <form onSubmit={handleSearchSubmit} className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type="text"
-                  value={searchCode}
-                  onChange={(e) => setSearchCode(e.target.value)}
-                  placeholder="Nhập mã đơn hàng (Ví dụ: CB-2026-8921)"
-                  className="w-full pl-10 pr-4 py-3 bg-white border border-slate-300 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-banana-500 shadow-sm uppercase"
-                />
-                <Search className="absolute left-3.5 top-3.5 w-4 h-4 text-slate-400" />
+        {/* Banners phản hồi thanh toán VNPAY */}
+        {paymentStatus === "success" && (
+          <div className="track-card mb-6" style={{ background: "#e8f8f0", borderColor: "#a3e6cd" }}>
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" />
+              <div>
+                <p className="font-bold text-emerald-950">Thanh toán cọc qua VNPAY thành công! 🎉</p>
+                <p className="text-xs text-emerald-700">Đơn hàng của bạn đã được xác nhận tiền cọc. Đội ngũ kho Tokyo sẽ tiến hành mua hàng ngay lập tức!</p>
               </div>
+              <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-700 hover:text-emerald-950">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        {paymentStatus === "failed" && (
+          <div className="track-card mb-6" style={{ background: "#ffeef0", borderColor: "#fecdd6" }}>
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
+              <div>
+                <p className="font-bold text-rose-950">Thanh toán chưa hoàn tất</p>
+                <p className="text-xs text-rose-700">Giao dịch bị hủy hoặc chưa hoàn tất. Đơn hàng của bạn vẫn được lưu — bạn có thể chuyển khoản VietQR để tiếp tục.</p>
+              </div>
+              <button onClick={() => setPaymentStatus(null)} className="ml-auto text-rose-700 hover:text-rose-950">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Tab Switcher (Khi khách hàng đã đăng nhập) */}
+        {customer && (
+          <div className="track-tabs">
+            <div className="tabs" role="tablist">
+              <button
+                role="tab"
+                aria-selected={activeTab === "my_orders"}
+                onClick={() => setActiveTab("my_orders")}
+              >
+                <ShoppingBag className="w-4 h-4 inline mr-1.5" />
+                Đơn Hàng Của Tôi ({myOrders.length})
+              </button>
+              <button
+                role="tab"
+                aria-selected={activeTab === "search"}
+                onClick={() => setActiveTab("search")}
+              >
+                <Search className="w-4 h-4 inline mr-1.5" />
+                Tra Cứu Mã Đơn Khác
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========================================================== */}
+        {/* TAB 1: ĐƠN HÀNG CỦA TÔI (MY ORDERS CRM) */}
+        {/* ========================================================== */}
+        {customer && activeTab === "my_orders" && (
+          <div className="space-y-6">
+            <div className="track-card flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h2 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span>Quản Lý Đơn Hàng Của {customer.name}</span>
+                  <span className="track-badge track-badge-gold">Thành viên VIP</span>
+                </h2>
+                <p style={{ margin: "4px 0 0", fontSize: "0.78rem", color: "var(--muted)" }}>
+                  Theo dõi danh sách đơn mua hộ từ các sàn Nhật Bản, kiểm tra tiến độ giao vận và chủ động hủy đơn khi cần.
+                </p>
+              </div>
+              <button
+                onClick={fetchMyOrders}
+                className="btn2"
+                style={{ padding: "8px 16px", fontSize: "0.8rem", alignSelf: "flex-start" }}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 inline mr-1.5 ${loadingMyOrders ? "animate-spin" : ""}`} />
+                <span>Làm mới danh sách</span>
+              </button>
+            </div>
+
+            {loadingMyOrders ? (
+              <div className="track-card text-center py-12">
+                <RefreshCw className="w-8 h-8 animate-spin mx-auto text-amber-500 mb-2" />
+                <p style={{ fontSize: "0.85rem", color: "var(--muted)" }}>Đang đồng bộ danh sách đơn hàng từ máy chủ...</p>
+              </div>
+            ) : myOrders.length === 0 ? (
+              <div className="track-card text-center py-12 space-y-3">
+                <div style={{ fontSize: "2.5rem" }}>🛍️</div>
+                <h3 style={{ fontSize: "1.1rem", fontWeight: 800 }}>Bạn chưa có đơn hàng nào</h3>
+                <p style={{ fontSize: "0.82rem", color: "var(--muted)", maxWidth: "420px", margin: "0 auto" }}>
+                  Dán link sản phẩm từ Amazon JP, Mercari hoặc Rakuten vào công cụ tính giá tự động để tạo đơn mua hộ đầu tiên!
+                </p>
+                <div style={{ paddingTop: "8px" }}>
+                  <Link href="/galaxy#quote" className="cta" style={{ textDecoration: "none", display: "inline-flex" }}>
+                    Dán Link Mua Hộ Ngay <svg><use href="#i-arrow" /></svg>
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {myOrders.map((item) => (
+                  <div key={item.id} className="track-item flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-2 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span style={{ fontFamily: "monospace", fontWeight: 800, fontSize: "0.95rem", color: "var(--ink)" }}>
+                          #{item.orderCode}
+                        </span>
+                        <span style={{ fontSize: "0.72rem", color: "var(--muted)" }}>
+                          {new Date(item.createdAt).toLocaleDateString("vi-VN")}
+                        </span>
+
+                        {/* Trạng thái đơn hàng */}
+                        {item.status === "CANCELLED" ? (
+                          <span className="track-badge track-badge-rose">✕ Đã Hủy</span>
+                        ) : item.status === "COMPLETED" ? (
+                          <span className="track-badge track-badge-green">✓ Hoàn Tất</span>
+                        ) : (
+                          <span className="track-badge track-badge-blue">{item.status}</span>
+                        )}
+
+                        {/* Trạng thái thanh toán */}
+                        <span
+                          className={`track-badge ${
+                            item.paymentStatus === "REFUNDED"
+                              ? "track-badge-gray"
+                              : item.paymentStatus === "UNPAID"
+                              ? "track-badge-gray"
+                              : item.paymentStatus === "DEPOSITED_50"
+                              ? "track-badge-gold"
+                              : "track-badge-green"
+                          }`}
+                        >
+                          {item.paymentStatus === "REFUNDED"
+                            ? "Đã hoàn tiền"
+                            : item.paymentStatus === "UNPAID"
+                            ? "Chờ cọc"
+                            : item.paymentStatus === "DEPOSITED_50"
+                            ? "Đã cọc 50%"
+                            : "Đã TT 100%"}
+                        </span>
+                      </div>
+
+                      <div>
+                        <h4 style={{ fontWeight: 800, fontSize: "0.92rem", color: "var(--ink)", margin: 0 }}>
+                          {item.productName}
+                        </h4>
+                        <p style={{ fontSize: "0.78rem", color: "var(--muted)", margin: "4px 0 0" }}>
+                          Tổng chi phí: <strong style={{ color: "var(--ink)", fontFamily: "monospace" }}>{item.totalVnd.toLocaleString("vi-VN")} đ</strong>
+                          {" "}(Cọc trước: <b style={{ color: "#d97706" }}>{item.depositAmountVnd.toLocaleString("vi-VN")} đ</b>)
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+                      <button
+                        onClick={() => {
+                          setOrder(item);
+                          setSearchCode(item.orderCode);
+                          setActiveTab("search");
+                        }}
+                        className="cta"
+                        style={{ padding: "8px 18px", fontSize: "0.78rem" }}
+                      >
+                        <PackageSearch className="w-3.5 h-3.5 inline mr-1" />
+                        <span>Xem Hành Trình</span>
+                      </button>
+
+                      {item.canCancel && (
+                        <button
+                          onClick={() => openCustomerCancelModal(item)}
+                          className="btn2"
+                          style={{ padding: "8px 14px", fontSize: "0.78rem", color: "#c01048", borderColor: "#fecdd6" }}
+                        >
+                          <Ban className="w-3.5 h-3.5 inline mr-1" />
+                          <span>Hủy Đơn</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ========================================================== */}
+        {/* TAB 2: TRA CỨU THEO MÃ ĐƠN HÀNG (SEARCH VIEW) */}
+        {/* ========================================================== */}
+        {(!customer || activeTab === "search") && (
+          <div className="space-y-6">
+            {/* Thanh Search Bar phong cách Cosmos */}
+            <form onSubmit={handleSearchSubmit} className="track-search">
+              <input
+                type="text"
+                value={searchCode}
+                onChange={(e) => setSearchCode(e.target.value)}
+                placeholder="Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)"
+              />
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-navy-900 hover:bg-slate-800 text-white font-bold text-sm rounded-2xl shadow transition-all shrink-0 flex items-center space-x-1.5"
+                className="cta"
+                style={{ padding: "12px 24px", fontSize: "0.88rem", flexShrink: 0 }}
               >
-                {loading ? <span>Đang tìm...</span> : <span>Tra Cứu</span>}
+                {loading ? "Đang tìm..." : "Tra Cứu"} <svg><use href="#i-arrow" /></svg>
               </button>
             </form>
 
-            <p className="text-[11px] text-slate-400 text-center mt-2">
-              Mã đơn hàng có dạng <strong className="font-mono text-navy-900">CB-2026-XXXX</strong> được tạo tự động khi bạn đặt hàng trên trang chủ.
+            <p style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", margin: "8px 0 0" }}>
+              Mã đơn hàng có cấu trúc <strong style={{ fontFamily: "monospace", color: "var(--ink)" }}>CB-2026-XXXX</strong> được tạo khi bạn bấm Đặt cọc trên hệ thống.
             </p>
-          </div>
 
-          {/* Error display */}
-          {error && (
-            <div className="max-w-2xl mx-auto p-4 bg-red-50 border border-red-200 text-red-700 rounded-2xl text-xs flex items-center space-x-2">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <span>{error}</span>
-            </div>
-          )}
-
-          {/* Welcoming Guidance State */}
-          {!order && !loading && !error && (
-            <div className="max-w-2xl mx-auto text-center py-12 px-6 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-4">
-              <div className="w-16 h-16 rounded-2xl bg-banana-100 text-banana-700 flex items-center justify-center mx-auto text-2xl font-bold">
-                📦
-              </div>
-              <h3 className="text-lg font-serif font-bold text-navy-900">
-                Hệ Thống Theo Dõi Vận Tải Thời Gian Thực
-              </h3>
-              <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
-                Vui lòng nhập mã đơn hàng thực tế của bạn vào thanh tra cứu để theo dõi từng bước di chuyển của kiện hàng từ Nhật về Việt Nam.
-              </p>
-              <div className="pt-2">
-                <Link
-                  href="/#calculator"
-                  className="inline-flex items-center space-x-2 px-5 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-sm transition-all"
-                >
-                  <span>Đặt Hàng Thực Tế Tại Trang Chủ</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-            </div>
-          )}
-
-          {/* Order Detail & Timeline */}
-          {order && (
-            <div className="space-y-8 animate-in fade-in duration-300">
-              {/* Main Info Card & 7 Steps Stepper */}
-              <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-                
-                {/* Top Bar: Order Code & Badges */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
-                  <div>
-                    <div className="flex items-center space-x-2">
-                      <span className="text-xs font-bold text-banana-900 bg-banana-100 px-2.5 py-0.5 rounded-md border border-banana-200">
-                        Mã Đơn ChillBanana
-                      </span>
-                      <h2 className="text-xl sm:text-2xl font-bold font-serif text-navy-900">
-                        {order.orderCode}
-                      </h2>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Khởi tạo lúc: {new Date(order.createdAt).toLocaleString("vi-VN")}
-                    </p>
-                  </div>
-
-                  {/* Status Tags & Cancel Action */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    {order.isGroupBuy && (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-banana-100 text-banana-900 border border-banana-300">
-                        <Users className="w-3.5 h-3.5 mr-1" />
-                        Đơn Ghép Gộp (Group Buy)
-                      </span>
-                    )}
-
-                    {order.status === "CANCELLED" ? (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-300">
-                        <Ban className="w-3.5 h-3.5 mr-1" />
-                        Đơn Hàng Đã Hủy
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                        {order.paymentStatus === "REFUNDED"
-                          ? "Đã hoàn tiền"
-                          : order.paymentStatus === "PAID_100"
-                          ? "Đã thanh toán 100%"
-                          : order.paymentStatus === "DEPOSITED_50"
-                          ? "Đã cọc 50%"
-                          : "Chờ đặt cọc"}
-                      </span>
-                    )}
-
-                    {/* Nút Hủy Đơn Hàng Dành Cho Khách */}
-                    {order.canCancel && (
-                      <button
-                        onClick={() => openCustomerCancelModal(order)}
-                        className="inline-flex items-center space-x-1.5 px-3 py-1 text-xs font-bold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-full transition-colors"
-                      >
-                        <Ban className="w-3.5 h-3.5 text-rose-600" />
-                        <span>Hủy Đơn Hàng</span>
-                      </button>
-                    )}
-                  </div>
+            {/* Error display */}
+            {error && (
+              <div className="track-card max-w-2xl mx-auto" style={{ background: "#ffeef0", borderColor: "#fecdd6", padding: "16px" }}>
+                <div className="flex items-center gap-2 text-rose-800 text-xs font-bold">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{error}</span>
                 </div>
-
-                {/* Stepper 7 Bước */}
-                <div className="pt-2">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-                    Tiến Độ Xử Lý &amp; Giao Vận Đa Chặng (7 Bước)
-                  </h3>
-                  <TrackingStepper currentStatus={order.status} />
-                </div>
-
-                {/* Thông Tin Đối Tác Vận Chuyển */}
-                {(order.jpDomesticTrack || order.vnDomesticTrack) && (
-                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-                    {order.jpDomesticTrack && (
-                      <div className="flex items-center space-x-3">
-                        <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-navy-900 shadow-sm border">
-                          🇯🇵
-                        </div>
-                        <div>
-                          <p className="text-slate-500 font-medium">Vận đơn nội địa Nhật:</p>
-                          <p className="font-bold text-navy-900">{order.jpDomesticTrack}</p>
-                        </div>
-                      </div>
-                    )}
-                    {order.vnDomesticTrack && (
-                      <div className="flex items-center space-x-3">
-                        <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-navy-900 shadow-sm border">
-                          🇻🇳
-                        </div>
-                        <div>
-                          <p className="text-slate-500 font-medium">Vận đơn giao hàng tại Việt Nam:</p>
-                          <p className="font-bold text-emerald-700">{order.vnDomesticTrack}</p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
+            )}
 
-              {/* 2 Columns: Financial/Product Details + Realtime Activity Logs */}
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-                
-                {/* Left: Product & Financial Summary (5 cols) */}
-                <div className="lg:col-span-5 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
-                  <h3 className="text-sm font-bold text-navy-900 uppercase tracking-wider font-serif pb-3 border-b">
-                    Thông Tin Hàng Hóa &amp; Chi Phí
-                  </h3>
+            {/* Welcome guidance khi chưa tra cứu */}
+            {!order && !loading && !error && (
+              <div className="track-card max-w-2xl mx-auto text-center py-12 space-y-4">
+                <div style={{ width: "64px", height: "64px", borderRadius: "20px", background: "#fff8d6", color: "#8a5a00", display: "grid", placeItems: "center", margin: "0 auto", fontSize: "1.8rem" }}>
+                  📦
+                </div>
+                <h3 style={{ fontSize: "1.2rem", fontWeight: 800 }}>
+                  Theo Dõi Hành Trình Kiện Hàng 7 Bước
+                </h3>
+                <p style={{ fontSize: "0.82rem", color: "var(--muted)", maxWidth: "440px", margin: "0 auto", lineHeight: 1.6 }}>
+                  Nhập mã đơn hàng của bạn vào ô tìm kiếm phía trên để theo dõi từng chặng di chuyển thực tế từ kho Tokyo về đến tận cửa nhà bạn tại Việt Nam.
+                </p>
+                <div style={{ paddingTop: "8px" }}>
+                  <Link href="/galaxy#quote" className="btn2" style={{ textDecoration: "none", display: "inline-flex" }}>
+                    Tạo Đơn Hàng Mới Tại Neo Cosmos <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                  </Link>
+                </div>
+              </div>
+            )}
 
-                  <div className="space-y-3 text-xs">
+            {/* Chi tiết đơn hàng & Hành trình khi đã tìm thấy */}
+            {order && (
+              <div className="space-y-6">
+                {/* Card tổng quan & Stepper 7 bước */}
+                <div className="track-card space-y-6">
+                  {/* Top Bar: Order Code & Badges */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/60 gap-4">
                     <div>
-                      <span className="text-slate-400">Tên món hàng:</span>
-                      <p className="font-bold text-slate-800 text-sm mt-0.5">{order.productName}</p>
-                      {order.originalUrl && (
-                        <a
-                          href={order.originalUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center text-blue-600 hover:underline text-[11px] mt-1"
+                      <div className="flex items-center gap-2">
+                        <span className="track-badge track-badge-gold">Đơn Mua Hộ</span>
+                        <h2 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, fontFamily: "monospace", color: "var(--ink)" }}>
+                          {order.orderCode}
+                        </h2>
+                      </div>
+                      <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: "4px 0 0" }}>
+                        Khởi tạo lúc: {new Date(order.createdAt).toLocaleString("vi-VN")}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {order.isGroupBuy && (
+                        <span className="track-badge track-badge-purple">
+                          <Users className="w-3 h-3 mr-1" /> Gộp Đơn Tiết Kiệm (-25%)
+                        </span>
+                      )}
+
+                      {order.status === "CANCELLED" ? (
+                        <span className="track-badge track-badge-rose">
+                          <Ban className="w-3 h-3 mr-1" /> Đã Hủy
+                        </span>
+                      ) : (
+                        <span className="track-badge track-badge-blue">
+                          {order.paymentStatus === "REFUNDED"
+                            ? "Đã hoàn tiền"
+                            : order.paymentStatus === "PAID_100"
+                            ? "Đã thanh toán 100%"
+                            : order.paymentStatus === "DEPOSITED_50"
+                            ? "Đã cọc 50%"
+                            : "Chờ đặt cọc"}
+                        </span>
+                      )}
+
+                      {order.canCancel && (
+                        <button
+                          onClick={() => openCustomerCancelModal(order)}
+                          className="btn2"
+                          style={{ padding: "6px 14px", fontSize: "0.75rem", color: "#c01048", borderColor: "#fecdd6" }}
                         >
-                          <span>Xem link gốc tại Nhật</span>
-                          <ExternalLink className="w-3 h-3 ml-1" />
-                        </a>
+                          <Ban className="w-3.5 h-3.5 inline mr-1 text-rose-600" />
+                          <span>Hủy Đơn Hàng</span>
+                        </button>
                       )}
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-2 gap-3 pt-2">
-                      <div>
-                        <span className="text-slate-400">Trọng lượng:</span>
-                        <p className="font-bold text-slate-800">{order.weightKg} kg</p>
+                  {/* Stepper 7 Bước */}
+                  <div>
+                    <h3 style={{ fontSize: "0.75rem", fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.06em", color: "var(--muted)", margin: "0 0 16px" }}>
+                      Tiến Độ Vận Tải Quốc Tế &amp; Nội Địa (7 Chặng)
+                    </h3>
+                    <div className="track-stepper-box">
+                      <TrackingStepper currentStatus={order.status} />
+                    </div>
+                  </div>
+
+                  {/* Vận đơn đối tác nếu có */}
+                  {(order.jpDomesticTrack || order.vnDomesticTrack) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                      {order.jpDomesticTrack && (
+                        <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={{ fontSize: "1.5rem" }}>🇯🇵</span>
+                          <div>
+                            <small style={{ color: "var(--muted)", display: "block" }}>Vận đơn nội địa Nhật Bản:</small>
+                            <b style={{ fontFamily: "monospace", fontSize: "0.9rem" }}>{order.jpDomesticTrack}</b>
+                          </div>
+                        </div>
+                      )}
+                      {order.vnDomesticTrack && (
+                        <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
+                          <span style={{ fontSize: "1.5rem" }}>🇻🇳</span>
+                          <div>
+                            <small style={{ color: "var(--muted)", display: "block" }}>Vận đơn giao hàng tại Việt Nam:</small>
+                            <b style={{ fontFamily: "monospace", fontSize: "0.9rem", color: "#167a48" }}>{order.vnDomesticTrack}</b>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 2 Cột: Thông tin đơn hàng & Nhật ký hành trình */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                  {/* Cột Trái: Chi tiết kiện hàng & Tài chính */}
+                  <div className="lg:col-span-7 track-card space-y-4">
+                    <h3 style={{ fontSize: "1rem", fontWeight: 800, margin: 0, paddingBottom: "12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                      Chi Tiết Kiện Hàng &amp; Chi Phí
+                    </h3>
+
+                    <div style={{ fontSize: "0.85rem", lineHeight: 1.8 }}>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Tên sản phẩm:</span>
+                        <b style={{ textAlign: "right", maxWidth: "60%" }}>{order.productName}</b>
                       </div>
-                      <div>
-                        <span className="text-slate-400">Giá gốc Yên:</span>
-                        <p className="font-bold text-slate-800">{order.priceJpy.toLocaleString()} ¥</p>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Giá gốc tại Nhật:</span>
+                        <b>{order.priceJpy?.toLocaleString("vi-VN")} ¥</b>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Tỷ giá áp dụng:</span>
+                        <span>1 JPY = {order.exchangeRate} đ</span>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Tiền hàng quy đổi:</span>
+                        <b>{order.productPriceVnd?.toLocaleString("vi-VN")} đ</b>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Phí mua hộ &amp; bảo hiểm (4%):</span>
+                        <b>{order.serviceFeeVnd?.toLocaleString("vi-VN")} đ</b>
+                      </div>
+                      <div className="flex justify-between py-1 border-b border-slate-100">
+                        <span style={{ color: "var(--muted)" }}>Cước bay quốc tế:</span>
+                        <b style={{ color: "#167a48" }}>{order.isGroupBuy ? "Ưu đãi Gộp Đơn (-25%)" : "Cân đo thực tế khi về kho"}</b>
+                      </div>
+                      <div className="flex justify-between py-2 border-b border-slate-200">
+                        <span style={{ fontWeight: 800 }}>Tổng tiền hàng:</span>
+                        <b style={{ fontSize: "1.1rem", color: "var(--ink)" }}>{order.totalVnd?.toLocaleString("vi-VN")} đ</b>
+                      </div>
+                      <div className="flex justify-between py-2" style={{ background: "rgba(248,219,85,0.2)", padding: "10px 14px", borderRadius: "14px" }}>
+                        <span style={{ fontWeight: 800, color: "#8a5a00" }}>Tiền đặt cọc:</span>
+                        <b style={{ fontSize: "1.15rem", color: "#8a5a00" }}>{order.depositAmountVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                     </div>
 
-                    <div className="pt-3 border-t space-y-2 text-slate-600">
-                      <div className="flex justify-between">
-                        <span>Quy đổi tiền hàng (VND):</span>
-                        <span className="font-medium text-slate-900">{order.productPriceVnd.toLocaleString("vi-VN")} đ</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Phí mua hộ:</span>
-                        <span className="font-medium text-slate-900">{order.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Cước bay quốc tế:</span>
-                        <span className="font-medium text-slate-900">{order.shippingFeeVnd.toLocaleString("vi-VN")} đ</span>
-                      </div>
-                      <div className="flex justify-between pt-2 border-t font-bold text-sm text-navy-900">
-                        <span>Tổng Đơn Trọn Gói:</span>
-                        <span className="text-banana-600 text-base">{order.totalVnd.toLocaleString("vi-VN")} đ</span>
-                      </div>
-                      <div className={`flex justify-between text-xs p-2.5 rounded-xl border ${
-                        order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT"
-                          ? "bg-amber-50 border-amber-200"
-                          : "bg-emerald-50 border-emerald-200"
-                      }`}>
-                        <span className={order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT" ? "text-amber-800 font-medium" : "text-emerald-800"}>
-                          {order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT"
-                            ? "⏳ Cần đặt cọc (50%):"
-                            : "✅ Đã đặt cọc:"}
-                        </span>
-                        <span className={`font-bold ${order.paymentStatus === "UNPAID" || order.status === "PENDING_DEPOSIT" ? "text-amber-700" : "text-emerald-700"}`}>
-                          {order.depositAmountVnd.toLocaleString("vi-VN")} đ
-                        </span>
-                      </div>
+                    {/* Thông tin người nhận */}
+                    <div style={{ marginTop: "16px", paddingTop: "14px", borderTop: "1px dashed #cbd5e1", fontSize: "0.82rem" }}>
+                      <p style={{ margin: "2px 0", color: "var(--muted)" }}>Người nhận: <b style={{ color: "var(--ink)" }}>{order.customerName}</b> · SĐT: <b style={{ color: "var(--ink)" }}>{order.customerPhone}</b></p>
+                      <p style={{ margin: "2px 0", color: "var(--muted)" }}>Địa chỉ giao hàng: <span style={{ color: "var(--ink)" }}>{order.customerAddress}</span></p>
+                      {order.customerNote && (
+                        <p style={{ margin: "4px 0 0", color: "var(--muted)", fontStyle: "italic" }}>Ghi chú: "{order.customerNote}"</p>
+                      )}
                     </div>
-
                   </div>
-                </div>
 
-                {/* Right: Detailed Historical Log Stepper (7 cols) */}
-                <div className="lg:col-span-7 bg-white p-6 rounded-3xl border border-slate-200 shadow-sm space-y-5">
-                  <h3 className="text-sm font-bold text-navy-900 uppercase tracking-wider font-serif pb-3 border-b flex items-center justify-between">
-                    <span>Nhật Ký Hành Trình Thực Tế (Logs)</span>
-                    <span className="text-[11px] font-normal text-slate-400 lowercase">
-                      {order.trackingLogs.length} mốc ghi nhận
-                    </span>
-                  </h3>
+                  {/* Cột Phải: Nhật ký hành trình thời gian thực */}
+                  <div className="lg:col-span-5 track-card space-y-4">
+                    <h3 style={{ fontSize: "1rem", fontWeight: 800, margin: 0, paddingBottom: "12px", borderBottom: "1px solid rgba(0,0,0,0.06)" }}>
+                      Nhật Ký Hành Trình Thời Gian Thực
+                    </h3>
 
-                  <div className="space-y-6 relative before:absolute before:inset-0 before:left-3.5 before:w-0.5 before:bg-slate-200">
-                    {order.trackingLogs.map((log, idx) => (
-                      <div key={log.id || idx} className="relative flex items-start space-x-4">
-                        {/* Dot */}
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-extrabold shrink-0 shadow-sm z-10 ring-4 ring-white ${
-                          log.status === "CANCELLED"
-                            ? "bg-rose-500 text-white"
-                            : "bg-banana-500 text-navy-950"
-                        }`}>
-                          {log.status === "CANCELLED" ? "✕" : "✓"}
-                        </div>
-                        {/* Content */}
-                        <div className="flex-1 bg-slate-50 p-4 rounded-2xl border border-slate-100 space-y-1">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
-                            <h4 className="text-xs sm:text-sm font-bold text-navy-900">
-                              {log.title}
-                            </h4>
-                            <span className="text-[10px] text-slate-400 flex items-center">
-                              <Clock className="w-3 h-3 mr-1" />
-                              {log.createdAt}
-                            </span>
+                    {order.trackingLogs && order.trackingLogs.length > 0 ? (
+                      <div style={{ paddingTop: "8px" }}>
+                        {order.trackingLogs.map((log) => (
+                          <div key={log.id} className="track-log-item">
+                            <span className="track-log-dot" />
+                            <div style={{ fontSize: "0.85rem" }}>
+                              <b style={{ color: "var(--ink)", display: "block" }}>{log.title}</b>
+                              <p style={{ fontSize: "0.78rem", color: "var(--muted)", margin: "3px 0" }}>{log.description}</p>
+                              <div className="flex items-center gap-2" style={{ fontSize: "0.7rem", color: "#94a3b8" }}>
+                                <Clock className="w-3 h-3" />
+                                <span>{new Date(log.createdAt).toLocaleString("vi-VN")}</span>
+                                {log.location && <span>· 📍 {log.location}</span>}
+                              </div>
+                            </div>
                           </div>
-                          <p className="text-xs text-slate-600 leading-relaxed">
-                            {log.description}
-                          </p>
-                          <div className="pt-1 flex items-center text-[11px] text-slate-500 font-medium">
-                            <MapPin className="w-3 h-3 text-banana-600 mr-1" />
-                            <span>Vị trí: {log.location}</span>
-                          </div>
-                        </div>
+                        ))}
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-center py-8" style={{ color: "var(--muted)", fontSize: "0.8rem" }}>
+                        <Truck className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        Chưa có ghi nhận nhật ký vận chuyển mới cho đơn hàng này.
+                      </div>
+                    )}
                   </div>
                 </div>
-
               </div>
-            </div>
-          )}
-        </>
-      )}
+            )}
+          </div>
+        )}
+      </div>
 
-      {/* ========================================================== */}
-      {/* MODAL HỦY ĐƠN HÀNG (CUSTOMER SIDE) */}
-      {/* ========================================================== */}
+      {/* Modal Hủy Đơn Hàng Phía Khách Hàng */}
       {cancelTargetOrder && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative my-8">
-            <button
-              onClick={() => setCancelTargetOrder(null)}
-              className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
-            >
-              <X className="w-6 h-6" />
-            </button>
-
-            <div className="flex items-center space-x-2 text-rose-600 mb-1">
-              <Ban className="w-5 h-5" />
-              <h3 className="text-lg font-bold text-navy-900">
-                {cancelTargetOrder.status === "PENDING_DEPOSIT"
-                  ? `Xác Nhận Hủy Đơn #${cancelTargetOrder.orderCode}`
-                  : `Yêu Cầu Hủy Đơn & Hoàn Cọc #${cancelTargetOrder.orderCode}`}
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: "16px" }}>
+          <div className="track-card max-w-lg w-full space-y-4" style={{ background: "#fff" }}>
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0 }}>
+                Xác Nhận Hủy Đơn #{cancelTargetOrder.orderCode}
               </h3>
+              <button
+                type="button"
+                onClick={() => setCancelTargetOrder(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "var(--muted)" }}
+              >
+                ✕
+              </button>
             </div>
 
-            <p className="text-xs text-slate-500 mb-4">
-              Sản phẩm: <strong>{cancelTargetOrder.productName}</strong>
+            <p style={{ fontSize: "0.82rem", color: "var(--muted)", margin: 0 }}>
+              Bạn đang yêu cầu hủy đơn hàng <b>{cancelTargetOrder.productName}</b>. Vui lòng cho biết lý do để ChillBanana hỗ trợ tốt hơn:
             </p>
 
-            <form onSubmit={handleCustomerCancelSubmit} className="space-y-4 text-xs">
-              {cancelTargetOrder.status === "PENDING_DEPOSIT" ? (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-blue-800">
-                  💡 <strong>Đơn hàng đang chờ cọc:</strong> Bạn có thể hủy đơn ngay lập tức hoàn toàn miễn phí.
-                </div>
-              ) : (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800">
-                  ⚠️ <strong>Đơn hàng đã được tiếp nhận / đặt cọc:</strong> Yêu cầu của bạn sẽ được gửi đến bộ phận quản trị viên để liên hệ đối soát hoàn tiền từ người bán Nhật Bản.
-                </div>
-              )}
-
-              <div>
-                <label className="block font-bold text-slate-700 mb-1">
-                  Vui lòng chọn lý do hủy đơn: <span className="text-rose-500">*</span>
+            <form onSubmit={handleCustomerCancelSubmit} className="space-y-3">
+              {[
+                "Tôi đổi ý, không có nhu cầu mua nữa",
+                "Tìm được nơi bán khác giá tốt hơn",
+                "Thời gian giao dự kiến lâu hơn mong đợi",
+                "Tôi nhập sai thông tin địa chỉ / phân loại hàng",
+                "Khác",
+              ].map((reason) => (
+                <label key={reason} className="flex items-center gap-2" style={{ fontSize: "0.8rem", cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="reason"
+                    checked={cancelReason === reason}
+                    onChange={() => setCancelReason(reason)}
+                  />
+                  <span>{reason}</span>
                 </label>
-                <select
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
-                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-rose-500"
-                >
-                  <option value="Tôi đổi ý, không có nhu cầu mua nữa">
-                    1. Tôi đổi ý, không có nhu cầu mua nữa
-                  </option>
-                  <option value="Tôi tìm thấy link sản phẩm khác rẻ hơn">
-                    2. Tôi tìm thấy link sản phẩm khác rẻ hơn
-                  </option>
-                  <option value="Tôi nhập nhầm thông tin sản phẩm / ghi chú">
-                    3. Tôi nhập nhầm thông tin sản phẩm / ghi chú
-                  </option>
-                  <option value="Thời gian giao hàng dự kiến chưa phù hợp">
-                    4. Thời gian giao hàng dự kiến chưa phù hợp
-                  </option>
-                  <option value="Khác">5. Lý do khác (Nhập chi tiết bên dưới)</option>
-                </select>
-              </div>
+              ))}
 
               {cancelReason === "Khác" && (
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Nhập chi tiết lý do
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={cancelCustomReason}
-                    onChange={(e) => setCancelCustomReason(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-rose-500"
-                    placeholder="Vui lòng chia sẻ thêm lý do bạn muốn hủy đơn..."
-                    required
-                  />
-                </div>
+                <textarea
+                  value={cancelCustomReason}
+                  onChange={(e) => setCancelCustomReason(e.target.value)}
+                  placeholder="Nhập lý do cụ thể của bạn..."
+                  rows={2}
+                  className="w-full p-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-banana-400"
+                  required
+                />
               )}
 
-              <div className="pt-2 flex justify-end space-x-2">
+              <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setCancelTargetOrder(null)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold"
+                  className="btn2"
+                  style={{ padding: "8px 16px", fontSize: "0.8rem" }}
                 >
                   Đóng
                 </button>
                 <button
                   type="submit"
                   disabled={isCancelling}
-                  className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold disabled:opacity-50 flex items-center space-x-1.5"
+                  className="cta"
+                  style={{ padding: "8px 20px", fontSize: "0.8rem", background: "linear-gradient(135deg, #f43f5e, #e11d48)", color: "#fff" }}
                 >
-                  <Ban className="w-3.5 h-3.5" />
-                  <span>
-                    {isCancelling
-                      ? "Đang gửi..."
-                      : cancelTargetOrder.status === "PENDING_DEPOSIT"
-                      ? "Xác Nhận Hủy Đơn"
-                      : "Gửi Yêu Cầu Hủy"}
-                  </span>
+                  {isCancelling ? "Đang xử lý..." : "Xác Nhận Hủy Đơn"}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
+      {/* Nút Mascot AI Nổi */}
+      <aside className="neo" aria-label="Trợ lý ChillBanana AI">
+        <button
+          aria-label="Hỏi ChillBanana AI"
+          onClick={handleOpenAIChat}
+          title="Bấm để hỏi Neo AI về đơn hàng của bạn"
+        >
+          <svg viewBox="0 0 34 34" aria-hidden="true">
+            <circle cx="17" cy="17" r="12" fill="#fff" stroke="#2b7fb0" strokeWidth="2" />
+            <rect x="9" y="12" width="16" height="10" rx="5" fill="#5abae6" />
+            <circle cx="14" cy="17" r="1.6" fill="#fff" />
+            <circle cx="20" cy="17" r="1.6" fill="#fff" />
+          </svg>
+        </button>
+      </aside>
+
+      {/* Nút công tắc hiệu ứng */}
+      <button
+        className="fxbtn"
+        id="fx"
+        aria-pressed={!calmMode}
+        onClick={() => {
+          setCalmMode(!calmMode);
+          showToast(!calmMode ? "Đã tắt hiệu ứng chuyển động" : "Đã bật hiệu ứng chuyển động");
+        }}
+      >
+        ✨ Hiệu ứng: {!calmMode ? "Bật" : "Tắt"}
+      </button>
+
+      {/* Toast thông báo popup */}
+      <div className={`toast ${toastMsg ? "on" : ""}`} role="status">
+        {toastMsg}
+      </div>
     </div>
   );
 }
 
 export default function TrackingPage() {
   return (
-    <div className="py-10 max-w-[1600px] w-[95%] mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-      {/* Header */}
-      <div className="text-center max-w-3xl mx-auto">
-        <div className="inline-flex items-center space-x-1.5 text-xs font-bold text-banana-900 bg-banana-100 border border-banana-200 px-3 py-1 rounded-full uppercase tracking-wider mb-2">
-          <PackageSearch className="w-3.5 h-3.5 text-banana-700" />
-          <span>Hệ Thống Theo Dõi Vận Tải ChillBanana</span>
+    <Suspense
+      fallback={
+        <div style={{ padding: "48px 16px", textAlign: "center", color: "#64748b", fontSize: "0.85rem" }}>
+          Đang khởi tạo không gian vũ trụ tra cứu đơn hàng...
         </div>
-        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-serif font-bold text-navy-900">
-          Tra Cứu &amp; Quản Lý Đơn Hàng Mua Hộ
-        </h1>
-        <p className="text-xs sm:text-sm text-slate-500 mt-1.5">
-          Theo dõi chi tiết 7 chặng vận chuyển từ Tokyo về tận tay khách hàng tại Việt Nam, quản lý danh sách đơn hàng và hỗ trợ hủy đơn linh hoạt.
-        </p>
-      </div>
-
-      <Suspense fallback={
-        <div className="py-12 text-center text-slate-400 text-xs">
-          Đang tải dữ liệu tra cứu đơn hàng...
-        </div>
-      }>
-        <TrackingContent />
-      </Suspense>
-    </div>
+      }
+    >
+      <TrackingCosmosContent />
+    </Suspense>
   );
 }
