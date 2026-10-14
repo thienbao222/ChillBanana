@@ -961,12 +961,12 @@ export default function AIChatBot() {
             onPointerCancel={handlePetPointerUp}
             onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
             onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
-            className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+            className="pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"
           >
             <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
-              <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)] group-hover:drop-shadow-[0_8px_12px_rgba(15,23,42,0.38)]" />
+              <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full" />
               <span className="absolute right-0 top-2 flex h-4 w-4">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
                 <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
