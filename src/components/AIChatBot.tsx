@@ -447,8 +447,27 @@ export default function AIChatBot() {
           
           if (scrapeRes.ok && scrapeData.success) {
             const sd = scrapeData.data;
-            enrichedQuery += `\n\n[Hệ thống tự động chèn thông tin cào được từ link: Sản phẩm "${sd.title}", Giá web: ${sd.priceJpy} JPY, Hình ảnh: ${sd.imageUrl}. Hãy tính toán tỷ giá, phí mua hộ và hiển thị thẻ báo giá cho khách hàng dựa trên thông tin này.]`;
-            
+
+            // Xây dựng context phong phú hơn với dữ liệu Agent mới trích xuất
+            const variantInfo = sd.variants && sd.variants.length > 0
+              ? `Biến thể có sẵn: ${sd.variants.map((v: { label: string; priceJpy: number | null }) => `${v.label}${v.priceJpy ? ` (¥${v.priceJpy.toLocaleString()})` : ""}`).join(", ")}.`
+              : "";
+            const riskInfo = sd.riskFlags && sd.riskFlags.length > 0
+              ? `Cảnh báo: ${[
+                  sd.riskFlags.includes("voltage_100v") ? "⚡ Điện áp 100V - cần biến áp tại VN" : null,
+                  sd.riskFlags.includes("new_seller") || sd.riskFlags.includes("low_seller_rating") ? "⚠️ Shop ít đánh giá - khuyên kiểm tra kỹ" : null,
+                  sd.riskFlags.includes("limited_stock") ? "🔥 Hàng giới hạn - nên đặt sớm" : null,
+                ].filter(Boolean).join(", ")}.`
+              : "";
+            const sellerInfo = typeof sd.sellerRating === "number"
+              ? `Đánh giá shop: ${sd.sellerRating}/5.`
+              : "";
+            const stockInfo = sd.stockStatus && sd.stockStatus !== "unknown"
+              ? `Tình trạng kho: ${sd.stockStatus === "available" ? "Còn hàng" : sd.stockStatus === "sold_out" ? "Hết hàng" : "Hàng giới hạn"}.`
+              : "";
+
+            enrichedQuery += `\n\n[Hệ thống tự động chèn thông tin cào được từ link: Sản phẩm "${sd.title}"${sd.titleJp ? ` (${sd.titleJp})` : ""}, Giá web: ${sd.priceJpy} JPY, Hình ảnh: ${sd.imageUrl}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo} Hãy tính toán tỷ giá, phí mua hộ và hiển thị thẻ báo giá cho khách hàng dựa trên thông tin này.]`;
+
             // Remove the temporary "Đang kéo..." message
             setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
           } else {
@@ -552,6 +571,7 @@ export default function AIChatBot() {
     const file = imageItem?.getAsFile();
     if (!file) return;
     event.preventDefault();
+    event.stopPropagation();
     selectImageFile(file);
   };
 
@@ -627,18 +647,20 @@ export default function AIChatBot() {
         anime: "Anime / mô hình",
         other: "Khác",
       };
-      let replyText = "### 🔎 Gợi ý tìm sản phẩm từ ảnh\n\n";
-      if (analysis.nameJp) replyText += `**Tên đọc được bằng tiếng Nhật:** ${analysis.nameJp}\n`;
+
+      // ── Bước 1: Hiển thị thẻ nhận diện ảnh ──────────────────────────────────
+      let replyText = "### 🔎 Nhận diện sản phẩm từ ảnh\n\n";
+      if (analysis.nameJp) replyText += `**Tên tiếng Nhật:** ${analysis.nameJp}\n`;
       if (analysis.nameVi) replyText += `**Nhận diện sơ bộ:** ${analysis.nameVi}\n`;
       if (typeof analysis.visiblePriceJpy === "number") replyText += `**Giá nhìn thấy trong ảnh:** ¥${analysis.visiblePriceJpy.toLocaleString("ja-JP")} (chưa xác minh giá hiện tại)\n`;
       if (analysis.category) replyText += `**Danh mục:** ${categoryName[analysis.category] || "Khác"}\n`;
-      if (analysis.voltageWarning) replyText += "\n⚠️ Ảnh có dấu hiệu ghi 100V/AC100V. Hãy kiểm tra nhãn điện áp và dùng biến áp phù hợp trước khi sử dụng tại Việt Nam.\n";
+      if (analysis.voltageWarning) replyText += "\n⚠️ Ảnh có dấu hiệu ghi 100V/AC100V. Cần biến áp khi dùng tại Việt Nam.\n";
       if (analysis.riskNotes) replyText += `\n**Lưu ý từ ảnh:** ${analysis.riskNotes}\n`;
       if (analysis.description) replyText += `\n${analysis.description}\n`;
 
       const searchKeywords: string[] = Array.isArray(analysis.searchKeywords) ? analysis.searchKeywords : [];
       if (searchKeywords.length) {
-        replyText += "\n**Tìm theo từ khóa trên sàn Nhật:**\n";
+        replyText += "\n**Từ khóa tìm kiếm trên sàn Nhật:**\n";
         searchKeywords.forEach((keyword) => {
           const encoded = encodeURIComponent(keyword);
           replyText += `- **${keyword}** — [Amazon JP](https://www.amazon.co.jp/s?k=${encoded}) · [Mercari](https://jp.mercari.com/search?keyword=${encoded}) · [Rakuten](https://search.rakuten.co.jp/search/mall/${encoded}/)\n`;
@@ -646,7 +668,7 @@ export default function AIChatBot() {
       } else {
         replyText += "\nNeo chưa đọc đủ tên hoặc đặc điểm để tạo từ khóa đáng tin cậy. Bạn hãy gửi ảnh rõ phần nhãn/model hoặc nhập thêm tên sản phẩm nhé.\n";
       }
-      replyText += "\n*Đây là gợi ý từ nội dung nhìn thấy trong ảnh, không phải tìm kiếm ảnh ngược hay xác nhận sản phẩm trùng khớp. Neo không thể xác nhận tồn kho, hàng chính hãng hoặc giá hiện hành từ ảnh. Hãy mở kết quả sàn để tự kiểm tra rồi gửi link vào ô tính giá nếu muốn mua hộ.*";
+      replyText += "\n*Gợi ý từ nội dung nhìn thấy trong ảnh — không phải xác nhận sản phẩm trùng khớp.*";
 
       setMessages((previous) => [...previous, {
         id: "bot-img-" + Date.now(),
@@ -654,6 +676,74 @@ export default function AIChatBot() {
         text: replyText,
         time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       }]);
+
+      // ── Bước 2: Smart Search — tự động tìm sản phẩm catalog + tư vấn AI ─────
+      // Chỉ chạy khi có đủ từ khóa để tìm kiếm có ý nghĩa
+      if (searchKeywords.length > 0) {
+        const searchLoadingId = "bot-search-loading-" + Date.now();
+        setMessages((previous) => [...previous, {
+          id: searchLoadingId,
+          sender: "bot",
+          text: `🔍 Neo đang tìm sản phẩm phù hợp trong kho ChillBanana và trên sàn Nhật...`,
+          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+        }]);
+
+        try {
+          // Xây dựng query thông minh: kết hợp từ khóa tiếng Nhật + tên sản phẩm + danh mục
+          const keywordsText = searchKeywords.join(", ");
+          const productHint = analysis.nameVi || analysis.nameJp || "";
+          const categoryHint = categoryName[analysis.category] || "";
+          const userQuestionHint = question ? `Yêu cầu khách: ${question}.` : "";
+
+          const smartSearchQuery = [
+            `[SMART SEARCH TỪ ẢNH — Hãy tìm và tư vấn sản phẩm phù hợp nhất:]`,
+            `Từ khóa nhận diện được: ${keywordsText}.`,
+            productHint ? `Sản phẩm gần đúng: ${productHint}.` : "",
+            categoryHint ? `Danh mục: ${categoryHint}.` : "",
+            userQuestionHint,
+            `Nhiệm vụ:`,
+            `1. Kiểm tra DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP — nếu có sản phẩm cùng danh mục hoặc tương tự, hãy giới thiệu kèm ảnh (cú pháp ![tên](url)) và giá.`,
+            `2. Gợi ý thêm 2-3 sản phẩm nổi tiếng cùng loại trên Amazon JP/Mercari kèm link tìm kiếm.`,
+            `3. Nếu là đồ điện tử/gia dụng Nhật, nhắc về điện áp 100V.`,
+            `4. Kết thúc bằng hướng dẫn: "Copy link sản phẩm từ sàn Nhật và dán vào ô Dán Link Tính Giá để ChillBanana báo giá và mua hộ."`,
+          ].filter(Boolean).join(" ");
+
+          // Lấy lịch sử hội thoại hiện tại (không gồm message loading)
+          const currentHistory = messages
+            .filter((m) => !m.id.startsWith("system-scrape-") && !m.id.startsWith("bot-search-loading-"))
+            .map((m) => ({ role: m.sender === "user" ? "user" : "model", text: m.text }));
+
+          const chatRes = await fetch("/api/ai/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: smartSearchQuery,
+              personality,
+              history: currentHistory,
+            }),
+          });
+          const chatData = await chatRes.json();
+
+          // Xóa loading message, thay bằng kết quả tư vấn
+          setMessages((previous) => {
+            const filtered = previous.filter((m) => m.id !== searchLoadingId);
+            if (chatRes.ok && chatData.reply) {
+              return [...filtered, {
+                id: "bot-smart-search-" + Date.now(),
+                sender: "bot" as const,
+                text: chatData.reply,
+                time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
+              }];
+            }
+            // Nếu chat API lỗi — xóa loading, không thêm message lỗi (đã có bước 1)
+            return filtered;
+          });
+        } catch {
+          // Xóa loading nếu mạng lỗi, không cần báo thêm (bước 1 đã đủ thông tin)
+          setMessages((previous) => previous.filter((m) => !m.id.startsWith("bot-search-loading-")));
+        }
+      }
+
     } catch (error) {
       const message = error instanceof Error ? error.message : "Neo chưa phân tích được ảnh này. Vui lòng thử ảnh khác.";
       setMessages((previous) => [...previous, {
@@ -666,6 +756,7 @@ export default function AIChatBot() {
       setImageAnalyzing(false);
     }
   };
+
 
   const submitComposer = () => {
     if (loading || imageAnalyzing) return;

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent } from "@/lib/gemini-agent";
+import { askGeminiAgent, lookupOrderContext } from "@/lib/gemini-agent";
 import { prisma } from "@/lib/prisma";
 import { getCustomerFromRequest } from "@/lib/auth-session";
 import { AIPersonality } from "@/types";
@@ -82,10 +82,30 @@ export async function POST(req: NextRequest) {
         ).map((entry: any) => ({ role: entry.role, text: entry.text.slice(0, 2000) }))
       : [];
 
-    // 1. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
-    const reply = await askGeminiAgent(message, selectedPersonality, validHistory);
+    // 1. Agent 1.4: Order Lookup — tra cứu đơn hàng nếu khách nhắc mã CB-xxxx
+    //    Lookup chạy song song với các bước validate khác để tiết kiệm latency.
+    const guestEmailForLookup = customerSession?.email ?? null;
+    const guestPhoneForLookup: string | null = (() => {
+      const match = message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
+      return match ? match[0] : null;
+    })();
 
-    // 2. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
+    const orderContext = await lookupOrderContext(
+      message,
+      customerSession?.id ?? null,
+      guestEmailForLookup,
+      guestPhoneForLookup
+    );
+
+    // Prepend order context vào query để Gemini có đủ dữ liệu trả lời chính xác
+    const enrichedMessage = orderContext
+      ? `${orderContext}\n\n[Câu hỏi của khách:] ${message}`
+      : message;
+
+    // 2. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
+    const reply = await askGeminiAgent(enrichedMessage, selectedPersonality, validHistory);
+
+    // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();
     const keywordMap: Record<string, string> = {
       "mỹ phẩm": "cosmetics", "kem chống nắng": "cosmetics", "sữa rửa mặt": "cosmetics", "tẩy trang": "cosmetics", "son": "cosmetics", "serum": "cosmetics",

@@ -2,6 +2,10 @@ export const DEPOSIT_PERCENT_OPTIONS = [50, 100] as const;
 export type DepositPercent = (typeof DEPOSIT_PERCENT_OPTIONS)[number];
 export type RecordedPaymentStatus = "DEPOSITED_50" | "PAID_100";
 
+export function isRecordedPaymentStatus(value: string): value is RecordedPaymentStatus {
+  return value === "DEPOSITED_50" || value === "PAID_100";
+}
+
 export function parseDepositPercent(value: unknown): DepositPercent | null {
   return value === 50 || value === 100 ? value : null;
 }

@@ -342,3 +342,61 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     console.warn("[Mailer] Lỗi khi gửi email cập nhật trạng thái:", err);
   }
 }
+
+/**
+ * 4. Zalo OA — Gửi tin nhắn thông báo cho khách qua Zalo Official Account
+ *
+ * Cần cấu hình:
+ *   ZALO_OA_ACCESS_TOKEN — Access token của Zalo OA (lấy từ developers.zalo.me)
+ *
+ * Lưu ý: Zalo OA chỉ gửi được cho user đã Follow OA và đồng ý nhận tin.
+ * Nếu chưa có token → log giả lập, không crash.
+ */
+export async function sendZaloTrackingNotification(
+  zaloUserId: string,
+  orderCode: string,
+  statusTitle: string,
+  description: string
+): Promise<void> {
+  const token = process.env.ZALO_OA_ACCESS_TOKEN;
+  if (!token) {
+    console.log(
+      `[ZaloOA Sim] ℹ️ ZALO_OA_ACCESS_TOKEN chưa cấu hình. Bỏ qua gửi Zalo cho ${zaloUserId} | ${orderCode}: ${statusTitle}`
+    );
+    return;
+  }
+
+  // Zalo OA v3 Message API — gửi text template
+  const message = {
+    recipient: { user_id: zaloUserId },
+    message: {
+      text: `🍌 *ChillBanana* — Cập nhật đơn hàng #${orderCode}\n\n📦 ${statusTitle}\n${description}\n\nXem chi tiết: https://chill-banana.vercel.app/tracking?orderCode=${orderCode}`,
+    },
+  };
+
+  try {
+    const res = await fetch("https://openapi.zalo.me/v3.0/oa/message/cs", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        access_token: token,
+      },
+      body: JSON.stringify(message),
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!res.ok) {
+      const errBody = await res.text();
+      console.warn(`[ZaloOA] ⚠️ Lỗi gửi tin Zalo (${res.status}): ${errBody}`);
+    } else {
+      const data = await res.json();
+      if (data.error === 0) {
+        console.log(`[ZaloOA] ✅ Đã gửi tin Zalo cho userId=${zaloUserId} | ${orderCode}: ${statusTitle}`);
+      } else {
+        console.warn(`[ZaloOA] ⚠️ Zalo OA trả lỗi ${data.error}: ${data.message}`);
+      }
+    }
+  } catch (err) {
+    console.warn("[ZaloOA] ⚠️ Không thể gửi tin Zalo:", err);
+  }
+}

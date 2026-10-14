@@ -68,6 +68,7 @@ model Order {
   trackingLogs     TrackingLog[]
   orderItems       OrderItem[]
   paymentTransactions PaymentTransaction[]
+  purchaseTask     PurchaseTask?         // Nhóm 3: Auto-Purchasing Agent task
   reservationExpiresAt DateTime?
   reservationReleasedAt DateTime?
   createdAt        DateTime      @default(now())
@@ -219,9 +220,59 @@ model Customer {
   phone        String?
   address      String?
   emailVerifiedAt DateTime?
+  zaloUserId   String?   // Zalo OA User ID — lưu khi khách Follow OA (để gửi thông báo Zalo)
   orders       Order[]
   chatSessions ChatSession[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
 
+// ─── Nhóm 3: Auto-Purchasing Agent (Phase A — API-first, human-in-the-loop) ──
+
+// Task mua hộ — được tạo sau khi khách đã cọc đủ và Admin muốn kích hoạt mua tự động
+// Phase A: Chỉ hỗ trợ Amazon JP (link deep) và Rakuten (API tìm sản phẩm)
+// Phase B: Mercari/Yahoo (Playwright) — chưa triển khai
+model PurchaseTask {
+  id              String    @id @default(cuid())
+  orderId         String    @unique
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Platform nguồn (phát hiện tự động từ originalUrl của Order)
+  platform        String    // "amazon_jp" | "rakuten" | "mercari" | "yahoo_jp" | "unknown"
+
+  // Trạng thái task
+  // QUEUED: Chờ Admin duyệt
+  // APPROVED: Admin đã duyệt, sẵn sàng để nhân viên JP thực hiện
+  // IN_PROGRESS: Đang tiến hành mua (nhân viên JP xác nhận)
+  // PURCHASED: Đã mua thành công — có externalOrderId
+  // FAILED: Mua thất bại (hết hàng, lỗi thanh toán...)
+  // CANCELLED: Admin hủy task
+  status          String    @default("QUEUED")
+
+  // Thông tin tìm kiếm / tra cứu từ platform
+  externalProductId String? // ASIN (Amazon) hoặc Item Code (Rakuten)
+  externalOrderId   String? // Mã đơn tại sàn nguồn (sau khi mua thành công)
+  platformUrl       String? // URL xác nhận / deeplink để nhân viên JP mua
+
+  // Thông tin báo giá từ platform (snapshot tại thời điểm tạo task)
+  scrapedPriceJpy Int?      // Giá thực tế lấy từ platform (so sánh với priceJpy của Order)
+  priceDiffPercent Float?   // Chênh lệch giá (nếu > 5% → cảnh báo)
+
+  // Audit trail
+  createdByAdmin  String?   // Username Admin tạo task
+  approvedByAdmin String?   // Username Admin duyệt (bắt buộc trước khi IN_PROGRESS)
+  approvedAt      DateTime?
+  purchasedByStaff String?  // Nhân viên JP xác nhận đã mua
+  purchasedAt     DateTime?
+
+  attempts        Int       @default(0)
+  lastError       String?
+  adminNote       String?   // Ghi chú nội bộ
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+  @@index([platform])
+  @@index([createdAt])
+}

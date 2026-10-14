@@ -4,6 +4,118 @@ import { fetchLiveExchangeRate } from "./exchange-rate";
 import { chatKeyPool } from "./api-key-manager";
 import { prisma } from "./prisma";
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Agent 1.4: Order Lookup Tool
+// Phát hiện mã đơn hàng trong tin nhắn khách → tra cứu DB → trả context text
+// để inject vào system prompt Gemini khi trả lời.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Regex nhận diện mã đơn ChillBanana. Ví dụ: CB-2026-abc123-45678 */
+const ORDER_CODE_REGEX = /\bCB-\d{4}-[A-Z0-9]+-\d{4,6}\b/gi;
+
+/** Map trạng thái đơn hàng sang tiếng Việt thân thiện */
+const STATUS_LABEL: Record<string, string> = {
+  PENDING_DEPOSIT: "⏳ Chờ đặt cọc",
+  PURCHASING_JP:   "🛒 Đang mua tại Nhật Bản",
+  WAREHOUSE_JP:    "📦 Đã vào kho Nhật (Tokyo/Osaka)",
+  IN_TRANSIT_AIR:  "✈️ Đang bay về Việt Nam",
+  WAREHOUSE_VN:    "🏭 Đã về kho Việt Nam",
+  LOCAL_DELIVERY:  "🚚 Đang giao hàng nội địa",
+  COMPLETED:       "✅ Giao hàng thành công",
+  CANCELLED:       "❌ Đã hủy đơn hàng",
+};
+
+/**
+ * Tra cứu đơn hàng từ tin nhắn của khách.
+ * Chỉ cho phép:
+ *   - Khách đã đăng nhập: xem đơn thuộc tài khoản mình
+ *   - Khách guest: xem đơn nếu email/phone trong tin nhắn khớp với đơn đó
+ * Trả về chuỗi context hoặc null nếu không tìm thấy mã đơn.
+ */
+export async function lookupOrderContext(
+  message: string,
+  customerId: string | null,
+  guestEmail: string | null,
+  guestPhone: string | null
+): Promise<string | null> {
+  const codes = message.match(ORDER_CODE_REGEX);
+  if (!codes || codes.length === 0) return null;
+
+  // Chỉ lookup mã đầu tiên tìm thấy để tránh spam DB
+  const orderCode = codes[0].toUpperCase();
+
+  try {
+    const order = await prisma.order.findUnique({
+      where: { orderCode },
+      select: {
+        orderCode: true,
+        productName: true,
+        status: true,
+        paymentStatus: true,
+        totalVnd: true,
+        depositAmountVnd: true,
+        jpDomesticTrack: true,
+        vnDomesticTrack: true,
+        customerId: true,
+        customerEmail: true,
+        customerPhone: true,
+        createdAt: true,
+        trackingLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 3,
+          select: { title: true, description: true, location: true, createdAt: true },
+        },
+      },
+    });
+
+    if (!order) {
+      return `[KHÔNG TÌM THẤY ĐƠN HÀNG: Mã "${orderCode}" không tồn tại trong hệ thống ChillBanana. Hãy thông báo cho khách và đề nghị kiểm tra lại mã đơn.]`;
+    }
+
+    // Kiểm tra quyền truy cập
+    const isOwner =
+      (customerId && order.customerId === customerId) ||
+      (guestEmail && order.customerEmail?.toLowerCase() === guestEmail.toLowerCase()) ||
+      (guestPhone && order.customerPhone?.replace(/\D/g, "") === guestPhone.replace(/\D/g, ""));
+
+    if (!isOwner) {
+      return `[BẢO MẬT: Tìm thấy đơn hàng nhưng thông tin khách hàng không khớp. TUYỆT ĐỐI không tiết lộ chi tiết đơn hàng. Yêu cầu khách xác nhận email hoặc số điện thoại đã dùng khi đặt đơn.]`;
+    }
+
+    // Format context đơn hàng
+    const statusLabel = STATUS_LABEL[order.status] ?? order.status;
+    const latestLog = order.trackingLogs[0];
+    const trackingInfo = [
+      order.jpDomesticTrack ? `Mã vận đơn Nhật: ${order.jpDomesticTrack}` : null,
+      order.vnDomesticTrack ? `Mã vận đơn VN: ${order.vnDomesticTrack}` : null,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+
+    const lines = [
+      `[DỮ LIỆU ĐƠN HÀNG THỰC TẾ TỪ HỆ THỐNG — Dùng để trả lời chính xác cho khách:]`,
+      `📋 Mã đơn: ${order.orderCode}`,
+      `🛍️ Sản phẩm: ${order.productName}`,
+      `📊 Trạng thái hiện tại: ${statusLabel}`,
+      `💳 Thanh toán: ${order.paymentStatus}`,
+      `💰 Tổng đơn: ${order.totalVnd.toLocaleString("vi-VN")}đ | Đã cọc: ${order.depositAmountVnd.toLocaleString("vi-VN")}đ`,
+      trackingInfo ? `🔍 ${trackingInfo}` : null,
+      latestLog
+        ? `📍 Cập nhật mới nhất (${new Date(latestLog.createdAt).toLocaleDateString("vi-VN")}): ${latestLog.title} — ${latestLog.description} (${latestLog.location})`
+        : null,
+      `📅 Ngày tạo đơn: ${new Date(order.createdAt).toLocaleDateString("vi-VN")}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    return lines;
+  } catch (err) {
+    console.warn("[lookupOrderContext] DB error:", err);
+    return null;
+  }
+}
+
+
 export interface GeminiAgentMessage {
   role: "user" | "model" | "assistant";
   text: string;
