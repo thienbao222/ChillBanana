@@ -9,7 +9,7 @@ src/
   context/             App-wide client state and providers
   features/
     ai/
-      customer/        Neo chat UI, customer assistant, product/order context
+      customer/        Neo chat UI, assistant, typed read-only support tools and policy
       admin/           Admin AI modules, snapshots, and saved daily insights
     orders/             Order lifecycle and status-transition policy
     logistics/         Carrier tracking adapters and status normalization
@@ -44,3 +44,10 @@ Prisma schema changes must be additive and reviewed with a generated client befo
 - Centralize price calculation and keep the AI from inventing shipping weight, availability, or final prices.
 - Protect guest order detail with email verification and persist the admin daily insight for later review.
 - Keep all verification on local/isolated data. No Neon, SMTP, carrier, payment-provider, or production cron call is needed to build this stage.
+
+## Stage 2 scope
+
+- Customer-support tool contracts and intent/policy rules live in `src/features/ai/customer/support-policy.ts`; server-side read-only queries and source evidence live in `support-tools.ts`.
+- The chat route authenticates and validates request context, then calls those tools before asking Gemini to explain results. Order access checks remain server-side; order and quote responses use deterministic server text where model-generated details could expose private data or alter arithmetic.
+- Keep the shared price rules in `src/features/pricing/calculator.ts`. AI support reads those rules and must not copy or invent a separate formula.
+- Run the local representative checks with `npm run eval:customer-support`. These checks do not connect to a database or external provider.

@@ -9,10 +9,16 @@
 
 ## Stage 2 — Reliable customer-support tools
 
-- Define typed, read-only tools for catalog search, quote estimates, order status, shipping policy, and product compatibility.
-- Return structured tool results with source timestamps, known/unknown fields, and links to the relevant website pages.
-- Have Neo ask a clarifying question when required inputs are missing (for example, product price or measured weight) instead of guessing.
-- Add representative evaluations for price arithmetic, stock-slot wording, image identification limits, and order access boundaries before expanding prompts.
+**Implemented on the isolated Stage 2 branch.** The chat API runs server-owned read-only support tools before calling Gemini:
+
+- Current catalog search with request-slot wording, voltage notes, and clearly labeled estimates. It never presents request slots as marketplace/warehouse stock.
+- Quote estimate using the shared price calculator and a current, non-stale exchange rate. It requires a numeric JPY price and allowlisted HTTPS marketplace URL; shipping is excluded until actual weight is known. The estimate is deterministic and labeled as unconfirmed.
+- Order status lookup only after matching customer session or valid guest email-access token. Unauthorized and unknown order codes receive the same generic response. Order answers are generated from a fixed server template rather than the model.
+- Shipping policy from the same constants used by the price calculator, and compatibility notes from the catalog. Missing model/voltage/weight facts are surfaced as unknown.
+- Structured evidence carries tool status, observation/data timestamps, known/unknown fields, and relative website links. The chat UI displays verified-source timestamps and links.
+- Representative local evaluations cover intent routing, order access, marketplace URL/price validation, quote arithmetic, request-slot wording, tool access levels, and image identification limits (`npm run eval:customer-support`).
+
+No Prisma schema change or database write was introduced for these tools. Existing chat-session logging remains in the chat route. The Stage 2 branch must be reviewed and deployed separately; it has not been pushed to `main` or run against Neon Production.
 
 ## Stage 3 — Admin operations copilot
 

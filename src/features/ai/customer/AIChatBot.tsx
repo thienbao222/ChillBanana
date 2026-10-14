@@ -21,7 +21,21 @@ interface Message {
   text: string;
   isGuardrail?: boolean;
   imagePreviewUrl?: string;
+  sources?: MessageSource[];
   time: string;
+}
+
+interface MessageSource {
+  label: string;
+  href: string;
+  checkedAt: string;
+}
+
+function formatSourceTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "vừa kiểm tra"
+    : date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
 type PendingImage = { file: File; previewUrl: string };
@@ -482,7 +496,7 @@ export default function AIChatBot() {
              // Let Gemini handle the error or raw link
              setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
           }
-        } catch (err) {
+        } catch {
            setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
         }
       }
@@ -506,18 +520,31 @@ export default function AIChatBot() {
 
       const data = await res.json();
       if (res.ok && data.reply) {
+        const sources: MessageSource[] = Array.isArray(data.sources)
+          ? data.sources.flatMap((source: unknown) => {
+              if (!source || typeof source !== "object") return [];
+              const item = source as Record<string, unknown>;
+              if (
+                typeof item.label !== "string" || typeof item.href !== "string" ||
+                !item.href.startsWith("/") || item.href.startsWith("//") ||
+                typeof item.checkedAt !== "string"
+              ) return [];
+              return [{ label: item.label.slice(0, 80), href: item.href, checkedAt: item.checkedAt }];
+            })
+          : [];
         const botMsg: Message = {
           id: "bot-" + Date.now(),
           sender: "bot",
           text: data.reply,
           isGuardrail: data.isGuardrailTriggered,
+          sources,
           time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         };
         setMessages((prev) => [...prev, botMsg]);
       } else {
         throw new Error(data.error || "Lỗi không xác định");
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -1021,6 +1048,15 @@ export default function AIChatBot() {
                     <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
                       {message.imagePreviewUrl && <img src={message.imagePreviewUrl} alt="Ảnh sản phẩm người dùng gửi" className="mb-2 max-h-36 max-w-full rounded-lg object-contain" />}
                       <div className="break-words">{renderMessageContent(message)}</div>
+                      {message.sender === "bot" && message.sources?.length ? (
+                        <div className="mt-2 border-t border-slate-100 pt-1.5 text-[9px] text-slate-500">
+                          Kiểm tra lúc {formatSourceTime(message.sources[0].checkedAt)} · {message.sources.map((source, index) => (
+                            <React.Fragment key={`${source.href}-${index}`}>
+                              {index > 0 ? ", " : ""}<a href={source.href} className="font-semibold text-blue-700 underline decoration-blue-200 underline-offset-2">{source.label}</a>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1164,6 +1200,16 @@ export default function AIChatBot() {
                   <div className="whitespace-pre-line space-y-2 leading-relaxed">
                     {renderMessageContent(msg)}
                   </div>
+                  {msg.sender === "bot" && msg.sources?.length ? (
+                    <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] leading-relaxed text-slate-500">
+                      <span className="font-semibold">Nguồn đã kiểm tra lúc {formatSourceTime(msg.sources[0].checkedAt)}:</span>{" "}
+                      {msg.sources.map((source, index) => (
+                        <React.Fragment key={`${source.href}-${index}`}>
+                          {index > 0 ? ", " : ""}<a href={source.href} className="font-semibold text-blue-700 underline decoration-blue-200 underline-offset-2">{source.label}</a>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  ) : null}
                   <span
                     className={`block text-[9px] mt-1 text-right ${
                       msg.sender === "user" ? "text-slate-400" : "text-slate-400"

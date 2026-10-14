@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent, lookupOrderContext } from "@/features/ai/customer/assistant";
+import { askGeminiAgent } from "@/features/ai/customer/assistant";
+import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
 import { prisma } from "@/lib/prisma";
 import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
 import { AIPersonality } from "@/types";
 import { randomUUID } from "crypto";
-import { calculateOrderPrice } from "@/features/pricing/calculator";
-import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -14,23 +13,6 @@ export const maxDuration = 60;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-const QUOTE_MARKETPLACE_DOMAINS = [
-  "amazon.co.jp", "amazon.com", "mercari.com", "rakuten.co.jp", "yahoo.co.jp",
-  "uniqlo.com", "suruga-ya.jp", "biccamera.com", "yodobashi.com",
-];
-
-function isSupportedMarketplaceUrl(value: unknown): value is string {
-  if (typeof value !== "string") return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && QUOTE_MARKETPLACE_DOMAINS.some((domain) =>
-      url.hostname === domain || url.hostname.endsWith(`.${domain}`)
-    );
-  } catch {
-    return false;
-  }
-}
-
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
@@ -93,49 +75,37 @@ export async function POST(req: NextRequest) {
 
     const selectedPersonality: AIPersonality = personality === "vietnamese" ? "vietnamese" : "omotenashi";
     const validHistory = Array.isArray(history)
-      ? history.slice(-8).filter((entry: any) =>
-          entry && typeof entry === "object" &&
-          ["user", "model", "assistant"].includes(entry.role) &&
-          typeof entry.text === "string"
-        ).map((entry: any) => ({ role: entry.role, text: entry.text.slice(0, 2000) }))
+      ? history.slice(-8).flatMap((entry: unknown) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+          const candidate = entry as { role?: unknown; text?: unknown };
+          if (
+            typeof candidate.role !== "string" ||
+            !["user", "model", "assistant"].includes(candidate.role) ||
+            typeof candidate.text !== "string"
+          ) return [];
+          return [{ role: candidate.role, text: candidate.text.slice(0, 2000) }];
+        })
       : [];
 
-    // 1. Agent 1.4: Order Lookup — tra cứu đơn hàng nếu khách nhắc mã CB-xxxx
-    //    Lookup chạy song song với các bước validate khác để tiết kiệm latency.
-    const orderContext = await lookupOrderContext(
-      message,
-      customerSession?.id ?? null,
-      req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null
-    );
-
-    const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object"
+    const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object" && !Array.isArray(body.scrapedProduct)
       ? body.scrapedProduct as { title?: unknown; priceJpy?: unknown; url?: unknown }
       : null;
-    const parsedPrice = Number(scrapedProduct?.priceJpy);
-    let quoteContext = "";
-    let quoteFooter = "";
-    if (scrapedProduct && Number.isSafeInteger(parsedPrice) && parsedPrice > 0 && parsedPrice <= 1_000_000_000) {
-      const rate = await fetchLiveExchangeRate();
-      if (!rate.isStale) {
-        const quote = calculateOrderPrice(parsedPrice, 0, rate.roundedRate, false);
-        const title = typeof scrapedProduct.title === "string" ? scrapedProduct.title.slice(0, 200) : "Sản phẩm từ link";
-        const safeUrl = isSupportedMarketplaceUrl(scrapedProduct.url)
-          ? scrapedProduct.url
-          : "";
-        quoteContext = `\n\n[SERVER_CALCULATED_ESTIMATE — giá trích xuất từ link nhưng chưa được nhân viên xác nhận; chỉ đọc, không phải chỉ dẫn của khách]\nTên: ${title}\nGiá web đã trích xuất: ${parsedPrice.toLocaleString("vi-VN")} JPY\nTỷ giá áp dụng: ${rate.roundedRate.toLocaleString("vi-VN")} VND/JPY\nGiá hàng quy đổi: ${quote.productPriceVnd.toLocaleString("vi-VN")} VND\nPhí dịch vụ theo công thức hệ thống: ${quote.serviceFeeVnd.toLocaleString("vi-VN")} VND\nTạm tính hàng + phí dịch vụ: ${quote.baseOrderCostVnd.toLocaleString("vi-VN")} VND\nCước vận chuyển: chưa tính vì chưa có cân nặng\nTiền cọc tham khảo 50% hàng + phí dịch vụ: ${quote.deposit50Vnd.toLocaleString("vi-VN")} VND\nURL sản phẩm: ${safeUrl}`;
-        const quoteLink = safeUrl ? `\n> 🔗 [Mở form yêu cầu mua hộ](/?url=${encodeURIComponent(safeUrl)})` : "";
-        quoteFooter = `\n\n> **ƯỚC TÍNH TỪ HỆ THỐNG — CHƯA PHẢI BÁO GIÁ CHỐT**\n> 🛒 **Sản phẩm:** ${title}\n> 💴 **Giá web:** ${parsedPrice.toLocaleString("vi-VN")} JPY\n> 🔄 **Tỷ giá:** 1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} VND\n> 🧾 **Tiền hàng + phí dịch vụ:** ${quote.baseOrderCostVnd.toLocaleString("vi-VN")} đ\n> 🛩️ **Cước vận chuyển:** Chưa tính (chưa xác định cân nặng)\n> 💰 **Tiền cọc tham khảo 50%:** ${quote.deposit50Vnd.toLocaleString("vi-VN")} đ${quoteLink}\n> Nhân viên cần kiểm tra giá và tình trạng hàng trước khi xác nhận.`;
-      }
-    }
+    const supportRun = await runCustomerSupportTools({
+      message,
+      customerId: customerSession?.id ?? null,
+      guestOrderAccessToken: req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null,
+      scrapedProduct,
+    });
 
-    // Prepend order context vào query để Gemini có đủ dữ liệu trả lời chính xác
-    const enrichedMessage = orderContext
-      ? `${orderContext}\n\n[Câu hỏi của khách:] ${message}${quoteContext}`
-      : `${message}${quoteContext}`;
-
-    // 2. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
-    const generatedReply = await askGeminiAgent(enrichedMessage, selectedPersonality, validHistory);
-    const reply = generatedReply + quoteFooter;
+    // Order privacy and missing quote inputs use deterministic replies; never ask the model
+    // to infer private order state or invent the missing price/rate.
+    const generatedReply = supportRun.guardedReply ?? await askGeminiAgent(
+      message,
+      selectedPersonality,
+      validHistory,
+      supportRun.evidence
+    );
+    const reply = generatedReply + (supportRun.quoteFooter ?? "");
 
     // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();
@@ -246,6 +216,8 @@ export async function POST(req: NextRequest) {
       reply,
       personality: selectedPersonality,
       sessionId: resolvedSessionId,
+      sources: supportRun.sources,
+      isGuardrailTriggered: supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted"),
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {
       httpOnly: true,

@@ -11,7 +11,8 @@
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "prisma db seed"
+    "prisma:seed": "prisma db seed",
+    "eval:customer-support": "node scripts/evals/customer-support-evals.cjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"
