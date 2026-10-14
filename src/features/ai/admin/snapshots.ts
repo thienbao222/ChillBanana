@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { recentVietnamDateKeys, vietnamDateKey, vietnamDayStart } from "@/lib/vietnam-time";
-import { ADMIN_AI_MODULES } from "@/lib/admin-ai/definitions";
-import type { AdminAiModuleId } from "@/lib/admin-ai/definitions";
-export { ADMIN_AI_MODULES } from "@/lib/admin-ai/definitions";
-export type { AdminAiModuleId } from "@/lib/admin-ai/definitions";
+import { ADMIN_AI_MODULES } from "./definitions";
+import type { AdminAiModuleId } from "./definitions";
+export { ADMIN_AI_MODULES } from "./definitions";
+export type { AdminAiModuleId } from "./definitions";
 
 function windowForDays(days: number) {
   const dateKeys = recentVietnamDateKeys(days);

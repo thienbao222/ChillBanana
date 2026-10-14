@@ -20,7 +20,7 @@ import {
 import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
-import { ORDER_STATUS_FLOW } from "@/lib/order-policy";
+import { ORDER_STATUS_FLOW } from "@/features/orders/policy";
 
 const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
   PENDING_DEPOSIT: "1. Chờ cọc",

@@ -15,7 +15,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { hasTrackingStatusChanged, queryTrackingStatus, shouldCompleteOrder } from "@/lib/logistics-api";
+import { hasTrackingStatusChanged, queryTrackingStatus, shouldCompleteOrder } from "@/features/logistics/tracking-service";
 import { sendOrderStatusUpdateEmail, sendZaloTrackingNotification } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";

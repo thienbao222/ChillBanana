@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 
 export const dynamic = "force-dynamic";
 

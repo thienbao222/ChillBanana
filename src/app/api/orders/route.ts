@@ -1,10 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
-import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
-import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
-import { MIN_ORDER_THRESHOLD_VND } from "@/lib/order-policy";
-import { getDepositAmount, parseDepositPercent } from "@/lib/payment-policy";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import {
+  createGuestOrderAccessToken,
+  isAdminRequest,
+  getCustomerFromRequest,
+  ORDER_ACCESS_COOKIE_NAME,
+} from "@/lib/auth-session";
+import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
+import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
 
 export const dynamic = "force-dynamic";
 
@@ -309,20 +315,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
-        const productPriceVnd = Math.round(verifiedPriceJpy * liveRate);
-        const serviceFeeVnd = productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0;
-        const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
+        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy);
+        const { productPriceVnd, serviceFeeVnd, baseOrderCostVnd, shippingFeeVnd, totalVnd } = price;
         if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
           throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
         }
-
-        let shippingRate = 185000;
-        if (body.isGroupBuy && verifiedWeightKg <= 0.5) {
-          shippingRate = Math.round(185000 * 0.75);
-        }
-        const shippingFeeVnd = verifiedWeightKg > 0 ? Math.round(verifiedWeightKg * shippingRate) : 0;
-
-        const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
 
         const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
         const hasCatalogReservation = orderItemsData.some((item) => item.itemType === "CATALOG");
@@ -383,7 +380,21 @@ export async function POST(req: NextRequest) {
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
 
-      return NextResponse.json({ success: true, order: createdDbOrder });
+      const response = NextResponse.json({ success: true, order: createdDbOrder });
+      if (!customerId && customerEmail) {
+        response.cookies.set(
+          ORDER_ACCESS_COOKIE_NAME,
+          createGuestOrderAccessToken(orderCode, customerEmail),
+          {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/api",
+            maxAge: 60 * 60 * 24 * 7,
+          }
+        );
+      }
+      return response;
     } catch (dbErr: any) {
       console.error("Lưu đơn hàng vào Prisma thất bại:", dbErr);
       if (dbErr.message === "ORDER_PRICE_TOO_LOW") {

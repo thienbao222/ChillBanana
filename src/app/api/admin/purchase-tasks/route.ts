@@ -12,7 +12,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
-import { createPurchaseTask } from "@/lib/purchase-agent";
+import { createPurchaseTask } from "@/features/purchasing/service";
 
 export const dynamic = "force-dynamic";
 

@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { createCustomerEmailVerificationToken } from "@/lib/auth-session";
+import { createCustomerEmailVerificationToken, createGuestOrderAccessToken } from "@/lib/auth-session";
 
 function getBaseUrl(): string {
   // 1. Ưu tiên APP_URL do người dùng cài đặt
@@ -29,6 +29,33 @@ function escapeHtml(value: string) {
     '"': "&quot;",
     "'": "&#39;",
   })[char]!);
+}
+
+function buildGuestOrderTrackingUrl(order: { orderCode: string; customerEmail?: string | null }): string {
+  const code = encodeURIComponent(order.orderCode);
+  const token = order.customerEmail
+    ? `&access=${encodeURIComponent(createGuestOrderAccessToken(order.orderCode, order.customerEmail))}`
+    : "";
+  return `${getBaseUrl()}/tracking?orderCode=${code}${token}`;
+}
+
+export async function sendGuestOrderAccessEmail(order: { orderCode: string; customerEmail: string; customerName?: string | null }): Promise<boolean> {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return false;
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
+  const orderCode = escapeHtml(order.orderCode);
+  const customerName = escapeHtml(order.customerName || "Quý khách");
+  try {
+    await getTransporter().sendMail({
+      from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
+      to: order.customerEmail,
+      subject: `[ChillBanana] Liên kết tra cứu đơn #${orderCode}`,
+      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1e293b;line-height:1.6"><h2>Tra cứu đơn hàng ChillBanana</h2><p>Xin chào ${customerName},</p><p>Bạn vừa yêu cầu truy cập đơn <strong>#${orderCode}</strong>. Bấm liên kết bên dưới để xem trạng thái đơn trong 7 ngày:</p><p><a href="${trackingUrl}" style="display:inline-block;background:#0f172a;color:#fbbf24;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">Mở đơn hàng</a></p><p>Nếu bạn không yêu cầu liên kết này, hãy bỏ qua email.</p></div>`,
+    });
+    return true;
+  } catch (error) {
+    console.error(`[Mailer] Không gửi được liên kết tra cứu đơn #${orderCode}:`, error);
+    return false;
+  }
 }
 
 // Cấu hình transporter Nodemailer cho ChillBanana
@@ -81,8 +108,7 @@ export async function sendOrderCreatedEmail(order: any) {
     return;
   }
 
-  const baseUrl = getBaseUrl();
-  const trackingUrl = `${baseUrl}/tracking?orderCode=${order.orderCode}`;
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
   const orderCode = escapeHtml(String(order.orderCode || ""));
   const customerName = escapeHtml(String(order.customerName || "Quý khách"));
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
@@ -155,7 +181,7 @@ export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
     return false;
   }
 
-  const trackingUrl = `${getBaseUrl()}/tracking?orderCode=${encodeURIComponent(order.orderCode)}`;
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
   const money = (value: number) => Number(value || 0).toLocaleString("vi-VN");
   const customerName = escapeHtml(String(order.customerName || "Quý khách"));
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
@@ -208,8 +234,7 @@ export async function sendPaymentSuccessEmail(order: any) {
     return;
   }
 
-  const baseUrl = getBaseUrl();
-  const trackingUrl = `${baseUrl}/tracking?orderCode=${order.orderCode}`;
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
   const customerName = escapeHtml(String(order.customerName || "Quý khách"));
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const orderCode = escapeHtml(String(order.orderCode || ""));
@@ -283,8 +308,7 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     return;
   }
 
-  const baseUrl = getBaseUrl();
-  const trackingUrl = `${baseUrl}/tracking?orderCode=${order.orderCode}`;
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
 
   const isCancelled = order.status === "CANCELLED";
   const headerBg = isCancelled

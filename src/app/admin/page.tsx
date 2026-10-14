@@ -21,8 +21,8 @@ import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/
 import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
-import PurchaseTasksTab from "@/app/admin/components/PurchaseTasksTab";
-import { AdminAiModuleId } from "@/lib/admin-ai/definitions";
+import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
+import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 import "./admin-neoday.css";
 
 function AdminDashboardPageInner() {

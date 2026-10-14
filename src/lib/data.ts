@@ -1,11 +1,12 @@
 import type { CuratedProduct, NewsItem, ProductCategory } from "@/types";
 import curatedProducts from "./curated-products.json";
-import { MIN_ORDER_THRESHOLD_VND } from "./order-policy";
-
-export const DEFAULT_EXCHANGE_RATE = 172; // 1 JPY = 172 VND
-export const AIR_SHIPPING_PER_KG = 185000; // 185.000đ / kg
-export { MIN_ORDER_THRESHOLD_VND } from "./order-policy";
-export const SERVICE_FEE_RATE = 0.04; // 4% phí mua hộ & bảo hiểm trọn gói
+export {
+  AIR_SHIPPING_PER_KG,
+  DEFAULT_EXCHANGE_RATE,
+  MIN_ORDER_THRESHOLD_VND,
+  SERVICE_FEE_RATE,
+  calculateOrderPrice,
+} from "@/features/pricing/calculator";
 
 export const CATEGORIES: ProductCategory[] = [
   {
@@ -37,7 +38,6 @@ export const CATEGORIES: ProductCategory[] = [
     badge: "Authentic 100%",
   },
 ];
-
 export const CURATED_PRODUCTS: CuratedProduct[] = curatedProducts as CuratedProduct[];
 
 export const KIZUNA_NEWS: NewsItem[] = [
@@ -109,47 +109,3 @@ export const KIZUNA_NEWS: NewsItem[] = [
     `,
   },
 ];
-
-// Helper tính toán chi phí trọn gói
-export function calculateOrderPrice(
-  priceJpy: number,
-  weightKg: number = 0,
-  exchangeRate: number = DEFAULT_EXCHANGE_RATE,
-  isGroupBuy: boolean = false
-) {
-  const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(20000, Math.round(productPriceVnd * SERVICE_FEE_RATE));
-  
-  // Tiền cọc đợt 1 (50% tiền hàng + phí dịch vụ mua hộ)
-  const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
-  const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
-
-  // Cước bay quốc tế: Chỉ tính khi có cân nặng thực tế từ kho hoặc khách tự nhập tham khảo
-  let shippingFeeVnd = 0;
-  if (weightKg > 0) {
-    let shippingRate = AIR_SHIPPING_PER_KG;
-    if (isGroupBuy && weightKg <= 0.5) {
-      shippingRate = Math.round(AIR_SHIPPING_PER_KG * 0.75);
-    }
-    shippingFeeVnd = Math.round(weightKg * shippingRate);
-  }
-
-  const totalVnd = baseOrderCostVnd + shippingFeeVnd;
-  const isUnderMinOrder = baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND;
-  const minOrderDiffVnd = Math.max(0, MIN_ORDER_THRESHOLD_VND - baseOrderCostVnd);
-
-  return {
-    priceJpy,
-    exchangeRate,
-    productPriceVnd,
-    serviceFeeVnd,
-    baseOrderCostVnd,
-    shippingFeeVnd,
-    weightKg,
-    totalVnd,
-    deposit50Vnd,
-    isUnderMinOrder,
-    minOrderDiffVnd,
-    canGroupBuy: weightKg <= 0.8 || isUnderMinOrder,
-  };
-}

@@ -1,8 +1,9 @@
 import { AIPersonality, CuratedProduct } from "@/types";
-import { AIR_SHIPPING_PER_KG } from "./data";
-import { fetchLiveExchangeRate } from "./exchange-rate";
-import { chatKeyPool } from "./api-key-manager";
-import { prisma } from "./prisma";
+import { AIR_SHIPPING_PER_KG } from "@/features/pricing/calculator";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import { chatKeyPool } from "@/lib/api-key-manager";
+import { prisma } from "@/lib/prisma";
+import { hasGuestOrderAccessForEmail, verifyGuestOrderAccessToken } from "@/lib/auth-session";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Agent 1.4: Order Lookup Tool
@@ -27,22 +28,23 @@ const STATUS_LABEL: Record<string, string> = {
 
 /**
  * Tra cứu đơn hàng từ tin nhắn của khách.
- * Chỉ cho phép:
- *   - Khách đã đăng nhập: xem đơn thuộc tài khoản mình
- *   - Khách guest: xem đơn nếu email/phone trong tin nhắn khớp với đơn đó
+ * Chỉ cho phép chủ tài khoản hoặc khách guest có link xác minh còn hạn.
  * Trả về chuỗi context hoặc null nếu không tìm thấy mã đơn.
  */
 export async function lookupOrderContext(
   message: string,
   customerId: string | null,
-  guestEmail: string | null,
-  guestPhone: string | null
+  guestOrderAccessToken: string | null
 ): Promise<string | null> {
   const codes = message.match(ORDER_CODE_REGEX);
   if (!codes || codes.length === 0) return null;
 
   // Chỉ lookup mã đầu tiên tìm thấy để tránh spam DB
   const orderCode = codes[0].toUpperCase();
+  const guestAccess = guestOrderAccessToken ? verifyGuestOrderAccessToken(guestOrderAccessToken) : null;
+  if (!customerId && guestAccess?.orderCode !== orderCode) {
+    return `[BẢO MẬT: Không xác nhận đơn hàng có tồn tại hay không và không tiết lộ chi tiết. Hướng dẫn khách đăng nhập đúng tài khoản hoặc yêu cầu liên kết xác minh qua email.]`;
+  }
 
   try {
     const order = await prisma.order.findUnique({
@@ -58,7 +60,6 @@ export async function lookupOrderContext(
         vnDomesticTrack: true,
         customerId: true,
         customerEmail: true,
-        customerPhone: true,
         createdAt: true,
         trackingLogs: {
           orderBy: { createdAt: "desc" },
@@ -69,17 +70,17 @@ export async function lookupOrderContext(
     });
 
     if (!order) {
-      return `[KHÔNG TÌM THẤY ĐƠN HÀNG: Mã "${orderCode}" không tồn tại trong hệ thống ChillBanana. Hãy thông báo cho khách và đề nghị kiểm tra lại mã đơn.]`;
+      return `[KHÔNG THỂ TRA CỨU ĐƠN: Không xác nhận mã đơn có tồn tại hay không. Hướng dẫn khách kiểm tra mã, đăng nhập đúng tài khoản hoặc mở liên kết xác minh được gửi qua email.]`;
     }
 
     // Kiểm tra quyền truy cập
-    const isOwner =
+    const isOwner = Boolean(
       (customerId && order.customerId === customerId) ||
-      (guestEmail && order.customerEmail?.toLowerCase() === guestEmail.toLowerCase()) ||
-      (guestPhone && order.customerPhone?.replace(/\D/g, "") === guestPhone.replace(/\D/g, ""));
+      hasGuestOrderAccessForEmail(guestOrderAccessToken, order.orderCode, order.customerEmail)
+    );
 
     if (!isOwner) {
-      return `[BẢO MẬT: Tìm thấy đơn hàng nhưng thông tin khách hàng không khớp. TUYỆT ĐỐI không tiết lộ chi tiết đơn hàng. Yêu cầu khách xác nhận email hoặc số điện thoại đã dùng khi đặt đơn.]`;
+      return `[BẢO MẬT: Không xác nhận đơn hàng có tồn tại hay không và không tiết lộ chi tiết. Hướng dẫn khách đăng nhập đúng tài khoản hoặc yêu cầu liên kết xác minh qua email.]`;
     }
 
     // Format context đơn hàng
@@ -139,7 +140,7 @@ export function buildSystemInstruction(products: CuratedProduct[], liveRate: num
     .slice(0, 15)
     .map(
       (p) =>
-        `- [${p.name}] | Giá gốc: ${p.priceJpy.toLocaleString()} ¥ (~${Math.round(p.priceJpy * liveRate).toLocaleString()} đ) | Danh mục: ${p.categoryName} | Tình trạng: CÓ SẴN TẠI KHO SHOP (Giao ngay 24-48h) | Ảnh: ${p.imageUrl} | Chi tiết: ${p.description}`
+        `- [${p.name}] | Giá gốc tham khảo: ${p.priceJpy.toLocaleString()} ¥ (~${Math.round(p.priceJpy * liveRate).toLocaleString()} đ, chưa gồm phí/cước) | Danh mục: ${p.categoryName} | Suất đặt mua hộ còn lại trên website: ${p.stockSlots} | Ảnh: ${p.imageUrl} | Chi tiết: ${p.description}`
     )
     .join("\n");
 
@@ -149,19 +150,19 @@ Bạn là "ChillBanana AI Agent" - Trợ lý mua sắm và mua hộ hàng nội 
 THÔNG TIN TỶ GIÁ THAM KHẢO (KHÔNG TỰ BỊA HOẶC BỎ QUA TRẠNG THÁI):
 - Tỷ giá JPY -> VND: 1 JPY = ${liveRate} VND (${isRateStale ? "DỮ LIỆU DỰ PHÒNG/CŨ, KHÔNG PHẢI TỶ GIÁ HIỆN TẠI" : "dữ liệu tham khảo mới nhất lấy được"})
 - ${isRateStale ? "Không được khẳng định đây là tỷ giá hiện tại hoặc tạo báo giá chốt; nếu khách hỏi giá, hãy nói tỷ giá đang được cập nhật và hướng dẫn kiểm tra lại sau." : "Có thể dùng tỷ giá này để đưa ra ước tính, nhưng nhắc khách đây là giá tham khảo."}
-- Cước vận chuyển đường hàng không: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg (3-5 ngày về kho VN)
+- Cước vận chuyển đường hàng không tham khảo: ${AIR_SHIPPING_PER_KG.toLocaleString()} đ/kg; thời gian phụ thuộc lịch vận chuyển thực tế.
 - Đặt cọc mua hộ: 50% tiền hàng + phí dịch vụ (chưa bao gồm cước bay)
 - Bảo hiểm đền bù 100% khi mất mát, gãy vỡ
 
 CHIẾN LƯỢC TƯ VẤN SẢN PHẨM (BẮT BUỘC KẾT HỢP CẢ 2 NGUỒN):
 Khi khách hàng hỏi tư vấn sản phẩm chung chung (ví dụ: trị mụn, dưỡng da, kem chống nắng, máy cạo râu, mô hình Anime, đồ điện tử...):
 
-1. NGUỒN 1 - SẢN PHẨM CÓ SẴN TẠI SHOP CHILLBANANA (Ưu tiên giới thiệu trước):
-   - Kiểm tra "DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP" bên dưới. Nếu có sản phẩm phù hợp hoặc liên quan, hãy giới thiệu trước:
-     * Nêu rõ: "Sản phẩm CÓ SẴN tại kho ChillBanana (Giao ngay 24-48h tại VN, không cần chờ order từ Nhật)".
+1. NGUỒN 1 - SẢN PHẨM CÓ SUẤT ĐẶT MUA HỘ TRÊN WEBSITE:
+   - Chỉ giới thiệu sản phẩm có "Suất đặt mua hộ còn lại" lớn hơn 0. Đây là suất nhận yêu cầu mua hộ, KHÔNG đồng nghĩa hàng đang ở kho Việt Nam hay đã xác nhận tồn kho tại sàn Nhật.
+     * Không cam kết thời gian giao hàng hoặc tình trạng hàng ngoài thông tin hiện có.
      * BẮT BUỘC chèn ảnh sản phẩm bằng cú pháp Markdown ảnh: ![Tên sản phẩm](URL_ảnh)
      * Nêu giá Yên, giá quy đổi VND, công dụng nổi bật.
-     * Nhắc khách có thể kéo xuống mục "Sản Phẩm Có Sẵn Tại Kho ChillBanana" trên trang chủ để thêm vào giỏ hàng hoặc bấm mua ngay.
+     * Nhắc khách kiểm tra suất đặt trên website hoặc gửi link để được kiểm tra lại trước khi xác nhận.
 
 2. NGUỒN 2 - GỢI Ý MỞ RỘNG TRÊN CÁC SÀN NỘI ĐỊA NHẬT (Amazon JP, Mercari, Rakuten):
    - Gợi ý thêm 2-3 sản phẩm nổi tiếng chuyên sâu khác của Nhật cùng phân khúc mà shop chưa đăng sẵn.
@@ -173,14 +174,10 @@ QUY TẮC HIỂN THỊ HÌNH ẢNH (BẮT BUỘC):
   ![Tên sản phẩm](URL_ảnh)
 - TUYỆT ĐỐI KHÔNG viết dạng văn bản thô "* Link ảnh: https://..." mà PHẢI viết dạng cú pháp ảnh Markdown ![Tên](URL).
 
-TỰ ĐỘNG BÁO GIÁ KHI CÓ LINK SẢN PHẨM:
-- Khi hệ thống truyền vào "Hệ thống tự động chèn thông tin cào được từ link...", bạn PHẢI tính toán và in ra THẺ BÁO GIÁ theo ĐÚNG định dạng blockquote sau (có dấu > ở đầu mỗi dòng):
-> **BÁO GIÁ TỰ ĐỘNG CHILLBANANA** 
-> 🛒 **Sản phẩm:** [Tên sản phẩm]
-> 💴 **Giá web:** [X] JPY
-> 🛩️ **Cước bay dự kiến:** [Y] VNĐ (tạm tính 0.5kg - 1kg tùy sản phẩm)
-> 💰 **TỔNG TIỀN:** [Z] VNĐ
-> ⚡ [ĐẶT CỌC 50% NGAY TẠI ĐÂY](/?url=[link_sản_phẩm])
+TƯ VẤN GIÁ AN TOÀN:
+- Không tự tính tổng tiền, cước bay, tiền cọc hoặc cam kết có hàng. Chỉ lặp lại con số trong khối báo giá do máy chủ cung cấp; không sửa, làm tròn lại hoặc suy diễn thêm.
+- Khối báo giá của máy chủ có thể chưa gồm cước vận chuyển nếu chưa biết cân nặng. Báo giá cuối cùng được xác nhận sau khi nhân viên kiểm tra đơn.
+- Không tự tạo link thanh toán hay nói khách đã đặt cọc; hướng khách sang form yêu cầu mua hộ trên website.
 
 LƯU Ý KỸ THUẬT, AN TOÀN & ĐÁNH GIÁ TỪ BÊN THỨ 3 (QUAN TRỌNG):
 - Đồ điện nội địa Nhật: LUÔN NHẮC điện áp 100V cần dùng biến áp tại VN.
@@ -189,7 +186,7 @@ LƯU Ý KỸ THUẬT, AN TOÀN & ĐÁNH GIÁ TỪ BÊN THỨ 3 (QUAN TRỌNG):
 - Uy tín người bán (Mercari/Yahoo): Hãy chủ động nhắc khách "Lưu ý kiểm tra số sao đánh giá (review) của người bán trên sàn, tránh mua từ tài khoản 0 đánh giá hoặc nhiều đánh giá xấu (bad ratings)".
 - Từ chối lịch sự các chủ đề nhạy cảm (chính trị, 18+, vũ khí, chất cấm).
 
-DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP CHILLBANANA:
+DANH MỤC SẢN PHẨM CÒN SUẤT ĐẶT MUA HỘ TRÊN WEBSITE:
 ${catalogSummary}
 `;
 }
@@ -197,8 +194,7 @@ ${catalogSummary}
 export async function askGeminiAgent(
   userQuery: string,
   personality: AIPersonality,
-  conversationHistory: { role: string; text: string }[] = [],
-  _apiKey?: string  // Legacy param — pool handles key selection internally
+  conversationHistory: { role: string; text: string }[] = []
 ): Promise<string> {
   const isOmo = personality === "omotenashi";
 
@@ -214,6 +210,7 @@ export async function askGeminiAgent(
       : "Phong cách: Thân thiện Chill Việt Nam - Vui vẻ, gần gũi, xưng Em, gọi Anh/Chị/Bạn, nhiệt tình mách mẹo săn deal, tư vấn sale hời.";
 
   const products = (await prisma.product.findMany({
+    where: { stockSlots: { gt: 0 } },
     orderBy: { createdAt: "desc" },
     take: 30, // Limit context to 30 products to avoid huge prompt
   })) as unknown as CuratedProduct[];
@@ -273,7 +270,7 @@ export async function askGeminiAgent(
       } else {
         chatKeyPool.markError(activeKey, response.status);
       }
-    } catch (apiErr) {
+    } catch {
       chatKeyPool.markError(activeKey, 500);
     }
   }

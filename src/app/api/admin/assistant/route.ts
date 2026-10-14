@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { getAdminAiModuleSnapshot, isAdminAiModuleId } from "@/lib/admin-ai/modules";
+import { getAdminAiModuleSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
 import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";

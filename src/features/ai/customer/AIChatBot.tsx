@@ -424,6 +424,7 @@ export default function AIChatBot() {
 
     try {
       let enrichedQuery = query;
+      let scrapedProductForQuote: { title: string; priceJpy: number; url: string } | null = null;
 
       // Detect links for automatic scraping
       const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -466,7 +467,14 @@ export default function AIChatBot() {
               ? `Tình trạng kho: ${sd.stockStatus === "available" ? "Còn hàng" : sd.stockStatus === "sold_out" ? "Hết hàng" : "Hàng giới hạn"}.`
               : "";
 
-            enrichedQuery += `\n\n[Hệ thống tự động chèn thông tin cào được từ link: Sản phẩm "${sd.title}"${sd.titleJp ? ` (${sd.titleJp})` : ""}, Giá web: ${sd.priceJpy} JPY, Hình ảnh: ${sd.imageUrl}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo} Hãy tính toán tỷ giá, phí mua hộ và hiển thị thẻ báo giá cho khách hàng dựa trên thông tin này.]`;
+            enrichedQuery += `\n\nThông tin trích xuất từ link: ${sd.title}${sd.titleJp ? ` (${sd.titleJp})` : ""}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo}`;
+            if (Number.isSafeInteger(sd.priceJpy) && sd.priceJpy > 0) {
+              scrapedProductForQuote = {
+                title: String(sd.title || "Sản phẩm từ link").slice(0, 200),
+                priceJpy: sd.priceJpy,
+                url: String(sd.url || targetUrl),
+              };
+            }
 
             // Remove the temporary "Đang kéo..." message
             setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
@@ -492,6 +500,7 @@ export default function AIChatBot() {
           message: enrichedQuery,
           personality,
           history: conversationHistory,
+          scrapedProduct: scrapedProductForQuote,
         }),
       });
 

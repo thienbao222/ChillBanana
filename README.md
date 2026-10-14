@@ -23,6 +23,8 @@ Cần Node.js 20 trở lên và một cơ sở dữ liệu PostgreSQL.
 
 2. Tạo file `.env` từ `.env.example`, rồi điền `DATABASE_URL`. Đặt thêm `ADMIN_SESSION_SECRET` và `CUSTOMER_SESSION_SECRET` để đăng nhập quản trị/khách hàng hoạt động ổn định.
 
+   `DATABASE_URL` ở máy cá nhân phải trỏ tới PostgreSQL riêng cho phát triển/kiểm thử, không dùng Neon Production.
+
 3. Đồng bộ schema và khởi tạo catalog:
 
    ```bash
@@ -49,3 +51,10 @@ npm run build
 ```
 
 Các biến môi trường mà ứng dụng đọc được liệt kê trong `.env.example`.
+
+## An toàn dữ liệu và cấu trúc mã
+
+- Không chạy `npm run prisma:push` hoặc `npm run prisma:seed` khi `DATABASE_URL` đang trỏ tới cơ sở dữ liệu Production. Build Production hiện đồng bộ schema qua `scripts/vercel-build.js`.
+- Dùng database và credentials riêng cho Preview trước khi kiểm thử thay đổi có truy cập dữ liệu.
+- Mã theo nghiệp vụ nằm trong `src/features`; quy tắc đặt file và ranh giới giữa UI, route, AI và dữ liệu được mô tả tại [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md).
+- Các giai đoạn phát triển trợ lý AI được ghi tại [`docs/architecture/ai-agent-roadmap.md`](docs/architecture/ai-agent-roadmap.md).

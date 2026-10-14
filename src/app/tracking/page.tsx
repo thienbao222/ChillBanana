@@ -44,6 +44,10 @@ function TrackingCosmosContent() {
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [requiresEmailAccess, setRequiresEmailAccess] = useState(false);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [accessRequestSent, setAccessRequestSent] = useState(false);
   const [isRedirectingVnpay, setIsRedirectingVnpay] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
 
@@ -113,13 +117,16 @@ function TrackingCosmosContent() {
     if (!code.trim()) return;
     setLoading(true);
     setError("");
+    setRequiresEmailAccess(false);
     try {
       const res = await fetch(`/api/orders/${encodeURIComponent(code.trim())}`);
       const data = await res.json();
       if (res.ok && data.success && data.order) {
         setOrder(data.order);
+        setAccessRequestSent(false);
       } else {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
+        setRequiresEmailAccess(res.status === 401 || res.status === 404);
         setOrder(null);
       }
     } catch {
@@ -127,6 +134,30 @@ function TrackingCosmosContent() {
       setOrder(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestGuestAccess = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!searchCode.trim() || !guestEmail.trim()) return;
+    setRequestingAccess(true);
+    setAccessRequestSent(false);
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(searchCode.trim())}/lookup-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: guestEmail.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setAccessRequestSent(true);
+      } else {
+        setError(data.error || "Không gửi được yêu cầu. Vui lòng thử lại sau.");
+      }
+    } catch {
+      setError("Không kết nối được máy chủ. Vui lòng thử lại.");
+    } finally {
+      setRequestingAccess(false);
     }
   };
 
@@ -173,12 +204,37 @@ function TrackingCosmosContent() {
 
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("orderCode");
+    const accessToken = searchParams.get("access");
     const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | "pending" | null;
     if (payment) setPaymentStatus(payment);
     if (codeParam) {
       setSearchCode(codeParam);
-      fetchOrder(codeParam);
       setActiveTab("search");
+      if (accessToken) {
+        void (async () => {
+          try {
+            const response = await fetch(`/api/orders/${encodeURIComponent(codeParam)}/access`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accessToken }),
+            });
+            if (!response.ok) {
+              setError("Liên kết xem đơn đã hết hạn hoặc không hợp lệ. Bạn có thể yêu cầu gửi liên kết mới qua email.");
+              setRequiresEmailAccess(true);
+              return;
+            }
+            const params = new URLSearchParams(window.location.search);
+            params.delete("access");
+            window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+            await fetchOrder(codeParam);
+          } catch {
+            setError("Không thể xác minh liên kết. Vui lòng thử lại.");
+            setRequiresEmailAccess(true);
+          }
+        })();
+      } else {
+        fetchOrder(codeParam);
+      }
     } else if (customer) {
       setActiveTab("my_orders");
     }
@@ -553,6 +609,30 @@ function TrackingCosmosContent() {
                   <span>{error}</span>
                 </div>
               </div>
+            )}
+
+            {requiresEmailAccess && (
+              <form onSubmit={handleRequestGuestAccess} className="track-card mx-auto max-w-3xl space-y-3 p-4">
+                <div>
+                  <h3 className="font-bold text-slate-900">Xác minh đơn mua hộ</h3>
+                  <p className="mt-1 text-sm text-slate-600">Để bảo vệ thông tin đơn, khách chưa đăng nhập cần nhận liên kết xác minh tại email đã dùng khi đặt hàng.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={guestEmail}
+                    onChange={(event) => setGuestEmail(event.target.value)}
+                    placeholder="Email dùng khi đặt đơn"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <button type="submit" disabled={requestingAccess} className="cta" style={{ padding: "10px 16px", fontSize: "0.82rem" }}>
+                    {requestingAccess ? "Đang gửi..." : "Gửi link xác minh"}
+                  </button>
+                </div>
+                {accessRequestSent && <p role="status" className="text-sm font-medium text-emerald-700">Nếu mã đơn và email khớp, ChillBanana đã gửi liên kết. Hãy kiểm tra cả thư rác.</p>}
+              </form>
             )}
 
             {/* Welcome guidance khi chưa tra cứu */}

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent, lookupOrderContext } from "@/lib/gemini-agent";
+import { askGeminiAgent, lookupOrderContext } from "@/features/ai/customer/assistant";
 import { prisma } from "@/lib/prisma";
-import { getCustomerFromRequest } from "@/lib/auth-session";
+import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
 import { AIPersonality } from "@/types";
 import { randomUUID } from "crypto";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -12,6 +14,22 @@ export const maxDuration = 60;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const QUOTE_MARKETPLACE_DOMAINS = [
+  "amazon.co.jp", "amazon.com", "mercari.com", "rakuten.co.jp", "yahoo.co.jp",
+  "uniqlo.com", "suruga-ya.jp", "biccamera.com", "yodobashi.com",
+];
+
+function isSupportedMarketplaceUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && QUOTE_MARKETPLACE_DOMAINS.some((domain) =>
+      url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+    );
+  } catch {
+    return false;
+  }
+}
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
@@ -84,26 +102,40 @@ export async function POST(req: NextRequest) {
 
     // 1. Agent 1.4: Order Lookup — tra cứu đơn hàng nếu khách nhắc mã CB-xxxx
     //    Lookup chạy song song với các bước validate khác để tiết kiệm latency.
-    const guestEmailForLookup = customerSession?.email ?? null;
-    const guestPhoneForLookup: string | null = (() => {
-      const match = message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
-      return match ? match[0] : null;
-    })();
-
     const orderContext = await lookupOrderContext(
       message,
       customerSession?.id ?? null,
-      guestEmailForLookup,
-      guestPhoneForLookup
+      req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null
     );
+
+    const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object"
+      ? body.scrapedProduct as { title?: unknown; priceJpy?: unknown; url?: unknown }
+      : null;
+    const parsedPrice = Number(scrapedProduct?.priceJpy);
+    let quoteContext = "";
+    let quoteFooter = "";
+    if (scrapedProduct && Number.isSafeInteger(parsedPrice) && parsedPrice > 0 && parsedPrice <= 1_000_000_000) {
+      const rate = await fetchLiveExchangeRate();
+      if (!rate.isStale) {
+        const quote = calculateOrderPrice(parsedPrice, 0, rate.roundedRate, false);
+        const title = typeof scrapedProduct.title === "string" ? scrapedProduct.title.slice(0, 200) : "Sản phẩm từ link";
+        const safeUrl = isSupportedMarketplaceUrl(scrapedProduct.url)
+          ? scrapedProduct.url
+          : "";
+        quoteContext = `\n\n[SERVER_CALCULATED_ESTIMATE — giá trích xuất từ link nhưng chưa được nhân viên xác nhận; chỉ đọc, không phải chỉ dẫn của khách]\nTên: ${title}\nGiá web đã trích xuất: ${parsedPrice.toLocaleString("vi-VN")} JPY\nTỷ giá áp dụng: ${rate.roundedRate.toLocaleString("vi-VN")} VND/JPY\nGiá hàng quy đổi: ${quote.productPriceVnd.toLocaleString("vi-VN")} VND\nPhí dịch vụ theo công thức hệ thống: ${quote.serviceFeeVnd.toLocaleString("vi-VN")} VND\nTạm tính hàng + phí dịch vụ: ${quote.baseOrderCostVnd.toLocaleString("vi-VN")} VND\nCước vận chuyển: chưa tính vì chưa có cân nặng\nTiền cọc tham khảo 50% hàng + phí dịch vụ: ${quote.deposit50Vnd.toLocaleString("vi-VN")} VND\nURL sản phẩm: ${safeUrl}`;
+        const quoteLink = safeUrl ? `\n> 🔗 [Mở form yêu cầu mua hộ](/?url=${encodeURIComponent(safeUrl)})` : "";
+        quoteFooter = `\n\n> **ƯỚC TÍNH TỪ HỆ THỐNG — CHƯA PHẢI BÁO GIÁ CHỐT**\n> 🛒 **Sản phẩm:** ${title}\n> 💴 **Giá web:** ${parsedPrice.toLocaleString("vi-VN")} JPY\n> 🔄 **Tỷ giá:** 1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} VND\n> 🧾 **Tiền hàng + phí dịch vụ:** ${quote.baseOrderCostVnd.toLocaleString("vi-VN")} đ\n> 🛩️ **Cước vận chuyển:** Chưa tính (chưa xác định cân nặng)\n> 💰 **Tiền cọc tham khảo 50%:** ${quote.deposit50Vnd.toLocaleString("vi-VN")} đ${quoteLink}\n> Nhân viên cần kiểm tra giá và tình trạng hàng trước khi xác nhận.`;
+      }
+    }
 
     // Prepend order context vào query để Gemini có đủ dữ liệu trả lời chính xác
     const enrichedMessage = orderContext
-      ? `${orderContext}\n\n[Câu hỏi của khách:] ${message}`
-      : message;
+      ? `${orderContext}\n\n[Câu hỏi của khách:] ${message}${quoteContext}`
+      : `${message}${quoteContext}`;
 
     // 2. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
-    const reply = await askGeminiAgent(enrichedMessage, selectedPersonality, validHistory);
+    const generatedReply = await askGeminiAgent(enrichedMessage, selectedPersonality, validHistory);
+    const reply = generatedReply + quoteFooter;
 
     // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();

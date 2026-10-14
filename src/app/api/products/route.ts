@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import { isAdminRequest } from "@/lib/auth-session";
 
 export const dynamic = "force-dynamic";

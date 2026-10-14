@@ -176,6 +176,21 @@ model AdminUser {
   updatedAt    DateTime @updatedAt
 }
 
+// Lưu báo cáo insight theo ngày nghiệp vụ Việt Nam để cron và Admin cùng đọc một nguồn.
+model AdminDailyInsight {
+  id              String   @id @default(cuid())
+  businessDate    String   @unique
+  periodStart     DateTime
+  periodEnd       DateTime
+  generatedAt     DateTime
+  insight         String
+  snapshotSummary Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([generatedAt])
+}
+
 // Lịch sử Chat AI Consultant & Phân tích xu hướng khách hàng
 model ChatSession {
   id               String        @id @default(cuid())

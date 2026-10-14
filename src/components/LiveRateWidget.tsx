@@ -7,7 +7,7 @@ import {
   ArrowUpRight,
   ArrowDownRight
 } from "lucide-react";
-import { LiveRateData } from "@/lib/exchange-rate";
+import { LiveRateData } from "@/features/pricing/exchange-rate";
 
 interface LiveRateWidgetProps {
   onRateChange?: (rate: number) => void;

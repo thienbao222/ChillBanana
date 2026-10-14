@@ -1,7 +1,7 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
-import { getRecordedPaymentStatus } from "@/lib/payment-policy";
+import { getRecordedPaymentStatus } from "@/features/payments/policy";
 
 function sortObject(obj: Record<string, string>) {
   return Object.fromEntries(Object.keys(obj).sort().map((key) => [key, obj[key]]));

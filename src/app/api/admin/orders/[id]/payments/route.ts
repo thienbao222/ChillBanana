@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminUsernameFromRequest, isAdminRequest } from "@/lib/auth-session";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
-import { getRecordedPaymentStatus } from "@/lib/payment-policy";
+import { getRecordedPaymentStatus } from "@/features/payments/policy";
 
 export const dynamic = "force-dynamic";
 

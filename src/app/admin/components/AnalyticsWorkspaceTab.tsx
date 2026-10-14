@@ -4,8 +4,8 @@ import React, { useEffect, useState } from "react";
 import { BarChart3, MessageSquareText, Sparkles } from "lucide-react";
 import ReportsTab from "@/app/admin/components/ReportsTab";
 import AiTrendsTab from "@/app/admin/components/AiTrendsTab";
-import AdminAgentTab from "@/app/admin/components/AdminAgentTab";
-import { AdminAiModuleId } from "@/lib/admin-ai/definitions";
+import AdminAgentTab from "@/features/ai/admin/AdminAgentTab";
+import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 
 export type AnalyticsSection = "reports" | "trends" | "assistant";
 

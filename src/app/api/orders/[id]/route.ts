@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
-import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
-import { isNextOrderStatus } from "@/lib/order-policy";
-import { getDepositAmount, getRecordedPaymentStatus } from "@/lib/payment-policy";
+import {
+  getCustomerFromRequest,
+  hasGuestOrderAccessForEmail,
+  isAdminRequest,
+  ORDER_ACCESS_COOKIE_NAME,
+  verifyGuestOrderAccessToken,
+} from "@/lib/auth-session";
+import { isNextOrderStatus } from "@/features/orders/policy";
+import { getDepositAmount } from "@/features/payments/policy";
 
 function isAdmin(req: NextRequest): boolean {
   return isAdminRequest(req);
@@ -17,11 +23,19 @@ export async function GET(
 ) {
   try {
     const { id: orderCode } = await params;
+    const customerSession = getCustomerFromRequest(req);
+    const adminSession = isAdminRequest(req);
+    const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
+    const guestAccess = verifyGuestOrderAccessToken(accessToken || "");
+    if (!adminSession && !customerSession && guestAccess?.orderCode !== orderCode) {
+      return NextResponse.json({ error: "Không tìm thấy đơn hàng hoặc cần xác minh quyền truy cập." }, { status: 404 });
+    }
 
     const dbOrder = await prisma.order.findFirst({
       where: { orderCode },
       select: {
         customerId: true,
+        customerEmail: true,
         orderCode: true,
         productName: true,
         category: true,
@@ -58,13 +72,20 @@ export async function GET(
       );
     }
 
-    const customerSession = getCustomerFromRequest(req);
-    const { customerId, ...publicOrder } = dbOrder;
+    const authorized = adminSession ||
+      Boolean(customerSession && dbOrder.customerId === customerSession.id) ||
+      hasGuestOrderAccessForEmail(accessToken, orderCode, dbOrder.customerEmail);
+    if (!authorized) {
+      // Same response for unknown codes and unauthorized users to avoid order-code enumeration.
+      return NextResponse.json({ error: "Không tìm thấy đơn hàng hoặc cần xác minh quyền truy cập." }, { status: 404 });
+    }
+
+    const publicOrder = { ...dbOrder, customerId: undefined, customerEmail: undefined };
     return NextResponse.json({
       success: true,
       order: {
         ...publicOrder,
-        canCancel: Boolean(customerSession && customerId === customerSession.id && dbOrder.status === "PENDING_DEPOSIT" && dbOrder.paymentStatus === "UNPAID"),
+        canCancel: Boolean(customerSession && dbOrder.customerId === customerSession.id && dbOrder.status === "PENDING_DEPOSIT" && dbOrder.paymentStatus === "UNPAID"),
       },
     });
   } catch (error) {
@@ -73,6 +94,43 @@ export async function GET(
       { error: "Lỗi khi tra cứu thông tin đơn hàng" },
       { status: 500 }
     );
+  }
+}
+
+/** Exchange a signed email link for a short-lived HttpOnly cookie. */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: orderCode } = await params;
+    const body = await req.json().catch(() => null);
+    const token = body && typeof body.accessToken === "string" ? body.accessToken : "";
+    const access = verifyGuestOrderAccessToken(token);
+    if (!access || access.orderCode !== orderCode) {
+      return NextResponse.json({ error: "Liên kết xác minh không hợp lệ hoặc đã hết hạn." }, { status: 401 });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { orderCode },
+      select: { customerEmail: true },
+    });
+    if (!order || !hasGuestOrderAccessForEmail(token, orderCode, order.customerEmail)) {
+      return NextResponse.json({ error: "Liên kết xác minh không hợp lệ hoặc đã hết hạn." }, { status: 401 });
+    }
+
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(ORDER_ACCESS_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/api",
+      expires: new Date(access.exp),
+    });
+    return response;
+  } catch (error) {
+    console.error("Lỗi xác minh quyền truy cập đơn hàng:", error);
+    return NextResponse.json({ error: "Không thể xác minh liên kết đơn hàng." }, { status: 500 });
   }
 }
 
