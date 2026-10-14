@@ -143,7 +143,7 @@ function AdminDashboardPageInner() {
                 { key: "orders", icon: <Package className="h-4 w-4" />, label: "Đơn hàng" },
                 { key: "customers", icon: <Users className="h-4 w-4" />, label: "Khách hàng" },
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
-                { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Mua tự động" },
+                { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Tác vụ mua hộ" },
                 { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
               ].map((tab) => (
                 <button
