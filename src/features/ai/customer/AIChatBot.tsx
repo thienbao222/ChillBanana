@@ -694,9 +694,29 @@ export default function AIChatBot() {
       if (analysis.riskNotes) replyText += `\n**Lưu ý từ ảnh:** ${analysis.riskNotes}\n`;
       if (analysis.description) replyText += `\n${analysis.description}\n`;
 
+      const catalogMatches = analysis.catalogMatches as {
+        status?: "matched" | "no_match" | "unavailable" | "not_searched";
+        products?: Array<{ name: string; category: string; priceJpy: number }>;
+      } | undefined;
+      if (catalogMatches?.status === "matched" && catalogMatches.products?.length) {
+        replyText += "\n\n**Gợi ý gần trong danh mục ChillBanana (đối chiếu từ khóa, chưa xác nhận đúng sản phẩm):**\n";
+        catalogMatches.products.forEach((product) => {
+          const safeName = String(product.name || "Sản phẩm").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 120);
+          const safeCategory = String(product.category || "Hàng Nhật").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 80);
+          const safePrice = Number.isSafeInteger(product.priceJpy) && product.priceJpy > 0
+            ? `¥${product.priceJpy.toLocaleString("ja-JP")} (giá tham khảo trong danh mục)`
+            : "giá cần kiểm tra";
+          replyText += `- **${safeName}** — ${safeCategory} · ${safePrice} · [Mở danh mục](/#products)\n`;
+        });
+      } else if (catalogMatches?.status === "no_match") {
+        replyText += "\n\nNeo chưa tìm thấy sản phẩm tương ứng trong danh mục ChillBanana. Từ khóa bên dưới chỉ mở kết quả tìm kiếm trên sàn Nhật; bạn có thể gửi thêm tên hoặc mã model để thu hẹp kết quả.\n";
+      } else if (catalogMatches?.status === "unavailable") {
+        replyText += "\n\nDanh mục sản phẩm ChillBanana hiện chưa truy cập được; các từ khóa bên dưới chỉ mở tìm kiếm trên sàn Nhật.\n";
+      }
+
       const searchKeywords: string[] = Array.isArray(analysis.searchKeywords) ? analysis.searchKeywords : [];
       if (searchKeywords.length) {
-        replyText += "\n**Từ khóa tìm kiếm trên sàn Nhật:**\n";
+        replyText += "\n**Mở tìm kiếm bằng từ khóa trên sàn Nhật:**\n";
         searchKeywords.forEach((keyword) => {
           const encoded = encodeURIComponent(keyword);
           replyText += `- **${keyword}** — [Amazon JP](https://www.amazon.co.jp/s?k=${encoded}) · [Mercari](https://jp.mercari.com/search?keyword=${encoded}) · [Rakuten](https://search.rakuten.co.jp/search/mall/${encoded}/)\n`;
@@ -712,73 +732,6 @@ export default function AIChatBot() {
         text: replyText,
         time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       }]);
-
-      // ── Bước 2: Smart Search — tự động tìm sản phẩm catalog + tư vấn AI ─────
-      // Chỉ chạy khi có đủ từ khóa để tìm kiếm có ý nghĩa
-      if (searchKeywords.length > 0) {
-        const searchLoadingId = "bot-search-loading-" + Date.now();
-        setMessages((previous) => [...previous, {
-          id: searchLoadingId,
-          sender: "bot",
-          text: `🔍 Neo đang tìm sản phẩm phù hợp trong kho ChillBanana và trên sàn Nhật...`,
-          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        }]);
-
-        try {
-          // Xây dựng query thông minh: kết hợp từ khóa tiếng Nhật + tên sản phẩm + danh mục
-          const keywordsText = searchKeywords.join(", ");
-          const productHint = analysis.nameVi || analysis.nameJp || "";
-          const categoryHint = categoryName[analysis.category] || "";
-          const userQuestionHint = question ? `Yêu cầu khách: ${question}.` : "";
-
-          const smartSearchQuery = [
-            `[SMART SEARCH TỪ ẢNH — Hãy tìm và tư vấn sản phẩm phù hợp nhất:]`,
-            `Từ khóa nhận diện được: ${keywordsText}.`,
-            productHint ? `Sản phẩm gần đúng: ${productHint}.` : "",
-            categoryHint ? `Danh mục: ${categoryHint}.` : "",
-            userQuestionHint,
-            `Nhiệm vụ:`,
-            `1. Kiểm tra DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP — nếu có sản phẩm cùng danh mục hoặc tương tự, hãy giới thiệu kèm ảnh (cú pháp ![tên](url)) và giá.`,
-            `2. Gợi ý thêm 2-3 sản phẩm nổi tiếng cùng loại trên Amazon JP/Mercari kèm link tìm kiếm.`,
-            `3. Nếu là đồ điện tử/gia dụng Nhật, nhắc về điện áp 100V.`,
-            `4. Kết thúc bằng hướng dẫn: "Copy link sản phẩm từ sàn Nhật và dán vào ô Dán Link Tính Giá để ChillBanana báo giá và mua hộ."`,
-          ].filter(Boolean).join(" ");
-
-          // Lấy lịch sử hội thoại hiện tại (không gồm message loading)
-          const currentHistory = messages
-            .filter((m) => !m.id.startsWith("system-scrape-") && !m.id.startsWith("bot-search-loading-"))
-            .map((m) => ({ role: m.sender === "user" ? "user" : "model", text: m.text }));
-
-          const chatRes = await fetch("/api/ai/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: smartSearchQuery,
-              personality,
-              history: currentHistory,
-            }),
-          });
-          const chatData = await chatRes.json();
-
-          // Xóa loading message, thay bằng kết quả tư vấn
-          setMessages((previous) => {
-            const filtered = previous.filter((m) => m.id !== searchLoadingId);
-            if (chatRes.ok && chatData.reply) {
-              return [...filtered, {
-                id: "bot-smart-search-" + Date.now(),
-                sender: "bot" as const,
-                text: chatData.reply,
-                time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-              }];
-            }
-            // Nếu chat API lỗi — xóa loading, không thêm message lỗi (đã có bước 1)
-            return filtered;
-          });
-        } catch {
-          // Xóa loading nếu mạng lỗi, không cần báo thêm (bước 1 đã đủ thông tin)
-          setMessages((previous) => previous.filter((m) => !m.id.startsWith("bot-search-loading-")));
-        }
-      }
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "Neo chưa phân tích được ảnh này. Vui lòng thử ảnh khác.";

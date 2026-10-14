@@ -108,7 +108,7 @@ export default function CuratedProducts({
   };
 
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
+    <section id="products" className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <motion.div 
           initial={{ opacity: 0, x: -20 }}

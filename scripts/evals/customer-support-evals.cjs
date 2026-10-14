@@ -28,6 +28,7 @@ function loadTypeScript(relativePath, overrides = {}) {
 }
 
 const policy = loadTypeScript("src/features/ai/customer/support-policy.ts");
+const imageCatalogMatcher = loadTypeScript("src/features/ai/customer/image-catalog-matcher.ts");
 const orderPolicy = loadTypeScript("src/features/orders/policy.ts");
 const pricing = loadTypeScript("src/features/pricing/calculator.ts", {
   "@/features/orders/policy": orderPolicy,
@@ -77,6 +78,38 @@ assert.ok(policy.CUSTOMER_SUPPORT_TOOL_REGISTRY.every((tool) => tool.access === 
 const assistantSource = fs.readFileSync(path.join(projectRoot, "src/features/ai/customer/assistant.ts"), "utf8");
 assert.match(assistantSource, /không tuyên bố đã reverse-image-search/i);
 assert.match(assistantSource, /không khẳng định đúng model/i);
+
+const imageCandidates = [
+  {
+    name: "Anessa Perfect UV Skincare Milk",
+    categoryName: "Mỹ phẩm & Chăm sóc da",
+    priceJpy: 2680,
+    description: "Kem chống nắng Anessa dùng hằng ngày",
+  },
+  {
+    name: "Anessa Perfect UV Compact",
+    categoryName: "Mỹ phẩm & Chăm sóc da",
+    priceJpy: 2200,
+    description: "Phấn nền chống nắng Anessa",
+  },
+  {
+    name: "Gundam RX-78 Figure",
+    categoryName: "Anime, Manga & Sưu tầm",
+    priceJpy: 3200,
+    description: "Mô hình lắp ráp",
+  },
+];
+const imageAnalysis = { nameVi: "Kem chống nắng Anessa Perfect UV", searchKeywords: ["アネッサ パーフェクトUV"] };
+const rankedImageCandidates = imageCatalogMatcher.rankImageCatalogCandidates(imageCandidates, imageAnalysis);
+assert.equal(rankedImageCandidates[0].name, "Anessa Perfect UV Skincare Milk", "the closest internal catalog title should rank first");
+assert.ok(rankedImageCandidates.length <= 3);
+assert.deepEqual(imageCatalogMatcher.rankImageCatalogCandidates(imageCandidates, { nameVi: "Sản phẩm Nhật" }), [], "generic category language must not return arbitrary catalog rows");
+assert.ok(imageCatalogMatcher.getImageCatalogSearchTerms(imageAnalysis).length <= 12, "image lookup terms must stay bounded");
+
+const imageChatSource = fs.readFileSync(path.join(projectRoot, "src/features/ai/customer/AIChatBot.tsx"), "utf8");
+assert.match(imageChatSource, /Gợi ý gần trong danh mục ChillBanana/);
+assert.match(imageChatSource, /chưa xác nhận đúng sản phẩm/);
+assert.doesNotMatch(imageChatSource, /SMART SEARCH TỪ ẢNH/);
 
 async function evaluateReadOnlyTools() {
   const orderCode = "CB-2026-AB12-78136";
@@ -196,8 +229,84 @@ async function evaluateReadOnlyTools() {
   assert.deepEqual(Object.keys(mockPrisma.order), ["findUnique"], "customer tools expose no order write method");
 }
 
-evaluateReadOnlyTools().then(() => {
-  console.log("Customer support evaluations passed: intents, order access, catalog and quote tools, pricing, stock-slot wording, read-only boundaries, and image limits.");
+async function evaluateImageAnalysisRoute() {
+  const catalogProduct = {
+    name: "Anessa Perfect UV Skincare Milk",
+    categoryName: "Mỹ phẩm & Chăm sóc da",
+    priceJpy: 2680,
+    description: "Kem chống nắng Anessa dùng hằng ngày",
+  };
+  let catalogBehavior = "matched";
+  let catalogQueries = 0;
+  let lastQuery;
+  const route = loadTypeScript("src/app/api/ai/image-analyze/route.ts", {
+    "next/server": {
+      NextResponse: {
+        json: (payload, init = {}) => ({ status: init.status || 200, json: async () => payload }),
+      },
+    },
+    "@/lib/api-key-manager": { visionKeyPool: { getNextKey: () => "eval-key", markError: () => {} } },
+    "@/lib/prisma": {
+      prisma: {
+        product: {
+          findMany: async (query) => {
+            catalogQueries += 1;
+            lastQuery = query;
+            if (catalogBehavior === "unavailable") throw new Error("mock unavailable");
+            return catalogBehavior === "matched" ? [catalogProduct] : [];
+          },
+        },
+      },
+    },
+    "@/features/ai/customer/image-catalog-matcher": imageCatalogMatcher,
+  });
+
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+        nameVi: "Kem chống nắng Anessa Perfect UV",
+        nameJp: "アネッサ パーフェクトUV",
+        visiblePriceJpy: null,
+        category: "cosmetics",
+        voltageWarning: false,
+        riskNotes: "Không thể xác thực sản phẩm chỉ từ ảnh.",
+        searchKeywords: ["アネッサ パーフェクトUV"],
+        description: "Nhận diện sơ bộ từ ảnh.",
+      }) }] } }] }),
+    });
+
+    const request = (ip) => ({
+      headers: { get: (name) => name === "x-forwarded-for" ? ip : null },
+      json: async () => ({ imageData: "data:image/png;base64,YWJj", question: "Tìm giúp" }),
+    });
+    const matchedResponse = await route.POST(request("eval-matched"));
+    const matched = await matchedResponse.json();
+    assert.equal(matchedResponse.status, 200);
+    assert.equal(matched.analysis.catalogMatches.status, "matched");
+    assert.equal(matched.analysis.catalogMatches.products[0].name, catalogProduct.name);
+    assert.equal(lastQuery.take, 60, "the catalog scan should be bounded");
+    assert.deepEqual(Object.keys(lastQuery.select), ["name", "categoryName", "priceJpy", "description"]);
+
+    catalogBehavior = "no-match";
+    const noMatch = await (await route.POST(request("eval-no-match"))).json();
+    assert.equal(noMatch.analysis.catalogMatches.status, "no_match");
+    assert.deepEqual(noMatch.analysis.catalogMatches.products, []);
+
+    catalogBehavior = "unavailable";
+    const unavailable = await (await route.POST(request("eval-unavailable"))).json();
+    assert.equal(unavailable.analysis.catalogMatches.status, "unavailable");
+    assert.deepEqual(unavailable.analysis.catalogMatches.products, []);
+    assert.equal(catalogQueries, 3);
+  } finally {
+    global.fetch = originalFetch;
+  }
+}
+
+evaluateReadOnlyTools().then(evaluateImageAnalysisRoute).then(() => {
+  console.log("Customer support evaluations passed: intents, ownership, catalog and quote tools, pricing, image-to-catalog ranking, bounded/read-only database lookup, and match/no-match/unavailable states.");
 }).catch((error) => {
   console.error(error);
   process.exitCode = 1;
