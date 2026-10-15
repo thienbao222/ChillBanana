@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import crypto from "node:crypto";
@@ -9,7 +9,7 @@ import {
   verifyAdminPassword,
   verifyLegacyCustomerSha256,
   verifyScryptPassword,
-} from "../../src/lib/password.ts";
+} from "@/lib/password";
 
 const require = createRequire(import.meta.url);
 const seedHasher = require("../../prisma/hash-password.js") as { hashPassword: (p: string) => string };

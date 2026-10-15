@@ -16,8 +16,12 @@
     "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
     "eval:customer-support": "node scripts/evals/customer-support-evals.cjs",
-    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/unit/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:e2e": "playwright test",
+    "test:all": "npm test && npm run test:integration && npm run test:e2e"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

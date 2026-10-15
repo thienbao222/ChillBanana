@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test } from "vitest";
 import assert from "node:assert/strict";
 import {
   clientIpFromHeaders,
@@ -7,7 +7,7 @@ import {
   LOGIN_FAILURES_PER_ACCOUNT,
   type RateLimitConfig,
   type RateLimitState,
-} from "../../src/lib/rate-limit-core.ts";
+} from "@/lib/rate-limit-core";
 
 const cfg: RateLimitConfig = { max: 3, windowMs: 60_000, blockMs: 120_000 };
 const T0 = 1_000_000;
