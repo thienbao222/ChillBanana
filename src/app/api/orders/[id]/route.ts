@@ -5,11 +5,13 @@ import {
   getCustomerFromRequest,
   hasGuestOrderAccessForEmail,
   isAdminRequest,
+  getAdminUsernameFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
   verifyGuestOrderAccessToken,
 } from "@/lib/auth-session";
 import { isNextOrderStatus } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
+import { writeAuditLog } from "@/lib/audit";
 
 function isAdmin(req: NextRequest): boolean {
   return isAdminRequest(req);
@@ -380,6 +382,23 @@ export async function PATCH(
           data: updateData,
           include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
         });
+
+    if (isAdminUser) {
+      await writeAuditLog({
+        actor: getAdminUsernameFromRequest(req) ?? "admin",
+        action: priceWasJustApproved ? "ORDER_PRICE_APPROVED" : action === "cancel" ? "ORDER_CANCELLED" : "ORDER_UPDATED",
+        entityType: "Order",
+        entityId: existingOrder.orderCode,
+        summary: `Cập nhật đơn ${existingOrder.orderCode}${status ? ` → ${status}` : ""}.`,
+        metadata: {
+          fromStatus: existingOrder.status,
+          toStatus: status ?? null,
+          priceApproved: priceWasJustApproved,
+          changedFields: Object.keys(updateData).filter((k) => k !== "trackingLogs"),
+        },
+        req,
+      });
+    }
 
     // Duyệt báo giá cần email riêng, có kết quả để giao diện báo chính xác cho admin.
     // Các thay đổi trạng thái khác tiếp tục gửi email cập nhật tiến độ như trước.

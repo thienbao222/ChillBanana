@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminUsernameFromRequest, isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
 import { getRecordedPaymentStatus } from "@/features/payments/policy";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Bạn cần đăng nhập quản trị để xác nhận thanh toán." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   try {
     const { id: orderId } = await params;
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const paymentStatus = getRecordedPaymentStatus(existingOrder.depositPercent);
-    const username = getAdminUsernameFromRequest(req);
+    const username = guard.username;
     const recordedAt = new Date();
     const order = await prisma.$transaction(async (tx) => {
       const claimed = await tx.order.updateMany({
@@ -76,6 +76,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return tx.order.findUniqueOrThrow({ where: { id: existingOrder.id } });
     });
 
+    await writeAuditLog({
+      actor: username,
+      action: "ORDER_PAYMENT_RECORDED",
+      entityType: "Order",
+      entityId: existingOrder.orderCode,
+      summary: `Ghi nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ (${paymentStatus}).`,
+      metadata: { amountVnd, paymentStatus, reference },
+      req,
+    });
     sendPaymentSuccessEmail(order).catch((error) => console.warn("[Manual Payment Email Error]", error));
     return NextResponse.json({ success: true, order });
   } catch (error) {

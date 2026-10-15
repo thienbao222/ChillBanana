@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
-import { isAdminRequest } from "@/lib/auth-session";
+import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +94,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_CREATE",
+      entityType: "Product",
+      entityId: newProd.id,
+      summary: `Tạo sản phẩm "${newProd.name}".`,
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Thêm sản phẩm thành công!",
@@ -167,6 +176,15 @@ export async function PUT(req: NextRequest) {
       data: updateData,
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_UPDATE",
+      entityType: "Product",
+      entityId: id,
+      summary: `Cập nhật sản phẩm "${updated.name}".`,
+      metadata: { fields: Object.keys(updateData) },
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Cập nhật thành công!",
@@ -201,6 +219,14 @@ export async function DELETE(req: NextRequest) {
       where: { id },
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_DELETE",
+      entityType: "Product",
+      entityId: id,
+      summary: "Xóa sản phẩm.",
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Đã xóa sản phẩm.",

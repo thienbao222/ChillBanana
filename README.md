@@ -21,18 +21,20 @@ Cần Node.js 20 trở lên và một cơ sở dữ liệu PostgreSQL.
    npm ci
    ```
 
-2. Tạo file `.env` từ `.env.example`, rồi điền `DATABASE_URL`. Đặt thêm `ADMIN_SESSION_SECRET` và `CUSTOMER_SESSION_SECRET` để đăng nhập quản trị/khách hàng hoạt động ổn định.
+2. Tạo file `.env` từ `.env.example`, rồi điền `DATABASE_URL`. Đặt thêm `ADMIN_SESSION_SECRET` và `CUSTOMER_SESSION_SECRET` (dùng để ký cookie phiên) để đăng nhập quản trị/khách hàng hoạt động ổn định.
 
    `DATABASE_URL` ở máy cá nhân phải trỏ tới PostgreSQL riêng cho phát triển/kiểm thử, không dùng Neon Production.
 
-3. Đồng bộ schema và khởi tạo catalog:
+3. Tạo schema và khởi tạo catalog trên database development **trống**:
 
    ```bash
-   npm run prisma:push
+   npm run prisma:migrate:deploy   # áp dụng prisma/migrations (cần baseline 0_init, xem docs/DATABASE_MIGRATIONS.md)
    npm run prisma:seed
    ```
 
-   Seed tạo hoặc cập nhật 10 sản phẩm catalog. Tồn kho của sản phẩm đã có trong database được giữ nguyên. Để tạo hoặc cập nhật tài khoản quản trị `admin`, đặt `ADMIN_INITIAL_PASSWORD` trước khi chạy seed; seed cũng cần `ADMIN_SESSION_SECRET`.
+   Seed tạo hoặc cập nhật 10 sản phẩm catalog. Tồn kho của sản phẩm đã có trong database được giữ nguyên. Để tạo hoặc cập nhật tài khoản quản trị `admin`, đặt `ADMIN_INITIAL_PASSWORD` trước khi chạy seed (mật khẩu được băm bằng scrypt có salt riêng; seed ghi đè mật khẩu tài khoản `admin` và từ chối chạy khi `APP_ENV`/`VERCEL_ENV` là production).
+
+   `npm run prisma:push` chỉ còn dùng cho database development riêng và phải đặt `ALLOW_DB_PUSH=1`; lệnh bị chặn trên production.
 
 4. Khởi động ứng dụng:
 
@@ -45,16 +47,23 @@ Cần Node.js 20 trở lên và một cơ sở dữ liệu PostgreSQL.
 ## Kiểm tra
 
 ```bash
-npx tsc --noEmit
+npm run typecheck
 npx prisma validate
+npm run lint
+npm test
+npm run eval:customer-support
 npm run build
 ```
+
+CI (`.github/workflows/ci.yml`) chạy các bước trên cho mọi pull request.
 
 Các biến môi trường mà ứng dụng đọc được liệt kê trong `.env.example`.
 
 ## An toàn dữ liệu và cấu trúc mã
 
-- Không chạy `npm run prisma:push` hoặc `npm run prisma:seed` khi `DATABASE_URL` đang trỏ tới cơ sở dữ liệu Production. Build Production hiện đồng bộ schema qua `scripts/vercel-build.js`.
+- Không chạy `npm run prisma:push` hoặc `npm run prisma:seed` khi `DATABASE_URL` đang trỏ tới cơ sở dữ liệu Production. Build Production chỉ áp dụng migration đã commit (`prisma migrate deploy`) qua `scripts/vercel-build.js` và từ chối build nếu chưa có baseline. Xem [`docs/DATABASE_MIGRATIONS.md`](docs/DATABASE_MIGRATIONS.md) và [`docs/BACKUP_RESTORE.md`](docs/BACKUP_RESTORE.md).
+- Đăng nhập admin/khách có giới hạn số lần sai (bảng `RateLimit`); thao tác quản trị nhạy cảm được ghi vào bảng `AuditLog`.
+- Tiến độ nâng cấp và hiện trạng từng chức năng: [`docs/STATUS.md`](docs/STATUS.md).
 - Dùng database và credentials riêng cho Preview trước khi kiểm thử thay đổi có truy cập dữ liệu.
 - Mã theo nghiệp vụ nằm trong `src/features`; quy tắc đặt file và ranh giới giữa UI, route, AI và dữ liệu được mô tả tại [`docs/architecture/project-structure.md`](docs/architecture/project-structure.md).
 - Các giai đoạn phát triển trợ lý AI được ghi tại [`docs/architecture/ai-agent-roadmap.md`](docs/architecture/ai-agent-roadmap.md).

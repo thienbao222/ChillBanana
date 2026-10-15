@@ -10,9 +10,14 @@
     "lint": "next lint",
     "postinstall": "prisma generate",
     "prisma:generate": "prisma generate",
-    "prisma:push": "prisma db push",
+    "prisma:push": "node scripts/guard-db-push.js",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
-    "eval:customer-support": "node scripts/evals/customer-support-evals.cjs"
+    "eval:customer-support": "node scripts/evals/customer-support-evals.cjs",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/unit/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

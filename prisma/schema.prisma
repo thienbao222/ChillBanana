@@ -291,3 +291,35 @@ model PurchaseTask {
   @@index([platform])
   @@index([createdAt])
 }
+
+// ─── Giai đoạn 1: An toàn dữ liệu ───────────────────────────────────────────
+
+// Bộ đếm giới hạn tần suất (đăng nhập sai, đăng ký...) lưu bền trong database.
+model RateLimit {
+  key          String    @id // ví dụ: admin-login:user:admin, admin-login:ip:1.2.3.4
+  count        Int
+  windowStart  DateTime
+  blockedUntil DateTime?
+  updatedAt    DateTime  @updatedAt
+
+  @@index([updatedAt])
+}
+
+// Nhật ký kiểm toán các thao tác nhạy cảm (không lưu mật khẩu/token trong summary hoặc metadata).
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String   // username admin, email khách hoặc "system"
+  actorType  String   @default("ADMIN") // ADMIN, CUSTOMER, SYSTEM
+  action     String   // ADMIN_LOGIN, PRODUCT_UPDATE, ORDER_PAYMENT_RECORDED...
+  entityType String?
+  entityId   String?
+  summary    String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actor, createdAt])
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+}
