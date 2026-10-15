@@ -48,7 +48,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 ## 3. Kết quả kiểm tra đã thực hiện
 
 - `npm test` (Node 22, `--experimental-strip-types`): **15/15 đạt**: hash scrypt, tương thích hash HMAC admin cũ và SHA-256 khách cũ, tương thích hash do `prisma/hash-password.js` (seed), ngưỡng khóa 5 lần, hết hạn khóa, đếm lại khi hết cửa sổ, lấy IP.
-- - **GitHub Actions (PR #4)**: `npm ci`, `prisma validate`, `typecheck`, `lint`, `npm test`, `eval:customer-support`, `build`: tất cả đạt.
+- **GitHub Actions (PR #4)**: `npm ci`, `prisma validate`, `typecheck`, `lint`, `npm test`, `eval:customer-support`, `build`: tất cả đạt.
 - **Chưa kiểm chứng**: chạy migration trên database thật, luồng đăng nhập/khóa/audit với database thật, diễn tập khôi phục. Cần database development riêng (mục 4).
 
 ## 4. Việc bạn cần làm trước khi merge vào nhánh chính
