@@ -11,9 +11,9 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Hạng mục | Trạng thái | Bằng chứng / ghi chú |
 | --- | --- | --- |
 | Rà soát repo, lập bảng hiện trạng (mục 2) | 🟡 | Đã đọc kỹ xác thực, đơn hàng, thanh toán, tỷ giá, seed, schema, build. Chưa đọc kỹ toàn bộ giao diện và module AI. |
-| Chạy `tsc`, `prisma validate`, `lint`, `build` | ⏳ | Môi trường làm việc không tải được npm nên **chưa chạy được**. CI sẽ chạy lần đầu khi nhánh được push. Cần chạy cục bộ: xem mục 4. |
+| Chạy `tsc`, `prisma validate`, `lint`, `build` | ✅ | Chạy trên GitHub Actions (PR #4): prisma validate, typecheck, lint, unit test, eval AI và build **đều đạt**. |
 | Dọn repo | ✅ | Bỏ `tsconfig.tsbuildinfo` khỏi git (đã thêm `*.tsbuildinfo` vào `.gitignore`); chuyển `GhiChu.txt` sang `docs/notes/`; chuyển báo cáo giữa kỳ `.docx` và `generate_academic_report.py` sang `docs/academic/`. Hai file roadmap AI khác ngôn ngữ và nội dung nên được giữ nguyên, không phải bản trùng. |
-| GitHub Actions CI | 🟡 | `.github/workflows/ci.yml` (cài đặt, prisma validate, typecheck, lint, test, eval, build). Chưa chạy lần nào. |
+| GitHub Actions CI | ✅ | `.github/workflows/ci.yml`; lần chạy đầu trên PR #4 xanh toàn bộ các bước. |
 | Database dev/staging riêng | ⏳ | Cần tạo branch Neon riêng và xác nhận `DATABASE_URL` cục bộ không trỏ production. |
 
 ### Giai đoạn 1: An toàn dữ liệu và bảo mật tài khoản
@@ -22,7 +22,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | --- | --- | --- |
 | Migration thay cho `db push` khi deploy | 🟡 | `vercel-build.js` production chạy `prisma migrate deploy`; `prisma:push` bị chặn (cần `ALLOW_DB_PUSH=1`, từ chối trên production). Có migration `20261015000100_phase1_security` viết tay (2 bảng mới). |
 | Baseline migration `0_init` | ⏳ | Không tạo được trong môi trường này (cần Prisma CLI). Chạy `bash scripts/db/generate-baseline.sh` rồi `prisma migrate resolve --applied 0_init` trên DB đã có dữ liệu. **Production sẽ từ chối build cho đến khi làm bước này** (chủ ý, để không deploy nhầm). |
-| Hash mật khẩu admin sang scrypt | ✅ logic / 🟡 tích hợp | `src/lib/password.ts`: 15 unit test đạt (xem mục 3). Hash HMAC cũ vẫn đăng nhập được và tự nâng cấp sau lần đăng nhập đúng. Tích hợp vào route chưa được chạy với database thật. |
+| Hash mật khẩu admin sang scrypt | ✅ logic / 🟡 tích hợp | `src/lib/password.ts`: 15 unit test đạt (xem mục 3). Hash HMAC cũ vẫn đăng nhập được và tự nâng cấp sau lần đăng nhập đúng. Typecheck/lint/build đạt trên CI; chưa chạy luồng đăng nhập với database thật. |
 | Giới hạn đăng nhập sai (admin, khách) và đăng ký | ✅ logic / 🟡 tích hợp | Bảng `RateLimit`; admin: khóa 15 phút sau 5 lần sai theo tài khoản, 20 lần theo IP; khách tương tự; đăng ký tối đa 10 lần/giờ/IP. Logic có test. Chưa thử trên database thật. |
 | Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi: đăng nhập/đăng xuất/đăng nhập sai admin, tạo/sửa/xóa sản phẩm, ghi nhận chuyển khoản, duyệt giá, đổi trạng thái/hủy đơn, gộp dữ liệu khách. Chưa có màn hình xem nhật ký. Chưa ghi cho `purchase-tasks`. |
 | Kiểm tra quyền ở backend | 🟡 | `requireAdmin` đối chiếu AdminUser trong DB (tài khoản bị xóa mất quyền ngay) và kiểm tra vai trò. Áp dụng cho `api-keys` và `stitch-all` (chỉ SUPER_ADMIN) và ghi nhận thanh toán. Các route admin còn lại vẫn dùng `isAdminRequest`. |
@@ -48,13 +48,12 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 ## 3. Kết quả kiểm tra đã thực hiện
 
 - `npm test` (Node 22, `--experimental-strip-types`): **15/15 đạt**: hash scrypt, tương thích hash HMAC admin cũ và SHA-256 khách cũ, tương thích hash do `prisma/hash-password.js` (seed), ngưỡng khóa 5 lần, hết hạn khóa, đếm lại khi hết cửa sổ, lấy IP.
-- Kiểm tra kiểu TypeScript (`tsc --strict`) cho các file mới và các route đã sửa với khai báo giả cho `next` và `@prisma/client`: không có lỗi kiểu ngoài các lỗi do khai báo giả (tham số implicit any của Prisma).
-- **Chưa chạy được**: `npm ci`, `prisma validate`, `next lint`, `next build`, migration trên database thật (môi trường làm việc không truy cập được npm registry).
+- - **GitHub Actions (PR #4)**: `npm ci`, `prisma validate`, `typecheck`, `lint`, `npm test`, `eval:customer-support`, `build`: tất cả đạt.
+- **Chưa kiểm chứng**: chạy migration trên database thật, luồng đăng nhập/khóa/audit với database thật, diễn tập khôi phục. Cần database development riêng (mục 4).
 
 ## 4. Việc bạn cần làm trước khi merge vào nhánh chính
 
-1. Chạy cục bộ: `npm ci && npx prisma validate && npm run typecheck && npm run lint && npm test && npm run build`. Gửi lại lỗi nếu có.
-2. Xem kết quả CI trên pull request.
+1. ~~Chạy kiểm tra tự động~~ (CI xanh trên PR #4).
 3. Tạo database Neon riêng (branch) cho development/staging và thử: `npm run prisma:migrate:deploy` trên DB trống, đăng nhập admin, thử nhập sai 5 lần.
 4. Tạo baseline và đánh dấu đã áp dụng (xem `docs/DATABASE_MIGRATIONS.md`). **Không merge vào nhánh chính trước bước này**, vì deploy production sẽ bị từ chối.
 5. Tạo bản sao lưu production trước khi deploy; diễn tập khôi phục theo `docs/BACKUP_RESTORE.md`.
