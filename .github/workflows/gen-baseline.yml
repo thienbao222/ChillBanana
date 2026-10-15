@@ -1,0 +1,33 @@
+name: gen-baseline (tạm thời)
+
+on:
+  push:
+    branches: [feat/phase-0-1-safety-foundation]
+    paths: [".github/workflows/gen-baseline.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  gen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Sinh SQL baseline từ schema gốc (ef9e20c)
+        env:
+          DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+        run: |
+          git show ef9e20c:prisma/schema.prisma > "$RUNNER_TEMP/old.prisma"
+          npx prisma migrate diff --from-empty --to-schema-datamodel "$RUNNER_TEMP/old.prisma" --script > "$RUNNER_TEMP/0_init.sql"
+          wc -l "$RUNNER_TEMP/0_init.sql"
+          echo "=====BEGIN_BASELINE_SQL====="
+          cat "$RUNNER_TEMP/0_init.sql"
+          echo "=====END_BASELINE_SQL====="
