@@ -78,7 +78,7 @@ Lưu ý khi đọc kết quả:
 ## 4. Việc bạn cần làm trước khi merge vào nhánh chính
 
 1. **Sao lưu production** (Neon branch và/hoặc `pg_dump`, xem `docs/BACKUP_RESTORE.md`).
-2. **Đánh dấu baseline trên database production**: làm đúng 3 bước trong `docs/DATABASE_MIGRATIONS.md` (sao lưu, kiểm tra schema khớp bằng `migrate diff`, rồi `migrate resolve --applied 0_init`). Nếu `migrate diff` báo khác biệt thì dừng và gửi kết quả.
+2. **Đánh dấu baseline trên database production**: làm đúng 3 bước trong `docs/DATABASE_MIGRATIONS.md` (sao lưu, kiểm tra schema khớp bằng `migrate diff`, rồi `migrate resolve --applied 0_init`). Nếu `migrate diff` báo khác biệt thì dừng và gửi kết quả. Ngoại lệ chấp nhận được: duy nhất bảng mẫu `playing_with_neon` do Neon tự tạo (mã thoát 2, mục "Removed tables"); đã gặp trên production ngày 16/10/2026, không ảnh hưởng migration.
 3. Kiểm tra biến môi trường Vercel: Production có `DATABASE_URL`, **`DIRECT_URL` (chuỗi kết nối trực tiếp của Neon, host không có `-pooler`)**, `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`, **không** có `ADMIN_INITIAL_PASSWORD`; Preview dùng database riêng.
 4. Chuyển PR #4 từ Draft sang Ready và merge; Vercel production sẽ chạy `prisma migrate deploy`.
 5. Sau deploy: đăng nhập admin một lần để hash mật khẩu nâng cấp lên scrypt; kiểm tra `AuditLog` có dòng `ADMIN_PASSWORD_REHASHED`.
