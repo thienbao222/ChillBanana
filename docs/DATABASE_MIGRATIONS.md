@@ -27,7 +27,9 @@ trong chính lệnh, không lưu URL production vào `.env`:
 # 2. Kiểm tra schema thật của database KHỚP baseline. Mã thoát 0 = khớp.
 git show ef9e20c:prisma/schema.prisma > old-schema.prisma
 npx prisma migrate diff --from-url "URL_DATABASE" --to-schema-datamodel old-schema.prisma --exit-code
-#    Nếu có khác biệt: DỪNG, đừng đánh dấu, và gửi kết quả để xử lý.
+#    Mã thoát 2 = có khác biệt. Chỉ chấp nhận nếu khác biệt DUY NHẤT là một bảng thừa không thuộc ChillBanana
+#    (ví dụ bảng mẫu `playing_with_neon` do Neon tự tạo khi lập database; "Removed tables" trong kết quả).
+#    Mọi khác biệt khác (thiếu bảng/cột/chỉ mục, cột khác kiểu): DỪNG, đừng đánh dấu, và gửi kết quả để xử lý.
 
 # 3. Đánh dấu baseline đã áp dụng (chỉ ghi một dòng vào bảng _prisma_migrations, không đổi dữ liệu)
 DATABASE_URL="URL_DATABASE" npx prisma migrate resolve --applied 0_init
