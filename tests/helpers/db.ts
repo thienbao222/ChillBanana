@@ -2,6 +2,9 @@ import { prisma } from "@/lib/prisma";
 
 const TABLES = [
   "PaymentTransaction",
+  "PaymentAttempt",
+  "EmailLog",
+  "PricingConfig",
   "TrackingLog",
   "OrderItem",
   "PurchaseTask",

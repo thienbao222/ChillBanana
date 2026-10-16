@@ -12,9 +12,10 @@ import WhyChooseUs from "@/components/WhyChooseUs";
 import NewsCorner from "@/components/NewsCorner";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 export default function NeoDaylightCosmos() {
-  const { totalItems, openCart, addToCart } = useCart();
+  const { totalItems, openCart, addToCart, pricingConfig } = useCart();
   const { customer, openAuthModal } = useAuth();
   const [showMini, setShowMini] = useState(false);
   const { preferences } = useWebsitePreferences();
@@ -47,8 +48,8 @@ export default function NeoDaylightCosmos() {
   const [createdOrder, setCreatedOrder] = useState<any>(null);
 
   // Exchange rate state (live from API)
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
-  const [rateLabel, setRateLabel] = useState<string>("172,0 đ");
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
+  const [rateLabel, setRateLabel] = useState<string>(`${DEFAULT_EXCHANGE_RATE.toLocaleString("vi-VN")} đ`);
 
   // Parallax pointermove & scroll listeners
   useEffect(() => {
@@ -180,7 +181,7 @@ export default function NeoDaylightCosmos() {
 
   // Tính toán chi phí theo tỷ giá live
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(20000, Math.round(productPriceVnd * 0.04));
+  const serviceFeeVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(productPriceVnd * pricingConfig.serviceFeePercent / 100));
   const baseOrderCost = productPriceVnd + serviceFeeVnd;
   const depositVnd = depositChoice === "100" ? baseOrderCost : Math.round(baseOrderCost * 0.5);
 
@@ -218,8 +219,8 @@ export default function NeoDaylightCosmos() {
       showToast("Vui lòng dán link sản phẩm trước khi tạo đơn đặt cọc.");
       return;
     }
-    if (baseOrderCost < 300000) {
-      showToast("Giá trị đơn hàng tối thiểu là 300.000 đ để đủ điều kiện mua hộ.");
+    if (baseOrderCost < pricingConfig.minimumBaseOrderVnd) {
+      showToast(`Giá trị đơn hàng tối thiểu là ${pricingConfig.minimumBaseOrderVnd.toLocaleString("vi-VN")} đ để đủ điều kiện mua hộ.`);
       return;
     }
 
@@ -482,7 +483,7 @@ export default function NeoDaylightCosmos() {
             <p className="lead">
               {preferences.language === "ja"
                 ? "Amazon JP、Mercari、Rakuten、Yahoo Auctionsの商品リンクを貼り付けると、実際の円価格と銀行為替レートに基づく費用を自動で計算します。ChillBanana AIが24時間サポートし、まとめ買いで送料を節約できます。"
-                : <>Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo Auctions</b> — hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <b>tỷ giá ngân hàng trực tiếp</b>, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn 24/7 và giải pháp <b>Gộp đơn tiết kiệm 25% cước</b>.</>}
+                : <>Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo Auctions</b> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn và giải pháp <b>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</b>.</>}
             </p>
             <div className="trust">
               <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "日本国内正規品をお届け" : "Cam kết 100% chính hãng nội địa Nhật"}</span>
@@ -653,7 +654,7 @@ export default function NeoDaylightCosmos() {
                 />
                 <span>
                   <b>{t("Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!")}</b><br />
-                  {t("Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước vận chuyển cho kiện < 0.5kg)")}
+                  {`Bật Chế Độ Gộp Đơn (Tiết kiệm ${pricingConfig.groupBuyShippingDiscountPercent}% cước vận chuyển cho kiện ≤ ${pricingConfig.groupBuyMaxWeightKg}kg)`}
                 </span>
               </label>
             </form>
@@ -669,12 +670,12 @@ export default function NeoDaylightCosmos() {
                 <b>{productPriceVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>{t("Phí mua hộ & bảo hiểm (4%):")}</span>
+                <span>{`Phí mua hộ & bảo hiểm (${pricingConfig.serviceFeePercent}%):`}</span>
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
                 <span>{t("Cước bay quốc tế:")}</span>
-                <b className="ok">{isGroupBuy ? t("Ưu đãi Mua Chung (-25%)") : t("Cân đo thực tế khi về kho (0 đ)")}</b>
+                <b className="ok">{isGroupBuy ? `Ưu đãi Mua Chung (-${pricingConfig.groupBuyShippingDiscountPercent}%)` : t("Cân đo thực tế khi về kho (0 đ)")}</b>
               </div>
               <div className="row">
                 <span>{t("Phụ phí hải quan & đóng gói:")}</span>

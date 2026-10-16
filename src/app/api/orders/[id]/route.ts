@@ -12,6 +12,8 @@ import {
 import { isNextOrderStatus } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
 
 function isAdmin(req: NextRequest): boolean {
   return isAdminRequest(req);
@@ -306,17 +308,16 @@ export async function PATCH(
         if (!Number.isSafeInteger(finalPriceJpy) || finalPriceJpy < 100 || !Number.isFinite(finalWeightKg) || finalWeightKg < 0 || finalWeightKg > 100) {
           return NextResponse.json({ error: "Để duyệt giá, vui lòng nhập giá JPY hợp lệ và cân nặng từ 0 đến 100 kg." }, { status: 400 });
         }
-        const finalProductPriceVnd = Math.round(finalPriceJpy * existingOrder.exchangeRate);
-        const finalServiceFeeVnd = Math.max(20000, Math.round(finalProductPriceVnd * 0.04));
-        const shipRate = existingOrder.isGroupBuy && finalWeightKg <= 0.5 ? Math.round(185000 * 0.75) : 185000;
-        const finalShippingFeeVnd = finalWeightKg > 0 ? Math.round(finalWeightKg * shipRate) : 0;
-        const finalTotalVnd = finalProductPriceVnd + finalServiceFeeVnd + finalShippingFeeVnd;
+        const pricingConfig = await getCurrentPricingConfig();
+        const finalPrice = calculateOrderPrice(finalPriceJpy, finalWeightKg, existingOrder.exchangeRate, existingOrder.isGroupBuy, pricingConfig.values);
+        const { productPriceVnd: finalProductPriceVnd, serviceFeeVnd: finalServiceFeeVnd, shippingFeeVnd: finalShippingFeeVnd, totalVnd: finalTotalVnd } = finalPrice;
         updateData.priceJpy = finalPriceJpy;
         updateData.weightKg = finalWeightKg;
         updateData.productPriceVnd = finalProductPriceVnd;
         updateData.serviceFeeVnd = finalServiceFeeVnd;
         updateData.shippingFeeVnd = finalShippingFeeVnd;
         updateData.totalVnd = finalTotalVnd;
+        updateData.pricingConfigVersion = pricingConfig.version || null;
         updateData.depositAmountVnd = getDepositAmount(
           finalProductPriceVnd + finalServiceFeeVnd,
           existingOrder.depositPercent === 100 ? 100 : 50

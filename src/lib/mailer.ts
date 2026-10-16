@@ -1,5 +1,8 @@
 import nodemailer from "nodemailer";
 import { createCustomerEmailVerificationToken, createGuestOrderAccessToken } from "@/lib/auth-session";
+import { deliverLoggedEmail } from "@/features/notifications/email-delivery";
+import { resolvePaymentMode } from "@/features/payments/provider";
+import { prisma } from "@/lib/prisma";
 
 function getBaseUrl(): string {
   // 1. Ưu tiên APP_URL do người dùng cài đặt
@@ -39,23 +42,18 @@ function buildGuestOrderTrackingUrl(order: { orderCode: string; customerEmail?: 
   return `${getBaseUrl()}/tracking?orderCode=${code}${token}`;
 }
 
-export async function sendGuestOrderAccessEmail(order: { orderCode: string; customerEmail: string; customerName?: string | null }): Promise<boolean> {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) return false;
+export async function sendGuestOrderAccessEmail(order: { id?: string; orderCode: string; customerEmail: string; customerName?: string | null }, logId?: string): Promise<boolean> {
   const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
   const orderCode = escapeHtml(order.orderCode);
   const customerName = escapeHtml(order.customerName || "Quý khách");
-  try {
-    await getTransporter().sendMail({
-      from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-      to: order.customerEmail,
-      subject: `[ChillBanana] Liên kết tra cứu đơn #${orderCode}`,
-      html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1e293b;line-height:1.6"><h2>Tra cứu đơn hàng ChillBanana</h2><p>Xin chào ${customerName},</p><p>Bạn vừa yêu cầu truy cập đơn <strong>#${orderCode}</strong>. Bấm liên kết bên dưới để xem trạng thái đơn trong 7 ngày:</p><p><a href="${trackingUrl}" style="display:inline-block;background:#0f172a;color:#fbbf24;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">Mở đơn hàng</a></p><p>Nếu bạn không yêu cầu liên kết này, hãy bỏ qua email.</p></div>`,
-    });
-    return true;
-  } catch (error) {
-    console.error(`[Mailer] Không gửi được liên kết tra cứu đơn #${orderCode}:`, error);
-    return false;
-  }
+  return deliverLoggedEmail({
+    emailType: "guest-order-access",
+    orderId: order.id,
+    logId,
+    to: order.customerEmail,
+    subject: `[ChillBanana] Liên kết tra cứu đơn #${orderCode}`,
+    html: `<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;color:#1e293b;line-height:1.6"><h2>Tra cứu đơn hàng ChillBanana</h2><p>Xin chào ${customerName},</p><p>Bạn vừa yêu cầu truy cập đơn <strong>#${orderCode}</strong>. Bấm liên kết bên dưới để xem trạng thái đơn trong 7 ngày:</p><p><a href="${trackingUrl}" style="display:inline-block;background:#0f172a;color:#fbbf24;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:bold">Mở đơn hàng</a></p><p>Nếu bạn không yêu cầu liên kết này, hãy bỏ qua email.</p></div>`,
+  }, getTransporter());
 }
 
 // Cấu hình transporter Nodemailer cho ChillBanana
@@ -84,28 +82,26 @@ function getTransporter() {
   });
 }
 
-export async function sendCustomerEmailVerification(customer: { id: string; email: string; name: string }) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error("SMTP_USER và SMTP_PASS phải được cấu hình để gửi email xác minh.");
-  }
+export async function sendCustomerEmailVerification(customer: { id: string; email: string; name: string }): Promise<void> {
   const token = createCustomerEmailVerificationToken({ id: customer.id, email: customer.email });
   const verificationUrl = `${getBaseUrl()}/api/auth/customer/verify?token=${encodeURIComponent(token)}`;
   const name = escapeHtml(customer.name);
-  await getTransporter().sendMail({
-    from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
+  const sent = await deliverLoggedEmail({
+    emailType: "customer-email-verification",
     to: customer.email,
     subject: "[ChillBanana] Xác minh địa chỉ email",
     html: `<p>Xin chào ${name},</p><p>Để kích hoạt tài khoản và kết nối các đơn hàng cũ của bạn, vui lòng xác minh email trong vòng 24 giờ:</p><p><a href="${verificationUrl}">Xác minh email</a></p><p>Nếu bạn không tạo tài khoản này, hãy bỏ qua email.</p>`,
-  });
+  }, getTransporter());
+  if (!sent) throw new Error("EMAIL_VERIFICATION_NOT_SENT");
 }
 
 /**
  * 1. Email xác nhận tạo đơn hàng mới (Chờ đặt cọc)
  */
-export async function sendOrderCreatedEmail(order: any) {
+export async function sendOrderCreatedEmail(order: any, logId?: string): Promise<boolean> {
   if (!order.customerEmail) {
     console.warn("[Mailer] Đơn hàng không có customerEmail, bỏ qua gửi email.");
-    return;
+    return false;
   }
 
   const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
@@ -114,9 +110,10 @@ export async function sendOrderCreatedEmail(order: any) {
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const isPriceVerified = order.isPriceVerified === true;
   const depositPercent = order.depositPercent === 100 ? 100 : 50;
-  const paymentInstructions = isPriceVerified
-    ? `<div style="background-color:#F8FAFC;border:1px solid #E2E8F0;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#475569"><p style="margin:0 0 8px;font-weight:bold;color:#0F172A">💳 Hướng dẫn thanh toán:</p><p style="margin:4px 0">• Thanh toán tự động bằng VNPAY trên trang theo dõi đơn hàng.</p><p style="margin:4px 0">• Nếu chuyển khoản VietQR, ghi đúng mã đơn: <strong style="color:#B45309">${orderCode}</strong>. Nhân viên sẽ xác nhận sau khi đối chiếu giao dịch.</p></div>`
-    : `<div style="background-color:#FFF7ED;border:1px solid #FED7AA;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#7C2D12"><p style="margin:0 0 8px;font-weight:bold">Đơn hàng đang chờ ChillBanana kiểm tra và xác nhận báo giá.</p><p style="margin:4px 0">Vui lòng chưa thanh toán. Khi báo giá được duyệt, chúng tôi sẽ gửi thông báo và cập nhật hướng dẫn thanh toán trên trang theo dõi đơn hàng.</p></div>`;
+  const paymentMode = resolvePaymentMode();
+  const paymentInstructions = !isPriceVerified
+    ? `<div style="background-color:#FFF7ED;border:1px solid #FED7AA;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#7C2D12"><p style="margin:0 0 8px;font-weight:bold">Đơn hàng đang chờ ChillBanana kiểm tra và xác nhận báo giá.</p><p style="margin:4px 0">Vui lòng chưa thanh toán. Khi báo giá được duyệt, trang theo dõi sẽ hiển thị hướng dẫn phù hợp.</p></div>`
+    : `<div style="background-color:#FFF8E6;border:1px solid #F4D27D;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#713F12"><p style="margin:0 0 8px;font-weight:bold">Luồng thanh toán hiện chỉ dành cho kiểm thử.</p><p style="margin:4px 0">${paymentMode === "sandbox" ? "VNPAY sandbox" : "Thanh toán mô phỏng"} không thu tiền thật. Không chuyển khoản thật; kết quả thử nghiệm không xác nhận đơn đã thanh toán hay bắt đầu mua hàng.</p></div>`;
 
   const html = `
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
@@ -154,30 +151,20 @@ export async function sendOrderCreatedEmail(order: any) {
     </div>
   `;
 
-  try {
-    const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-
-    if (hasAuth) {
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-        to: order.customerEmail,
-        subject: `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${String(order.productName || "Sản phẩm").slice(0, 100)}`,
-        html,
-      });
-      console.log(`[Mailer] ✅ Đã gửi email xác nhận tạo đơn tới ${order.customerEmail}`);
-    } else {
-      console.log(`[Mailer Sim] ℹ️ Đã tạo nội dung email cho đơn #${order.orderCode} gửi tới ${order.customerEmail} (Chưa cấu hình SMTP_USER & SMTP_PASS trong .env)`);
-    }
-  } catch (err) {
-    console.warn("[Mailer] Lỗi khi gửi email xác nhận tạo đơn:", err);
-  }
+  return deliverLoggedEmail({
+    emailType: "order-created",
+    orderId: order.id,
+    logId,
+    to: order.customerEmail,
+    subject: `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${String(order.productName || "Sản phẩm").slice(0, 100)}`,
+    html,
+  }, getTransporter());
 }
 
 /** Gửi báo giá đã được admin xác nhận; trả false khi không thể gửi thật. */
-export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
-  if (!order.customerEmail || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.warn("[Mailer] Không gửi email duyệt giá: thiếu email khách hàng hoặc cấu hình SMTP.");
+export async function sendPriceApprovedEmail(order: any, logId?: string): Promise<boolean> {
+  if (!order.customerEmail) {
+    console.warn("[Mailer] Không gửi email duyệt giá: đơn không có email khách hàng.");
     return false;
   }
 
@@ -210,28 +197,23 @@ export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
       </div>
     </div>`;
 
-  try {
-    await getTransporter().sendMail({
-      from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-      to: order.customerEmail,
-      subject: `[ChillBanana] Báo giá đơn #${order.orderCode} đã được xác nhận`,
-      html,
-    });
-    console.log(`[Mailer] Đã gửi email duyệt giá cho đơn #${order.orderCode}.`);
-    return true;
-  } catch (error) {
-    console.error(`[Mailer] Gửi email duyệt giá thất bại cho đơn #${order.orderCode}:`, error);
-    return false;
-  }
+  return deliverLoggedEmail({
+    emailType: "price-approved",
+    orderId: order.id,
+    logId,
+    to: order.customerEmail,
+    subject: `[ChillBanana] Báo giá đơn #${order.orderCode} đã được xác nhận`,
+    html,
+  }, getTransporter());
 }
 
 /**
  * 2. Email xác nhận thanh toán thành công (VNPAY hoặc nhân viên xác nhận chuyển khoản)
  */
-export async function sendPaymentSuccessEmail(order: any) {
+export async function sendPaymentSuccessEmail(order: any, logId?: string): Promise<boolean> {
   if (!order.customerEmail) {
     console.warn("[Mailer] Đơn hàng không có customerEmail, bỏ qua gửi email thanh toán.");
-    return;
+    return false;
   }
 
   const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
@@ -279,33 +261,23 @@ export async function sendPaymentSuccessEmail(order: any) {
     </div>
   `;
 
-  try {
-    const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-
-    if (hasAuth) {
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-        to: order.customerEmail,
-        subject: `[ChillBanana] ✅ Xác nhận thanh toán thành công đơn hàng #${order.orderCode}`,
-        html,
-      });
-      console.log(`[Mailer] ✅ Đã gửi email xác nhận thanh toán cọc tới ${order.customerEmail}`);
-    } else {
-      console.log(`[Mailer Sim] ℹ️ Đã tạo nội dung email thanh toán thành công cho đơn #${order.orderCode} gửi tới ${order.customerEmail}`);
-    }
-  } catch (err) {
-    console.warn("[Mailer] Lỗi khi gửi email xác nhận thanh toán:", err);
-  }
+  return deliverLoggedEmail({
+    emailType: "payment-success",
+    orderId: order.id,
+    logId,
+    to: order.customerEmail,
+    subject: `[ChillBanana] ✅ Xác nhận thanh toán thành công đơn hàng #${order.orderCode}`,
+    html,
+  }, getTransporter());
 }
 
 /**
  * 3. Email cập nhật tiến độ vận đơn (7 Bước) hoặc Hủy đơn
  */
-export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: string, description: string) {
+export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: string, description: string, logId?: string): Promise<boolean> {
   if (!order.customerEmail) {
     console.warn("[Mailer] Đơn hàng không có customerEmail, bỏ qua gửi email cập nhật.");
-    return;
+    return false;
   }
 
   const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
@@ -347,23 +319,37 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     </div>
   `;
 
-  try {
-    const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+  return deliverLoggedEmail({
+    emailType: "order-status-update",
+    orderId: order.id,
+    payload: { title: newStatusTitle.slice(0, 100) },
+    logId,
+    to: order.customerEmail,
+    subject: `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`,
+    html,
+  }, getTransporter());
+}
 
-    if (hasAuth) {
-      await transporter.sendMail({
-        from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-        to: order.customerEmail,
-        subject: `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`,
-        html,
-      });
-      console.log(`[Mailer] ✅ Đã gửi email cập nhật trạng thái tới ${order.customerEmail}`);
-    } else {
-      console.log(`[Mailer Sim] ℹ️ Đã tạo nội dung email cập nhật đơn #${order.orderCode}: ${newStatusTitle} cho ${order.customerEmail}`);
-    }
-  } catch (err) {
-    console.warn("[Mailer] Lỗi khi gửi email cập nhật trạng thái:", err);
+/** Retry a failed transactional email by re-rendering its template from the current order snapshot. */
+export async function retryEmailLog(logId: string): Promise<boolean> {
+  const log = await prisma.emailLog.findUnique({ where: { id: logId }, include: { order: true } });
+  if (!log || !log.order || log.status !== "FAILED") return false;
+  const payload = log.payload && typeof log.payload === "object" && !Array.isArray(log.payload)
+    ? log.payload as Record<string, unknown>
+    : {};
+  switch (log.emailType) {
+    case "guest-order-access":
+      return sendGuestOrderAccessEmail(log.order, log.id);
+    case "order-created":
+      return sendOrderCreatedEmail(log.order, log.id);
+    case "price-approved":
+      return sendPriceApprovedEmail(log.order, log.id);
+    case "payment-success":
+      return sendPaymentSuccessEmail(log.order, log.id);
+    case "order-status-update":
+      return sendOrderStatusUpdateEmail(log.order, String(payload.title || "Cập nhật trạng thái"), "Đơn hàng đã có cập nhật mới.", log.id);
+    default:
+      return false;
   }
 }
 

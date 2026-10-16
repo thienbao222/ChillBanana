@@ -11,6 +11,7 @@ import { CuratedProduct } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 type CuratedProductsProps = {
   quoteSectionId?: string;
@@ -26,7 +27,7 @@ export default function CuratedProducts({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const [products, setProducts] = useState<CuratedProduct[]>([]);
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 

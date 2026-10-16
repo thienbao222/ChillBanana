@@ -16,6 +16,7 @@ import { useAdminToast } from "@/context/AdminToastContext";
 export default function ProductsTab() {
   const { adminToast } = useAdminToast();
   const [products, setProducts] = useState<CuratedProduct[]>([]);
+  const [exchangeRate, setExchangeRate] = useState(172);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [productSearch, setProductSearch] = useState("");
   const [productCategoryFilter, setProductCategoryFilter] = useState("all");
@@ -41,7 +42,10 @@ export default function ProductsTab() {
     try {
       const res = await fetch("/api/products");
       const data = await res.json();
-      if (res.ok && data.products) setProducts(data.products);
+      if (res.ok && data.products) {
+        setProducts(data.products);
+        if (Number.isFinite(data.exchangeRate) && data.exchangeRate > 0) setExchangeRate(data.exchangeRate);
+      }
     } catch { adminToast.error("Lỗi tải sản phẩm"); }
     finally { setLoadingProducts(false); }
   };
@@ -383,7 +387,7 @@ export default function ProductsTab() {
                     className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 font-mono font-bold"
                   />
                   <span className="text-[11px] text-banana-700 font-semibold mt-1 block">
-                    ≈ {Math.round(productForm.priceJpy * 172).toLocaleString("vi-VN")} đ
+                    ≈ {Math.round(productForm.priceJpy * exchangeRate).toLocaleString("vi-VN")} đ
                   </span>
                 </div>
 

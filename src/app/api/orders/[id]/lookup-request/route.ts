@@ -34,7 +34,7 @@ export async function POST(
   try {
     const order = await prisma.order.findUnique({
       where: { orderCode },
-      select: { orderCode: true, customerEmail: true, customerName: true },
+      select: { id: true, orderCode: true, customerEmail: true, customerName: true },
     });
     if (order && order.customerEmail.trim().toLowerCase() === email) {
       await sendGuestOrderAccessEmail(order);

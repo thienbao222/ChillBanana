@@ -1,11 +1,6 @@
 import { prisma } from "@/lib/prisma";
-import {
-  AIR_SHIPPING_PER_KG,
-  GROUP_BUY_MAX_WEIGHT_KG,
-  GROUP_BUY_SHIPPING_DISCOUNT_RATE,
-  calculateOrderPrice,
-} from "@/features/pricing/calculator";
-import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import {
   hasGuestOrderAccessForEmail,
@@ -160,6 +155,7 @@ async function searchCatalog(message: string, category: string | null, includePr
       .slice(0, 5);
 
     const rate = includePriceEstimate && ranked.length > 0 ? await fetchLiveExchangeRate() : null;
+    const pricingConfig = rate && !rate.isStale ? await getCurrentPricingConfig() : null;
     const hasCurrentRate = Boolean(rate && !rate.isStale && rate.roundedRate > 0);
 
     return createEvidence(
@@ -183,7 +179,7 @@ async function searchCatalog(message: string, category: string | null, includePr
           voltageNote: product.voltageNote ? cleanSingleLine(product.voltageNote, "", 160) : null,
           estimatedQuote: hasCurrentRate
             ? (() => {
-                const estimate = calculateOrderPrice(product.priceJpy, product.weightKg, rate!.roundedRate, false);
+                const estimate = calculateOrderPrice(product.priceJpy, product.weightKg, rate!.roundedRate, false, pricingConfig!.values);
                 return {
                   serviceFeeVnd: estimate.serviceFeeVnd,
                   subtotalVnd: estimate.baseOrderCostVnd,
@@ -280,7 +276,8 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
       };
     }
 
-    const quote = calculateOrderPrice(priceJpy, 0, rate.roundedRate, false);
+    const pricingConfig = await getCurrentPricingConfig();
+    const quote = calculateOrderPrice(priceJpy, 0, rate.roundedRate, false, pricingConfig.values);
     const checkedAt = nowIso();
     const evidence = createEvidence(
       "quote_estimate",
@@ -314,7 +311,7 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
       `> 💴 **Giá trang sản phẩm:** ${number(priceJpy)} JPY (chưa được nhân viên xác nhận)`,
       `> 🔄 **Tỷ giá dùng để ước tính:** 1 JPY = ${number(rate.roundedRate)} VND (${rate.source})`,
       `> 🧾 **Tiền hàng + phí dịch vụ:** ${number(quote.baseOrderCostVnd)} đ`,
-      `> ✈️ **Cước vận chuyển:** ${number(AIR_SHIPPING_PER_KG)} đ/kg; chưa cộng vì chưa có cân nặng thực tế. Đơn gộp đủ điều kiện (tối đa ${GROUP_BUY_MAX_WEIGHT_KG} kg) được giảm ${Math.round(GROUP_BUY_SHIPPING_DISCOUNT_RATE * 100)}% cước.`,
+      `> ✈️ **Cước vận chuyển:** ${number(pricingConfig.values.airShippingPerKgVnd)} đ/kg; chưa cộng vì chưa có cân nặng thực tế. Đơn gộp đủ điều kiện (tối đa ${pricingConfig.values.groupBuyMaxWeightKg} kg) được giảm ${pricingConfig.values.groupBuyShippingDiscountPercent}% cước.`,
       `> 💰 **Tiền cọc tham khảo 50%:** ${number(quote.deposit50Vnd)} đ (không gồm cước bay)`,
       "> Tổng cuối cùng và tình trạng hàng cần nhân viên kiểm tra trước khi xác nhận.",
     ].join("\n");
@@ -458,16 +455,19 @@ async function lookupOrderStatus(
   }
 }
 
-function getShippingPolicyEvidence(): SupportEvidence {
+async function getShippingPolicyEvidence(): Promise<SupportEvidence> {
+  const pricingConfig = await getCurrentPricingConfig();
   return createEvidence(
     "shipping_policy",
     "ok",
     "Quy tắc giá và vận chuyển đang cấu hình trên website",
     {
-      airShippingRateVndPerKg: AIR_SHIPPING_PER_KG,
-      groupBuyDiscountPercent: Math.round(GROUP_BUY_SHIPPING_DISCOUNT_RATE * 100),
-      groupBuyDiscountCondition: `Đơn được bật gộp đơn và cân nặng không quá ${GROUP_BUY_MAX_WEIGHT_KG} kg`,
-      minimumBaseOrderVnd: MIN_ORDER_THRESHOLD_VND,
+      airShippingRateVndPerKg: pricingConfig.values.airShippingPerKgVnd,
+      serviceFeePercent: pricingConfig.values.serviceFeePercent,
+      serviceFeeMinimumVnd: pricingConfig.values.serviceFeeMinimumVnd,
+      groupBuyDiscountPercent: pricingConfig.values.groupBuyShippingDiscountPercent,
+      groupBuyDiscountCondition: `Đơn được bật gộp đơn và cân nặng không quá ${pricingConfig.values.groupBuyMaxWeightKg} kg`,
+      minimumBaseOrderVnd: pricingConfig.values.minimumBaseOrderVnd,
       deliveryEta: null,
       shippingSchedule: null,
     },
@@ -519,7 +519,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   if (intents.catalog && catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
   if (intents.orderStatus) jobs.push(lookupOrderStatus(intents.orderCode, input.customerId, input.guestOrderAccessToken));
-  if (intents.shipping) jobs.push(Promise.resolve(getShippingPolicyEvidence()));
+  if (intents.shipping) jobs.push(getShippingPolicyEvidence());
   if (intents.compatibility && catalogPromise) {
     jobs.push(catalogPromise.then(getCompatibilityEvidence));
   }

@@ -10,32 +10,47 @@ import { ipnPath } from "../helpers/vnpay";
 
 const callIpn = async (path: string) => json<{ RspCode: string; Message: string }>(await ipn(get(path)));
 
+async function makeVnpayOrder(overrides: Record<string, unknown> = {}) {
+  const order = await makeOrder(overrides);
+  await prisma.paymentAttempt.create({
+    data: {
+      orderId: order.id,
+      provider: "VNPAY_SANDBOX",
+      mode: "sandbox",
+      amountVnd: order.depositAmountVnd,
+      idempotencyKey: `test-vnpay-${order.id}`,
+      expiresAt: new Date(Date.now() + 15 * 60_000),
+    },
+  });
+  return order;
+}
+
 describe("VNPAY IPN", () => {
-  it("thanh toán hợp lệ: ghi nhận đúng một lần, chuyển đơn sang mua hàng", async () => {
-    const o = await makeOrder();
+  it("callback sandbox hợp lệ: ghi nhận một kịch bản nhưng không đánh dấu tiền thật", async () => {
+    const o = await makeVnpayOrder();
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400, txnNo: "T100" }));
     expect(r.RspCode).toBe("00");
 
     const after = await prisma.order.findUniqueOrThrow({ where: { id: o.id }, include: { paymentTransactions: true, trackingLogs: true } });
-    expect(after.paymentStatus).toBe("DEPOSITED_50");
-    expect(after.paymentMethod).toBe("VNPAY");
-    expect(after.status).toBe("PURCHASING_JP");
-    expect(after.reservationExpiresAt).toBeNull();
-    expect(after.paymentTransactions).toHaveLength(1);
-    expect(after.paymentTransactions[0]).toMatchObject({ provider: "VNPAY", amountVnd: 530_400, providerTransactionId: "T100", status: "CONFIRMED" });
+    expect(after.paymentStatus).toBe("UNPAID");
+    expect(after.paymentMethod).toBe("VIETQR");
+    expect(after.status).toBe("PENDING_DEPOSIT");
+    expect(after.reservationExpiresAt).not.toBeNull();
+    expect(after.paymentTransactions).toHaveLength(0);
+    expect((await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: o.id } })).status).toBe("CONFIRMED");
     expect(after.trackingLogs).toHaveLength(1);
-    expect(sendPaymentSuccessEmail).toHaveBeenCalledTimes(1);
+    expect(sendPaymentSuccessEmail).not.toHaveBeenCalled();
   });
 
-  it("đặt cọc 100% thì ghi PAID_100", async () => {
-    const o = await makeOrder({ depositPercent: 100, depositAmountVnd: 1_060_800 });
+  it("sandbox cọc 100% vẫn không xác nhận tiền thật", async () => {
+    const o = await makeVnpayOrder({ depositPercent: 100, depositAmountVnd: 1_060_800 });
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 1_060_800 }));
     expect(r.RspCode).toBe("00");
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("PAID_100");
+    expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
   });
 
   it("chữ ký sai: từ chối (97) và không đổi đơn", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400 }, "khoa-bi-mat-sai"));
     expect(r.RspCode).toBe("97");
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
@@ -43,7 +58,7 @@ describe("VNPAY IPN", () => {
   });
 
   it("sửa số tiền nhưng giữ chữ ký cũ: bị từ chối", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const good = ipnPath({ orderCode: o.orderCode, amountVnd: 530_400 });
     const tampered = good.replace("vnp_Amount=53040000", "vnp_Amount=100");
     expect(tampered).not.toBe(good);
@@ -52,27 +67,27 @@ describe("VNPAY IPN", () => {
   });
 
   it("chữ ký đúng nhưng số tiền khác số cọc: từ chối (04)", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 1_000 }));
     expect(r.RspCode).toBe("04");
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
   });
 
   it("gửi lại cùng IPN: không ghi nhận lần hai (02)", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const path = ipnPath({ orderCode: o.orderCode, amountVnd: 530_400, txnNo: "T200" });
     expect((await callIpn(path)).RspCode).toBe("00");
     expect((await callIpn(path)).RspCode).toBe("02");
-    expect(await prisma.paymentTransaction.count()).toBe(1);
-    expect(sendPaymentSuccessEmail).toHaveBeenCalledTimes(1);
+    expect(await prisma.paymentTransaction.count()).toBe(0);
+    expect(sendPaymentSuccessEmail).not.toHaveBeenCalled();
   });
 
   it("hai IPN đồng thời: chỉ một giao dịch được ghi", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const path = ipnPath({ orderCode: o.orderCode, amountVnd: 530_400, txnNo: "T300" });
     const results = await Promise.all([callIpn(path), callIpn(path)]);
     expect(results.map((r) => r.RspCode).sort()).toEqual(["00", "02"]);
-    expect(await prisma.paymentTransaction.count()).toBe(1);
+    expect(await prisma.paymentTransaction.count()).toBe(0);
   });
 
   it("không tìm thấy đơn (01)", async () => {
@@ -80,29 +95,30 @@ describe("VNPAY IPN", () => {
   });
 
   it("đơn ngoài catalog chưa được duyệt giá thì không nhận thanh toán", async () => {
-    const o = await makeOrder({ isPriceVerified: false });
+    const o = await makeVnpayOrder({ isPriceVerified: false });
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400 }));
     expect(r.RspCode).toBe("04");
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
   });
 
   it("đơn đã hủy không được nhận thanh toán", async () => {
-    const o = await makeOrder({ status: "CANCELLED", reservationExpiresAt: null });
+    const o = await makeVnpayOrder({ status: "CANCELLED", reservationExpiresAt: null });
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400 }));
     expect(r.RspCode).not.toBe("00");
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
   });
 
   it("giao dịch thất bại tại VNPAY: không ghi nhận tiền", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400, responseCode: "24", status: "02" }));
-    expect(r.RspCode).toBe("00"); // đã nhận thông báo; hiện chưa lưu giao dịch thất bại (xem docs/STATUS.md)
+    expect(r.RspCode).toBe("00"); // đã nhận thông báo thất bại
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
     expect(await prisma.paymentTransaction.count()).toBe(0);
+    expect((await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: o.id } })).status).toBe("FAILED");
   });
 
   it("thiếu VNPAY_HASH_SECRET thì từ chối mọi IPN", async () => {
-    const o = await makeOrder();
+    const o = await makeVnpayOrder();
     const path = ipnPath({ orderCode: o.orderCode, amountVnd: 530_400 });
     const saved = process.env.VNPAY_HASH_SECRET;
     delete process.env.VNPAY_HASH_SECRET;

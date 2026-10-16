@@ -12,6 +12,9 @@ Object.assign(process.env, {
   VNPAY_TMN_CODE: "E2ETMN01",
   VNPAY_HASH_SECRET: "e2e-vnpay-hash-secret",
   VNPAY_URL: "https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+  PAYMENT_MODE: "sandbox",
+  PAYMENT_MOCK_SECRET: "e2e-mock-payment-secret-00000000000000000000",
+  EMAIL_MODE: "mock",
   NEXT_PUBLIC_APP_URL: `http://127.0.0.1:${PORT}`,
 });
 delete process.env.SMTP_USER;

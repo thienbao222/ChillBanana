@@ -14,18 +14,15 @@ import {
   RefreshCw,
   Activity
 } from "lucide-react";
-import {
-  AIR_SHIPPING_PER_KG,
-  MIN_ORDER_THRESHOLD_VND,
-  calculateOrderPrice
-} from "@/lib/data";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 export default function OrderCalculator() {
-  const { addToCart, items, clearCart } = useCart();
+  const { addToCart, items, clearCart, pricingConfig } = useCart();
   const { customer } = useAuth();
   const { toast } = useToast();
 
@@ -57,7 +54,7 @@ export default function OrderCalculator() {
   const [isPriceLocked, setIsPriceLocked] = useState(false);
 
   // Tỷ giá thời gian thực tế
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [rateLoading, setRateLoading] = useState(false);
   const [rateSource, setRateSource] = useState("Tỷ giá liên ngân hàng");
 
@@ -191,7 +188,7 @@ export default function OrderCalculator() {
     setCategory(newCat);
   };
 
-  const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy);
+  const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy, pricingConfig);
 
   // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
   const handleVnpayPayment = async (order: any) => {
@@ -574,10 +571,10 @@ export default function OrderCalculator() {
                   {calc.isUnderMinOrder ? (
                     <>
                       <p className="font-bold text-amber-900">
-                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")} đ)
+                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({pricingConfig.minimumBaseOrderVnd.toLocaleString("vi-VN")} đ)
                       </p>
                       <p className="text-slate-600">
-                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm 25% cước vận chuyển quốc tế!
+                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm {pricingConfig.groupBuyShippingDiscountPercent}% cước vận chuyển quốc tế!
                       </p>
                     </>
                   ) : (
@@ -596,7 +593,7 @@ export default function OrderCalculator() {
                     />
                     <span className="font-bold text-navy-900 flex items-center">
                       <Users className="w-3.5 h-3.5 mr-1 text-banana-600" />
-                      Bật Chế Độ Gộp Đơn (Tiết kiệm 25% cước vận chuyển cho kiện &lt; 0.5kg)
+                      Bật Chế Độ Gộp Đơn (Tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước cho kiện ≤ {pricingConfig.groupBuyMaxWeightKg}kg)
                     </span>
                   </label>
                 </div>
@@ -630,7 +627,7 @@ export default function OrderCalculator() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
-                  Phí mua hộ & bảo hiểm (4%):
+                  Phí dịch vụ ({pricingConfig.serviceFeePercent}%):
                   <Info className="w-3 h-3 ml-1 text-slate-400" />
                 </span>
                 <span className="font-medium text-white">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
@@ -638,7 +635,7 @@ export default function OrderCalculator() {
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
                   Cước bay quốc tế:
-                  {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-25% Gộp</span>}
+                  {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-{pricingConfig.groupBuyShippingDiscountPercent}% Gộp</span>}
                 </span>
                 <span className="font-medium text-emerald-400">
                   {weightKg > 0 ? `${calc.shippingFeeVnd.toLocaleString("vi-VN")} đ (${weightKg}kg tham khảo)` : "Cân đo thực tế khi về kho (0 đ)"}
@@ -939,10 +936,10 @@ export default function OrderCalculator() {
                       <span>{orderSuccessData.isPriceVerified ? `Số tiền cần thanh toán (${orderSuccessData.depositPercent}%):` : "Mức thanh toán tạm tính:"}</span>
                       <strong className="text-banana-700 font-bold text-sm">{orderSuccessData.depositAmountVnd.toLocaleString("vi-VN")} đ</strong>
                     </div>
-                    {orderSuccessData.isPriceVerified ? <p className="text-[11px] text-slate-500 italic mt-2 border-t pt-2 border-slate-100">Thanh toán qua VNPAY để hệ thống tự xác nhận. Nếu chuyển khoản VietQR, nhân viên sẽ đối chiếu giao dịch.</p> : <p className="text-[11px] text-amber-700 italic mt-2 border-t pt-2 border-slate-100">Đơn hàng cần được duyệt báo giá trước. Vui lòng chưa thanh toán; số tiền cuối cùng sẽ được cập nhật trên trang theo dõi.</p>}
+              {orderSuccessData.isPriceVerified ? <p className="text-[11px] text-amber-700 italic mt-2 border-t pt-2 border-slate-100">Đây là luồng sandbox/mô phỏng để kiểm thử; không thu tiền thật và kết quả thử nghiệm không xác nhận đơn đã thanh toán.</p> : <p className="text-[11px] text-amber-700 italic mt-2 border-t pt-2 border-slate-100">Đơn hàng cần được duyệt báo giá trước. Vui lòng chưa thanh toán; số tiền cuối cùng sẽ được cập nhật trên trang theo dõi.</p>}
                   </div>
 
-                  {orderSuccessData.isPriceVerified && <button onClick={() => handleVnpayPayment(orderSuccessData)} disabled={isRedirecting} className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60">{isRedirecting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Đang chuyển đến VNPAY...</> : <><ExternalLink className="w-4 h-4" />Thanh Toán Qua VNPAY</>}</button>}
+                  {orderSuccessData.isPriceVerified && <button onClick={() => handleVnpayPayment(orderSuccessData)} disabled={isRedirecting} className="mt-4 w-full py-3 bg-[#0066CC] hover:bg-[#0052a3] text-white font-extrabold text-sm rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60">{isRedirecting ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Đang mở trang kiểm thử...</> : <><ExternalLink className="w-4 h-4" />Thử luồng thanh toán</>}</button>}
                 </div>
 
                 <div className="flex space-x-3 pt-2">

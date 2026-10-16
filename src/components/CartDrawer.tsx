@@ -29,6 +29,7 @@ export default function CartDrawer() {
     totalWeightKg,
     shippingFeeVnd,
     serviceFeeVnd,
+    pricingConfig,
     totalVnd,
     deposit50Vnd
   } = useCart();
@@ -483,7 +484,7 @@ export default function CartDrawer() {
                 <span className="font-semibold text-navy-900">{totalProductPriceVnd.toLocaleString()} đ</span>
               </div>
               <div className="flex justify-between">
-                <span>Phí mua hộ trọn gói (4%):</span>
+                <span>Phí dịch vụ ({pricingConfig.serviceFeePercent}%):</span>
                 <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString()} đ</span>
               </div>
               <div className="flex justify-between">
