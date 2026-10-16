@@ -10,33 +10,32 @@ Từ Giai đoạn 1, schema được quản lý bằng **Prisma Migrate** (thư 
 - Không bao giờ chạy `prisma migrate reset`, `prisma db push` hay seed trên database production.
 - Trước mỗi lần deploy có migration: tạo bản sao lưu (xem `docs/BACKUP_RESTORE.md`).
 
-## Bước làm một lần: tạo baseline (BẮT BUỘC trước khi deploy production)
+## Bước làm một lần: đánh dấu baseline trên database đã có dữ liệu (BẮT BUỘC trước khi deploy production)
 
-Database production đã có sẵn các bảng gốc (do `db push` tạo ra). Cần một migration "baseline" mô tả các bảng đó
-và đánh dấu là *đã áp dụng*, để Prisma không cố tạo lại.
+Database production đã có sẵn các bảng gốc (do `db push` tạo ra). Baseline `prisma/migrations/0_init` mô tả các bảng đó
+(sinh bằng Prisma từ schema ở commit `ef9e20c`, đã được CI kiểm tra: toàn bộ migration khớp `schema.prisma`, không lệch).
+Với database **đã có dữ liệu** cần đánh dấu baseline là *đã áp dụng* để Prisma không cố tạo lại bảng.
 
-Trên máy của bạn, trong thư mục repo (đã `npm ci`, có đủ lịch sử git):
+Với database **trống** (máy mới, môi trường test, CI): chỉ cần `npx prisma migrate deploy`; Prisma chạy `0_init` rồi các migration sau.
 
-```bash
-# 1. Tạo prisma/migrations/0_init từ schema gốc (commit ef9e20c), không cần kết nối database
-bash scripts/db/generate-baseline.sh
-
-# 2. Xem lại file SQL sinh ra, rồi commit
-git add prisma/migrations/0_init
-git commit -m "chore(db): add baseline migration"
-```
-
-Sau đó, với **mỗi database đã có dữ liệu** (production, và staging nếu đã tạo bằng db push), đánh dấu baseline là đã áp dụng:
+Làm lần lượt cho từng database đã có dữ liệu (production, và staging nếu tạo bằng `db push`). Chỉ đặt `DATABASE_URL`
+trong chính lệnh, không lưu URL production vào `.env`:
 
 ```bash
-# DATABASE_URL trỏ tới đúng database cần đánh dấu
-npx prisma migrate resolve --applied 0_init
-npx prisma migrate status   # phải báo còn migration chờ áp dụng: 20261015000100_phase1_security
+# 1. Sao lưu trước (docs/BACKUP_RESTORE.md)
+
+# 2. Kiểm tra schema thật của database KHỚP baseline. Mã thoát 0 = khớp.
+git show ef9e20c:prisma/schema.prisma > old-schema.prisma
+npx prisma migrate diff --from-url "URL_DATABASE" --to-schema-datamodel old-schema.prisma --exit-code
+#    Nếu có khác biệt: DỪNG, đừng đánh dấu, và gửi kết quả để xử lý.
+
+# 3. Đánh dấu baseline đã áp dụng (chỉ ghi một dòng vào bảng _prisma_migrations, không đổi dữ liệu)
+DATABASE_URL="URL_DATABASE" npx prisma migrate resolve --applied 0_init
+DATABASE_URL="URL_DATABASE" npx prisma migrate status   # phải báo còn 1 migration chờ: 20261015000100_phase1_security
 ```
 
-Với database **trống** (máy mới, môi trường test): chỉ cần `npx prisma migrate deploy`, Prisma sẽ chạy `0_init` rồi các migration sau.
-
-> Nếu deploy production khi chưa có `prisma/migrations/0_init`, `scripts/vercel-build.js` sẽ **từ chối build** và in hướng dẫn này.
+Không tự chạy `migrate deploy` lên production; Vercel sẽ chạy khi deploy production.
+Nếu deploy production khi chưa có `prisma/migrations/0_init`, `scripts/vercel-build.js` sẽ **từ chối build**.
 
 ## Quy trình hằng ngày
 
