@@ -1,6 +1,6 @@
 # Trạng thái dự án và tiến độ nâng cấp
 
-Cập nhật: 16/10/2026 · Nhánh `feat/phase-0-1-safety-foundation` (PR #4, draft) · Kế hoạch gốc: `NangCapFinal.docx`
+Cập nhật: 16/10/2026 · Giai đoạn 0–2 đã merge vào `main` (PR #4) và chạy trên production; sửa lỗi hồ sơ nhân đôi ở PR #5 · Kế hoạch gốc: `NangCapFinal.docx`
 
 Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa kiểm chứng đầy đủ · ⏳ cần bạn thực hiện · ⬜ chưa làm
 
@@ -20,8 +20,8 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 
 | Hạng mục | Trạng thái | Bằng chứng / ghi chú |
 | --- | --- | --- |
-| Migration thay cho `db push` khi deploy | ✅ | `vercel-build.js` production chạy `prisma migrate deploy`; `prisma:push` bị chặn (cần `ALLOW_DB_PUSH=1`, từ chối trên production). CI áp dụng toàn bộ migration lên DB trống và kiểm tra **không lệch** so với `schema.prisma`. |
-| Baseline migration `0_init` | ✅ tạo / ⏳ đánh dấu | Đã sinh bằng Prisma trên CI từ schema ở `ef9e20c` (12 bảng). **Còn phải đánh dấu đã áp dụng trên database có dữ liệu** (`docs/DATABASE_MIGRATIONS.md`). Nếu quên: `migrate deploy` trên production báo lỗi P3005 và build Vercel thất bại, bản cũ vẫn chạy (thất bại an toàn). |
+| Migration thay cho `db push` khi deploy | ✅ Đã chạy trên production | `vercel-build.js` production chạy `prisma migrate deploy`; `prisma:push` bị chặn (cần `ALLOW_DB_PUSH=1`, từ chối trên production). CI áp dụng toàn bộ migration lên DB trống và kiểm tra **không lệch** so với `schema.prisma`. |
+| Baseline migration `0_init` | ✅ | Sinh bằng Prisma trên CI từ schema ở `ef9e20c` (12 bảng). Đã đánh dấu đã áp dụng trên production ngày 16/10/2026 sau khi `migrate diff` chỉ khác bảng mẫu `playing_with_neon` của Neon (không thuộc schema). |
 | Hash mật khẩu admin sang scrypt | ✅ | Unit test + integration test với PostgreSQL thật: hash HMAC cũ đăng nhập được và tự nâng cấp; hash mới là `scrypt$...`. |
 | Giới hạn đăng nhập sai (admin, khách) và đăng ký | ✅ | Integration test: khóa sau 5 lần sai (kể cả nhập đúng sau đó), khóa theo IP, đăng nhập đúng xóa bộ đếm, đăng ký tối đa 10 lần/giờ/IP. |
 | Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi: đăng nhập/đăng xuất/đăng nhập sai admin, tạo/sửa/xóa sản phẩm, ghi nhận chuyển khoản, duyệt giá, đổi trạng thái/hủy đơn, gộp dữ liệu khách; có test. Chưa có màn hình xem nhật ký. Chưa ghi cho `purchase-tasks`. |
@@ -75,11 +75,20 @@ Lưu ý khi đọc kết quả:
 - Test tự từ chối chạy nếu `DATABASE_URL` không trỏ về máy cục bộ (trừ khi `ALLOW_TEST_DB_RESET=1`), vì chúng xóa dữ liệu (`tests/helpers/safety.ts`).
 - **Chưa kiểm chứng:** chạy migration trên database Neon thật của bạn, luồng với dữ liệu production, diễn tập khôi phục.
 
-## 4. Việc bạn cần làm trước khi merge vào nhánh chính
+## 4. Việc đã làm khi đưa lên production (16/10/2026)
 
-1. **Sao lưu production** (Neon branch và/hoặc `pg_dump`, xem `docs/BACKUP_RESTORE.md`).
-2. **Đánh dấu baseline trên database production**: làm đúng 3 bước trong `docs/DATABASE_MIGRATIONS.md` (sao lưu, kiểm tra schema khớp bằng `migrate diff`, rồi `migrate resolve --applied 0_init`). Nếu `migrate diff` báo khác biệt thì dừng và gửi kết quả. Ngoại lệ chấp nhận được: duy nhất bảng mẫu `playing_with_neon` do Neon tự tạo (mã thoát 2, mục "Removed tables"); đã gặp trên production ngày 16/10/2026, không ảnh hưởng migration.
-3. Kiểm tra biến môi trường Vercel: Production có `DATABASE_URL`, **`DIRECT_URL` (chuỗi kết nối trực tiếp của Neon, host không có `-pooler`)**, `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`, **không** có `ADMIN_INITIAL_PASSWORD`; Preview dùng database riêng.
-4. Chuyển PR #4 từ Draft sang Ready và merge; Vercel production sẽ chạy `prisma migrate deploy`.
-5. Sau deploy: đăng nhập admin một lần để hash mật khẩu nâng cấp lên scrypt; kiểm tra `AuditLog` có dòng `ADMIN_PASSWORD_REHASHED`.
-6. (Nên làm) Tạo database Neon development riêng và diễn tập khôi phục; ghi kết quả vào `docs/BACKUP_RESTORE.md`.
+| Việc | Kết quả |
+| --- | --- |
+| Sao lưu bằng Neon branch `backup-truoc-migrate-16-10` | ✅ Hết hạn 23/10/2026; giữ đến khi web ổn vài ngày |
+| Đánh dấu baseline `0_init` trên production | ✅ `migrate resolve --applied 0_init`; `migrate status` chỉ còn `20261015000100_phase1_security` chờ |
+| Biến môi trường Vercel | ✅ Thêm `DIRECT_URL` (chỉ Production, host không `-pooler`); có `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`; không có `ADMIN_INITIAL_PASSWORD` |
+| Merge PR #4 và deploy | ✅ Bảng `AuditLog` đã có trên production, nên migration phase1 đã chạy |
+| Đăng nhập admin sau deploy | ✅ `AuditLog` có `ADMIN_PASSWORD_REHASHED`, `ADMIN_LOGIN`, `ORDER_PRICE_APPROVED`; hash của `admin` bắt đầu bằng `scrypt$` |
+| Lỗi giao diện trang Hồ sơ nhân đôi thanh đầu trang và mascot | ✅ Sửa ở PR #5 (bỏ `LayoutWrapper` lồng nhau), người dùng xác nhận đã ổn |
+
+## 5. Việc còn lại
+
+1. **Tách database cho Preview**: `DATABASE_URL` đang dùng chung Production và Preview. Tạo branch Neon `dev` và đặt riêng cho Preview.
+2. **Diễn tập khôi phục** từ backup rồi ghi kết quả vào `docs/BACKUP_RESTORE.md`.
+3. **Giai đoạn 3**: bảng giá cấu hình có lịch sử, lớp thanh toán mock/sandbox/live, `EmailLog`.
+4. **Giai đoạn 4**: giới hạn tần suất `/api/scrape-link`, màn hình xem nhật ký kiểm toán, ghi audit cho `purchase-tasks`.
