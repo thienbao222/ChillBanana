@@ -15,7 +15,6 @@ import {
   Mail
 } from "lucide-react";
 import Link from "next/link";
-import LayoutWrapper from "@/components/LayoutWrapper";
 
 export default function ProfilePage() {
   const { customer, loading: authLoading, openAuthModal } = useAuth();
@@ -54,21 +53,21 @@ export default function ProfilePage() {
 
   if (authLoading || (!customer && loading)) {
     return (
-      <LayoutWrapper>
+      <>
         <div className="min-h-[70vh] flex items-center justify-center">
           <div className="animate-pulse flex flex-col items-center">
             <div className="w-12 h-12 border-4 border-banana-400 border-t-transparent rounded-full animate-spin mb-4" />
             <p className="text-slate-500 font-medium">Đang tải hồ sơ...</p>
           </div>
         </div>
-      </LayoutWrapper>
+      </>
     );
   }
 
   if (!customer) return null; // Wait for redirect
 
   return (
-    <LayoutWrapper>
+    <>
       <div className="bg-slate-50 min-h-screen pb-20 pt-8">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           {/* Header */}
@@ -269,6 +268,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
-    </LayoutWrapper>
+    </>
   );
 }
