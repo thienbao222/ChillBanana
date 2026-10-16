@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { chatKeyPool, visionKeyPool, adminKeyPool } from "@/lib/api-key-manager";
 
 export const dynamic = "force-dynamic";
 
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
+  if (!guard.ok) return guard.response;
 
   try {
     const chatKeys = chatKeyPool.getStatus();

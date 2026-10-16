@@ -1,0 +1,146 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Giá trị giả chỉ dành cho CI (database là container tạm trong job). KHÔNG phải secret thật.
+      DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/shadow
+      ADMIN_SESSION_SECRET: ci-only-admin-secret-0000000000000000
+      CUSTOMER_SESSION_SECRET: ci-only-customer-secret-00000000000000
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        id: install
+        run: |
+          mkdir -p "$RUNNER_TEMP/logs"
+          set -o pipefail
+          npm ci 2>&1 | tee "$RUNNER_TEMP/logs/install.log"
+
+      - name: Validate Prisma schema
+        id: validate
+        run: |
+          set -o pipefail
+          npx prisma validate 2>&1 | tee "$RUNNER_TEMP/logs/validate.log"
+
+      - name: Apply migrations to an empty database
+        id: migrate
+        run: |
+          set -o pipefail
+          {
+            npx prisma migrate deploy
+            npx prisma migrate status
+          } 2>&1 | tee "$RUNNER_TEMP/logs/migrate.log"
+
+      - name: Migrations must match schema.prisma (no drift)
+        id: drift
+        run: |
+          set -o pipefail
+          PGPASSWORD=ci psql -h localhost -U ci -d ci -c 'CREATE DATABASE shadow' 2>&1 | tee "$RUNNER_TEMP/logs/drift.log"
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code 2>&1 | tee -a "$RUNNER_TEMP/logs/drift.log"
+
+      - name: Type check
+        id: typecheck
+        run: |
+          set -o pipefail
+          npm run typecheck 2>&1 | tee "$RUNNER_TEMP/logs/typecheck.log"
+
+      - name: Lint
+        id: lint
+        run: |
+          set -o pipefail
+          npm run lint 2>&1 | tee "$RUNNER_TEMP/logs/lint.log"
+
+      - name: Unit tests
+        id: unit
+        run: |
+          set -o pipefail
+          npm run test:coverage 2>&1 | tee "$RUNNER_TEMP/logs/unit.log"
+
+      - name: Customer support evals
+        id: evals
+        run: |
+          set -o pipefail
+          npm run eval:customer-support 2>&1 | tee "$RUNNER_TEMP/logs/evals.log"
+
+      - name: Integration tests (PostgreSQL)
+        id: integration
+        run: |
+          set -o pipefail
+          npm run test:integration 2>&1 | tee "$RUNNER_TEMP/logs/integration.log"
+
+      - name: Build
+        id: build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/logs/build.log"
+
+      - name: Install Playwright browser
+        id: pwinstall
+        run: |
+          set -o pipefail
+          npx playwright install --with-deps chromium 2>&1 | tee "$RUNNER_TEMP/logs/pwinstall.log"
+
+      - name: End-to-end tests
+        id: e2e
+        run: |
+          set -o pipefail
+          npm run test:e2e 2>&1 | tee "$RUNNER_TEMP/logs/e2e.log"
+
+      - name: Post CI report to the pull request
+        if: always() && github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STEPS_JSON: ${{ toJSON(steps) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 .github/scripts/ci_report.py "$RUNNER_TEMP/logs"

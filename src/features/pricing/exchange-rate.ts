@@ -108,7 +108,32 @@ function getFallbackFloorRate(): number {
   return 172;
 }
 
+/**
+ * Chỉ dùng cho kiểm thử tự động (E2E): khi APP_ENV=test và có TEST_FIXED_JPY_VND_RATE thì
+ * trả tỷ giá cố định, không gọi API ngoài. Tuyệt đối bị bỏ qua trên Vercel production.
+ * Sẽ được thay bằng lớp provider mock/sandbox/live ở Giai đoạn 3.
+ */
+function getTestFixedRate(): LiveRateData | null {
+  if (process.env.APP_ENV !== "test" || process.env.VERCEL_ENV === "production") return null;
+  const fixed = Number(process.env.TEST_FIXED_JPY_VND_RATE);
+  if (!Number.isFinite(fixed) || fixed <= 0) return null;
+  return {
+    rate: fixed,
+    roundedRate: Math.round(fixed),
+    previousRate: fixed,
+    changePercent: 0,
+    updatedAt: new Date().toISOString(),
+    source: "test-fixed-rate",
+    isFallback: false,
+    isStale: false,
+    isVolatile: false,
+  };
+}
+
 export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
+  const testRate = getTestFixedRate();
+  if (testRate) return testRate;
+
   const now = Date.now();
   if (now - lastFetchTime < CACHE_DURATION_MS && cachedRate.rate > 0) {
     return { ...cachedRate, isStale: !lastFetchSucceeded };

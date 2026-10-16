@@ -1,5 +1,13 @@
 import type { NextRequest } from "next/server";
 import crypto from "crypto";
+import {
+  hashPassword,
+  verifyAdminPassword as verifyAdminPasswordCore,
+  verifyLegacyCustomerSha256,
+  verifyScryptPassword,
+  isScryptHash,
+  type PasswordCheck,
+} from "@/lib/password";
 
 // ============================================================================
 // Module xác thực phiên đăng nhập DÙNG CHUNG cho Admin & Customer.
@@ -103,8 +111,17 @@ function decodeToken(token: string): { payloadStr: string; signature: string } |
 // ADMIN
 // ---------------------------------------------------------------------------
 
+/** Hash mật khẩu admin mới: scrypt có salt riêng (không còn phụ thuộc ADMIN_SESSION_SECRET). */
 export function hashAdminPassword(password: string): string {
-  return sign(getAdminSecret(), password);
+  return hashPassword(password);
+}
+
+/**
+ * Kiểm tra mật khẩu admin. Hỗ trợ hash HMAC cũ để chuyển tiếp: nếu khớp thì needsRehash=true
+ * và nơi gọi phải lưu lại hash scrypt mới.
+ */
+export function verifyAdminPassword(password: string, storedHash: string): PasswordCheck {
+  return verifyAdminPasswordCore(password, storedHash, process.env.ADMIN_SESSION_SECRET);
 }
 
 export function createAdminSessionToken(username: string): string {
@@ -145,30 +162,16 @@ export function getAdminUsernameFromRequest(req: NextRequest): string | null {
 // ---------------------------------------------------------------------------
 
 export function hashCustomerPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${hash}`;
+  return hashPassword(password);
 }
 
-export function verifyCustomerPassword(password: string, storedHash: string): { valid: boolean; needsRehash: boolean } {
-  if (storedHash.startsWith("scrypt$")) {
-    const [, salt, expectedHex] = storedHash.split("$");
-    if (!salt || !expectedHex) return { valid: false, needsRehash: false };
-    const actual = crypto.scryptSync(password, salt, 64);
-    const expected = Buffer.from(expectedHex, "hex");
-    return {
-      valid: actual.length === expected.length && crypto.timingSafeEqual(actual, expected),
-      needsRehash: false,
-    };
+export function verifyCustomerPassword(password: string, storedHash: string): PasswordCheck {
+  if (isScryptHash(storedHash)) {
+    return { valid: verifyScryptPassword(password, storedHash), needsRehash: false };
   }
-
-  // Hashes created by the previous version are upgraded after a successful login.
-  const legacy = crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest();
-  const expected = Buffer.from(storedHash, "hex");
-  return {
-    valid: legacy.length === expected.length && crypto.timingSafeEqual(legacy, expected),
-    needsRehash: true,
-  };
+  // Hash đời đầu được nâng cấp sau khi đăng nhập thành công.
+  const valid = verifyLegacyCustomerSha256(password, storedHash);
+  return { valid, needsRehash: valid };
 }
 
 export function createCustomerSessionToken(data: { id: string; email: string }): string {
