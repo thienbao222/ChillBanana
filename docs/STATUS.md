@@ -79,7 +79,7 @@ Lưu ý khi đọc kết quả:
 
 1. **Sao lưu production** (Neon branch và/hoặc `pg_dump`, xem `docs/BACKUP_RESTORE.md`).
 2. **Đánh dấu baseline trên database production**: làm đúng 3 bước trong `docs/DATABASE_MIGRATIONS.md` (sao lưu, kiểm tra schema khớp bằng `migrate diff`, rồi `migrate resolve --applied 0_init`). Nếu `migrate diff` báo khác biệt thì dừng và gửi kết quả.
-3. Kiểm tra biến môi trường Vercel: Production có `DATABASE_URL`, `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`, **không** có `ADMIN_INITIAL_PASSWORD`; Preview dùng database riêng.
+3. Kiểm tra biến môi trường Vercel: Production có `DATABASE_URL`, **`DIRECT_URL` (chuỗi kết nối trực tiếp của Neon, host không có `-pooler`)**, `ADMIN_SESSION_SECRET`, `CUSTOMER_SESSION_SECRET`, `CRON_SECRET`, **không** có `ADMIN_INITIAL_PASSWORD`; Preview dùng database riêng.
 4. Chuyển PR #4 từ Draft sang Ready và merge; Vercel production sẽ chạy `prisma migrate deploy`.
 5. Sau deploy: đăng nhập admin một lần để hash mật khẩu nâng cấp lên scrypt; kiểm tra `AuditLog` có dòng `ADMIN_PASSWORD_REHASHED`.
 6. (Nên làm) Tạo database Neon development riêng và diễn tập khôi phục; ghi kết quả vào `docs/BACKUP_RESTORE.md`.

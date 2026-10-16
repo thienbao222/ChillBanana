@@ -6,11 +6,12 @@ const npmCli = process.env.npm_execpath;
 const isProductionDeployment =
   process.env.VERCEL === "1" && process.env.VERCEL_ENV === "production";
 
-function runNpm(args) {
+function runNpm(args, extraEnv = {}) {
   const command = npmCli ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
   const commandArgs = npmCli ? [npmCli, ...args] : args;
   const result = spawnSync(command, commandArgs, {
     stdio: "inherit",
+    env: { ...process.env, ...extraEnv },
     shell: !npmCli && process.platform === "win32",
   });
 
@@ -36,7 +37,21 @@ if (isProductionDeployment) {
     );
     process.exit(1);
   }
-  runNpm(["run", "prisma:migrate:deploy"]);
+
+  // Prisma Migrate dùng khóa advisory nên cần kết nối TRỰC TIẾP tới PostgreSQL.
+  // Chuỗi kết nối "pooler" của Neon (host chứa "-pooler") có thể làm migrate bị treo hoặc lỗi.
+  // Ứng dụng vẫn dùng DATABASE_URL (pooler); riêng bước migrate dùng DIRECT_URL nếu có.
+  const direct = process.env.DIRECT_URL;
+  const databaseUrl = direct || process.env.DATABASE_URL || "";
+  if (!direct && /-pooler\./.test(databaseUrl)) {
+    console.error(
+      "\n[vercel-build] TỪ CHỐI deploy production: DATABASE_URL là chuỗi kết nối pooler của Neon (host có \"-pooler\").\n" +
+        "Hãy thêm biến môi trường DIRECT_URL (chuỗi kết nối TRỰC TIẾP, host không có \"-pooler\") trên Vercel cho môi trường Production\n" +
+        "rồi deploy lại. Xem docs/DATABASE_MIGRATIONS.md.\n"
+    );
+    process.exit(1);
+  }
+  runNpm(["run", "prisma:migrate:deploy"], databaseUrl ? { DATABASE_URL: databaseUrl } : {});
 } else {
   console.log("Skipping database migration outside a Vercel production deployment.");
 }

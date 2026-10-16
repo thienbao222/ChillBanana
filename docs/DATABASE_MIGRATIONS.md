@@ -37,6 +37,15 @@ DATABASE_URL="URL_DATABASE" npx prisma migrate status   # phải báo còn 1 mig
 Không tự chạy `migrate deploy` lên production; Vercel sẽ chạy khi deploy production.
 Nếu deploy production khi chưa có `prisma/migrations/0_init`, `scripts/vercel-build.js` sẽ **từ chối build**.
 
+## Kết nối trực tiếp cho migration (Neon)
+
+Neon có hai loại chuỗi kết nối: **pooler** (host có `-pooler`, dùng cho ứng dụng) và **trực tiếp** (host không có `-pooler`).
+`prisma migrate` cần kết nối **trực tiếp**. Vì vậy:
+
+- Trên Vercel (Production) thêm biến `DIRECT_URL` = chuỗi kết nối trực tiếp của cùng database. `DATABASE_URL` giữ nguyên.
+- Khi deploy production, `scripts/vercel-build.js` chạy migrate với `DIRECT_URL`; nếu `DATABASE_URL` là pooler mà thiếu `DIRECT_URL`, build **từ chối** và báo rõ.
+- Khi chạy `migrate diff`/`resolve`/`status` bằng tay, cũng dùng chuỗi trực tiếp.
+
 ## Quy trình hằng ngày
 
 1. Sửa `prisma/schema.prisma`.
