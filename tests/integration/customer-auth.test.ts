@@ -81,7 +81,21 @@ describe("xác minh email", () => {
   it("token sai, bị sửa hoặc thiếu thì 400", async () => {
     const c = await makeCustomer("a@example.test", { emailVerifiedAt: null });
     const token = createCustomerEmailVerificationToken({ id: c.id, email: c.email });
-    expect((await verify(post("/api/auth/customer/verify", { token: token + "x" }))).status).toBe(400);
+
+    // Token = base64(`${payload}::${chữ ký}`). Thêm ký tự cuối KHÔNG phải giả mạo (base64 bỏ qua phần dư),
+    // nên giả mạo thật sự phải đổi nội dung hoặc chữ ký.
+    const raw = Buffer.from(token, "base64").toString("utf8");
+    const sep = raw.lastIndexOf("::");
+    const payload = JSON.parse(raw.slice(0, sep));
+    const signature = raw.slice(sep + 2);
+    const encode = (s: string) => Buffer.from(s).toString("base64");
+
+    const forgedPayload = encode(JSON.stringify({ ...payload, email: "ke-tan-cong@example.test" }) + "::" + signature);
+    const lastChar = signature.slice(-1);
+    const forgedSignature = encode(raw.slice(0, sep) + "::" + signature.slice(0, -1) + (lastChar === "0" ? "1" : "0"));
+
+    expect((await verify(post("/api/auth/customer/verify", { token: forgedPayload }))).status).toBe(400);
+    expect((await verify(post("/api/auth/customer/verify", { token: forgedSignature }))).status).toBe(400);
     expect((await verify(post("/api/auth/customer/verify", { token: "rac" }))).status).toBe(400);
     expect((await verify(post("/api/auth/customer/verify", {}))).status).toBe(400);
   });
