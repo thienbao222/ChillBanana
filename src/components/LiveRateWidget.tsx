@@ -8,6 +8,7 @@ import {
   ArrowDownRight
 } from "lucide-react";
 import { LiveRateData } from "@/features/pricing/exchange-rate";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 interface LiveRateWidgetProps {
   onRateChange?: (rate: number) => void;
@@ -16,9 +17,9 @@ interface LiveRateWidgetProps {
 
 export default function LiveRateWidget({ onRateChange, compact = false }: LiveRateWidgetProps) {
   const [rateData, setRateData] = useState<LiveRateData>({
-    rate: 172,
-    roundedRate: 172,
-    previousRate: 172,
+    rate: DEFAULT_EXCHANGE_RATE,
+    roundedRate: DEFAULT_EXCHANGE_RATE,
+    previousRate: DEFAULT_EXCHANGE_RATE,
     changePercent: 0,
     updatedAt: "",
     source: "Tỷ giá tham chiếu mặc định",

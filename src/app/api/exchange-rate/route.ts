@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 export const dynamic = "force-dynamic";
 
@@ -10,14 +12,17 @@ export async function GET() {
       success: true,
       data: rateData,
     });
-  } catch (error) {
+  } catch {
+    const configuredFallback = await getCurrentPricingConfig()
+      .then((config) => config.values.fallbackJpyVndRate)
+      .catch(() => DEFAULT_EXCHANGE_RATE);
     return NextResponse.json(
       {
         success: false,
         data: {
-          rate: 172,
-          roundedRate: 172,
-          previousRate: 172,
+          rate: configuredFallback,
+          roundedRate: configuredFallback,
+          previousRate: configuredFallback,
           changePercent: 0,
           updatedAt: "",
           source: "Tỷ giá tham chiếu mặc định",

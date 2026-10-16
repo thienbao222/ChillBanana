@@ -8,9 +8,9 @@ import {
   getCustomerFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
 } from "@/lib/auth-session";
-import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
 
 export const dynamic = "force-dynamic";
 
@@ -200,6 +200,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const liveRate = liveRateData.roundedRate || liveRateData.rate || 172;
+    const pricingConfig = await getCurrentPricingConfig();
+    const minimumBaseOrderVnd = pricingConfig.values.minimumBaseOrderVnd;
 
     // Khởi tạo mã đơn hàng
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -315,10 +317,10 @@ export async function POST(req: NextRequest) {
         }
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
-        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy);
+        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingConfig.values);
         const { productPriceVnd, serviceFeeVnd, baseOrderCostVnd, shippingFeeVnd, totalVnd } = price;
-        if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
-          throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
+        if (baseOrderCostVnd < minimumBaseOrderVnd) {
+          throw new Error(`ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`);
         }
 
         const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
@@ -343,6 +345,7 @@ export async function POST(req: NextRequest) {
             priceJpy: verifiedPriceJpy,
             weightKg: verifiedWeightKg,
             exchangeRate: liveRate,
+            pricingConfigVersion: pricingConfig.version || null,
             productPriceVnd,
             serviceFeeVnd,
             shippingFeeVnd,
@@ -400,8 +403,8 @@ export async function POST(req: NextRequest) {
       if (dbErr.message === "ORDER_PRICE_TOO_LOW") {
         return NextResponse.json({ error: "Tổng giá sản phẩm phải từ 100 ¥ trở lên." }, { status: 400 });
       }
-      if (dbErr.message === `ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`) {
-        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
+      if (dbErr.message === `ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`) {
+        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${minimumBaseOrderVnd.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
       }
       if (dbErr.message && dbErr.message.startsWith("INSUFFICIENT_STOCK:")) {
         const productName = dbErr.message.split(":")[2] || "Sản phẩm này";

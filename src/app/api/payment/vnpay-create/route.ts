@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
+import { createMockPaymentAttemptToken } from "@/features/payments/mock-provider";
+import { resolvePaymentMode } from "@/features/payments/provider";
 
 // ========== Helpers ==========
 function sortObject(obj: Record<string, string>) {
@@ -46,11 +49,18 @@ export async function POST(req: NextRequest) {
     if (order.depositAmountVnd <= 0) {
       return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
     }
-    const tmnCode = process.env.VNPAY_TMN_CODE;
-    const hashSecret = process.env.VNPAY_HASH_SECRET;
-    const vnpUrl = process.env.VNPAY_URL;
-    if (!tmnCode || !hashSecret || !vnpUrl) {
-      return NextResponse.json({ error: "Cổng thanh toán chưa được cấu hình đầy đủ." }, { status: 503 });
+    const mode = resolvePaymentMode();
+    if (mode === "blocked-live") {
+      return NextResponse.json({ error: "Thanh toán live đang bị khóa trong giai đoạn demo; không thể tạo giao dịch thật." }, { status: 503 });
+    }
+    if (mode === "misconfigured") {
+      return NextResponse.json({ error: "Cấu hình thanh toán không hợp lệ. Sandbox chỉ chấp nhận URL chính thức sandbox.vnpayment.vn." }, { status: 503 });
+    }
+    const tmnCode = mode === "sandbox" ? process.env.VNPAY_TMN_CODE : undefined;
+    const hashSecret = mode === "sandbox" ? process.env.VNPAY_HASH_SECRET : undefined;
+    const vnpUrl = mode === "sandbox" ? process.env.VNPAY_URL : undefined;
+    if (mode === "sandbox" && (!tmnCode || !hashSecret || !vnpUrl)) {
+      return NextResponse.json({ error: "Cấu hình VNPAY sandbox chưa đầy đủ." }, { status: 503 });
     }
 
     // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer.
@@ -86,6 +96,56 @@ export async function POST(req: NextRequest) {
 
     const returnUrl = `${baseUrl}/api/payment/vnpay-return`;
 
+    const attemptExpiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    const createdAttempt = await prisma.$transaction(async (tx) => {
+      // Serialize initiation per order so two rapid clicks cannot create two live payment sessions.
+      await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${order.id} FOR UPDATE`;
+      const currentOrder = await tx.order.findUnique({
+        where: { id: order.id },
+        select: { status: true, paymentStatus: true, isPriceVerified: true, depositAmountVnd: true, reservationExpiresAt: true },
+      });
+      const currentTime = new Date();
+      if (!currentOrder || currentOrder.status !== "PENDING_DEPOSIT" || currentOrder.paymentStatus !== "UNPAID" || !currentOrder.isPriceVerified || currentOrder.depositAmountVnd !== order.depositAmountVnd || (currentOrder.reservationExpiresAt && currentOrder.reservationExpiresAt <= currentTime)) {
+        return { error: "Đơn hàng vừa được thanh toán hoặc không còn đủ điều kiện tạo phiên thanh toán." } as const;
+      }
+      await tx.paymentAttempt.updateMany({
+        where: { orderId: order.id, status: { in: ["INITIATED", "PENDING"] }, expiresAt: { lte: currentTime } },
+        data: { status: "EXPIRED", failureCode: "ATTEMPT_EXPIRED", completedAt: currentTime },
+      });
+      const activeAttempt = await tx.paymentAttempt.findFirst({
+        where: { orderId: order.id, status: { in: ["INITIATED", "PENDING"] }, expiresAt: { gt: currentTime } },
+        select: { id: true },
+      });
+      if (activeAttempt) return { error: "Đơn hàng đã có một phiên thanh toán đang chờ. Hãy hoàn tất hoặc chờ phiên đó hết hạn." } as const;
+      const attempt = await tx.paymentAttempt.create({
+        data: {
+          orderId: order.id,
+          provider: mode === "mock" ? "MOCK" : "VNPAY_SANDBOX",
+          mode,
+          amountVnd: order.depositAmountVnd,
+          idempotencyKey: `${mode}:${order.id}:${randomUUID()}`,
+          expiresAt: attemptExpiresAt,
+        },
+      });
+      return { attempt } as const;
+    });
+    if ("error" in createdAttempt) return NextResponse.json({ error: createdAttempt.error }, { status: 409 });
+    const attempt = createdAttempt.attempt;
+
+    if (mode === "mock") {
+      try {
+        const token = createMockPaymentAttemptToken(attempt.id, attemptExpiresAt);
+        const paymentUrl = new URL("/payment/mock", baseUrl);
+        paymentUrl.searchParams.set("token", token);
+        paymentUrl.searchParams.set("orderCode", order.orderCode);
+        return NextResponse.json({ success: true, mode, paymentUrl: paymentUrl.toString(), demo: true });
+      } catch (error) {
+        await prisma.paymentAttempt.update({ where: { id: attempt.id }, data: { status: "FAILED", failureCode: "MOCK_PROVIDER_CONFIG", completedAt: new Date() } });
+        console.error("[Mock Payment] Provider configuration failed:", error);
+        return NextResponse.json({ error: "Cấu hình chữ ký thanh toán mô phỏng chưa đầy đủ." }, { status: 503 });
+      }
+    }
+
     // Múi giờ Vietnam (GMT+7)
     const formatter = new Intl.DateTimeFormat("en-GB", {
       timeZone: "Asia/Ho_Chi_Minh",
@@ -116,7 +176,7 @@ export async function POST(req: NextRequest) {
     const params: Record<string, string> = {
       vnp_Version: "2.1.0",
       vnp_Command: "pay",
-      vnp_TmnCode: tmnCode,
+      vnp_TmnCode: tmnCode!,
       vnp_Amount: String(amountInt * 100),
       vnp_CreateDate: createDate,
       vnp_CurrCode: "VND",
@@ -131,12 +191,12 @@ export async function POST(req: NextRequest) {
 
     const sortedParams = sortObject(params);
     const signData = buildQueryString(sortedParams);
-    const hmac = crypto.createHmac("sha512", hashSecret);
+    const hmac = crypto.createHmac("sha512", hashSecret!);
     const signed = hmac.update(Buffer.from(signData, "utf-8")).digest("hex");
 
-    const paymentUrl = `${vnpUrl}?${signData}&vnp_SecureHash=${signed}`;
+    const paymentUrl = `${vnpUrl!}?${signData}&vnp_SecureHash=${signed}`;
 
-    return NextResponse.json({ success: true, paymentUrl });
+    return NextResponse.json({ success: true, mode, paymentUrl, demo: true });
   } catch (error) {
     console.error("[VNPAY CREATE]", error);
     return NextResponse.json({ error: "Lỗi tạo URL thanh toán" }, { status: 500 });

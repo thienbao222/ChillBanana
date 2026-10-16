@@ -28,6 +28,7 @@ import { useToast } from "@/context/ToastContext";
 import { useCart } from "@/context/CartContext";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 import "@/styles/NeoDaylightCosmos.css";
 
 function TrackingCosmosContent() {
@@ -63,10 +64,10 @@ function TrackingCosmosContent() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Trạng thái thanh toán VNPAY trả về
-  const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | "pending" | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "simulated" | "failed" | "invalid" | "pending" | null>(null);
 
   // Tỷ giá live
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
 
   // Parallax pointermove listeners
   useEffect(() => {
@@ -205,7 +206,7 @@ function TrackingCosmosContent() {
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("orderCode");
     const accessToken = searchParams.get("access");
-    const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | "pending" | null;
+    const payment = searchParams.get("payment") as "success" | "simulated" | "failed" | "invalid" | "pending" | null;
     if (payment) setPaymentStatus(payment);
     if (codeParam) {
       setSearchCode(codeParam);
@@ -397,6 +398,20 @@ function TrackingCosmosContent() {
                 <p className="text-xs text-emerald-700">{t("Giao dịch đã được xác nhận. Tiến độ xử lý đơn được cập nhật bên dưới.")}</p>
               </div>
               <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-700 hover:text-emerald-950">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        {paymentStatus === "simulated" && (
+          <div className="track-card mb-6" style={{ background: "#fff8e6", borderColor: "#f4d27d" }}>
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-amber-700 shrink-0" />
+              <div>
+                <p className="font-bold text-amber-950">Đã ghi nhận kịch bản VNPAY sandbox</p>
+                <p className="text-xs text-amber-800">Đây là kết quả kiểm thử, không phải thanh toán thật. Đơn vẫn chờ thanh toán và không được chuyển sang mua hàng.</p>
+              </div>
+              <button onClick={() => setPaymentStatus(null)} className="ml-auto text-amber-700 hover:text-amber-950" aria-label="Đóng thông báo">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -796,11 +811,11 @@ function TrackingCosmosContent() {
                           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
                             <div>
                               <p className="font-bold text-sky-950">Thanh toán đơn hàng</p>
-                              <p className="text-xs text-sky-800">VNPAY sẽ tự xác nhận giao dịch. Nếu chuyển khoản VietQR, hãy ghi đúng mã đơn và chờ nhân viên đối chiếu.</p>
+                              <p className="text-xs text-amber-800">Luồng dưới đây chỉ dùng để kiểm thử sandbox/mô phỏng, không thu tiền thật và không xác nhận đơn đã thanh toán.</p>
                               {order.reservationExpiresAt && <p className="text-xs text-sky-800 mt-1">Thời hạn giữ hàng đến {new Date(order.reservationExpiresAt).toLocaleString("vi-VN")}.</p>}
                             </div>
                             <button onClick={handlePayVnpay} disabled={isRedirectingVnpay} className="w-full rounded-xl bg-[#0066CC] px-4 py-3 text-sm font-bold text-white disabled:opacity-60 flex items-center justify-center gap-2">
-                              <CreditCard className="w-4 h-4" />{isRedirectingVnpay ? "Đang chuyển đến VNPAY..." : "Thanh toán qua VNPAY"}
+                              <CreditCard className="w-4 h-4" />{isRedirectingVnpay ? "Đang mở trang kiểm thử..." : "Thử luồng thanh toán"}
                             </button>
                             <div className="text-center text-xs text-slate-600">
                               <p>Hoặc chuyển khoản VietQR, nội dung: <strong>{order.orderCode}</strong></p>

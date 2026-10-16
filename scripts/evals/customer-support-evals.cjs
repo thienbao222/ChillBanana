@@ -152,6 +152,15 @@ async function evaluateReadOnlyTools() {
     "./support-policy": policy,
     "@/lib/prisma": { prisma: mockPrisma },
     "@/features/pricing/calculator": pricing,
+    "@/features/pricing/config": {
+      getCurrentPricingConfig: async () => ({
+        version: 0,
+        values: pricing.DEFAULT_PRICING_CONFIG,
+        changedBy: "eval",
+        changeReason: null,
+        createdAt: new Date(0),
+      }),
+    },
     "@/features/orders/policy": orderPolicy,
     "@/features/pricing/exchange-rate": { fetchLiveExchangeRate: async () => currentRate },
     "@/lib/auth-session": {

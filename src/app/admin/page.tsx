@@ -15,6 +15,7 @@ import {
   Columns,
   ExternalLink,
   RefreshCw,
+  Settings2,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
@@ -22,6 +23,7 @@ import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
 import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
+import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 import "./admin-neoday.css";
 
@@ -37,7 +39,7 @@ function AdminDashboardPageInner() {
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
   // Tab đang chọn
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase" | "settings">("orders");
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
   const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("overview");
 
@@ -145,6 +147,7 @@ function AdminDashboardPageInner() {
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
                 { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Tác vụ mua hộ" },
                 { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
+                ...(currentUser?.role === "SUPER_ADMIN" ? [{ key: "settings", icon: <Settings2 className="h-4 w-4" />, label: "Cài đặt nghiệp vụ" }] : []),
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -190,6 +193,7 @@ function AdminDashboardPageInner() {
             {activeTab === "analytics" && (
               <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
             )}
+            {activeTab === "settings" && currentUser?.role === "SUPER_ADMIN" && <BusinessSettingsTab />}
           </>
         )}
 

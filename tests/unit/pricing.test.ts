@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   AIR_SHIPPING_PER_KG,
+  DEFAULT_PRICING_CONFIG,
   GROUP_BUY_MAX_WEIGHT_KG,
   MIN_ORDER_THRESHOLD_VND,
   calculateOrderPrice,
 } from "@/features/pricing/calculator";
+import { validatePricingConfig } from "@/features/pricing/config";
 
 describe("calculateOrderPrice", () => {
   it("tính giá cơ bản: hàng + phí 4% + cước theo cân nặng", () => {
@@ -58,5 +60,28 @@ describe("calculateOrderPrice", () => {
     const p = calculateOrderPrice(2_800, 0, 100); // 280.000 + 20.000
     expect(p.baseOrderCostVnd).toBe(300_000);
     expect(p.isUnderMinOrder).toBe(false);
+  });
+
+  it("dùng được một phiên bản cấu hình giá tùy chỉnh", () => {
+    const config = {
+      serviceFeePercent: 5,
+      serviceFeeMinimumVnd: 25_000,
+      airShippingPerKgVnd: 200_000,
+      groupBuyShippingDiscountPercent: 20,
+      groupBuyMaxWeightKg: 0.75,
+      minimumBaseOrderVnd: 250_000,
+      fallbackJpyVndRate: 168,
+      usdVndReferenceRate: 25_500,
+    };
+    expect(validatePricingConfig(config)).toEqual({ values: config });
+    const quote = calculateOrderPrice(10_000, 0.5, 170, true, config);
+    expect(quote.serviceFeeVnd).toBe(85_000);
+    expect(quote.shippingFeeVnd).toBe(80_000);
+  });
+
+  it("từ chối cấu hình thiếu trường, giá trị ngoài giới hạn hoặc trường lạ", () => {
+    expect("error" in validatePricingConfig({})).toBe(true);
+    expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, serviceFeePercent: 100 })).toBe(true);
+    expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, unknown: 1 })).toBe(true);
   });
 });

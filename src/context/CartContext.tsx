@@ -1,7 +1,8 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { AIR_SHIPPING_PER_KG, DEFAULT_EXCHANGE_RATE } from "@/lib/data";
+import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
+import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { useToast } from "@/context/ToastContext";
 
 export interface CartItem {
@@ -28,6 +29,8 @@ interface CartContextType {
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   exchangeRate: number;
+  pricingConfig: PricingConfigValues;
+  pricingConfigVersion: number;
   totalItems: number;
   totalPriceJpy: number;
   totalProductPriceVnd: number;
@@ -47,6 +50,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
+  const [pricingConfig, setPricingConfig] = useState<PricingConfigValues>(DEFAULT_PRICING_CONFIG);
+  const [pricingConfigVersion, setPricingConfigVersion] = useState(0);
 
   // Lấy tỷ giá thực tế live từ API
   useEffect(() => {
@@ -60,6 +65,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .catch((err) => {
         console.warn("Could not fetch live rate for cart:", err);
       });
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/pricing-config")
+      .then(async (res) => {
+        if (!res.ok) throw new Error("Pricing configuration unavailable");
+        return res.json();
+      })
+      .then((data) => {
+        if (data?.values && Number.isSafeInteger(data.version)) {
+          setPricingConfig(data.values as PricingConfigValues);
+          setPricingConfigVersion(data.version);
+        }
+      })
+      .catch((err) => console.warn("Could not load pricing config:", err));
   }, []);
 
   // Khôi phục giỏ hàng từ localStorage
@@ -196,10 +216,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
 
   // Cước bay: 0đ khi chưa có trọng lượng thực tế (sẽ tính khi kho Tokyo cân đo)
-  const shippingFeeVnd = totalWeightKg > 0 ? Math.round(totalWeightKg * AIR_SHIPPING_PER_KG) : 0;
+  const shippingFeeVnd = totalWeightKg > 0 ? Math.round(totalWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
 
   // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 20.000đ)
-  const serviceFeeVnd = totalItems > 0 ? Math.max(20000, Math.round(totalProductPriceVnd * 0.04)) : 0;
+  const serviceFeeVnd = totalItems > 0
+    ? Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100))
+    : 0;
 
   // Tổng tiền
   const totalVnd = totalProductPriceVnd + shippingFeeVnd + serviceFeeVnd;
@@ -220,6 +242,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         updateQuantity,
         clearCart,
         exchangeRate,
+        pricingConfig,
+        pricingConfigVersion,
         totalItems,
         totalPriceJpy,
         totalProductPriceVnd,

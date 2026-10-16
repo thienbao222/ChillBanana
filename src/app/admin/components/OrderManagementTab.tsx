@@ -21,6 +21,7 @@ import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
 import { ORDER_STATUS_FLOW } from "@/features/orders/policy";
+import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 
 const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
   PENDING_DEPOSIT: "1. Chờ cọc",
@@ -67,6 +68,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [paymentAmountVnd, setPaymentAmountVnd] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+  const [pricingConfig, setPricingConfig] = useState<PricingConfigValues>(DEFAULT_PRICING_CONFIG);
 
   // Sync external search term
   useEffect(() => {
@@ -92,6 +94,13 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
 
   useEffect(() => {
     fetchOrders();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    fetch("/api/pricing-config")
+      .then((res) => res.ok ? res.json() : Promise.reject(new Error("pricing config unavailable")))
+      .then((data) => data?.values && setPricingConfig(data.values as PricingConfigValues))
+      .catch(() => adminToast.warning("Đang dùng cấu hình phí mặc định để xem trước; kiểm tra kết nối trước khi duyệt giá."));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openUpdateModal = (order: StoredOrder) => {
@@ -364,8 +373,10 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const approvalProductVnd = priceApprovalOrder && Number.isSafeInteger(approvalJpy) && approvalJpy >= 100
     ? Math.round(approvalJpy * priceApprovalOrder.exchangeRate)
     : 0;
-  const approvalServiceVnd = Math.max(20000, Math.round(approvalProductVnd * 0.04));
-  const approvalShippingRate = priceApprovalOrder?.isGroupBuy && approvalWeight <= 0.5 ? Math.round(185000 * 0.75) : 185000;
+  const approvalServiceVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(approvalProductVnd * pricingConfig.serviceFeePercent / 100));
+  const approvalShippingRate = priceApprovalOrder?.isGroupBuy && approvalWeight <= pricingConfig.groupBuyMaxWeightKg
+    ? Math.round(pricingConfig.airShippingPerKgVnd * (1 - pricingConfig.groupBuyShippingDiscountPercent / 100))
+    : pricingConfig.airShippingPerKgVnd;
   const approvalShippingVnd = Number.isFinite(approvalWeight) && approvalWeight > 0 && approvalWeight <= 100
     ? Math.round(approvalWeight * approvalShippingRate)
     : 0;

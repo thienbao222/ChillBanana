@@ -80,7 +80,7 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   expect(actions).toContain("ORDER_UPDATED");
 });
 
-test("thanh toán VNPAY: tạo URL, IPN hợp lệ ghi nhận một lần", async () => {
+test("VNPAY sandbox: ghi nhận kịch bản nhưng giữ nguyên thanh toán và trạng thái đơn", async () => {
   const order = (await api.post("/api/orders", orderPayload([{ id: productId, quantity: 2 }], { paymentMethod: "VNPAY" }))).data.order;
 
   const pay = await api.post("/api/payment/vnpay-create", { orderCode: order.orderCode });
@@ -95,9 +95,10 @@ test("thanh toán VNPAY: tạo URL, IPN hợp lệ ghi nhận một lần", asyn
   expect((await api.get(forged)).data.RspCode).toBe("97");
 
   const row = await prisma.order.findUniqueOrThrow({ where: { orderCode: order.orderCode }, include: { paymentTransactions: true } });
-  expect(row.paymentStatus).toBe("DEPOSITED_50");
-  expect(row.status).toBe("PURCHASING_JP");
-  expect(row.paymentTransactions).toHaveLength(1);
+  expect(row.paymentStatus).toBe("UNPAID");
+  expect(row.status).toBe("PENDING_DEPOSIT");
+  expect(row.paymentTransactions).toHaveLength(0);
+  expect((await prisma.paymentAttempt.findFirstOrThrow({ where: { orderId: row.id } })).status).toBe("CONFIRMED");
 });
 
 test("hết hàng: hai yêu cầu đồng thời vào suất cuối, chỉ một thành công", async () => {
