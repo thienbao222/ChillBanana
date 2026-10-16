@@ -66,7 +66,9 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   }
   const done = (await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order;
   expect(done.status).toBe("COMPLETED");
-  expect(done.trackingLogs.length).toBe(1 + flow.length);
+  // Log: 1 khi tạo đơn + 1 khi admin ghi nhận chuyển khoản + 1 cho mỗi bước chuyển trạng thái.
+  expect(done.trackingLogs.length).toBe(2 + flow.length);
+  expect(done.trackingLogs.map((l: { title: string }) => l.title)).toContain("Đã ghi nhận tiền cọc 50%");
 
   // 7. Đơn đã hoàn tất không sửa được nữa
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(400);
