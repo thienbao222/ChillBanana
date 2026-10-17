@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE "system_config" (
+CREATE TABLE IF NOT EXISTS "system_config" (
     "key" TEXT NOT NULL,
     "value" TEXT NOT NULL,
     "description" TEXT,
