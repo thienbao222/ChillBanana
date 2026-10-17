@@ -1,6 +1,11 @@
 import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { CUSTOMER_SUPPORT_TOOL_REGISTRY, type SupportEvidence } from "./support-policy";
+
+// shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
+let neoPrimaryUnavailable = false;
+let neoPrimaryCooldownUntil = 0;
 
 const SENSITIVE_KEYWORDS = [
   "chính trị", "chinh tri", "bầu cử", "biểu tình", "bạo động",
@@ -79,38 +84,61 @@ export async function askGeminiAgent(
   });
 
   let attemptCount = 0;
-  const maxAttempts = 3;
+  const maxAttempts = 2;
   while (attemptCount < maxAttempts) {
     attemptCount++;
     const activeKey = chatKeyPool.getNextKey();
     if (!activeKey) break;
 
-    try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${activeKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemInstruction }] },
-            contents,
-            generationConfig: { temperature: 0.4, maxOutputTokens: 2200 },
-          }),
-          signal: AbortSignal.timeout(12_000),
-        }
-      );
+    const models = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
+      ? [GEMINI_MODELS.neoFallback]
+      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback];
 
-      if (response.ok) {
-        const data = await response.json();
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
-        if (typeof textPart?.text === "string" && textPart.text.trim()) return textPart.text.trim();
-        chatKeyPool.markError(activeKey, 502);
-      } else {
+    for (const model of models) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemInstruction }] },
+              contents,
+              generationConfig: {
+                maxOutputTokens: 2200,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
+            }),
+            signal: AbortSignal.timeout(12_000),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
+          if (typeof textPart?.text === "string" && textPart.text.trim()) return textPart.text.trim();
+          if (model === GEMINI_MODELS.neo) continue;
+          chatKeyPool.markError(activeKey, 502);
+          break;
+        }
+
+        if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
+          if (response.status === 403 || response.status === 404) neoPrimaryUnavailable = true;
+          else neoPrimaryCooldownUntil = Date.now() + 60_000;
+          continue;
+        }
+
         chatKeyPool.markError(activeKey, response.status);
+        break;
+      } catch {
+        if (model === GEMINI_MODELS.neo) {
+          neoPrimaryCooldownUntil = Date.now() + 60_000;
+          continue;
+        }
+        chatKeyPool.markError(activeKey, 500);
+        break;
       }
-    } catch {
-      chatKeyPool.markError(activeKey, 500);
     }
   }
 

@@ -18,6 +18,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { isAdminRequest } from "@/lib/auth-session";
 import { isRecordedPaymentStatus } from "@/features/payments/policy";
 
@@ -186,14 +187,17 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.admin}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+          generationConfig: {
+            maxOutputTokens: 2000,
+            thinkingConfig: { thinkingLevel: "low" },
+          },
         }),
         signal: AbortSignal.timeout(30000),
       }

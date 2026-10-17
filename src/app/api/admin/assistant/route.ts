@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { getAdminAiModuleSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
 import { isAdminRequest } from "@/lib/auth-session";
 
@@ -55,13 +56,16 @@ Trả lời bằng tiếng Việt ngắn gọn, dễ quét. Nêu căn cứ bằn
       const apiKey = adminKeyPool.getNextKey();
       if (!apiKey) break;
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.admin}:generateContent?key=${apiKey}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: systemInstruction }] },
             contents,
-            generationConfig: { temperature: 0.2, maxOutputTokens: 1800 },
+            generationConfig: {
+              maxOutputTokens: 1800,
+              thinkingConfig: { thinkingLevel: "low" },
+            },
           }),
           signal: AbortSignal.timeout(18000),
         });

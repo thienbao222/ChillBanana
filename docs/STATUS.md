@@ -24,7 +24,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Baseline migration `0_init` | ✅ | Sinh bằng Prisma trên CI từ schema ở `ef9e20c` (12 bảng). Đã đánh dấu đã áp dụng trên production ngày 16/10/2026 sau khi `migrate diff` chỉ khác bảng mẫu `playing_with_neon` của Neon (không thuộc schema). |
 | Hash mật khẩu admin sang scrypt | ✅ | Unit test + integration test với PostgreSQL thật: hash HMAC cũ đăng nhập được và tự nâng cấp; hash mới là `scrypt$...`. |
 | Giới hạn đăng nhập sai (admin, khách) và đăng ký | ✅ | Integration test: khóa sau 5 lần sai (kể cả nhập đúng sau đó), khóa theo IP, đăng nhập đúng xóa bộ đếm, đăng ký tối đa 10 lần/giờ/IP. |
-| Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi: đăng nhập/đăng xuất/đăng nhập sai admin, tạo/sửa/xóa sản phẩm, ghi nhận chuyển khoản, duyệt giá, đổi trạng thái/hủy đơn, gộp dữ liệu khách; có test. Chưa có màn hình xem nhật ký. Chưa ghi cho `purchase-tasks`. |
+| Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi các thao tác admin và purchase task; tab xem nhật ký/API chỉ cho Super Admin, phân trang và lọc. Chưa xác nhận các integration test mới trên CI. |
 | Kiểm tra quyền ở backend | 🟡 | `requireAdmin` đối chiếu AdminUser trong DB và kiểm tra vai trò (chỉ SUPER_ADMIN cho `api-keys`, `stitch-all`). Test phân quyền cho các route admin hiện có. Các route admin còn lại vẫn dùng `isAdminRequest` (chưa kiểm tra vai trò). |
 | Tài liệu migration và backup/restore | ✅ viết / ⏳ diễn tập | `docs/DATABASE_MIGRATIONS.md`, `docs/BACKUP_RESTORE.md`. Chưa diễn tập khôi phục thật. |
 
@@ -52,7 +52,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Email | Đã có | Chưa cấu hình SMTP thì chỉ log "Mailer Sim". Tại thời điểm rà soát ban đầu chưa có retry và `EmailLog`. |
 | Tài khoản khách, xác minh email | Đã có, có test | Có giới hạn đăng nhập sai. Chưa có quên mật khẩu. |
 | Trang quản trị | Đã có | Sản phẩm, đơn, khách, báo cáo, AI, mua hàng. Chưa có test giao diện admin. |
-| Chatbot AI, trợ lý admin, báo cáo AI | Đã có | Chỉ có bộ eval sẵn (`npm run eval:customer-support`). Rate limit AI trong bộ nhớ. `/api/scrape-link` công khai, gọi Gemini, chưa có giới hạn tần suất: **rủi ro chi phí**, xử lý ở Giai đoạn 4. |
+| Chatbot AI, trợ lý admin, báo cáo AI | Đã có | Có bộ eval (`npm run eval:customer-support`). Rate limit chat AI vẫn trong bộ nhớ. `/api/scrape-link` có giới hạn bền vững theo IP để giảm rủi ro chi phí; chờ CI xác nhận integration test. |
 
 ## 3. Kết quả kiểm tra (GitHub Actions, commit `10d97c0`)
 
@@ -102,4 +102,13 @@ Lưu ý khi đọc kết quả:
 1. **Tách database cho Preview**: `DATABASE_URL` đang dùng chung Production và Preview. Tạo branch Neon `dev` và đặt riêng cho Preview.
 2. **Diễn tập khôi phục** từ backup rồi ghi kết quả vào `docs/BACKUP_RESTORE.md`.
 3. Hoàn thành test PostgreSQL/Playwright trên CI cho Giai đoạn 3; sau khi nhánh được merge, Production migration sẽ chạy trong Vercel Production build.
-4. **Giai đoạn 4**: giới hạn tần suất `/api/scrape-link`, màn hình xem nhật ký kiểm toán, ghi audit cho `purchase-tasks`.
+4. **Giai đoạn 4**: phần triển khai đã có trong working tree; cần chạy CI để xác nhận các integration test mới trước khi merge.
+
+## 7. Giai đoạn 4 — nhật ký và bảo vệ API tốn chi phí
+
+| Hạng mục | Trạng thái | Bằng chứng / ghi chú |
+| --- | --- | --- |
+| Giới hạn `/api/scrape-link` | 🟡 | 10 yêu cầu/IP trong 10 phút; bộ đếm dùng bảng `RateLimit` hiện có và chỉ lưu hash SHA-256 của IP. Quá ngưỡng trả HTTP 429 cùng `Retry-After`. Integration test đã thêm; chưa chạy do không dùng database production cho test phá hủy dữ liệu. |
+| Màn hình nhật ký kiểm toán | 🟡 | Tab “Nhật ký kiểm toán” và API chỉ cho `SUPER_ADMIN`; phân trang 50 dòng, lọc theo tên thao tác. Không trả IP hoặc metadata nội bộ cho giao diện. Integration test quyền và lọc dữ liệu đã thêm; chờ CI. |
+| Audit tác vụ mua hộ | 🟡 | Ghi sự kiện sau khi tạo task và sau khi cập nhật trạng thái thành công; không đưa link sản phẩm, mã đơn, mã ngoài hoặc thông tin khách vào metadata. Integration test đã thêm; chờ CI. |
+| Kiểm tra cục bộ | 🟡 | `npm run typecheck`, `npm run build`, `npm run lint`, `npm test` đạt (52 unit test); AI eval và Prisma validate đạt; lint còn cảnh báo có sẵn. Integration test cần PostgreSQL test riêng/CI; không chạy trên Neon production. |

@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { chatKeyPool } from "@/lib/api-key-manager";
+import { createHash } from "node:crypto";
+import { scrapeKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const SCRAPE_LINK_LIMIT = { max: 10, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
 
 // Domain allowlist — chỉ cho phép sàn thương mại điện tử Nhật Bản
 const ALLOWED_DOMAINS = [
@@ -49,7 +54,7 @@ async function extractWithGemini(
   storeName: string,
   productUrl: string
 ): Promise<Partial<ExtractedProduct> | null> {
-  const apiKey = chatKeyPool.getNextKey();
+  const apiKey = scrapeKeyPool.getNextKey();
   if (!apiKey) {
     console.warn("[ScrapeLink] Không có Gemini key khả dụng, dùng fallback.");
     return null;
@@ -86,20 +91,23 @@ JSON Schema cần trả về:
 
   try {
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.1, maxOutputTokens: 1024 },
+          generationConfig: {
+            maxOutputTokens: 1024,
+            thinkingConfig: { thinkingLevel: "minimal" },
+          },
         }),
         signal: AbortSignal.timeout(15000),
       }
     );
 
     if (!response.ok) {
-      chatKeyPool.markError(apiKey, response.status);
+      scrapeKeyPool.markError(apiKey, response.status);
       return null;
     }
 
@@ -226,6 +234,22 @@ function detectCategory(title: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const ip = getClientIp(req);
+    const ipHash = createHash("sha256").update(ip).digest("hex");
+    const rateLimitKey = `scrape-link:${ipHash}`;
+    let retryAfter: number;
+    try {
+      retryAfter = await checkAndRecordHit(rateLimitKey, SCRAPE_LINK_LIMIT);
+    } catch (error) {
+      console.error("[ScrapeLink] Không kiểm tra được giới hạn tần suất:", error);
+      return NextResponse.json({ error: "Dịch vụ tạm thời không khả dụng." }, { status: 503 });
+    }
+    if (retryAfter > 0) {
+      return NextResponse.json(
+        { error: "Bạn gửi quá nhiều yêu cầu. Vui lòng thử lại sau.", retryAfterSeconds: retryAfter },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
     const { url } = await req.json();
 
     if (!url || typeof url !== "string" || !url.startsWith("http")) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { visionKeyPool } from '@/lib/api-key-manager';
+import { GEMINI_MODELS } from '@/lib/gemini-models';
 import { prisma } from '@/lib/prisma';
 import { getImageCatalogSearchTerms, rankImageCatalogCandidates } from '@/features/ai/customer/image-catalog-matcher';
 
@@ -101,12 +102,12 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
         ]
       }],
       generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 2048
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingLevel: 'minimal' },
       }
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'

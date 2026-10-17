@@ -255,6 +255,7 @@ async function evaluateImageAnalysisRoute() {
       },
     },
     "@/lib/api-key-manager": { visionKeyPool: { getNextKey: () => "eval-key", markError: () => {} } },
+    "@/lib/gemini-models": { GEMINI_MODELS: { lightweight: "gemini-3.5-flash-lite" } },
     "@/lib/prisma": {
       prisma: {
         product: {

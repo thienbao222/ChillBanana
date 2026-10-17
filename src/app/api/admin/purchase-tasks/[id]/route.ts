@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -135,6 +136,16 @@ export async function PATCH(
     where: { id: taskId },
     data: updateData,
     include: { order: { select: { orderCode: true, productName: true } } },
+  });
+
+  await writeAuditLog({
+    actor: adminUsername,
+    action: "PURCHASE_TASK_STATUS_CHANGED",
+    entityType: "PurchaseTask",
+    entityId: taskId,
+    summary: `Cập nhật trạng thái tác vụ mua hộ: ${task.status} → ${targetStatus}.`,
+    metadata: { action, fromStatus: task.status, toStatus: targetStatus },
+    req,
   });
 
   console.log(
