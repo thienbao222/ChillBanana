@@ -47,7 +47,8 @@ export async function getMaxBlockedSeconds(keys: string[]): Promise<number> {
 export async function checkAndRecordHit(key: string, config: RateLimitConfig): Promise<number> {
   return prisma.$transaction(async (tx) => {
     // Serialize parallel calls from the same key across serverless instances.
-    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`;
+    // Project the void lock result to a scalar Prisma can decode.
+    await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))) AS advisory_lock`;
     const now = Date.now();
     const existing = await tx.rateLimit.findUnique({ where: { key } });
     const state = existing ? toState(existing) : null;
