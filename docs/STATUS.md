@@ -93,7 +93,7 @@ Lưu ý khi đọc kết quả:
 | Giá cấu hình có lịch sử | ✅ code, ⏳ production | Đã thêm PricingConfig, API chỉ cho Super Admin ghi, giao diện lịch sử/điều chỉnh và ảnh chụp phiên bản trên đơn. Migration và kiểm thử PostgreSQL đã qua CI. |
 | Đồng bộ cấu hình giá | ✅ code, ⏳ production | Storefront, giỏ, tạo đơn, duyệt giá, báo giá AI, tỷ giá fallback và ước tính trong quản trị dùng chung cấu hình. Lưu lại cùng giá trị hiện hành không sinh phiên bản/audit giả. |
 | Provider thanh toán mock/sandbox/live | ✅ code, ⏳ production | Mock là mặc định; VNPAY sandbox cần bật tường minh và URL allowlist; live bị khóa. Kết quả mock/sandbox chỉ ghi PaymentAttempt và tracking log, không đánh dấu đơn đã trả, không tạo doanh thu/thanh toán thật, không mở bước mua hàng. Integration CI đã qua. |
-| EmailLog và retry | ✅ code, ⏳ production | Có nhật ký không lưu địa chỉ nhận/nội dung thư, SMTP opt-in, thử tối đa 3 lần mỗi lượt và Super Admin có thể yêu cầu thử lại (tối đa 9 lần). Chưa có cron retry. Integration CI đã qua. |
+| EmailLog và retry | ✅ code, ⏳ production | Có nhật ký không lưu địa chỉ nhận/nội dung thư, SMTP opt-in, thử tối đa 3 lần mỗi lượt và Super Admin có thể yêu cầu thử lại (tối đa 9 lần). Cron `/api/cron/retry-emails` chạy mỗi ngày (cần `CRON_SECRET`) thử lại email FAILED đã đến hạn và cứu log kẹt PENDING; lịch hằng ngày vì gói Vercel Hobby chỉ cho phép cron mỗi ngày một lần. Integration CI đã qua. |
 | Giao diện quản trị | ✅ | Tab Super Admin “Cài đặt nghiệp vụ” gồm bảng giá có phiên bản, trạng thái dịch vụ và nhật ký email. |
 | Kiểm chứng cục bộ | ✅ | `npm ci`, Prisma generate/validate, typecheck, build, lint, 51/51 unit test và AI eval đạt. Lint còn cảnh báo có sẵn. Integration/E2E không chạy cục bộ (không có PostgreSQL); đã chạy trên CI với DB tạm và đều đạt. Build local dùng DATABASE_URL giả trỏ loopback và không kết nối Neon. |
 
@@ -102,7 +102,7 @@ Lưu ý khi đọc kết quả:
 1. **Xác nhận production đã chạy bản mới (việc của bạn):** Vercel → Deployments → bản Production mới nhất phải Ready; Neon SQL Editor chạy `SELECT migration_name, finished_at FROM "_prisma_migrations" ORDER BY started_at;` phải thấy `20261017000100_phase3_simulated_services` có `finished_at`. Production giờ bắt buộc có `NEXT_PUBLIC_APP_URL` (https) nếu build có kiểm tra cấu hình.
 2. **Tách database cho Preview**: `DATABASE_URL` đang dùng chung Production và Preview. Tạo branch Neon `dev` và đặt riêng cho Preview.
 3. **Diễn tập khôi phục** từ backup rồi ghi kết quả vào `docs/BACKUP_RESTORE.md`. Backup `backup-truoc-migrate-16-10` hết hạn 23/10/2026.
-4. Chưa làm: cron thử lại email, hoàn tiền qua cổng thật, `ShippingProvider`, quên mật khẩu, phân quyền theo vai trò cho các route admin còn lại.
+4. Chưa làm: hoàn tiền qua cổng thật, `ShippingProvider`, quên mật khẩu, phân quyền theo vai trò cho các route admin còn lại.
 
 ## 7. Giai đoạn 4 — nhật ký và bảo vệ API tốn chi phí
 
