@@ -25,7 +25,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Hash mật khẩu admin sang scrypt | ✅ | Unit test + integration test với PostgreSQL thật: hash HMAC cũ đăng nhập được và tự nâng cấp; hash mới là `scrypt$...`. |
 | Giới hạn đăng nhập sai (admin, khách) và đăng ký | ✅ | Integration test: khóa sau 5 lần sai (kể cả nhập đúng sau đó), khóa theo IP, đăng nhập đúng xóa bộ đếm, đăng ký tối đa 10 lần/giờ/IP. |
 | Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi các thao tác admin và purchase task; tab xem nhật ký/API chỉ cho Super Admin, phân trang và lọc. Chưa xác nhận các integration test mới trên CI. |
-| Kiểm tra quyền ở backend | 🟡 | `requireAdmin` đối chiếu AdminUser trong DB và kiểm tra vai trò (chỉ SUPER_ADMIN cho `api-keys`, `stitch-all`). Test phân quyền cho các route admin hiện có. Các route admin còn lại vẫn dùng `isAdminRequest` (chưa kiểm tra vai trò). |
+| Kiểm tra quyền ở backend | 🟡 | `requireAdmin` đối chiếu AdminUser trong DB và kiểm tra vai trò (chỉ SUPER_ADMIN cho `api-keys`, `stitch-all`). Test phân quyền cho các route admin hiện có. Mọi route admin và route dùng chung (orders, products) giờ đối chiếu AdminUser trong DB nên tài khoản bị xóa mất quyền ngay (test `admin-session-revocation`). Vai trò (SUPER_ADMIN/OPERATOR) mới được phân biệt ở các route nhạy cảm; các route còn lại cho cả hai vai trò. |
 | Tài liệu migration và backup/restore | ✅ viết / ⏳ diễn tập | `docs/DATABASE_MIGRATIONS.md`, `docs/BACKUP_RESTORE.md`. Chưa diễn tập khôi phục thật. |
 
 ### Giai đoạn 2: Kiểm thử luồng lõi

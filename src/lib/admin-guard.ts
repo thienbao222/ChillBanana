@@ -33,3 +33,8 @@ export async function requireAdmin(req: NextRequest, options: { roles?: AdminRol
   }
   return { ok: true, username: admin.username, role: admin.role };
 }
+
+/** Dùng cho route dùng chung (khách và admin): true chỉ khi cookie hợp lệ VÀ tài khoản admin còn tồn tại trong database. */
+export async function isVerifiedAdmin(req: NextRequest): Promise<boolean> {
+  return (await requireAdmin(req)).ok;
+}

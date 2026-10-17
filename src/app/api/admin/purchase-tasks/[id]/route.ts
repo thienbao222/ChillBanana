@@ -15,7 +15,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -43,9 +44,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   const { id: taskId } = await params;
   if (!taskId) {
