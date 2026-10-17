@@ -28,6 +28,7 @@ vi.mock("@/lib/mailer", () => ({
   sendPaymentSuccessEmail: vi.fn().mockResolvedValue(true),
   sendOrderStatusUpdateEmail: vi.fn().mockResolvedValue(true),
   sendZaloTrackingNotification: vi.fn().mockResolvedValue(true),
+  retryEmailLog: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/features/pricing/exchange-rate", () => ({
