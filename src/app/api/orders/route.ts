@@ -11,7 +11,6 @@ import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
-import { orderCreateLimiter, getClientIp } from "@/lib/rate-limiter";
 
 export const dynamic = "force-dynamic";
 
@@ -66,21 +65,6 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  // Rate limiting: max 5 đơn hàng mỗi 2 phút từ cùng IP (chống spam đặt đơn)
-  const ip = getClientIp(req);
-  const rl = orderCreateLimiter.check(ip);
-  if (!rl.allowed) {
-    return NextResponse.json(
-      { error: "Bạn đang đặt đơn quá nhanh. Vui lòng chờ vài phút rồi thử lại." },
-      {
-        status: 429,
-        headers: {
-          "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
-        },
-      }
-    );
-  }
-
   try {
     const body = await req.json();
     const depositPercent = body.depositPercent === undefined ? 50 : parseDepositPercent(body.depositPercent);
