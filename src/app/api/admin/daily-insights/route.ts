@@ -19,7 +19,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { isRecordedPaymentStatus } from "@/features/payments/policy";
 
 export const dynamic = "force-dynamic";
@@ -262,7 +262,10 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
 
 export async function GET(req: NextRequest) {
   if (hasValidCronSecret(req)) return generateDailyInsight();
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  {
+    const guard = await requireAdmin(req);
+    if (!guard.ok) return guard.response;
+  }
 
   try {
     const report = await prisma.adminDailyInsight.findFirst({ orderBy: { businessDate: "desc" } });
@@ -274,6 +277,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  {
+    const guard = await requireAdmin(req);
+    if (!guard.ok) return guard.response;
+  }
   return generateDailyInsight();
 }

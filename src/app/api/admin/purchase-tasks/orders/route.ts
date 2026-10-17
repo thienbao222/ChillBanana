@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { detectPlatform } from "@/features/purchasing/service";
 
 export const dynamic = "force-dynamic";
 
 /** Search only orders that satisfy the existing purchase-task prerequisites. */
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   const rawQuery = new URL(req.url).searchParams.get("q")?.trim().slice(0, 80) ?? "";
   const query = rawQuery.replace(/^#\s*/, "").trim();

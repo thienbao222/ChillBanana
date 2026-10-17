@@ -5,13 +5,14 @@
  * POST /api/admin/purchase-tasks            → Tạo task mới từ orderId
  * PATCH /api/admin/purchase-tasks/[id]      → Cập nhật task (APPROVE, CANCEL, mark PURCHASED)
  *
- * Bảo mật: Yêu cầu Admin session (isAdminRequest).
+ * Bảo mật: Yêu cầu Admin session (requireAdmin).
  * Human-in-the-loop: Mọi task phải APPROVE trước khi chuyển sang IN_PROGRESS.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { createPurchaseTask } from "@/features/purchasing/service";
 import { writeAuditLog } from "@/lib/audit";
 
@@ -20,9 +21,8 @@ export const dynamic = "force-dynamic";
 // ─── GET: Lấy danh sách Purchase Tasks ───────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") || undefined;
@@ -73,9 +73,8 @@ export async function GET(req: NextRequest) {
 // ─── POST: Tạo Purchase Task mới ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   let body: { orderId?: string };
   try {

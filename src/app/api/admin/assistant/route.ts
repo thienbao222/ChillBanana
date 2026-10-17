@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { getAdminAiModuleSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
@@ -10,9 +10,8 @@ export const maxDuration = 45;
 type HistoryMessage = { role: "user" | "assistant"; content: string };
 
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   try {
     const body = await req.json();

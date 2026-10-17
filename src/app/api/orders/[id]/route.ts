@@ -4,20 +4,16 @@ import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer
 import {
   getCustomerFromRequest,
   hasGuestOrderAccessForEmail,
-  isAdminRequest,
   getAdminUsernameFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
   verifyGuestOrderAccessToken,
 } from "@/lib/auth-session";
+import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { isNextOrderStatus } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
-
-function isAdmin(req: NextRequest): boolean {
-  return isAdminRequest(req);
-}
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +24,7 @@ export async function GET(
   try {
     const { id: orderCode } = await params;
     const customerSession = getCustomerFromRequest(req);
-    const adminSession = isAdminRequest(req);
+    const adminSession = await isVerifiedAdmin(req);
     const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
     const guestAccess = verifyGuestOrderAccessToken(accessToken || "");
     if (!adminSession && !customerSession && guestAccess?.orderCode !== orderCode) {
@@ -193,7 +189,7 @@ export async function PATCH(
       );
     }
 
-    const isAdminUser = isAdmin(req);
+    const isAdminUser = await isVerifiedAdmin(req);
     const customerInfo = getCustomerFromRequest(req);
     const priceWasJustApproved = isAdminUser && isPriceVerified === true && !existingOrder.isPriceVerified;
 

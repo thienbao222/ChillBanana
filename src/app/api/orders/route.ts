@@ -4,10 +4,10 @@ import { sendOrderCreatedEmail } from "@/lib/mailer";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import {
   createGuestOrderAccessToken,
-  isAdminRequest,
   getCustomerFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
 } from "@/lib/auth-session";
+import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const email = searchParams.get("email");
     const phone = searchParams.get("phone");
 
-    const isAdmin = isAdminRequest(req);
+    const isAdmin = await isVerifiedAdmin(req);
     const customerSession = getCustomerFromRequest(req);
 
     if (!isAdmin && !customerSession) {
