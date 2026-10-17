@@ -43,23 +43,38 @@ export async function getMaxBlockedSeconds(keys: string[]): Promise<number> {
   return Math.max(0, ...waits);
 }
 
-/** Ghi nhận một lần thử/thất bại cho khóa. */
-export async function recordHit(key: string, config: RateLimitConfig): Promise<void> {
-  try {
+/** Đếm lượt và trả số giây chặn; lỗi DB được ném ra để route tốn chi phí có thể fail closed. */
+export async function checkAndRecordHit(key: string, config: RateLimitConfig): Promise<number> {
+  return prisma.$transaction(async (tx) => {
+    // Serialize parallel calls from the same key across serverless instances.
+    // Project the void lock result to a scalar Prisma can decode.
+    await tx.$queryRaw`SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))) AS advisory_lock`;
     const now = Date.now();
-    const existing = await prisma.rateLimit.findUnique({ where: { key } });
-    const next = registerHit(existing ? toState(existing) : null, now, config);
+    const existing = await tx.rateLimit.findUnique({ where: { key } });
+    const state = existing ? toState(existing) : null;
+    const retryAfter = retryAfterSeconds(state, now);
+    if (retryAfter > 0) return retryAfter;
+
+    const next = registerHit(state, now, config);
     const data = {
       count: next.count,
       windowStart: new Date(next.windowStart),
       blockedUntil: next.blockedUntil === null ? null : new Date(next.blockedUntil),
     };
-    await prisma.rateLimit.upsert({ where: { key }, create: { key, ...data }, update: data });
+    await tx.rateLimit.upsert({ where: { key }, create: { key, ...data }, update: data });
 
     // Dọn dần các bộ đếm đã cũ (khoảng 1% số lần ghi) để bảng không phình ra.
     if (Math.random() < 0.01) {
-      await prisma.rateLimit.deleteMany({ where: { updatedAt: { lt: new Date(now - 24 * 60 * 60 * 1000) } } });
+      await tx.rateLimit.deleteMany({ where: { updatedAt: { lt: new Date(now - 24 * 60 * 60 * 1000) } } });
     }
+    return 0;
+  });
+}
+
+/** Ghi nhận một lần thử/thất bại theo chính sách fail-open dùng chung. */
+export async function recordHit(key: string, config: RateLimitConfig): Promise<void> {
+  try {
+    await checkAndRecordHit(key, config);
   } catch (error) {
     console.error("[RateLimit] Không ghi được bộ đếm:", error);
   }

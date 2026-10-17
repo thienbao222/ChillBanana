@@ -13,6 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
 import { createPurchaseTask } from "@/features/purchasing/service";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -98,6 +99,16 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+
+  await writeAuditLog({
+    actor: adminUsername,
+    action: "PURCHASE_TASK_CREATED",
+    entityType: "PurchaseTask",
+    entityId: task.id,
+    summary: "Tạo tác vụ mua hộ.",
+    metadata: { toStatus: task.status },
+    req,
+  });
 
   return NextResponse.json(
     {

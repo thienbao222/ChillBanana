@@ -4,6 +4,7 @@ import * as reports from "@/app/api/admin/reports/route";
 import * as funnel from "@/app/api/admin/funnel/route";
 import * as chatTrends from "@/app/api/admin/chat-trends/route";
 import * as apiKeys from "@/app/api/admin/api-keys/route";
+import * as auditLogs from "@/app/api/admin/audit-logs/route";
 import * as assistant from "@/app/api/admin/assistant/route";
 import * as dailyInsights from "@/app/api/admin/daily-insights/route";
 import * as purchaseTasks from "@/app/api/admin/purchase-tasks/route";
@@ -27,6 +28,7 @@ const anonymous: [string, Call][] = [
   ["GET /api/admin/funnel", () => funnel.GET(get("/api/admin/funnel"))],
   ["GET /api/admin/chat-trends", () => chatTrends.GET(get("/api/admin/chat-trends"))],
   ["GET /api/admin/api-keys", () => apiKeys.GET(get("/api/admin/api-keys"))],
+  ["GET /api/admin/audit-logs", () => auditLogs.GET(get("/api/admin/audit-logs"))],
   ["POST /api/admin/assistant", () => assistant.POST(post("/api/admin/assistant", { message: "hi" }))],
   ["GET /api/admin/daily-insights", () => dailyInsights.GET(get("/api/admin/daily-insights"))],
   ["POST /api/admin/daily-insights", () => dailyInsights.POST(post("/api/admin/daily-insights", {}))],
@@ -70,6 +72,23 @@ describe("phân quyền theo vai trò (requireAdmin)", () => {
     const cookies = adminCookies("nhanvien");
     expect((await apiKeys.GET(get("/api/admin/api-keys", { cookies }))).status).toBe(403);
     expect((await stitchAll.POST(post("/api/admin/stitch-all", {}, { cookies }))).status).toBe(403);
+    expect((await auditLogs.GET(get("/api/admin/audit-logs", { cookies }))).status).toBe(403);
+  });
+
+  it("SUPER_ADMIN xem nhật ký nhưng API không trả metadata hoặc IP", async () => {
+    await makeAdmin("boss", "SUPER_ADMIN");
+    await prisma.auditLog.create({
+      data: { actor: "boss", action: "TEST_AUDIT", summary: "Bản ghi kiểm tra", metadata: { internal: "secret" }, ip: "203.0.113.10" },
+    });
+    await prisma.auditLog.create({ data: { actor: "boss", action: "OTHER_EVENT", summary: "Không khớp bộ lọc" } });
+
+    const response = await auditLogs.GET(get("/api/admin/audit-logs?action=TEST_AUDIT", { cookies: adminCookies("boss") }));
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.logs[0]).toMatchObject({ actor: "boss", action: "TEST_AUDIT", summary: "Bản ghi kiểm tra" });
+    expect(data.logs[0]).not.toHaveProperty("metadata");
+    expect(data.logs[0]).not.toHaveProperty("ip");
+    expect(data.pagination.total).toBe(1);
   });
 
   it("tài khoản admin đã bị xóa khỏi DB thì cookie cũ mất hiệu lực ngay", async () => {
