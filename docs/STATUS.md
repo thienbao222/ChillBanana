@@ -1,6 +1,6 @@
 # Trạng thái dự án và tiến độ nâng cấp
 
-Cập nhật: 17/10/2026 · Giai đoạn 0–2 đã merge vào `main` (PR #4) và chạy trên production; Giai đoạn 3 đang triển khai trên nhánh codex/phase3-simulated-services-20261017 · Kế hoạch gốc: `NangCapFinal.docx`
+Cập nhật: 17/10/2026 · Giai đoạn 0–2 chạy trên production (PR #4); Giai đoạn 3 (PR #7) và phần lớn Giai đoạn 4 (PR #8) đã merge vào `main`, CI đầy đủ xanh · Kế hoạch gốc: `NangCapFinal.docx`
 
 Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa kiểm chứng đầy đủ · ⏳ cần bạn thực hiện · ⬜ chưa làm
 
@@ -24,7 +24,7 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Baseline migration `0_init` | ✅ | Sinh bằng Prisma trên CI từ schema ở `ef9e20c` (12 bảng). Đã đánh dấu đã áp dụng trên production ngày 16/10/2026 sau khi `migrate diff` chỉ khác bảng mẫu `playing_with_neon` của Neon (không thuộc schema). |
 | Hash mật khẩu admin sang scrypt | ✅ | Unit test + integration test với PostgreSQL thật: hash HMAC cũ đăng nhập được và tự nâng cấp; hash mới là `scrypt$...`. |
 | Giới hạn đăng nhập sai (admin, khách) và đăng ký | ✅ | Integration test: khóa sau 5 lần sai (kể cả nhập đúng sau đó), khóa theo IP, đăng nhập đúng xóa bộ đếm, đăng ký tối đa 10 lần/giờ/IP. |
-| Nhật ký kiểm toán `AuditLog` | 🟡 | Ghi các thao tác admin và purchase task; tab xem nhật ký/API chỉ cho Super Admin, phân trang và lọc. Chưa xác nhận các integration test mới trên CI. |
+| Nhật ký kiểm toán `AuditLog` | ✅ | Ghi các thao tác admin và purchase task; tab xem nhật ký/API chỉ cho Super Admin, phân trang và lọc. Integration test đã qua CI. |
 | Kiểm tra quyền ở backend | 🟡 | `requireAdmin` đối chiếu AdminUser trong DB và kiểm tra vai trò (chỉ SUPER_ADMIN cho `api-keys`, `stitch-all`). Test phân quyền cho các route admin hiện có. Mọi route admin và route dùng chung (orders, products) giờ đối chiếu AdminUser trong DB nên tài khoản bị xóa mất quyền ngay (test `admin-session-revocation`). Vai trò (SUPER_ADMIN/OPERATOR) mới được phân biệt ở các route nhạy cảm; các route còn lại cho cả hai vai trò. |
 | Tài liệu migration và backup/restore | ✅ viết / ⏳ diễn tập | `docs/DATABASE_MIGRATIONS.md`, `docs/BACKUP_RESTORE.md`. Chưa diễn tập khôi phục thật. |
 
@@ -52,21 +52,21 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | Email | Đã có | Chưa cấu hình SMTP thì chỉ log "Mailer Sim". Tại thời điểm rà soát ban đầu chưa có retry và `EmailLog`. |
 | Tài khoản khách, xác minh email | Đã có, có test | Có giới hạn đăng nhập sai. Chưa có quên mật khẩu. |
 | Trang quản trị | Đã có | Sản phẩm, đơn, khách, báo cáo, AI, mua hàng. Chưa có test giao diện admin. |
-| Chatbot AI, trợ lý admin, báo cáo AI | Đã có | Có bộ eval (`npm run eval:customer-support`). Rate limit chat AI vẫn trong bộ nhớ. `/api/scrape-link` có giới hạn bền vững theo IP để giảm rủi ro chi phí; chờ CI xác nhận integration test. |
+| Chatbot AI, trợ lý admin, báo cáo AI | Đã có | Có bộ eval (`npm run eval:customer-support`). Rate limit chat AI vẫn trong bộ nhớ. `/api/scrape-link` có giới hạn bền vững theo IP để giảm rủi ro chi phí; integration test đã qua CI. |
 
-## 3. Kết quả kiểm tra (GitHub Actions, commit `10d97c0`)
+## 3. Kết quả kiểm tra (GitHub Actions, commit `4e921da` trên `main`)
 
 | Bước | Kết quả |
 | --- | --- |
 | Cài đặt, Prisma validate | ✅ |
-| Migration trên DB trống (0_init + phase1) | ✅ |
+| Migration trên DB trống (toàn bộ migration, gồm phase3) | ✅ |
 | Migration khớp `schema.prisma` (không lệch) | ✅ |
 | Type check, Lint | ✅ |
-| Unit test | ✅ 44/44 |
+| Unit test | ✅ |
 | Eval AI | ✅ |
-| Integration test (PostgreSQL) | ✅ 136/136 |
+| Integration test (PostgreSQL) | ✅ |
 | Build | ✅ |
-| E2E Playwright | ✅ 18/18 |
+| E2E Playwright | ✅ |
 
 Lưu ý khi đọc kết quả:
 - Con số độ phủ của `test:coverage` (unit) chỉ phản ánh phần unit test; phần lớn route được kiểm bằng integration/e2e nên chưa có báo cáo độ phủ gộp.
@@ -90,25 +90,25 @@ Lưu ý khi đọc kết quả:
 
 | Hạng mục | Trạng thái | Bằng chứng / ghi chú |
 | --- | --- | --- |
-| Giá cấu hình có lịch sử | 🟡 | Đã thêm PricingConfig, API chỉ cho Super Admin ghi, giao diện lịch sử/điều chỉnh và ảnh chụp phiên bản trên đơn. Migration và kiểm thử PostgreSQL chờ CI xác nhận. |
-| Đồng bộ cấu hình giá | 🟡 | Storefront, giỏ, tạo đơn, duyệt giá, báo giá AI, tỷ giá fallback và ước tính trong quản trị dùng chung cấu hình. Lưu lại cùng giá trị hiện hành không sinh phiên bản/audit giả. Chờ kiểm thử CI. |
-| Provider thanh toán mock/sandbox/live | 🟡 | Mock là mặc định; VNPAY sandbox cần bật tường minh và URL allowlist; live bị khóa. Kết quả mock/sandbox chỉ ghi PaymentAttempt và tracking log, không đánh dấu đơn đã trả, không tạo doanh thu/thanh toán thật, không mở bước mua hàng. Chờ integration CI xác nhận callback và chống lặp. |
-| EmailLog và retry | 🟡 | Có nhật ký không lưu địa chỉ nhận/nội dung thư, SMTP opt-in, thử tối đa 3 lần mỗi lượt và Super Admin có thể yêu cầu thử lại (tối đa 9 lần). Chưa có cron retry. Chờ integration CI xác nhận. |
+| Giá cấu hình có lịch sử | ✅ code, ⏳ production | Đã thêm PricingConfig, API chỉ cho Super Admin ghi, giao diện lịch sử/điều chỉnh và ảnh chụp phiên bản trên đơn. Migration và kiểm thử PostgreSQL đã qua CI. |
+| Đồng bộ cấu hình giá | ✅ code, ⏳ production | Storefront, giỏ, tạo đơn, duyệt giá, báo giá AI, tỷ giá fallback và ước tính trong quản trị dùng chung cấu hình. Lưu lại cùng giá trị hiện hành không sinh phiên bản/audit giả. |
+| Provider thanh toán mock/sandbox/live | ✅ code, ⏳ production | Mock là mặc định; VNPAY sandbox cần bật tường minh và URL allowlist; live bị khóa. Kết quả mock/sandbox chỉ ghi PaymentAttempt và tracking log, không đánh dấu đơn đã trả, không tạo doanh thu/thanh toán thật, không mở bước mua hàng. Integration CI đã qua. |
+| EmailLog và retry | ✅ code, ⏳ production | Có nhật ký không lưu địa chỉ nhận/nội dung thư, SMTP opt-in, thử tối đa 3 lần mỗi lượt và Super Admin có thể yêu cầu thử lại (tối đa 9 lần). Chưa có cron retry. Integration CI đã qua. |
 | Giao diện quản trị | ✅ | Tab Super Admin “Cài đặt nghiệp vụ” gồm bảng giá có phiên bản, trạng thái dịch vụ và nhật ký email. |
-| Kiểm chứng cục bộ | 🟡 | `npm ci`, Prisma generate/validate, typecheck, build, lint, 51/51 unit test và AI eval đạt. Lint còn cảnh báo có sẵn. Integration/E2E chưa chạy cục bộ vì không có PostgreSQL tại localhost:5432; cần CI xác nhận trên DB tạm. Build local dùng DATABASE_URL giả trỏ loopback và không kết nối Neon. |
+| Kiểm chứng cục bộ | ✅ | `npm ci`, Prisma generate/validate, typecheck, build, lint, 51/51 unit test và AI eval đạt. Lint còn cảnh báo có sẵn. Integration/E2E không chạy cục bộ (không có PostgreSQL); đã chạy trên CI với DB tạm và đều đạt. Build local dùng DATABASE_URL giả trỏ loopback và không kết nối Neon. |
 
 ## 6. Việc còn lại
 
-1. **Tách database cho Preview**: `DATABASE_URL` đang dùng chung Production và Preview. Tạo branch Neon `dev` và đặt riêng cho Preview.
-2. **Diễn tập khôi phục** từ backup rồi ghi kết quả vào `docs/BACKUP_RESTORE.md`.
-3. Hoàn thành test PostgreSQL/Playwright trên CI cho Giai đoạn 3; sau khi nhánh được merge, Production migration sẽ chạy trong Vercel Production build.
-4. **Giai đoạn 4**: phần triển khai đã có trong working tree; cần chạy CI để xác nhận các integration test mới trước khi merge.
+1. **Xác nhận production đã chạy bản mới (việc của bạn):** Vercel → Deployments → bản Production mới nhất phải Ready; Neon SQL Editor chạy `SELECT migration_name, finished_at FROM "_prisma_migrations" ORDER BY started_at;` phải thấy `20261017000100_phase3_simulated_services` có `finished_at`. Production giờ bắt buộc có `NEXT_PUBLIC_APP_URL` (https) nếu build có kiểm tra cấu hình.
+2. **Tách database cho Preview**: `DATABASE_URL` đang dùng chung Production và Preview. Tạo branch Neon `dev` và đặt riêng cho Preview.
+3. **Diễn tập khôi phục** từ backup rồi ghi kết quả vào `docs/BACKUP_RESTORE.md`. Backup `backup-truoc-migrate-16-10` hết hạn 23/10/2026.
+4. Chưa làm: cron thử lại email, hoàn tiền qua cổng thật, `ShippingProvider`, quên mật khẩu, phân quyền theo vai trò cho các route admin còn lại.
 
 ## 7. Giai đoạn 4 — nhật ký và bảo vệ API tốn chi phí
 
 | Hạng mục | Trạng thái | Bằng chứng / ghi chú |
 | --- | --- | --- |
-| Giới hạn `/api/scrape-link` | 🟡 | 10 yêu cầu/IP trong 10 phút; bộ đếm dùng bảng `RateLimit` hiện có và chỉ lưu hash SHA-256 của IP. Quá ngưỡng trả HTTP 429 cùng `Retry-After`. Integration test đã thêm; chưa chạy do không dùng database production cho test phá hủy dữ liệu. |
-| Màn hình nhật ký kiểm toán | 🟡 | Tab “Nhật ký kiểm toán” và API chỉ cho `SUPER_ADMIN`; phân trang 50 dòng, lọc theo tên thao tác. Không trả IP hoặc metadata nội bộ cho giao diện. Integration test quyền và lọc dữ liệu đã thêm; chờ CI. |
-| Audit tác vụ mua hộ | 🟡 | Ghi sự kiện sau khi tạo task và sau khi cập nhật trạng thái thành công; không đưa link sản phẩm, mã đơn, mã ngoài hoặc thông tin khách vào metadata. Integration test đã thêm; chờ CI. |
-| Kiểm tra cục bộ | 🟡 | `npm run typecheck`, `npm run build`, `npm run lint`, `npm test` đạt (52 unit test); AI eval và Prisma validate đạt; lint còn cảnh báo có sẵn. Integration test cần PostgreSQL test riêng/CI; không chạy trên Neon production. |
+| Giới hạn `/api/scrape-link` | ✅ code, ⏳ production | 10 yêu cầu/IP trong 10 phút; bộ đếm dùng bảng `RateLimit` hiện có và chỉ lưu hash SHA-256 của IP. Quá ngưỡng trả HTTP 429 cùng `Retry-After`. Integration test đã qua CI. |
+| Màn hình nhật ký kiểm toán | ✅ code, ⏳ production | Tab “Nhật ký kiểm toán” và API chỉ cho `SUPER_ADMIN`; phân trang 50 dòng, lọc theo tên thao tác. Không trả IP hoặc metadata nội bộ cho giao diện. Integration test quyền và lọc dữ liệu đã qua CI. |
+| Audit tác vụ mua hộ | ✅ code, ⏳ production | Ghi sự kiện sau khi tạo task và sau khi cập nhật trạng thái thành công; không đưa link sản phẩm, mã đơn, mã ngoài hoặc thông tin khách vào metadata. Integration test đã qua CI. |
+| Kiểm tra cục bộ | ✅ code, ⏳ production | `npm run typecheck`, `npm run build`, `npm run lint`, `npm test` đạt (52 unit test); AI eval và Prisma validate đạt; lint còn cảnh báo có sẵn. Integration test cần PostgreSQL test riêng/CI; không chạy trên Neon production. |
