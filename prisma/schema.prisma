@@ -276,3 +276,51 @@ model PurchaseTask {
   @@index([platform])
   @@index([createdAt])
 }
+
+// Cấu hình hệ thống động — Admin có thể điều chỉnh tỷ lệ phí, cước vận chuyển mà không cần redeploy
+model SystemConfig {
+  key         String    @id           // Ví dụ: "service_fee_percent", "air_shipping_per_kg_vnd"
+  value       String                  // Luôn lưu dạng string, parse khi dùng
+  description String?                 // Giải thích ý nghĩa để Admin hiểu
+  updatedAt   DateTime  @updatedAt
+  updatedBy   String?                 // Username Admin cập nhật gần nhất
+
+  @@map("system_config")
+}
+
+// Báo cáo thông minh hàng ngày của Admin AI
+model AdminDailyInsight {
+  id              String   @id @default(cuid())
+  businessDate    String
+  periodStart     DateTime
+  periodEnd       DateTime
+  generatedAt     DateTime
+  insight         String
+  snapshotSummary Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Nhật ký kiểm toán thao tác hệ thống
+model AuditLog {
+  id         String   @id @default(cuid())
+  actor      String
+  actorType  String
+  action     String
+  entityType String?
+  entityId   String?
+  summary    String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+}
+
+// Lịch sử cấu hình giá versioned
+model PricingConfig {
+  version      Int      @id @default(autoincrement())
+  values       Json
+  changedBy    String
+  changeReason String?
+  createdAt    DateTime @default(now())
+}
+

@@ -15,6 +15,7 @@ import {
   Columns,
   ExternalLink,
   RefreshCw,
+  FlaskConical,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
@@ -22,7 +23,9 @@ import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
 import PurchaseTasksTab from "@/app/admin/components/PurchaseTasksTab";
+import SandboxTab from "@/app/admin/components/SandboxTab";
 import { AdminAiModuleId } from "@/lib/admin-ai/definitions";
+
 import "./admin-neoday.css";
 
 function AdminDashboardPageInner() {
@@ -37,7 +40,8 @@ function AdminDashboardPageInner() {
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
   // Tab đang chọn
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase" | "sandbox">("orders");
+
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
   const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("overview");
 
@@ -145,6 +149,7 @@ function AdminDashboardPageInner() {
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
                 { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Mua tự động" },
                 { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
+                { key: "sandbox", icon: <FlaskConical className="h-4 w-4" />, label: "Sandbox & Demo" },
               ].map((tab) => (
                 <button
                   key={tab.key}
@@ -190,10 +195,12 @@ function AdminDashboardPageInner() {
             {activeTab === "analytics" && (
               <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
             )}
+            {activeTab === "sandbox"   && <SandboxTab />}
           </>
         )}
 
       </main>
+
     </div>
   );
 }

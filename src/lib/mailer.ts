@@ -57,18 +57,72 @@ function getTransporter() {
   });
 }
 
-export async function sendCustomerEmailVerification(customer: { id: string; email: string; name: string }) {
-  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    throw new Error("SMTP_USER và SMTP_PASS phải được cấu hình để gửi email xác minh.");
+// ─────────────────────────────────────────────────────────────────────────────
+// Demo Email Queue — Lưu 50 email gần nhất trong bộ nhớ phục vụ Sandbox Admin
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SentEmailRecord {
+  id: string;
+  to: string;
+  subject: string;
+  html: string;
+  type: "ORDER_CREATED" | "PAYMENT_SUCCESS" | "TRACKING_UPDATE" | "VERIFY_EMAIL" | "RESET_PASSWORD" | "PRICE_APPROVED" | "ZALO_NOTIFICATION";
+  sentAt: string; // ISO string
+  isSimulated: boolean; // true nếu chưa cấu hình SMTP thật
+}
+
+// Global buffer trên NodeJS globalThis để giữ qua module reloads
+const globalEmailStore = globalThis as unknown as { __chillbanana_emails?: SentEmailRecord[] };
+if (!globalEmailStore.__chillbanana_emails) {
+  globalEmailStore.__chillbanana_emails = [];
+}
+
+export function recordSentEmail(record: Omit<SentEmailRecord, "id" | "sentAt">): void {
+  const list = globalEmailStore.__chillbanana_emails!;
+  const newRecord: SentEmailRecord = {
+    ...record,
+    id: `email_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+    sentAt: new Date().toISOString(),
+  };
+  list.unshift(newRecord);
+  if (list.length > 50) {
+    list.pop();
   }
+}
+
+export function getRecentSentEmails(): SentEmailRecord[] {
+  return [...(globalEmailStore.__chillbanana_emails || [])];
+}
+
+export function clearSentEmails(): void {
+  globalEmailStore.__chillbanana_emails = [];
+}
+
+export async function sendCustomerEmailVerification(customer: { id: string; email: string; name: string }) {
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
   const token = createCustomerEmailVerificationToken({ id: customer.id, email: customer.email });
   const verificationUrl = `${getBaseUrl()}/api/auth/customer/verify?token=${encodeURIComponent(token)}`;
   const name = escapeHtml(customer.name);
+  const html = `<p>Xin chào ${name},</p><p>Để kích hoạt tài khoản và kết nối các đơn hàng cũ của bạn, vui lòng xác minh email trong vòng 24 giờ:</p><p><a href="${verificationUrl}">Xác minh email</a></p><p>Nếu bạn không tạo tài khoản này, hãy bỏ qua email.</p>`;
+
+  recordSentEmail({
+    to: customer.email,
+    subject: "[ChillBanana] Xác minh địa chỉ email",
+    html,
+    type: "VERIFY_EMAIL",
+    isSimulated: !hasAuth,
+  });
+
+  if (!hasAuth) {
+    console.log(`[Mailer Sim] ℹ️ Đã tạo link xác minh email cho ${customer.email}: ${verificationUrl}`);
+    return;
+  }
+
   await getTransporter().sendMail({
     from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
     to: customer.email,
     subject: "[ChillBanana] Xác minh địa chỉ email",
-    html: `<p>Xin chào ${name},</p><p>Để kích hoạt tài khoản và kết nối các đơn hàng cũ của bạn, vui lòng xác minh email trong vòng 24 giờ:</p><p><a href="${verificationUrl}">Xác minh email</a></p><p>Nếu bạn không tạo tài khoản này, hãy bỏ qua email.</p>`,
+    html,
   });
 }
 
@@ -128,15 +182,24 @@ export async function sendOrderCreatedEmail(order: any) {
     </div>
   `;
 
+  const subject = `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${String(order.productName || "Sản phẩm").slice(0, 100)}`;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  recordSentEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    type: "ORDER_CREATED",
+    isSimulated: !hasAuth,
+  });
+
   try {
     const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-
     if (hasAuth) {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
         to: order.customerEmail,
-        subject: `[ChillBanana] Xác nhận đơn mua hộ #${order.orderCode} - ${String(order.productName || "Sản phẩm").slice(0, 100)}`,
+        subject,
         html,
       });
       console.log(`[Mailer] ✅ Đã gửi email xác nhận tạo đơn tới ${order.customerEmail}`);
@@ -147,6 +210,7 @@ export async function sendOrderCreatedEmail(order: any) {
     console.warn("[Mailer] Lỗi khi gửi email xác nhận tạo đơn:", err);
   }
 }
+
 
 /** Gửi báo giá đã được admin xác nhận; trả false khi không thể gửi thật. */
 export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
@@ -184,14 +248,29 @@ export async function sendPriceApprovedEmail(order: any): Promise<boolean> {
       </div>
     </div>`;
 
+  const subject = `[ChillBanana] Báo giá đơn #${order.orderCode} đã được xác nhận`;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  recordSentEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    type: "PRICE_APPROVED",
+    isSimulated: !hasAuth,
+  });
+
   try {
-    await getTransporter().sendMail({
-      from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
-      to: order.customerEmail,
-      subject: `[ChillBanana] Báo giá đơn #${order.orderCode} đã được xác nhận`,
-      html,
-    });
-    console.log(`[Mailer] Đã gửi email duyệt giá cho đơn #${order.orderCode}.`);
+    if (hasAuth) {
+      await getTransporter().sendMail({
+        from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
+        to: order.customerEmail,
+        subject,
+        html,
+      });
+      console.log(`[Mailer] Đã gửi email duyệt giá cho đơn #${order.orderCode}.`);
+    } else {
+      console.log(`[Mailer Sim] ℹ️ Đã tạo email duyệt giá cho đơn #${order.orderCode} gửi tới ${order.customerEmail}`);
+    }
     return true;
   } catch (error) {
     console.error(`[Mailer] Gửi email duyệt giá thất bại cho đơn #${order.orderCode}:`, error);
@@ -254,15 +333,24 @@ export async function sendPaymentSuccessEmail(order: any) {
     </div>
   `;
 
+  const subject = `[ChillBanana] ✅ Xác nhận thanh toán thành công đơn hàng #${order.orderCode}`;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  recordSentEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    type: "PAYMENT_SUCCESS",
+    isSimulated: !hasAuth,
+  });
+
   try {
     const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-
     if (hasAuth) {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
         to: order.customerEmail,
-        subject: `[ChillBanana] ✅ Xác nhận thanh toán thành công đơn hàng #${order.orderCode}`,
+        subject,
         html,
       });
       console.log(`[Mailer] ✅ Đã gửi email xác nhận thanh toán cọc tới ${order.customerEmail}`);
@@ -273,6 +361,7 @@ export async function sendPaymentSuccessEmail(order: any) {
     console.warn("[Mailer] Lỗi khi gửi email xác nhận thanh toán:", err);
   }
 }
+
 
 /**
  * 3. Email cập nhật tiến độ vận đơn (7 Bước) hoặc Hủy đơn
@@ -323,15 +412,24 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     </div>
   `;
 
+  const subject = `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`;
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  recordSentEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    type: "TRACKING_UPDATE",
+    isSimulated: !hasAuth,
+  });
+
   try {
     const transporter = getTransporter();
-    const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
-
     if (hasAuth) {
       await transporter.sendMail({
         from: process.env.SMTP_FROM || `"ChillBanana" <${process.env.SMTP_USER}>`,
         to: order.customerEmail,
-        subject: `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`,
+        subject,
         html,
       });
       console.log(`[Mailer] ✅ Đã gửi email cập nhật trạng thái tới ${order.customerEmail}`);
@@ -359,9 +457,27 @@ export async function sendZaloTrackingNotification(
   description: string
 ): Promise<void> {
   const token = process.env.ZALO_OA_ACCESS_TOKEN;
+
+  // Luôn ghi nhận vào buffer để Admin kiểm tra xem thông báo Zalo trông ra sao
+  recordSentEmail({
+    to: `Zalo ID: ${zaloUserId}`,
+    subject: `[Zalo OA] Cập nhật đơn hàng #${orderCode}: ${statusTitle}`,
+    html: `
+      <div style="font-family:sans-serif;padding:16px;background:#f0f7ff;border-radius:12px;border:1px solid #bae0ff">
+        <h3 style="color:#0050b3;margin-top:0">🍌 Thông báo qua Zalo OA</h3>
+        <p><strong>Người nhận (Zalo User ID):</strong> ${zaloUserId}</p>
+        <p><strong>Đơn hàng:</strong> #${orderCode}</p>
+        <p><strong>Trạng thái:</strong> ${statusTitle}</p>
+        <p style="background:#fff;padding:12px;border-radius:8px;border:1px dashed #91caff">${description}</p>
+        <p style="color:#888;font-size:12px;margin-bottom:0">Đường dẫn: https://chill-banana.vercel.app/tracking?orderCode=${orderCode}</p>
+      </div>`,
+    type: "ZALO_NOTIFICATION",
+    isSimulated: !token,
+  });
+
   if (!token) {
     console.log(
-      `[ZaloOA Sim] ℹ️ ZALO_OA_ACCESS_TOKEN chưa cấu hình. Bỏ qua gửi Zalo cho ${zaloUserId} | ${orderCode}: ${statusTitle}`
+      `[ZaloOA Sim] ℹ️ ZALO_OA_ACCESS_TOKEN chưa cấu hình. Đã ghi nhận mô phỏng Zalo cho ${zaloUserId} | ${orderCode}: ${statusTitle}`
     );
     return;
   }
@@ -400,3 +516,97 @@ export async function sendZaloTrackingNotification(
     console.warn("[ZaloOA] ⚠️ Không thể gửi tin Zalo:", err);
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Gửi email đặt lại mật khẩu
+// ─────────────────────────────────────────────────────────────────────────────
+
+export async function sendPasswordResetEmail({
+  to,
+  name,
+  resetUrl,
+}: {
+  to: string;
+  name: string;
+  resetUrl: string;
+}): Promise<void> {
+  const transporter = getTransporter();
+  const safeName = escapeHtml(name);
+  const safeUrl = escapeHtml(resetUrl);
+  const hasAuth = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  const html = `
+  <!DOCTYPE html>
+  <html lang="vi">
+  <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"></head>
+  <body style="font-family:'Helvetica Neue',Arial,sans-serif;background:#f5f5f5;margin:0;padding:20px;">
+    <table style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+      <tr>
+        <td style="background:linear-gradient(135deg,#FFD700 0%,#FFA500 100%);padding:32px 40px;text-align:center;">
+          <h1 style="color:#1a1a1a;font-size:28px;margin:0;font-weight:800;">🍌 ChillBanana</h1>
+          <p style="color:#333;margin:8px 0 0;font-size:14px;">Mua hàng Nhật Bản — Giao tận tay Việt Nam</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:40px;">
+          <h2 style="color:#1a1a1a;font-size:22px;margin:0 0 16px;">Đặt lại mật khẩu</h2>
+          <p style="color:#444;line-height:1.6;margin:0 0 24px;">
+            Xin chào <strong>${safeName}</strong>,<br>
+            Chúng tôi nhận được yêu cầu đặt lại mật khẩu cho tài khoản ChillBanana của bạn.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="${safeUrl}"
+               style="background:linear-gradient(135deg,#FFD700,#FFA500);color:#1a1a1a;padding:16px 36px;
+                      border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;display:inline-block;">
+              🔑 Đặt lại mật khẩu
+            </a>
+          </div>
+          <p style="color:#888;font-size:13px;line-height:1.5;border-top:1px solid #eee;padding-top:16px;margin-top:24px;">
+            ⏰ Link có hiệu lực trong <strong>1 giờ</strong>.<br>
+            Nếu bạn không yêu cầu đặt lại mật khẩu, hãy bỏ qua email này — tài khoản của bạn vẫn an toàn.<br><br>
+            Hoặc copy link sau vào trình duyệt:<br>
+            <span style="word-break:break-all;color:#FFA500;">${safeUrl}</span>
+          </p>
+        </td>
+      </tr>
+      <tr>
+        <td style="background:#f9f9f9;padding:20px 40px;text-align:center;">
+          <p style="color:#bbb;font-size:12px;margin:0;">
+            © 2026 ChillBanana.vn — Đây là email tự động, vui lòng không trả lời.
+          </p>
+        </td>
+      </tr>
+    </table>
+  </body>
+  </html>`;
+
+  recordSentEmail({
+    to,
+    subject: "🔑 Đặt lại mật khẩu ChillBanana của bạn",
+    html,
+    type: "RESET_PASSWORD",
+    isSimulated: !hasAuth,
+  });
+
+
+  const mailOptions = {
+    from: `"ChillBanana 🍌" <${process.env.SMTP_USER || "noreply@chillbanana.vn"}>`,
+    to,
+    subject: "🔑 Đặt lại mật khẩu ChillBanana của bạn",
+    html,
+  };
+
+  if (!transporter) {
+    console.log(`[Mailer][DEV] sendPasswordResetEmail → ${to}: ${resetUrl}`);
+    return;
+  }
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`[Mailer] ✅ Gửi email đặt lại mật khẩu tới ${to}`);
+  } catch (err) {
+    console.error(`[Mailer] ❌ Lỗi gửi email đặt lại mật khẩu tới ${to}:`, err);
+    throw err;
+  }
+}
+

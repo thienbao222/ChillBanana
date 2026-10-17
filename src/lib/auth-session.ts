@@ -215,3 +215,83 @@ export function getCustomerFromRequest(req: NextRequest): { id: string; email: s
   if (!cookie) return null;
   return verifyCustomerSessionToken(cookie);
 }
+
+// ---------------------------------------------------------------------------
+// ADMIN RBAC — Phân quyền SUPER_ADMIN vs OPERATOR
+// ---------------------------------------------------------------------------
+
+/**
+ * Tạo session token cho Admin, nhúng thêm role để kiểm tra phân quyền.
+ * Gọi thay createAdminSessionToken() khi Admin login.
+ */
+export function createAdminSessionTokenWithRole(username: string, role: string): string {
+  const payload = JSON.stringify({
+    username,
+    role: role === "OPERATOR" ? "OPERATOR" : "SUPER_ADMIN",
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
+  });
+  return encodeToken(payload, sign(getAdminSecret(), payload));
+}
+
+/**
+ * Verify và trả về { username, role } từ token Admin.
+ * Backward-compatible: token cũ không có role → mặc định SUPER_ADMIN.
+ */
+export function verifyAdminSessionTokenFull(
+  token: string
+): { valid: boolean; username?: string; role?: string } {
+  const decoded = decodeToken(token);
+  if (!decoded) return { valid: false };
+  const expected = sign(getAdminSecret(), decoded.payloadStr);
+  if (!safeEqual(expected, decoded.signature)) return { valid: false };
+  try {
+    const payload = JSON.parse(decoded.payloadStr);
+    if (typeof payload.exp !== "number" || payload.exp < Date.now()) return { valid: false };
+    return {
+      valid: true,
+      username: payload.username,
+      // Token cũ không có role → fallback SUPER_ADMIN (backward compat)
+      role: payload.role ?? "SUPER_ADMIN",
+    };
+  } catch {
+    return { valid: false };
+  }
+}
+
+/**
+ * Lấy role của Admin đang đăng nhập từ request.
+ * Trả về "SUPER_ADMIN" | "OPERATOR" | null (nếu chưa đăng nhập).
+ */
+export function getAdminRoleFromRequest(req: NextRequest): "SUPER_ADMIN" | "OPERATOR" | null {
+  const cookie = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!cookie) return null;
+  const session = verifyAdminSessionTokenFull(cookie);
+  if (!session.valid) return null;
+  return session.role === "OPERATOR" ? "OPERATOR" : "SUPER_ADMIN";
+}
+
+/**
+ * Kiểm tra xem request hiện tại có phải SUPER_ADMIN không.
+ * Dùng để bảo vệ các API nhạy cảm (system-config, reports, delete).
+ */
+export function isSuperAdminRequest(req: NextRequest): boolean {
+  return getAdminRoleFromRequest(req) === "SUPER_ADMIN";
+}
+
+/**
+ * Kiểm tra xem request hiện tại có phải Admin hợp lệ (bất kỳ role nào) không.
+ * Tương đương isAdminRequest() nhưng trả về object đầy đủ thông tin.
+ */
+export function getAdminSessionFromRequest(
+  req: NextRequest
+): { username: string; role: "SUPER_ADMIN" | "OPERATOR" } | null {
+  const cookie = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
+  if (!cookie) return null;
+  const session = verifyAdminSessionTokenFull(cookie);
+  if (!session.valid || !session.username) return null;
+  return {
+    username: session.username,
+    role: session.role === "OPERATOR" ? "OPERATOR" : "SUPER_ADMIN",
+  };
+}
+

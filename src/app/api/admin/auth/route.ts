@@ -3,9 +3,10 @@ import { prisma } from "@/lib/prisma";
 import {
   ADMIN_COOKIE_NAME,
   hashAdminPassword,
-  createAdminSessionToken,
+  createAdminSessionTokenWithRole,
   verifyAdminSessionToken,
 } from "@/lib/auth-session";
+
 
 export const dynamic = "force-dynamic";
 
@@ -83,8 +84,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Thiết lập Cookie phiên đăng nhập bảo mật
-    const token = createAdminSessionToken(trimmedUser);
+    // Thiết lập Cookie phiên đăng nhập bảo mật — nhúng role vào token để RBAC
+    const token = createAdminSessionTokenWithRole(trimmedUser, adminRole);
+
     const response = NextResponse.json({
       success: true,
       message: "Đăng nhập thành công!",

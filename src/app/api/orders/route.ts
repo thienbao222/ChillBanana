@@ -5,6 +5,10 @@ import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
 import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
 import { MIN_ORDER_THRESHOLD_VND } from "@/lib/order-policy";
 import { getDepositAmount, parseDepositPercent } from "@/lib/payment-policy";
+import { getSystemConfig } from "@/lib/system-config";
+import { orderCreateLimiter, getClientIp } from "@/lib/rate-limiter";
+
+
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +63,21 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting: max 5 đơn hàng mỗi 2 phút từ cùng IP (chống spam đặt đơn)
+  const ip = getClientIp(req);
+  const rl = orderCreateLimiter.check(ip);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Bạn đang đặt đơn quá nhanh. Vui lòng chờ vài phút rồi thử lại." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+        },
+      }
+    );
+  }
+
   try {
     const body = await req.json();
     const depositPercent = body.depositPercent === undefined ? 50 : parseDepositPercent(body.depositPercent);
@@ -71,6 +90,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+
     const phoneDigits = body.customerPhone.replace(/\D/g, "");
     if (body.customerName.trim().length > 120 || phoneDigits.length < 8 || phoneDigits.length > 15 || body.customerAddress.trim().length > 500) {
       return NextResponse.json({ error: "Tên, số điện thoại hoặc địa chỉ không hợp lệ." }, { status: 400 });
@@ -309,17 +329,27 @@ export async function POST(req: NextRequest) {
         }
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
+        // Đọc phí động từ SystemConfig (có cache 5 phút, fallback về hardcode nếu DB lỗi)
+        const sysConfig = await getSystemConfig();
+        const serviceFeePercent = sysConfig.service_fee_percent / 100; // Ví dụ: 4 → 0.04
+        const minServiceFeeVnd = sysConfig.min_service_fee_vnd;        // Ví dụ: 20000
+        const airShippingPerKg = sysConfig.air_shipping_per_kg_vnd;    // Ví dụ: 185000
+        const groupBuyDiscountPct = sysConfig.group_buy_discount_percent / 100; // Ví dụ: 25 → 0.25
+
         const productPriceVnd = Math.round(verifiedPriceJpy * liveRate);
-        const serviceFeeVnd = productPriceVnd > 0 ? Math.max(20000, Math.round(productPriceVnd * 0.04)) : 0;
+        const serviceFeeVnd = productPriceVnd > 0
+          ? Math.max(minServiceFeeVnd, Math.round(productPriceVnd * serviceFeePercent))
+          : 0;
         const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
         if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
           throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
         }
 
-        let shippingRate = 185000;
+        let shippingRate = airShippingPerKg;
         if (body.isGroupBuy && verifiedWeightKg <= 0.5) {
-          shippingRate = Math.round(185000 * 0.75);
+          shippingRate = Math.round(airShippingPerKg * (1 - groupBuyDiscountPct));
         }
+
         const shippingFeeVnd = verifiedWeightKg > 0 ? Math.round(verifiedWeightKg * shippingRate) : 0;
 
         const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;

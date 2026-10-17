@@ -46,12 +46,27 @@ export async function POST(req: NextRequest) {
     if (order.depositAmountVnd <= 0) {
       return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
     }
+    // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
+    const baseUrl =
+      process.env.APP_URL?.replace(/\/+$/, "") ||
+      (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost") ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "") : null) ||
+      (process.env.VERCEL || process.env.NODE_ENV === "production" ? "https://chill-banana.vercel.app" : "http://localhost:3000");
+
     const tmnCode = process.env.VNPAY_TMN_CODE;
     const hashSecret = process.env.VNPAY_HASH_SECRET;
     const vnpUrl = process.env.VNPAY_URL;
+
+    // Nếu chưa cấu hình VNPay keys trên môi trường này -> Tự động chuyển tiếp sang Mock Sandbox
     if (!tmnCode || !hashSecret || !vnpUrl) {
-      return NextResponse.json({ error: "Cổng thanh toán chưa được cấu hình đầy đủ." }, { status: 503 });
+      const sandboxUrl = `${baseUrl}/payment/mock-sandbox?orderCode=${encodeURIComponent(orderCode)}&amount=${order.depositAmountVnd}`;
+      return NextResponse.json({
+        success: true,
+        paymentUrl: sandboxUrl,
+        isSandbox: true,
+        message: "Chuyển tiếp đến Cổng thanh toán Sandbox thử nghiệm (Pre-production)",
+      });
     }
+
 
     // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer.
     if (order.reservationExpiresAt) {
@@ -78,13 +93,8 @@ export async function POST(req: NextRequest) {
 
     const amount = order.depositAmountVnd; // Server-side computed amount
 
-    // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
-    const baseUrl =
-      process.env.APP_URL?.replace(/\/+$/, "") ||
-      (process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost") ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/+$/, "") : null) ||
-      (process.env.VERCEL || process.env.NODE_ENV === "production" ? "https://chill-banana.vercel.app" : "http://localhost:3000");
-
     const returnUrl = `${baseUrl}/api/payment/vnpay-return`;
+
 
     // Múi giờ Vietnam (GMT+7)
     const formatter = new Intl.DateTimeFormat("en-GB", {

@@ -1,59 +1,72 @@
+/**
+ * prisma/seed.js
+ * ─────────────────────────────────────────────────────────────────────────────
+ * Seed dữ liệu khởi tạo cho SystemConfig (CommonJS, chạy trực tiếp bằng node).
+ * ─────────────────────────────────────────────────────────────────────────────
+ */
+
 const { PrismaClient } = require("@prisma/client");
-const crypto = require("crypto");
-const curatedProducts = require("../src/lib/curated-products.json");
 
 const prisma = new PrismaClient();
-const SESSION_SECRET = process.env.ADMIN_SESSION_SECRET;
 
-function hashPassword(password) {
-  if (!SESSION_SECRET) {
-    throw new Error("ADMIN_SESSION_SECRET phải được đặt trước khi tạo tài khoản quản trị.");
-  }
-  return crypto.createHmac("sha256", SESSION_SECRET).update(password).digest("hex");
-}
+const systemConfigSeed = [
+  {
+    key: "service_fee_percent",
+    value: "4",
+    description: "Tỷ lệ phí mua hộ (%). Ví dụ: 4 = 4%. Tối đa 20%.",
+  },
+  {
+    key: "min_service_fee_vnd",
+    value: "20000",
+    description: "Phí mua hộ tối thiểu (VND) áp dụng khi % tính ra thấp hơn mức này.",
+  },
+  {
+    key: "air_shipping_per_kg_vnd",
+    value: "185000",
+    description: "Cước hàng không quốc tế Nhật→Việt mỗi kg (VND).",
+  },
+  {
+    key: "group_buy_discount_percent",
+    value: "25",
+    description: "Mức giảm cước gộp đơn nhóm (%) cho đơn ≤ 0.5kg. Ví dụ: 25 = giảm 25%.",
+  },
+  {
+    key: "floor_exchange_rate_jpy",
+    value: "172",
+    description: "Tỷ giá sàn an toàn JPY/VND. Dùng khi API tỷ giá trả về giá thấp hơn mức này.",
+  },
+  {
+    key: "min_order_threshold_vnd",
+    value: "300000",
+    description: "Giá trị đơn hàng tối thiểu (VND) để chấp nhận đặt đơn.",
+  },
+];
 
 async function main() {
-  console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma + Neon Postgres)...");
+  console.log("🌱 Bắt đầu seed SystemConfig...");
 
-  // 1. Tạo tài khoản Admin mặc định
-  // SECURITY: Set ADMIN_INITIAL_PASSWORD env var before running seed.
-  // After seeding, change password via admin panel or DB directly.
-  const adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
-  if (!adminPassword) {
-    console.error("❌ ADMIN_INITIAL_PASSWORD env var chưa được đặt! Bỏ qua tạo admin.");
-    console.error("   Chạy: ADMIN_INITIAL_PASSWORD=your_secure_password npx prisma db seed");
-  } else {
-    const adminHash = hashPassword(adminPassword);
-
-    const admin = await prisma.adminUser.upsert({
-      where: { username: "admin" },
-      update: { passwordHash: adminHash },
+  for (const config of systemConfigSeed) {
+    await prisma.systemConfig.upsert({
+      where: { key: config.key },
+      update: {
+        description: config.description,
+      },
       create: {
-        username: "admin",
-        passwordHash: adminHash,
-        name: "Quản Trị Viên ChillBanana",
-        role: "SUPER_ADMIN",
+        key: config.key,
+        value: config.value,
+        description: config.description,
+        updatedBy: "system:seed",
       },
     });
-    console.log(`✅ Đã tạo/cập nhật tài khoản quản trị: ${admin.username}`);
+    console.log(`  ✅ ${config.key} = ${config.value}`);
   }
 
-  // Keep the demo catalog and database catalog in sync so displayed products
-  // always have matching product IDs during checkout.
-  for (const product of curatedProducts) {
-    const { stockSlots, ...catalogDetails } = product;
-    await prisma.product.upsert({
-      where: { slug: product.slug },
-      update: catalogDetails,
-      create: product,
-    });
-  }
-  console.log(`✅ Đã đồng bộ ${curatedProducts.length} sản phẩm trong catalog.`);
+  console.log(`\n🎉 Seed hoàn tất! ${systemConfigSeed.length} cấu hình đã được khởi tạo.`);
 }
 
 main()
   .catch((e) => {
-    console.error("Lỗi seed dữ liệu:", e);
+    console.error("❌ Seed thất bại:", e);
     process.exit(1);
   })
   .finally(async () => {

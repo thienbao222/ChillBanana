@@ -8,8 +8,10 @@ import {
   verifyCustomerSessionToken as verifySession,
 } from "@/lib/auth-session";
 import { sendCustomerEmailVerification } from "@/lib/mailer";
+import { loginLimiter, getClientIp } from "@/lib/rate-limiter";
 
 export const dynamic = "force-dynamic";
+
 
 export async function GET(req: NextRequest) {
   try {
@@ -46,6 +48,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  // Rate limiting: max 10 lần đăng nhập/đăng ký mỗi 1 phút từ cùng IP
+  const ip = getClientIp(req);
+  const rl = loginLimiter.check(ip);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Quá nhiều yêu cầu. Vui lòng thử lại sau 1 phút." },
+      {
+        status: 429,
+        headers: {
+          "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          "X-RateLimit-Remaining": "0",
+        },
+      }
+    );
+  }
+
   try {
     const body = await req.json();
     const { action, email, password, name, phone, address } = body;
