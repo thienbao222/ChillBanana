@@ -23,6 +23,8 @@ import {
   ChevronDown,
   Package,
   Loader2,
+  Search,
+  Info,
 } from "lucide-react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -56,6 +58,16 @@ interface PurchaseTask {
   };
 }
 
+interface EligibleOrder {
+  id: string;
+  orderCode: string;
+  customerName: string;
+  productName: string;
+  priceJpy: number;
+  paymentStatus: string;
+  platform: string;
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, { label: string; color: string; icon: React.ReactNode }> = {
@@ -75,6 +87,49 @@ const PLATFORM_EMOJI: Record<string, string> = {
   unknown:   "❓ Unknown",
 };
 
+const PLATFORM_GUIDANCE: Record<string, { label: string; mode: string; note: string; tone: string }> = {
+  amazon_jp: {
+    label: "Amazon JP",
+    mode: "Tra cứu bổ sung",
+    note: "Chuẩn hóa link/ASIN; giá và tồn kho có thể không lấy được, cần đối chiếu trên sàn.",
+    tone: "border-sky-200 bg-sky-50 text-sky-800",
+  },
+  rakuten: {
+    label: "Rakuten",
+    mode: "API nếu đã cấu hình",
+    note: "Có thể lấy thông tin sản phẩm qua API khi môi trường đã có RAKUTEN_APP_ID.",
+    tone: "border-rose-200 bg-rose-50 text-rose-800",
+  },
+  mercari: {
+    label: "Mercari",
+    mode: "Nhân viên kiểm tra",
+    note: "Task vẫn tạo được; nhân viên cần tự xác nhận giá, người bán và tình trạng hàng.",
+    tone: "border-orange-200 bg-orange-50 text-orange-800",
+  },
+  yahoo_jp: {
+    label: "Yahoo! JAPAN",
+    mode: "Nhân viên kiểm tra",
+    note: "Task vẫn tạo được; nhân viên cần tự xác nhận giá và tình trạng sản phẩm trên link gốc.",
+    tone: "border-violet-200 bg-violet-50 text-violet-800",
+  },
+  unknown: {
+    label: "Sàn khác / chưa nhận diện",
+    mode: "Nhân viên kiểm tra",
+    note: "Task lưu link gốc để nhân viên kiểm tra thủ công; không có giá/tồn kho tự động.",
+    tone: "border-slate-200 bg-slate-50 text-slate-700",
+  },
+};
+
+function platformGuidance(platform: string) {
+  return PLATFORM_GUIDANCE[platform] ?? PLATFORM_GUIDANCE.unknown;
+}
+
+function paymentStatusLabel(status: string) {
+  if (status === "PAID_100") return "Đã thanh toán 100%";
+  if (status === "DEPOSITED_50") return "Đã cọc 50%";
+  return status;
+}
+
 function fmt(n: number) {
   return n.toLocaleString("ja-JP");
 }
@@ -89,13 +144,19 @@ export default function PurchaseTasksTab() {
   const [tasks, setTasks] = useState<PurchaseTask[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [taskLoadError, setTaskLoadError] = useState("");
   const [filterStatus, setFilterStatus] = useState(""); // "" = tất cả
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
   // Form tạo task mới
   const [creating, setCreating] = useState(false);
-  const [newOrderId, setNewOrderId] = useState("");
+  const [orderQuery, setOrderQuery] = useState("");
+  const [orderResults, setOrderResults] = useState<EligibleOrder[]>([]);
+  const [selectedOrder, setSelectedOrder] = useState<EligibleOrder | null>(null);
+  const [searchingOrders, setSearchingOrders] = useState(false);
+  const [orderSearchError, setOrderSearchError] = useState("");
+  const [orderSearchOpen, setOrderSearchOpen] = useState(false);
   const [createMsg, setCreateMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
   // Action modal
@@ -110,16 +171,18 @@ export default function PurchaseTasksTab() {
   // Fetch tasks
   const fetchTasks = useCallback(async () => {
     setLoading(true);
+    setTaskLoadError("");
     try {
       const params = new URLSearchParams({ page: String(page), limit: "15" });
       if (filterStatus) params.set("status", filterStatus);
       const res = await fetch(`/api/admin/purchase-tasks?${params}`);
-      if (res.ok) {
-        const data = await res.json();
-        setTasks(data.tasks);
-        setTotal(data.pagination.total);
-        setTotalPages(data.pagination.totalPages);
-      }
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Không thể tải danh sách tác vụ.");
+      setTasks(data.tasks);
+      setTotal(data.pagination.total);
+      setTotalPages(data.pagination.totalPages);
+    } catch (error) {
+      setTaskLoadError(error instanceof Error ? error.message : "Lỗi kết nối server.");
     } finally {
       setLoading(false);
     }
@@ -127,22 +190,63 @@ export default function PurchaseTasksTab() {
 
   useEffect(() => { fetchTasks(); }, [fetchTasks]);
 
+  // Search only eligible orders; keep the order's internal ID out of the manual workflow.
+  useEffect(() => {
+    const query = orderQuery.trim();
+    if (selectedOrder || query.length < 2) {
+      setOrderResults([]);
+      setSearchingOrders(false);
+      setOrderSearchError("");
+      return;
+    }
+
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      setSearchingOrders(true);
+      setOrderSearchError("");
+      try {
+        const res = await fetch(`/api/admin/purchase-tasks/orders?q=${encodeURIComponent(query)}`, {
+          signal: controller.signal,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Không thể tìm đơn hàng.");
+        setOrderResults(data.orders ?? []);
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+        setOrderSearchError(error instanceof Error ? error.message : "Lỗi kết nối server.");
+        setOrderResults([]);
+      } finally {
+        if (!controller.signal.aborted) setSearchingOrders(false);
+      }
+    }, 250);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [orderQuery, selectedOrder]);
+
   // Tạo task mới
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!newOrderId.trim()) return;
+    if (!selectedOrder) {
+      setCreateMsg({ type: "err", text: "Hãy tìm và chọn một đơn đủ điều kiện trước khi tạo task." });
+      return;
+    }
     setCreating(true);
     setCreateMsg(null);
     try {
       const res = await fetch("/api/admin/purchase-tasks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderId: newOrderId.trim() }),
+        body: JSON.stringify({ orderId: selectedOrder.id }),
       });
       const data = await res.json();
       if (res.ok) {
-        setCreateMsg({ type: "ok", text: `✅ Đã tạo task cho đơn ${data.task?.order?.orderCode ?? newOrderId}` });
-        setNewOrderId("");
+        setCreateMsg({ type: "ok", text: `✅ Đã tạo task cho đơn ${data.task?.order?.orderCode ?? selectedOrder.orderCode}` });
+        setOrderQuery("");
+        setOrderResults([]);
+        setSelectedOrder(null);
         fetchTasks();
       } else {
         setCreateMsg({ type: "err", text: `❌ ${data.error}` });
@@ -213,10 +317,10 @@ export default function PurchaseTasksTab() {
         <div>
           <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
             <ShoppingCart className="w-5 h-5 text-sky-600" />
-            Purchase Tasks — Auto-Purchasing Agent
+            Tác vụ mua hộ — Purchase Tasks
           </h2>
           <p className="text-xs text-slate-500 mt-0.5">
-            {total} task · Phase A (Amazon JP + Rakuten) · Human-in-the-loop bắt buộc
+            {total} task · Hệ thống hỗ trợ tra cứu và theo dõi; nhân viên xác nhận, đặt hàng trên sàn
           </p>
         </div>
         <button
@@ -231,33 +335,131 @@ export default function PurchaseTasksTab() {
 
       {/* Tạo task mới */}
       <div className="bg-white border border-slate-200 rounded-xl p-4">
-        <p className="text-xs font-semibold text-slate-700 mb-2 flex items-center gap-1.5">
+        <p className="text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
           <Plus className="w-3.5 h-3.5 text-sky-600" />
-          Tạo Purchase Task mới
+          Tạo task từ đơn đủ điều kiện
         </p>
-        <form onSubmit={handleCreate} className="flex gap-2 items-center flex-wrap">
-          <input
-            type="text"
-            placeholder="Nhập Order ID (chuỗi cuid — xem trong DB)"
-            value={newOrderId}
-            onChange={e => setNewOrderId(e.target.value)}
-            className="flex-1 min-w-48 px-3 py-1.5 text-xs border border-slate-200 rounded-lg outline-none focus:border-sky-400"
-          />
+        <p className="text-[11px] text-slate-500 mb-3">
+          Tìm bằng mã đơn, tên khách hoặc sản phẩm. Chỉ hiện đơn đã xác minh giá, đã cọc/đã thanh toán và đang mua tại Nhật.
+        </p>
+        <form onSubmit={handleCreate} className="flex gap-2 items-start flex-wrap">
+          <div
+            className="relative flex-1 min-w-64"
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget;
+              if (!(nextTarget instanceof Node) || !event.currentTarget.contains(nextTarget)) setOrderSearchOpen(false);
+            }}
+          >
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+              <input
+                type="search"
+                placeholder="Tìm mã #CB-..., tên khách hoặc tên sản phẩm"
+                value={orderQuery}
+                onFocus={() => setOrderSearchOpen(true)}
+                onChange={(event) => {
+                  setOrderQuery(event.target.value);
+                  setSelectedOrder(null);
+                  setCreateMsg(null);
+                  setOrderSearchOpen(true);
+                }}
+                className="w-full pl-9 pr-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:border-sky-400"
+                role="combobox"
+                aria-label="Tìm đơn hàng đủ điều kiện tạo task mua hộ"
+                aria-autocomplete="list"
+                aria-expanded={orderSearchOpen && !selectedOrder && orderQuery.trim().length >= 2}
+                aria-controls="eligible-purchase-orders"
+              />
+            </div>
+            {orderSearchOpen && !selectedOrder && orderQuery.trim().length >= 2 && (
+              <div id="eligible-purchase-orders" role="listbox" className="absolute z-30 mt-1 max-h-72 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-xl">
+                {searchingOrders ? (
+                  <div className="flex items-center gap-2 px-3 py-3 text-xs text-slate-500"><Loader2 className="w-3.5 h-3.5 animate-spin" />Đang tìm đơn đủ điều kiện…</div>
+                ) : orderSearchError ? (
+                  <div role="status" className="px-3 py-3 text-xs text-red-600">{orderSearchError}</div>
+                ) : orderResults.length > 0 ? orderResults.map((order) => {
+                  const support = platformGuidance(order.platform);
+                  return (
+                    <button
+                      key={order.id}
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => {
+                        setSelectedOrder(order);
+                        setOrderQuery(`${order.orderCode} · ${order.customerName}`);
+                        setOrderResults([]);
+                        setOrderSearchOpen(false);
+                      }}
+                      className="flex w-full flex-col gap-1 rounded-lg px-3 py-2 text-left hover:bg-sky-50 focus:bg-sky-50 focus:outline-none"
+                    >
+                      <span className="flex w-full flex-wrap items-center justify-between gap-1 text-xs">
+                        <span className="font-semibold text-slate-800">{order.orderCode} · {order.customerName}</span>
+                        <span className="text-slate-500">¥{fmt(order.priceJpy)}</span>
+                      </span>
+                      <span className="w-full truncate text-[11px] text-slate-600">{order.productName}</span>
+                      <span className="flex flex-wrap items-center gap-1.5">
+                        <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] ${support.tone}`}>
+                          {support.label} · {support.mode}
+                        </span>
+                        <span className="text-[10px] text-emerald-700">{paymentStatusLabel(order.paymentStatus)}</span>
+                      </span>
+                    </button>
+                  );
+                }) : (
+                  <div className="px-3 py-3 text-xs text-slate-500">Không tìm thấy đơn đủ điều kiện. Kiểm tra trạng thái đơn, tiền cọc và xác minh giá.</div>
+                )}
+              </div>
+            )}
+          </div>
           <button
             type="submit"
-            disabled={creating || !newOrderId.trim()}
+            disabled={creating || !selectedOrder}
             className="px-4 py-1.5 rounded-lg bg-sky-600 text-white text-xs font-semibold hover:bg-sky-700 disabled:opacity-50 flex items-center gap-1.5"
           >
             {creating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
             Tạo Task
           </button>
         </form>
+        {selectedOrder && (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+            <span>Đã chọn <strong className="text-slate-800">{selectedOrder.orderCode}</strong> · {selectedOrder.productName}</span>
+            <span className={`rounded-full border px-2 py-0.5 ${platformGuidance(selectedOrder.platform).tone}`}>
+              {platformGuidance(selectedOrder.platform).label} · {platformGuidance(selectedOrder.platform).mode}
+            </span>
+            <button type="button" onClick={() => { setSelectedOrder(null); setOrderQuery(""); }} className="font-semibold text-sky-700 hover:underline">Bỏ chọn</button>
+          </div>
+        )}
         {createMsg && (
           <p className={`mt-2 text-xs ${createMsg.type === "ok" ? "text-green-600" : "text-red-600"}`}>
             {createMsg.text}
           </p>
         )}
       </div>
+
+      <details className="group rounded-xl border border-sky-100 bg-white/90 px-4 py-3 shadow-sm">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-xs font-semibold text-slate-700">
+          <span className="flex items-center gap-2"><Info className="h-4 w-4 text-sky-600" />Hướng dẫn sử dụng và phạm vi hỗ trợ sàn</span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-slate-400 transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="mt-3 space-y-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-600">
+          <div className="grid gap-2 md:grid-cols-3">
+            {Object.entries(PLATFORM_GUIDANCE).map(([platform, support]) => (
+              <div key={platform} className={`rounded-lg border p-3 ${support.tone}`}>
+                <p className="font-semibold">{support.label} <span className="font-normal">· {support.mode}</span></p>
+                <p className="mt-1 opacity-90">{support.note}</p>
+              </div>
+            ))}
+          </div>
+          <ol className="space-y-1.5 pl-5 list-decimal">
+            <li><strong>Tìm và chọn đơn:</strong> tra theo mã đơn, tên khách hoặc tên sản phẩm. Đơn phải đang ở bước mua tại Nhật, đã cọc/đã thanh toán, giá đã xác minh và chưa có task.</li>
+            <li><strong>Tạo task rồi duyệt:</strong> task bắt đầu ở “Chờ duyệt”. Admin kiểm tra link, giá và ghi chú trước khi duyệt.</li>
+            <li><strong>Mua thủ công:</strong> sau khi duyệt, chuyển sang “Đang mua”, mở link và nhân viên đặt hàng trực tiếp trên sàn. Hệ thống không tự đăng nhập, đặt mua hay thanh toán.</li>
+            <li><strong>Ghi nhận kết quả:</strong> khi đã mua, nhập mã đơn của sàn và tên nhân viên. Nếu mua không thành công, báo thất bại kèm lý do rồi dùng “Thử lại” khi đã xử lý nguyên nhân.</li>
+          </ol>
+          <p className="rounded-lg bg-amber-50 px-3 py-2 text-amber-800">Giá lấy từ sàn có thể thiếu hoặc thay đổi. Cột chênh lệch trên 5% được cảnh báo để admin đối chiếu trước khi nhân viên đặt mua.</p>
+        </div>
+      </details>
 
       {/* Filter */}
       <div className="flex gap-1.5 flex-wrap">
@@ -281,6 +483,11 @@ export default function PurchaseTasksTab() {
         {loading ? (
           <div className="flex items-center justify-center py-12 text-slate-400 text-xs gap-2">
             <Loader2 className="w-4 h-4 animate-spin" />Đang tải...
+          </div>
+        ) : taskLoadError ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-10 text-center text-xs text-red-600" role="alert">
+            <span>{taskLoadError}</span>
+            <button type="button" onClick={fetchTasks} className="rounded-lg border border-red-200 px-3 py-1.5 font-semibold hover:bg-red-50">Tải lại danh sách</button>
           </div>
         ) : tasks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-xs gap-2">
@@ -323,7 +530,8 @@ export default function PurchaseTasksTab() {
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-slate-600">
-                        {PLATFORM_EMOJI[task.platform] ?? task.platform}
+                        <div>{PLATFORM_EMOJI[task.platform] ?? task.platform}</div>
+                        <div className="text-[10px] text-slate-400">{platformGuidance(task.platform).mode}</div>
                         {task.externalProductId && (
                           <div className="text-slate-400 font-mono text-[10px]">{task.externalProductId}</div>
                         )}

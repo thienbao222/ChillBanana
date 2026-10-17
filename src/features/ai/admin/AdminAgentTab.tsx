@@ -2,7 +2,7 @@
 
 import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles } from "lucide-react";
-import { ADMIN_AI_MODULES, AdminAiModuleId } from "@/lib/admin-ai/definitions";
+import { ADMIN_AI_MODULES, AdminAiModuleId } from "./definitions";
 
 type AgentMessage = {
   id: string;

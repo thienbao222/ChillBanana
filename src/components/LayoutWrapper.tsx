@@ -4,7 +4,7 @@ import React from "react";
 import { usePathname } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
-import AIChatBot from "@/components/AIChatBot";
+import AIChatBot from "@/features/ai/customer/AIChatBot";
 import CartDrawer from "@/components/CartDrawer";
 import AuthModal from "@/components/AuthModal";
 import { CartProvider } from "@/context/CartContext";

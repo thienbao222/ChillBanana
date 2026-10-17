@@ -5,6 +5,7 @@ import {
   RefreshCw, TrendingUp, BarChart3, ShoppingBag, Package, AlertCircle, Sparkles,
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
+import DailyInsightCard from "@/features/ai/admin/DailyInsightCard";
 
 export default function ReportsTab({ onOpenAgent }: { onOpenAgent?: () => void }) {
   const { adminToast } = useAdminToast();
@@ -100,6 +101,8 @@ export default function ReportsTab({ onOpenAgent }: { onOpenAgent?: () => void }
                 </button>
               </div>
             </div>
+
+            <DailyInsightCard />
 
             {loadingReport ? (
               <div className="flex items-center justify-center py-20 text-slate-400 text-sm">

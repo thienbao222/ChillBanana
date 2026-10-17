@@ -11,6 +11,7 @@ import { CuratedProduct } from "@/types";
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 type CuratedProductsProps = {
   quoteSectionId?: string;
@@ -26,7 +27,7 @@ export default function CuratedProducts({
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
   const [products, setProducts] = useState<CuratedProduct[]>([]);
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
 
@@ -108,7 +109,7 @@ export default function CuratedProducts({
   };
 
   return (
-    <section className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
+    <section id="products" className="py-12 px-4 sm:px-6 lg:px-8 max-w-[1600px] w-[95%] mx-auto">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
         <motion.div 
           initial={{ opacity: 0, x: -20 }}

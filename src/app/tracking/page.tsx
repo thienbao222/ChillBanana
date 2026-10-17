@@ -28,6 +28,7 @@ import { useToast } from "@/context/ToastContext";
 import { useCart } from "@/context/CartContext";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
+import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 import "@/styles/NeoDaylightCosmos.css";
 
 function TrackingCosmosContent() {
@@ -44,6 +45,10 @@ function TrackingCosmosContent() {
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [requiresEmailAccess, setRequiresEmailAccess] = useState(false);
+  const [guestEmail, setGuestEmail] = useState("");
+  const [requestingAccess, setRequestingAccess] = useState(false);
+  const [accessRequestSent, setAccessRequestSent] = useState(false);
   const [isRedirectingVnpay, setIsRedirectingVnpay] = useState(false);
   const [currentTimestamp, setCurrentTimestamp] = useState(0);
 
@@ -59,10 +64,10 @@ function TrackingCosmosContent() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Trạng thái thanh toán VNPAY trả về
-  const [paymentStatus, setPaymentStatus] = useState<"success" | "failed" | "invalid" | "pending" | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "simulated" | "failed" | "invalid" | "pending" | null>(null);
 
   // Tỷ giá live
-  const [exchangeRate, setExchangeRate] = useState<number>(172);
+  const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
 
   // Parallax pointermove listeners
   useEffect(() => {
@@ -113,13 +118,16 @@ function TrackingCosmosContent() {
     if (!code.trim()) return;
     setLoading(true);
     setError("");
+    setRequiresEmailAccess(false);
     try {
       const res = await fetch(`/api/orders/${encodeURIComponent(code.trim())}`);
       const data = await res.json();
       if (res.ok && data.success && data.order) {
         setOrder(data.order);
+        setAccessRequestSent(false);
       } else {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
+        setRequiresEmailAccess(res.status === 401 || res.status === 404);
         setOrder(null);
       }
     } catch {
@@ -127,6 +135,30 @@ function TrackingCosmosContent() {
       setOrder(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRequestGuestAccess = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!searchCode.trim() || !guestEmail.trim()) return;
+    setRequestingAccess(true);
+    setAccessRequestSent(false);
+    try {
+      const response = await fetch(`/api/orders/${encodeURIComponent(searchCode.trim())}/lookup-request`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: guestEmail.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok && data.success) {
+        setAccessRequestSent(true);
+      } else {
+        setError(data.error || "Không gửi được yêu cầu. Vui lòng thử lại sau.");
+      }
+    } catch {
+      setError("Không kết nối được máy chủ. Vui lòng thử lại.");
+    } finally {
+      setRequestingAccess(false);
     }
   };
 
@@ -173,12 +205,37 @@ function TrackingCosmosContent() {
 
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("orderCode");
-    const payment = searchParams.get("payment") as "success" | "failed" | "invalid" | "pending" | null;
+    const accessToken = searchParams.get("access");
+    const payment = searchParams.get("payment") as "success" | "simulated" | "failed" | "invalid" | "pending" | null;
     if (payment) setPaymentStatus(payment);
     if (codeParam) {
       setSearchCode(codeParam);
-      fetchOrder(codeParam);
       setActiveTab("search");
+      if (accessToken) {
+        void (async () => {
+          try {
+            const response = await fetch(`/api/orders/${encodeURIComponent(codeParam)}/access`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ accessToken }),
+            });
+            if (!response.ok) {
+              setError("Liên kết xem đơn đã hết hạn hoặc không hợp lệ. Bạn có thể yêu cầu gửi liên kết mới qua email.");
+              setRequiresEmailAccess(true);
+              return;
+            }
+            const params = new URLSearchParams(window.location.search);
+            params.delete("access");
+            window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+            await fetchOrder(codeParam);
+          } catch {
+            setError("Không thể xác minh liên kết. Vui lòng thử lại.");
+            setRequiresEmailAccess(true);
+          }
+        })();
+      } else {
+        fetchOrder(codeParam);
+      }
     } else if (customer) {
       setActiveTab("my_orders");
     }
@@ -341,6 +398,20 @@ function TrackingCosmosContent() {
                 <p className="text-xs text-emerald-700">{t("Giao dịch đã được xác nhận. Tiến độ xử lý đơn được cập nhật bên dưới.")}</p>
               </div>
               <button onClick={() => setPaymentStatus(null)} className="ml-auto text-emerald-700 hover:text-emerald-950">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        {paymentStatus === "simulated" && (
+          <div className="track-card mb-6" style={{ background: "#fff8e6", borderColor: "#f4d27d" }}>
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-6 h-6 text-amber-700 shrink-0" />
+              <div>
+                <p className="font-bold text-amber-950">Đã ghi nhận kịch bản VNPAY sandbox</p>
+                <p className="text-xs text-amber-800">Đây là kết quả kiểm thử, không phải thanh toán thật. Đơn vẫn chờ thanh toán và không được chuyển sang mua hàng.</p>
+              </div>
+              <button onClick={() => setPaymentStatus(null)} className="ml-auto text-amber-700 hover:text-amber-950" aria-label="Đóng thông báo">
                 <X className="w-4 h-4" />
               </button>
             </div>
@@ -555,6 +626,30 @@ function TrackingCosmosContent() {
               </div>
             )}
 
+            {requiresEmailAccess && (
+              <form onSubmit={handleRequestGuestAccess} className="track-card mx-auto max-w-3xl space-y-3 p-4">
+                <div>
+                  <h3 className="font-bold text-slate-900">Xác minh đơn mua hộ</h3>
+                  <p className="mt-1 text-sm text-slate-600">Để bảo vệ thông tin đơn, khách chưa đăng nhập cần nhận liên kết xác minh tại email đã dùng khi đặt hàng.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={guestEmail}
+                    onChange={(event) => setGuestEmail(event.target.value)}
+                    placeholder="Email dùng khi đặt đơn"
+                    className="min-w-0 flex-1 rounded-xl border border-slate-300 px-3 py-2 text-sm"
+                  />
+                  <button type="submit" disabled={requestingAccess} className="cta" style={{ padding: "10px 16px", fontSize: "0.82rem" }}>
+                    {requestingAccess ? "Đang gửi..." : "Gửi link xác minh"}
+                  </button>
+                </div>
+                {accessRequestSent && <p role="status" className="text-sm font-medium text-emerald-700">Nếu mã đơn và email khớp, ChillBanana đã gửi liên kết. Hãy kiểm tra cả thư rác.</p>}
+              </form>
+            )}
+
             {/* Welcome guidance khi chưa tra cứu */}
             {!order && !loading && !error && (
               <div className="track-card max-w-3xl mx-auto text-center py-12 space-y-4">
@@ -716,11 +811,11 @@ function TrackingCosmosContent() {
                           <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 space-y-3">
                             <div>
                               <p className="font-bold text-sky-950">Thanh toán đơn hàng</p>
-                              <p className="text-xs text-sky-800">VNPAY sẽ tự xác nhận giao dịch. Nếu chuyển khoản VietQR, hãy ghi đúng mã đơn và chờ nhân viên đối chiếu.</p>
+                              <p className="text-xs text-amber-800">Luồng dưới đây chỉ dùng để kiểm thử sandbox/mô phỏng, không thu tiền thật và không xác nhận đơn đã thanh toán.</p>
                               {order.reservationExpiresAt && <p className="text-xs text-sky-800 mt-1">Thời hạn giữ hàng đến {new Date(order.reservationExpiresAt).toLocaleString("vi-VN")}.</p>}
                             </div>
                             <button onClick={handlePayVnpay} disabled={isRedirectingVnpay} className="w-full rounded-xl bg-[#0066CC] px-4 py-3 text-sm font-bold text-white disabled:opacity-60 flex items-center justify-center gap-2">
-                              <CreditCard className="w-4 h-4" />{isRedirectingVnpay ? "Đang chuyển đến VNPAY..." : "Thanh toán qua VNPAY"}
+                              <CreditCard className="w-4 h-4" />{isRedirectingVnpay ? "Đang mở trang kiểm thử..." : "Thử luồng thanh toán"}
                             </button>
                             <div className="text-center text-xs text-slate-600">
                               <p>Hoặc chuyển khoản VietQR, nội dung: <strong>{order.orderCode}</strong></p>

@@ -1,5 +1,7 @@
 // Module Quản lý Tỷ Giá Thời Gian Thực Tế (Live Exchange Rate Engine)
 // Nâng cấp Agent 1.2: Multi-source fallback (3 nguồn) + Volatility Alert
+import { getCurrentPricingConfig } from "@/features/pricing/config";
+import { DEFAULT_PRICING_CONFIG } from "@/features/pricing/calculator";
 
 export interface LiveRateData {
   rate: number;          // Tỷ giá JPY -> VND (VD: 171.8)
@@ -14,9 +16,9 @@ export interface LiveRateData {
 }
 
 const FALLBACK_RATE: LiveRateData = {
-  rate: 172,
-  roundedRate: 172,
-  previousRate: 172,
+  rate: DEFAULT_PRICING_CONFIG.fallbackJpyVndRate,
+  roundedRate: DEFAULT_PRICING_CONFIG.fallbackJpyVndRate,
+  previousRate: DEFAULT_PRICING_CONFIG.fallbackJpyVndRate,
   changePercent: 0,
   updatedAt: "",
   source: "Tỷ giá tham chiếu mặc định",
@@ -78,7 +80,7 @@ async function fetchFromOpenErApi(): Promise<number | null> {
  * JPY/VND không trực tiếp → cross rate qua JPY/USD × USD/VND tham chiếu.
  * Độ chính xác thấp hơn một chút nhưng rất ổn định, không rate-limit.
  */
-async function fetchFromFrankfurter(): Promise<number | null> {
+async function fetchFromFrankfurter(usdToVnd: number): Promise<number | null> {
   try {
     const res = await fetch("https://api.frankfurter.app/latest?from=JPY&to=USD", {
       cache: "no-store",
@@ -89,8 +91,6 @@ async function fetchFromFrankfurter(): Promise<number | null> {
     const data = await res.json();
     const jpyToUsd: unknown = data?.rates?.USD;
     if (typeof jpyToUsd !== "number" || jpyToUsd <= 0) return null;
-    // USD/VND tham chiếu ngân hàng VN (cập nhật thủ công theo quý nếu cần)
-    const usdToVnd = 25400;
     const rate = jpyToUsd * usdToVnd;
     if (rate > 100 && rate < 300) return rate;
   } catch {
@@ -104,20 +104,48 @@ async function fetchFromFrankfurter(): Promise<number | null> {
  * Chỉ dùng khi cả 2 API trên đều không kết nối được.
  * Cập nhật con số này nếu tỷ giá thực tế lệch > 5% so với giá trị này.
  */
-function getFallbackFloorRate(): number {
-  return 172;
+/**
+ * Chỉ dùng cho kiểm thử tự động (E2E): khi APP_ENV=test và có TEST_FIXED_JPY_VND_RATE thì
+ * trả tỷ giá cố định, không gọi API ngoài. Tuyệt đối bị bỏ qua trên Vercel production.
+ * Sẽ được thay bằng lớp provider mock/sandbox/live ở Giai đoạn 3.
+ */
+function getTestFixedRate(): LiveRateData | null {
+  if (process.env.APP_ENV !== "test" || process.env.VERCEL_ENV === "production") return null;
+  const fixed = Number(process.env.TEST_FIXED_JPY_VND_RATE);
+  if (!Number.isFinite(fixed) || fixed <= 0) return null;
+  return {
+    rate: fixed,
+    roundedRate: Math.round(fixed),
+    previousRate: fixed,
+    changePercent: 0,
+    updatedAt: new Date().toISOString(),
+    source: "test-fixed-rate",
+    isFallback: false,
+    isStale: false,
+    isVolatile: false,
+  };
 }
 
 export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
+  const testRate = getTestFixedRate();
+  if (testRate) return testRate;
+
   const now = Date.now();
   if (now - lastFetchTime < CACHE_DURATION_MS && cachedRate.rate > 0) {
     return { ...cachedRate, isStale: !lastFetchSucceeded };
   }
 
+  let pricing = DEFAULT_PRICING_CONFIG;
+  try {
+    pricing = (await getCurrentPricingConfig()).values;
+  } catch (error) {
+    console.warn("[ExchangeRate] Không đọc được cấu hình giá; dùng tỷ giá dự phòng mặc định.", error);
+  }
+
   // Thử lần lượt từng nguồn theo thứ tự ưu tiên
   const sources: { name: string; fetch: () => Promise<number | null> }[] = [
     { name: "open.er-api.com", fetch: fetchFromOpenErApi },
-    { name: "frankfurter.app (ECB)", fetch: fetchFromFrankfurter },
+    { name: "frankfurter.app (ECB) × USD/VND cấu hình", fetch: () => fetchFromFrankfurter(pricing.usdVndReferenceRate) },
   ];
 
   for (const source of sources) {
@@ -163,12 +191,13 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
   }
 
   // Hoàn toàn không có dữ liệu → floor rate hardcoded
-  const floorRate = getFallbackFloorRate();
+  const floorRate = pricing.fallbackJpyVndRate;
   cachedRate = {
     ...FALLBACK_RATE,
     rate: floorRate,
     roundedRate: floorRate,
     updatedAt: new Date().toISOString(),
+    source: "Tỷ giá dự phòng theo cấu hình",
   };
   return { ...cachedRate, isStale: true };
 }

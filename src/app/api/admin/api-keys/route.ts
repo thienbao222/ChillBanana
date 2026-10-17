@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminRequest } from "@/lib/auth-session";
-import { chatKeyPool, visionKeyPool, adminKeyPool } from "@/lib/api-key-manager";
+import { requireAdmin } from "@/lib/admin-guard";
+import { chatKeyPool, scrapeKeyPool, visionKeyPool, adminKeyPool } from "@/lib/api-key-manager";
 
 export const dynamic = "force-dynamic";
 
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
+  if (!guard.ok) return guard.response;
 
   try {
     const chatKeys = chatKeyPool.getStatus();
+    const scrapeKeys = scrapeKeyPool.getStatus();
     const visionKeys = visionKeyPool.getStatus();
     const adminKeys = adminKeyPool.getStatus();
 
-    const allKeys = [...chatKeys, ...visionKeys, ...adminKeys];
+    const allKeys = [...chatKeys, ...scrapeKeys, ...visionKeys, ...adminKeys];
     
     // Group keys logically for the UI to display them unified
     // For simplicity, we just return the chatKeys right now since UI expects a single array
@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
     // Let's combine them and give them unique index names
     const combinedKeys = [
       ...chatKeys.map((k, i) => ({ ...k, index: `Chat-${i+1}` })),
+      ...scrapeKeys.map((k, i) => ({ ...k, index: `Scrape-${i+1}` })),
       ...visionKeys.map((k, i) => ({ ...k, index: `Vision-${i+1}` })),
       ...adminKeys.map((k, i) => ({ ...k, index: `Admin-${i+1}` }))
     ];

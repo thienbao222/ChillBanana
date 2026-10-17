@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { visionKeyPool } from '@/lib/api-key-manager';
+import { GEMINI_MODELS } from '@/lib/gemini-models';
+import { prisma } from '@/lib/prisma';
+import { getImageCatalogSearchTerms, rankImageCatalogCandidates } from '@/features/ai/customer/image-catalog-matcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -99,12 +102,12 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
         ]
       }],
       generationConfig: {
-        temperature: 0.3,
-        maxOutputTokens: 2048
+        maxOutputTokens: 2048,
+        thinkingConfig: { thinkingLevel: 'minimal' },
       }
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -134,7 +137,7 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       // Remove markdown wrapping if present
       const cleanedText = textOutput.replace(/```(?:json)?\n?|\n?```/g, '').trim();
       parsedResult = JSON.parse(cleanedText);
-    } catch (parseError) {
+    } catch {
       console.error('Failed to parse Gemini output as JSON:', textOutput);
       return NextResponse.json({ success: false, error: 'AI Vision trả kết quả không đọc được. Vui lòng thử lại với ảnh rõ hơn.' }, { status: 502 });
     }
@@ -159,9 +162,46 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       description: typeof parsedResult.description === 'string' ? parsedResult.description.slice(0, 800) : '',
     };
 
+    const catalogTerms = getImageCatalogSearchTerms(normalizedResult);
+    let catalogMatches: {
+      status: 'matched' | 'no_match' | 'unavailable' | 'not_searched';
+      products: Array<{ name: string; category: string; priceJpy: number }>;
+    } = { status: catalogTerms.length ? 'no_match' : 'not_searched', products: [] };
+
+    if (catalogTerms.length) {
+      try {
+        const products = await prisma.product.findMany({
+          where: {
+            OR: catalogTerms.map((term) => ({
+              OR: [
+                { name: { contains: term, mode: 'insensitive' as const } },
+                { description: { contains: term, mode: 'insensitive' as const } },
+                { categoryName: { contains: term, mode: 'insensitive' as const } },
+              ],
+            })),
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 60,
+          select: { name: true, categoryName: true, priceJpy: true, description: true },
+        });
+        const ranked = rankImageCatalogCandidates(products, normalizedResult);
+        catalogMatches = {
+          status: ranked.length ? 'matched' : 'no_match',
+          products: ranked.map((product) => ({
+            name: product.name.slice(0, 120),
+            category: product.categoryName.slice(0, 80),
+            priceJpy: product.priceJpy,
+          })),
+        };
+      } catch {
+        console.warn('[ImageAnalysis] Catalog lookup unavailable.');
+        catalogMatches = { status: 'unavailable', products: [] };
+      }
+    }
+
     return NextResponse.json({
       success: true,
-      analysis: normalizedResult
+      analysis: { ...normalizedResult, catalogMatches }
     });
 
   } catch (error) {

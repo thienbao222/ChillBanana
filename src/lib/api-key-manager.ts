@@ -67,10 +67,10 @@ export class ApiKeyPool {
 
     stats.errorCount++;
 
-    if (statusCode === 429 || statusCode === 503 || statusCode === 403) {
+    if (statusCode === 429 || statusCode === 503) {
       stats.status = "RATE_LIMITED";
       stats.cooldownUntil = Date.now() + 60_000; // 60s cooldown
-      console.warn(`[ApiKeyPool:${this.envVarName}] Key rate-limited (HTTP ${statusCode}). Cooldown 60s.`);
+      console.warn(`[ApiKeyPool:${this.envVarName}] Provider temporarily limited request (HTTP ${statusCode}). Cooldown 60s.`);
     } else {
       console.warn(`[ApiKeyPool:${this.envVarName}] Key error (HTTP ${statusCode}).`);
     }
@@ -96,5 +96,6 @@ export class ApiKeyPool {
 }
 
 export const chatKeyPool = new ApiKeyPool("GEMINI_CHAT_KEYS");
+export const scrapeKeyPool = new ApiKeyPool("GEMINI_SCRAPE_KEYS");
 export const visionKeyPool = new ApiKeyPool("GEMINI_VISION_KEYS");
 export const adminKeyPool = new ApiKeyPool("GEMINI_ADMIN_KEYS");

@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
-import { isAdminRequest } from "@/lib/auth-session";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import { getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +44,8 @@ export async function GET(req: NextRequest) {
 
 // POST: Thêm sản phẩm mới (Admin)
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   try {
     const body = await req.json();
 
@@ -93,6 +94,14 @@ export async function POST(req: NextRequest) {
       },
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_CREATE",
+      entityType: "Product",
+      entityId: newProd.id,
+      summary: `Tạo sản phẩm "${newProd.name}".`,
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Thêm sản phẩm thành công!",
@@ -109,9 +118,8 @@ export async function POST(req: NextRequest) {
 
 // PUT: Cập nhật thông tin sản phẩm
 export async function PUT(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   try {
     const body = await req.json();
     const { id, ...data } = body;
@@ -167,6 +175,15 @@ export async function PUT(req: NextRequest) {
       data: updateData,
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_UPDATE",
+      entityType: "Product",
+      entityId: id,
+      summary: `Cập nhật sản phẩm "${updated.name}".`,
+      metadata: { fields: Object.keys(updateData) },
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Cập nhật thành công!",
@@ -183,9 +200,8 @@ export async function PUT(req: NextRequest) {
 
 // DELETE: Xóa sản phẩm
 export async function DELETE(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");
@@ -201,6 +217,14 @@ export async function DELETE(req: NextRequest) {
       where: { id },
     });
 
+    await writeAuditLog({
+      actor: getAdminUsernameFromRequest(req) ?? "admin",
+      action: "PRODUCT_DELETE",
+      entityType: "Product",
+      entityId: id,
+      summary: "Xóa sản phẩm.",
+      req,
+    });
     return NextResponse.json({
       success: true,
       message: "Đã xóa sản phẩm.",

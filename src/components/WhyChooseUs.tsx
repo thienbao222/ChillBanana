@@ -1,4 +1,7 @@
+"use client";
+
 import React from "react";
+import { useCart } from "@/context/CartContext";
 import {
   ShieldCheck,
   Plane,
@@ -7,6 +10,7 @@ import {
 } from "lucide-react";
 
 export default function WhyChooseUs() {
+  const { pricingConfig } = useCart();
   const points = [
     {
       icon: <ShieldCheck className="w-7 h-7 text-banana-600" />,
@@ -25,8 +29,8 @@ export default function WhyChooseUs() {
     },
     {
       icon: <BadgePercent className="w-7 h-7 text-emerald-600" />,
-      title: "Gộp Đơn Giảm 25% Cước Bay",
-      desc: "Giải pháp ghép kiện bay chung thông minh dành cho các món hàng nhỏ nhẹ dưới 0.5kg giúp tiết kiệm chi phí tối đa.",
+      title: `Gộp Đơn Giảm ${pricingConfig.groupBuyShippingDiscountPercent}% Cước Bay`,
+      desc: `Giải pháp ghép kiện bay chung thông minh dành cho các món hàng nhỏ nhẹ đến ${pricingConfig.groupBuyMaxWeightKg}kg giúp tiết kiệm chi phí vận chuyển tham khảo.`,
     },
   ];
 

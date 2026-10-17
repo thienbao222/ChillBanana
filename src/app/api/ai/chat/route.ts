@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent, lookupOrderContext } from "@/lib/gemini-agent";
+import { askGeminiAgent } from "@/features/ai/customer/assistant";
+import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
 import { prisma } from "@/lib/prisma";
-import { getCustomerFromRequest } from "@/lib/auth-session";
+import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
 import { AIPersonality } from "@/types";
 import { randomUUID } from "crypto";
 
@@ -12,7 +13,6 @@ export const maxDuration = 60;
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
   const entry = rateLimitMap.get(ip);
@@ -75,35 +75,37 @@ export async function POST(req: NextRequest) {
 
     const selectedPersonality: AIPersonality = personality === "vietnamese" ? "vietnamese" : "omotenashi";
     const validHistory = Array.isArray(history)
-      ? history.slice(-8).filter((entry: any) =>
-          entry && typeof entry === "object" &&
-          ["user", "model", "assistant"].includes(entry.role) &&
-          typeof entry.text === "string"
-        ).map((entry: any) => ({ role: entry.role, text: entry.text.slice(0, 2000) }))
+      ? history.slice(-8).flatMap((entry: unknown) => {
+          if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+          const candidate = entry as { role?: unknown; text?: unknown };
+          if (
+            typeof candidate.role !== "string" ||
+            !["user", "model", "assistant"].includes(candidate.role) ||
+            typeof candidate.text !== "string"
+          ) return [];
+          return [{ role: candidate.role, text: candidate.text.slice(0, 2000) }];
+        })
       : [];
 
-    // 1. Agent 1.4: Order Lookup — tra cứu đơn hàng nếu khách nhắc mã CB-xxxx
-    //    Lookup chạy song song với các bước validate khác để tiết kiệm latency.
-    const guestEmailForLookup = customerSession?.email ?? null;
-    const guestPhoneForLookup: string | null = (() => {
-      const match = message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
-      return match ? match[0] : null;
-    })();
-
-    const orderContext = await lookupOrderContext(
+    const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object" && !Array.isArray(body.scrapedProduct)
+      ? body.scrapedProduct as { title?: unknown; priceJpy?: unknown; url?: unknown }
+      : null;
+    const supportRun = await runCustomerSupportTools({
       message,
-      customerSession?.id ?? null,
-      guestEmailForLookup,
-      guestPhoneForLookup
+      customerId: customerSession?.id ?? null,
+      guestOrderAccessToken: req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null,
+      scrapedProduct,
+    });
+
+    // Order privacy and missing quote inputs use deterministic replies; never ask the model
+    // to infer private order state or invent the missing price/rate.
+    const generatedReply = supportRun.guardedReply ?? await askGeminiAgent(
+      message,
+      selectedPersonality,
+      validHistory,
+      supportRun.evidence
     );
-
-    // Prepend order context vào query để Gemini có đủ dữ liệu trả lời chính xác
-    const enrichedMessage = orderContext
-      ? `${orderContext}\n\n[Câu hỏi của khách:] ${message}`
-      : message;
-
-    // 2. Gọi Gemini AI Agent đàm thoại trực tiếp (không giới hạn chủ đề)
-    const reply = await askGeminiAgent(enrichedMessage, selectedPersonality, validHistory);
+    const reply = generatedReply + (supportRun.quoteFooter ?? "");
 
     // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();
@@ -214,6 +216,8 @@ export async function POST(req: NextRequest) {
       reply,
       personality: selectedPersonality,
       sessionId: resolvedSessionId,
+      sources: supportRun.sources,
+      isGuardrailTriggered: supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted"),
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {
       httpOnly: true,

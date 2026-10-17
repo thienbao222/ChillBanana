@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,10 +10,8 @@ function isPaymentRecorded(paymentStatus: string) {
 
 export async function GET(req: NextRequest) {
   try {
-    const isAdmin = isAdminRequest(req);
-    if (!isAdmin) {
-      return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-    }
+    const guard = await requireAdmin(req);
+    if (!guard.ok) return guard.response;
 
     // ====== 1. Thành viên đã đăng ký (REGISTERED) ======
     const registeredCustomers = await prisma.customer.findMany({

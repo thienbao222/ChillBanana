@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderCreatedEmail } from "@/lib/mailer";
-import { fetchLiveExchangeRate } from "@/lib/exchange-rate";
-import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
-import { MIN_ORDER_THRESHOLD_VND } from "@/lib/order-policy";
-import { getDepositAmount, parseDepositPercent } from "@/lib/payment-policy";
-import { getSystemConfig } from "@/lib/system-config";
+import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import {
+  createGuestOrderAccessToken,
+  getCustomerFromRequest,
+  ORDER_ACCESS_COOKIE_NAME,
+} from "@/lib/auth-session";
+import { isVerifiedAdmin } from "@/lib/admin-guard";
+import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { orderCreateLimiter, getClientIp } from "@/lib/rate-limiter";
-
-
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +21,7 @@ export async function GET(req: NextRequest) {
     const email = searchParams.get("email");
     const phone = searchParams.get("phone");
 
-    const isAdmin = isAdminRequest(req);
+    const isAdmin = await isVerifiedAdmin(req);
     const customerSession = getCustomerFromRequest(req);
 
     if (!isAdmin && !customerSession) {
@@ -214,6 +217,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const liveRate = liveRateData.roundedRate || liveRateData.rate || 172;
+    const pricingConfig = await getCurrentPricingConfig();
+    const minimumBaseOrderVnd = pricingConfig.values.minimumBaseOrderVnd;
 
     // Khởi tạo mã đơn hàng
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -329,31 +334,11 @@ export async function POST(req: NextRequest) {
         }
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
-        // Đọc phí động từ SystemConfig (có cache 5 phút, fallback về hardcode nếu DB lỗi)
-        const sysConfig = await getSystemConfig();
-        const serviceFeePercent = sysConfig.service_fee_percent / 100; // Ví dụ: 4 → 0.04
-        const minServiceFeeVnd = sysConfig.min_service_fee_vnd;        // Ví dụ: 20000
-        const airShippingPerKg = sysConfig.air_shipping_per_kg_vnd;    // Ví dụ: 185000
-        const groupBuyDiscountPct = sysConfig.group_buy_discount_percent / 100; // Ví dụ: 25 → 0.25
-
-        const productPriceVnd = Math.round(verifiedPriceJpy * liveRate);
-        const serviceFeeVnd = productPriceVnd > 0
-          ? Math.max(minServiceFeeVnd, Math.round(productPriceVnd * serviceFeePercent))
-          : 0;
-        const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
-        if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
-          throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
+        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingConfig.values);
+        const { productPriceVnd, serviceFeeVnd, baseOrderCostVnd, shippingFeeVnd, totalVnd } = price;
+        if (baseOrderCostVnd < minimumBaseOrderVnd) {
+          throw new Error(`ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`);
         }
-
-        let shippingRate = airShippingPerKg;
-        if (body.isGroupBuy && verifiedWeightKg <= 0.5) {
-          shippingRate = Math.round(airShippingPerKg * (1 - groupBuyDiscountPct));
-        }
-
-        const shippingFeeVnd = verifiedWeightKg > 0 ? Math.round(verifiedWeightKg * shippingRate) : 0;
-
-        const totalVnd = productPriceVnd + serviceFeeVnd + shippingFeeVnd;
-
         const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
         const hasCatalogReservation = orderItemsData.some((item) => item.itemType === "CATALOG");
         const reservationExpiresAt = hasCatalogReservation && isOnlyCatalogItems
@@ -376,6 +361,7 @@ export async function POST(req: NextRequest) {
             priceJpy: verifiedPriceJpy,
             weightKg: verifiedWeightKg,
             exchangeRate: liveRate,
+            pricingConfigVersion: pricingConfig.version || null,
             productPriceVnd,
             serviceFeeVnd,
             shippingFeeVnd,
@@ -413,14 +399,28 @@ export async function POST(req: NextRequest) {
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
 
-      return NextResponse.json({ success: true, order: createdDbOrder });
+      const response = NextResponse.json({ success: true, order: createdDbOrder });
+      if (!customerId && customerEmail) {
+        response.cookies.set(
+          ORDER_ACCESS_COOKIE_NAME,
+          createGuestOrderAccessToken(orderCode, customerEmail),
+          {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            path: "/api",
+            maxAge: 60 * 60 * 24 * 7,
+          }
+        );
+      }
+      return response;
     } catch (dbErr: any) {
       console.error("Lưu đơn hàng vào Prisma thất bại:", dbErr);
       if (dbErr.message === "ORDER_PRICE_TOO_LOW") {
         return NextResponse.json({ error: "Tổng giá sản phẩm phải từ 100 ¥ trở lên." }, { status: 400 });
       }
-      if (dbErr.message === `ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`) {
-        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
+      if (dbErr.message === `ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`) {
+        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${minimumBaseOrderVnd.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
       }
       if (dbErr.message && dbErr.message.startsWith("INSUFFICIENT_STOCK:")) {
         const productName = dbErr.message.split(":")[2] || "Sản phẩm này";

@@ -1,5 +1,13 @@
-import { NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 import crypto from "crypto";
+import {
+  hashPassword,
+  verifyAdminPassword as verifyAdminPasswordCore,
+  verifyLegacyCustomerSha256,
+  verifyScryptPassword,
+  isScryptHash,
+  type PasswordCheck,
+} from "@/lib/password";
 
 // ============================================================================
 // Module xác thực phiên đăng nhập DÙNG CHUNG cho Admin & Customer.
@@ -23,6 +31,7 @@ import crypto from "crypto";
 
 export const ADMIN_COOKIE_NAME = "chillbanana_admin_session";
 export const CUSTOMER_COOKIE_NAME = "cb_customer_session";
+export const ORDER_ACCESS_COOKIE_NAME = "cb_order_access";
 
 const isProd = process.env.NODE_ENV === "production";
 
@@ -102,8 +111,17 @@ function decodeToken(token: string): { payloadStr: string; signature: string } |
 // ADMIN
 // ---------------------------------------------------------------------------
 
+/** Hash mật khẩu admin mới: scrypt có salt riêng (không còn phụ thuộc ADMIN_SESSION_SECRET). */
 export function hashAdminPassword(password: string): string {
-  return sign(getAdminSecret(), password);
+  return hashPassword(password);
+}
+
+/**
+ * Kiểm tra mật khẩu admin. Hỗ trợ hash HMAC cũ để chuyển tiếp: nếu khớp thì needsRehash=true
+ * và nơi gọi phải lưu lại hash scrypt mới.
+ */
+export function verifyAdminPassword(password: string, storedHash: string): PasswordCheck {
+  return verifyAdminPasswordCore(password, storedHash, process.env.ADMIN_SESSION_SECRET);
 }
 
 export function createAdminSessionToken(username: string): string {
@@ -144,30 +162,16 @@ export function getAdminUsernameFromRequest(req: NextRequest): string | null {
 // ---------------------------------------------------------------------------
 
 export function hashCustomerPassword(password: string): string {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${hash}`;
+  return hashPassword(password);
 }
 
-export function verifyCustomerPassword(password: string, storedHash: string): { valid: boolean; needsRehash: boolean } {
-  if (storedHash.startsWith("scrypt$")) {
-    const [, salt, expectedHex] = storedHash.split("$");
-    if (!salt || !expectedHex) return { valid: false, needsRehash: false };
-    const actual = crypto.scryptSync(password, salt, 64);
-    const expected = Buffer.from(expectedHex, "hex");
-    return {
-      valid: actual.length === expected.length && crypto.timingSafeEqual(actual, expected),
-      needsRehash: false,
-    };
+export function verifyCustomerPassword(password: string, storedHash: string): PasswordCheck {
+  if (isScryptHash(storedHash)) {
+    return { valid: verifyScryptPassword(password, storedHash), needsRehash: false };
   }
-
-  // Hashes created by the previous version are upgraded after a successful login.
-  const legacy = crypto.createHash("sha256").update(password + "chillbanana-secret-salt-2026").digest();
-  const expected = Buffer.from(storedHash, "hex");
-  return {
-    valid: legacy.length === expected.length && crypto.timingSafeEqual(legacy, expected),
-    needsRehash: true,
-  };
+  // Hash đời đầu được nâng cấp sau khi đăng nhập thành công.
+  const valid = verifyLegacyCustomerSha256(password, storedHash);
+  return { valid, needsRehash: valid };
 }
 
 export function createCustomerSessionToken(data: { id: string; email: string }): string {
@@ -293,5 +297,53 @@ export function getAdminSessionFromRequest(
     username: session.username,
     role: session.role === "OPERATOR" ? "OPERATOR" : "SUPER_ADMIN",
   };
+}
+
+// ---------------------------------------------------------------------------
+// GUEST ORDER ACCESS
+// ---------------------------------------------------------------------------
+
+type GuestOrderAccess = { orderCode: string; emailDigest: string };
+
+function digestOrderEmail(email: string): string {
+  return sign(getCustomerSecret(), `guest-order-email:${email.trim().toLowerCase()}`);
+}
+
+/** Short-lived bearer link sent only to the email address attached to a guest order. */
+export function createGuestOrderAccessToken(orderCode: string, email: string): string {
+  const payload = JSON.stringify({
+    purpose: "guest-order-access",
+    orderCode,
+    emailDigest: digestOrderEmail(email),
+    exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
+  });
+  return encodeToken(payload, sign(getCustomerSecret(), payload));
+}
+
+export function verifyGuestOrderAccessToken(token: string): (GuestOrderAccess & { exp: number }) | null {
+  const decoded = decodeToken(token);
+  if (!decoded) return null;
+  const expected = sign(getCustomerSecret(), decoded.payloadStr);
+  if (!safeEqual(expected, decoded.signature)) return null;
+  try {
+    const payload = JSON.parse(decoded.payloadStr);
+    if (
+      payload.purpose !== "guest-order-access" ||
+      typeof payload.exp !== "number" || payload.exp < Date.now() ||
+      typeof payload.orderCode !== "string" ||
+      typeof payload.emailDigest !== "string" || !/^[a-f0-9]{64}$/i.test(payload.emailDigest)
+    ) return null;
+    return { orderCode: payload.orderCode, emailDigest: payload.emailDigest, exp: payload.exp };
+  } catch {
+    return null;
+  }
+}
+
+export function hasGuestOrderAccessForEmail(token: string | null | undefined, orderCode: string, email: string): boolean {
+  if (!token) return false;
+  const access = verifyGuestOrderAccessToken(token);
+  return Boolean(
+    access && access.orderCode === orderCode && safeEqual(access.emailDigest, digestOrderEmail(email))
+  );
 }
 

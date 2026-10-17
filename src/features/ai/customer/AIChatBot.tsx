@@ -21,7 +21,21 @@ interface Message {
   text: string;
   isGuardrail?: boolean;
   imagePreviewUrl?: string;
+  sources?: MessageSource[];
   time: string;
+}
+
+interface MessageSource {
+  label: string;
+  href: string;
+  checkedAt: string;
+}
+
+function formatSourceTime(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime())
+    ? "vừa kiểm tra"
+    : date.toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
 type PendingImage = { file: File; previewUrl: string };
@@ -424,6 +438,7 @@ export default function AIChatBot() {
 
     try {
       let enrichedQuery = query;
+      let scrapedProductForQuote: { title: string; priceJpy: number; url: string } | null = null;
 
       // Detect links for automatic scraping
       const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -466,7 +481,14 @@ export default function AIChatBot() {
               ? `Tình trạng kho: ${sd.stockStatus === "available" ? "Còn hàng" : sd.stockStatus === "sold_out" ? "Hết hàng" : "Hàng giới hạn"}.`
               : "";
 
-            enrichedQuery += `\n\n[Hệ thống tự động chèn thông tin cào được từ link: Sản phẩm "${sd.title}"${sd.titleJp ? ` (${sd.titleJp})` : ""}, Giá web: ${sd.priceJpy} JPY, Hình ảnh: ${sd.imageUrl}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo} Hãy tính toán tỷ giá, phí mua hộ và hiển thị thẻ báo giá cho khách hàng dựa trên thông tin này.]`;
+            enrichedQuery += `\n\nThông tin trích xuất từ link: ${sd.title}${sd.titleJp ? ` (${sd.titleJp})` : ""}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo}`;
+            if (Number.isSafeInteger(sd.priceJpy) && sd.priceJpy > 0) {
+              scrapedProductForQuote = {
+                title: String(sd.title || "Sản phẩm từ link").slice(0, 200),
+                priceJpy: sd.priceJpy,
+                url: String(sd.url || targetUrl),
+              };
+            }
 
             // Remove the temporary "Đang kéo..." message
             setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
@@ -474,7 +496,7 @@ export default function AIChatBot() {
              // Let Gemini handle the error or raw link
              setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
           }
-        } catch (err) {
+        } catch {
            setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
         }
       }
@@ -492,23 +514,37 @@ export default function AIChatBot() {
           message: enrichedQuery,
           personality,
           history: conversationHistory,
+          scrapedProduct: scrapedProductForQuote,
         }),
       });
 
       const data = await res.json();
       if (res.ok && data.reply) {
+        const sources: MessageSource[] = Array.isArray(data.sources)
+          ? data.sources.flatMap((source: unknown) => {
+              if (!source || typeof source !== "object") return [];
+              const item = source as Record<string, unknown>;
+              if (
+                typeof item.label !== "string" || typeof item.href !== "string" ||
+                !item.href.startsWith("/") || item.href.startsWith("//") ||
+                typeof item.checkedAt !== "string"
+              ) return [];
+              return [{ label: item.label.slice(0, 80), href: item.href, checkedAt: item.checkedAt }];
+            })
+          : [];
         const botMsg: Message = {
           id: "bot-" + Date.now(),
           sender: "bot",
           text: data.reply,
           isGuardrail: data.isGuardrailTriggered,
+          sources,
           time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         };
         setMessages((prev) => [...prev, botMsg]);
       } else {
         throw new Error(data.error || "Lỗi không xác định");
       }
-    } catch (err) {
+    } catch {
       setMessages((prev) => [
         ...prev,
         {
@@ -658,9 +694,29 @@ export default function AIChatBot() {
       if (analysis.riskNotes) replyText += `\n**Lưu ý từ ảnh:** ${analysis.riskNotes}\n`;
       if (analysis.description) replyText += `\n${analysis.description}\n`;
 
+      const catalogMatches = analysis.catalogMatches as {
+        status?: "matched" | "no_match" | "unavailable" | "not_searched";
+        products?: Array<{ name: string; category: string; priceJpy: number }>;
+      } | undefined;
+      if (catalogMatches?.status === "matched" && catalogMatches.products?.length) {
+        replyText += "\n\n**Gợi ý gần trong danh mục ChillBanana (đối chiếu từ khóa, chưa xác nhận đúng sản phẩm):**\n";
+        catalogMatches.products.forEach((product) => {
+          const safeName = String(product.name || "Sản phẩm").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 120);
+          const safeCategory = String(product.category || "Hàng Nhật").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 80);
+          const safePrice = Number.isSafeInteger(product.priceJpy) && product.priceJpy > 0
+            ? `¥${product.priceJpy.toLocaleString("ja-JP")} (giá tham khảo trong danh mục)`
+            : "giá cần kiểm tra";
+          replyText += `- **${safeName}** — ${safeCategory} · ${safePrice} · [Mở danh mục](/#products)\n`;
+        });
+      } else if (catalogMatches?.status === "no_match") {
+        replyText += "\n\nNeo chưa tìm thấy sản phẩm tương ứng trong danh mục ChillBanana. Từ khóa bên dưới chỉ mở kết quả tìm kiếm trên sàn Nhật; bạn có thể gửi thêm tên hoặc mã model để thu hẹp kết quả.\n";
+      } else if (catalogMatches?.status === "unavailable") {
+        replyText += "\n\nDanh mục sản phẩm ChillBanana hiện chưa truy cập được; các từ khóa bên dưới chỉ mở tìm kiếm trên sàn Nhật.\n";
+      }
+
       const searchKeywords: string[] = Array.isArray(analysis.searchKeywords) ? analysis.searchKeywords : [];
       if (searchKeywords.length) {
-        replyText += "\n**Từ khóa tìm kiếm trên sàn Nhật:**\n";
+        replyText += "\n**Mở tìm kiếm bằng từ khóa trên sàn Nhật:**\n";
         searchKeywords.forEach((keyword) => {
           const encoded = encodeURIComponent(keyword);
           replyText += `- **${keyword}** — [Amazon JP](https://www.amazon.co.jp/s?k=${encoded}) · [Mercari](https://jp.mercari.com/search?keyword=${encoded}) · [Rakuten](https://search.rakuten.co.jp/search/mall/${encoded}/)\n`;
@@ -676,73 +732,6 @@ export default function AIChatBot() {
         text: replyText,
         time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
       }]);
-
-      // ── Bước 2: Smart Search — tự động tìm sản phẩm catalog + tư vấn AI ─────
-      // Chỉ chạy khi có đủ từ khóa để tìm kiếm có ý nghĩa
-      if (searchKeywords.length > 0) {
-        const searchLoadingId = "bot-search-loading-" + Date.now();
-        setMessages((previous) => [...previous, {
-          id: searchLoadingId,
-          sender: "bot",
-          text: `🔍 Neo đang tìm sản phẩm phù hợp trong kho ChillBanana và trên sàn Nhật...`,
-          time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-        }]);
-
-        try {
-          // Xây dựng query thông minh: kết hợp từ khóa tiếng Nhật + tên sản phẩm + danh mục
-          const keywordsText = searchKeywords.join(", ");
-          const productHint = analysis.nameVi || analysis.nameJp || "";
-          const categoryHint = categoryName[analysis.category] || "";
-          const userQuestionHint = question ? `Yêu cầu khách: ${question}.` : "";
-
-          const smartSearchQuery = [
-            `[SMART SEARCH TỪ ẢNH — Hãy tìm và tư vấn sản phẩm phù hợp nhất:]`,
-            `Từ khóa nhận diện được: ${keywordsText}.`,
-            productHint ? `Sản phẩm gần đúng: ${productHint}.` : "",
-            categoryHint ? `Danh mục: ${categoryHint}.` : "",
-            userQuestionHint,
-            `Nhiệm vụ:`,
-            `1. Kiểm tra DANH MỤC SẢN PHẨM CÓ SẴN TẠI KHO SHOP — nếu có sản phẩm cùng danh mục hoặc tương tự, hãy giới thiệu kèm ảnh (cú pháp ![tên](url)) và giá.`,
-            `2. Gợi ý thêm 2-3 sản phẩm nổi tiếng cùng loại trên Amazon JP/Mercari kèm link tìm kiếm.`,
-            `3. Nếu là đồ điện tử/gia dụng Nhật, nhắc về điện áp 100V.`,
-            `4. Kết thúc bằng hướng dẫn: "Copy link sản phẩm từ sàn Nhật và dán vào ô Dán Link Tính Giá để ChillBanana báo giá và mua hộ."`,
-          ].filter(Boolean).join(" ");
-
-          // Lấy lịch sử hội thoại hiện tại (không gồm message loading)
-          const currentHistory = messages
-            .filter((m) => !m.id.startsWith("system-scrape-") && !m.id.startsWith("bot-search-loading-"))
-            .map((m) => ({ role: m.sender === "user" ? "user" : "model", text: m.text }));
-
-          const chatRes = await fetch("/api/ai/chat", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              message: smartSearchQuery,
-              personality,
-              history: currentHistory,
-            }),
-          });
-          const chatData = await chatRes.json();
-
-          // Xóa loading message, thay bằng kết quả tư vấn
-          setMessages((previous) => {
-            const filtered = previous.filter((m) => m.id !== searchLoadingId);
-            if (chatRes.ok && chatData.reply) {
-              return [...filtered, {
-                id: "bot-smart-search-" + Date.now(),
-                sender: "bot" as const,
-                text: chatData.reply,
-                time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
-              }];
-            }
-            // Nếu chat API lỗi — xóa loading, không thêm message lỗi (đã có bước 1)
-            return filtered;
-          });
-        } catch {
-          // Xóa loading nếu mạng lỗi, không cần báo thêm (bước 1 đã đủ thông tin)
-          setMessages((previous) => previous.filter((m) => !m.id.startsWith("bot-search-loading-")));
-        }
-      }
 
     } catch (error) {
       const message = error instanceof Error ? error.message : "Neo chưa phân tích được ảnh này. Vui lòng thử ảnh khác.";
@@ -972,12 +961,12 @@ export default function AIChatBot() {
             onPointerCancel={handlePetPointerUp}
             onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
             onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
-            className="group pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 transition-transform duration-200 hover:scale-105 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
+            className="pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"
           >
             <span className="relative flex h-[104px] w-[94px] items-end justify-center sm:h-[126px] sm:w-[112px]">
-              <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full drop-shadow-[0_5px_8px_rgba(15,23,42,0.28)] group-hover:drop-shadow-[0_8px_12px_rgba(15,23,42,0.38)]" />
+              <NeoUniverseSprite animation={petAnimation} flipX={facingLeft} className="h-full w-full" />
               <span className="absolute right-0 top-2 flex h-4 w-4">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
                 <span className="relative inline-flex h-4 w-4 rounded-full border-2 border-white bg-emerald-500" />
@@ -1012,6 +1001,15 @@ export default function AIChatBot() {
                     <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
                       {message.imagePreviewUrl && <img src={message.imagePreviewUrl} alt="Ảnh sản phẩm người dùng gửi" className="mb-2 max-h-36 max-w-full rounded-lg object-contain" />}
                       <div className="break-words">{renderMessageContent(message)}</div>
+                      {message.sender === "bot" && message.sources?.length ? (
+                        <div className="mt-2 border-t border-slate-100 pt-1.5 text-[9px] text-slate-500">
+                          Kiểm tra lúc {formatSourceTime(message.sources[0].checkedAt)} · {message.sources.map((source, index) => (
+                            <React.Fragment key={`${source.href}-${index}`}>
+                              {index > 0 ? ", " : ""}<a href={source.href} className="font-semibold text-blue-700 underline decoration-blue-200 underline-offset-2">{source.label}</a>
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
                 ))}
@@ -1155,6 +1153,16 @@ export default function AIChatBot() {
                   <div className="whitespace-pre-line space-y-2 leading-relaxed">
                     {renderMessageContent(msg)}
                   </div>
+                  {msg.sender === "bot" && msg.sources?.length ? (
+                    <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] leading-relaxed text-slate-500">
+                      <span className="font-semibold">Nguồn đã kiểm tra lúc {formatSourceTime(msg.sources[0].checkedAt)}:</span>{" "}
+                      {msg.sources.map((source, index) => (
+                        <React.Fragment key={`${source.href}-${index}`}>
+                          {index > 0 ? ", " : ""}<a href={source.href} className="font-semibold text-blue-700 underline decoration-blue-200 underline-offset-2">{source.label}</a>
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  ) : null}
                   <span
                     className={`block text-[9px] mt-1 text-right ${
                       msg.sender === "user" ? "text-slate-400" : "text-slate-400"

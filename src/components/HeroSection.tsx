@@ -4,8 +4,10 @@ import React from "react";
 import Link from "next/link";
 import { Sparkles, ArrowRight, ShieldCheck, CheckCircle2, ShoppingBag, Bot, Activity } from "lucide-react";
 import { motion } from "framer-motion";
+import { useCart } from "@/context/CartContext";
 
 export default function HeroSection() {
+  const { pricingConfig } = useCart();
   const containerVariants = {
     hidden: { opacity: 0 },
     visible: {
@@ -69,7 +71,7 @@ export default function HeroSection() {
 
             {/* Subtitle */}
             <motion.p variants={itemVariants} className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo Auctions</strong> — Hệ thống tự động lấy giá Yên gốc thực tế, tính chi phí minh bạch theo <strong>tỷ giá ngân hàng trực tiếp</strong>, tích hợp <strong>Trợ lý ChillBanana AI Agent</strong> tư vấn 24/7 và giải pháp <strong>Gộp đơn tiết kiệm 25% cước</strong>.
+              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo Auctions</strong> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <strong>Trợ lý ChillBanana AI Agent</strong> tư vấn và giải pháp <strong>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</strong>.
             </motion.p>
 
             {/* Key Value Badges */}

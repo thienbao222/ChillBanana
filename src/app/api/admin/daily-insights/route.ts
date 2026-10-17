@@ -7,7 +7,7 @@
  *
  * Gemini phân tích dữ liệu 24h qua và trả về:
  *   1. Top sản phẩm được hỏi nhiều nhưng CHƯA có trong catalog → gợi ý nhập thêm
- *   2. Phát hiện complaint trend (nếu có > 2 khách than về cùng vấn đề)
+ *   2. Theo dõi số phiên được phân loại là khiếu nại và các từ khóa tổng hợp
  *   3. Tóm tắt hiệu suất đơn hàng ngày qua
  *   4. 3 hành động ưu tiên đề xuất cho Admin hôm nay
  *
@@ -18,8 +18,9 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { isAdminRequest } from "@/lib/auth-session";
-import { isRecordedPaymentStatus } from "@/lib/payment-policy";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { requireAdmin } from "@/lib/admin-guard";
+import { isRecordedPaymentStatus } from "@/features/payments/policy";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
@@ -34,7 +35,9 @@ function hasValidCronSecret(req: NextRequest): boolean {
 }
 
 async function buildDailySnapshot() {
-  const since24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const periodEnd = new Date();
+  const periodStart = new Date(periodEnd.getTime() - 24 * 60 * 60 * 1000);
+  const since24h = periodStart;
   const trackingCutoff = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
 
   const [
@@ -53,17 +56,10 @@ async function buildDailySnapshot() {
       },
     }),
 
-    // Chat sessions 24h qua với keywords
+    // Chỉ lấy metadata tổng hợp; không gửi nội dung chat hoặc dữ liệu định danh sang mô hình.
     prisma.chatSession.findMany({
       where: { createdAt: { gte: since24h } },
-      select: {
-        topic: true, detectedKeywords: true, sentiment: true,
-        messages: {
-          select: { content: true, role: true },
-          orderBy: { createdAt: "desc" },
-          take: 3,
-        },
-      },
+      select: { topic: true, detectedKeywords: true, sentiment: true },
       take: 100,
     }),
 
@@ -106,12 +102,7 @@ async function buildDailySnapshot() {
 
   // Tổng hợp keywords từ chat sessions
   const keywordFreq = new Map<string, number>();
-  const complaintMessages: string[] = [];
   for (const session of chatSessions24h) {
-    if (session.sentiment === "complaint" && session.messages.length > 0) {
-      const userMsg = session.messages.find((m) => m.role === "user");
-      if (userMsg) complaintMessages.push(userMsg.content.slice(0, 150));
-    }
     for (const kw of (session.detectedKeywords || "").split(",")) {
       const clean = kw.trim();
       if (clean) keywordFreq.set(clean, (keywordFreq.get(clean) || 0) + 1);
@@ -129,7 +120,9 @@ async function buildDailySnapshot() {
   const recordedPayments = newOrders24h.filter((order) => isRecordedPaymentStatus(order.paymentStatus));
 
   return {
-    generatedAt: new Date().toISOString(),
+    generatedAt: periodEnd.toISOString(),
+    periodStart: periodStart.toISOString(),
+    periodEnd: periodEnd.toISOString(),
     period: "24 giờ qua",
     orders: {
       new24h: newOrders24h.length,
@@ -153,8 +146,7 @@ async function buildDailySnapshot() {
     },
     chat: {
       sessions24h: chatSessions24h.length,
-      complaints24h: complaintMessages.length,
-      complaintSamples: complaintMessages.slice(0, 3),
+      complaints24h: chatSessions24h.filter((session) => session.sentiment === "complaint").length,
       topKeywords,
     },
     catalog: {
@@ -165,13 +157,7 @@ async function buildDailySnapshot() {
   };
 }
 
-export async function GET(req: NextRequest) {
-  // Chấp nhận cả cron secret lẫn admin session
-  const authorized = hasValidCronSecret(req) || isAdminRequest(req);
-  if (!authorized) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
-
+async function generateDailyInsight() {
   const apiKey = adminKeyPool.getNextKey();
   if (!apiKey) {
     return NextResponse.json(
@@ -195,20 +181,23 @@ QUY TẮC BẮT BUỘC:
 YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
 1. 📊 TÓM TẮT NGÀY QUA (3-5 bullet points về đơn hàng, chat, số tiền đã ghi nhận từ cọc/thanh toán)
 2. 🔥 GỢI Ý NHẬP HÀNG (keywords được hỏi nhiều mà CHƯA có trong catalog — so sánh với catalogNames)
-3. ⚠️ CẢNH BÁO CẦN XỬ LÝ (đơn kẹt, khiếu nại, stock sắp hết — chỉ nêu nếu có thực)
+3. ⚠️ CẢNH BÁO CẦN XỬ LÝ (đơn kẹt, số phiên khiếu nại, suất đặt thấp — chỉ nêu điều snapshot chứng minh; không suy diễn nội dung hay nguyên nhân khiếu nại)
 4. ✅ 3 HÀNH ĐỘNG ƯU TIÊN HÔM NAY (cụ thể, có thể thực hiện ngay)`;
 
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.admin}:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           system_instruction: { parts: [{ text: systemInstruction }] },
           contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: { temperature: 0.3, maxOutputTokens: 2000 },
+          generationConfig: {
+            maxOutputTokens: 2000,
+            thinkingConfig: { thinkingLevel: "low" },
+          },
         }),
         signal: AbortSignal.timeout(30000),
       }
@@ -232,22 +221,65 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
       return NextResponse.json({ error: "Gemini không trả về nội dung." }, { status: 502 });
     }
 
-    console.log(`[DailyInsight] ✅ Đã tạo báo cáo AI ngày ${new Date().toLocaleDateString("vi-VN")}`);
-
-    return NextResponse.json({
-      success: true,
-      insight,
-      generatedAt: snapshot.generatedAt,
-      snapshotSummary: {
-        orders24h: snapshot.orders.new24h,
-        chats24h: snapshot.chat.sessions24h,
-        complaints24h: snapshot.chat.complaints24h,
-        stuckOrders: snapshot.orders.stuckInTransit,
-        lowStockCount: snapshot.catalog.lowStock.length,
+    const snapshotSummary = {
+      orders24h: snapshot.orders.new24h,
+      chats24h: snapshot.chat.sessions24h,
+      complaints24h: snapshot.chat.complaints24h,
+      stuckOrders: snapshot.orders.stuckInTransit,
+      lowStockCount: snapshot.catalog.lowStock.length,
+    };
+    const localDateParts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
+    }).formatToParts(new Date(snapshot.generatedAt));
+    const datePart = (type: string) => localDateParts.find((part) => part.type === type)?.value || "00";
+    const businessDate = `${datePart("year")}-${datePart("month")}-${datePart("day")}`;
+    const report = await prisma.adminDailyInsight.upsert({
+      where: { businessDate },
+      update: {
+        periodStart: new Date(snapshot.periodStart),
+        periodEnd: new Date(snapshot.periodEnd),
+        generatedAt: new Date(snapshot.generatedAt),
+        insight,
+        snapshotSummary,
+      },
+      create: {
+        businessDate,
+        periodStart: new Date(snapshot.periodStart),
+        periodEnd: new Date(snapshot.periodEnd),
+        generatedAt: new Date(snapshot.generatedAt),
+        insight,
+        snapshotSummary,
       },
     });
+
+    console.log(`[DailyInsight] Đã lưu báo cáo AI cho ngày ${businessDate} (giờ Việt Nam).`);
+    return NextResponse.json({ success: true, report });
   } catch (err) {
     console.error("[DailyInsight] Error:", err);
     return NextResponse.json({ error: "Lỗi tạo báo cáo AI." }, { status: 500 });
   }
+}
+
+export async function GET(req: NextRequest) {
+  if (hasValidCronSecret(req)) return generateDailyInsight();
+  {
+    const guard = await requireAdmin(req);
+    if (!guard.ok) return guard.response;
+  }
+
+  try {
+    const report = await prisma.adminDailyInsight.findFirst({ orderBy: { businessDate: "desc" } });
+    return NextResponse.json({ success: true, report });
+  } catch (error) {
+    console.error("[DailyInsight] Không đọc được báo cáo đã lưu:", error);
+    return NextResponse.json({ error: "Không tải được báo cáo AI đã lưu." }, { status: 500 });
+  }
+}
+
+export async function POST(req: NextRequest) {
+  {
+    const guard = await requireAdmin(req);
+    if (!guard.ok) return guard.response;
+  }
+  return generateDailyInsight();
 }

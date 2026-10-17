@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +9,8 @@ export const dynamic = "force-dynamic";
 // POST /api/admin/stitch-all
 // Chạy Identity Stitching cho toàn bộ dữ liệu lịch sử trong DB
 export async function POST(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
+  if (!guard.ok) return guard.response;
 
   try {
     // Lấy tất cả khách hàng đã đăng ký
@@ -41,6 +41,13 @@ export async function POST(req: NextRequest) {
       // BẢO MẬT: Bỏ qua Stitch theo SĐT vì chưa có cơ chế xác minh SMS OTP.
     }
 
+    await writeAuditLog({
+      actor: guard.username,
+      action: "CUSTOMER_STITCH_ALL",
+      summary: `Gán ${totalOrdersStitched} đơn và ${totalSessionsStitched} phiên chat vào tài khoản thành viên.`,
+      metadata: { orders: totalOrdersStitched, sessions: totalSessionsStitched, customersProcessed: allCustomers.length },
+      req,
+    });
     console.log(`[StitchAll] Hoàn thành: ${totalOrdersStitched} đơn + ${totalSessionsStitched} chat đã được gán.`);
 
     return NextResponse.json({

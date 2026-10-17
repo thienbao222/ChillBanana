@@ -4,6 +4,10 @@
     {
       "path": "/api/admin/daily-insights",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/retry-emails",
+      "schedule": "0 2 * * *"
     }
   ]
 }

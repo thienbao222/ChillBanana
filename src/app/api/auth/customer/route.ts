@@ -8,7 +8,13 @@ import {
   verifyCustomerSessionToken as verifySession,
 } from "@/lib/auth-session";
 import { sendCustomerEmailVerification } from "@/lib/mailer";
-import { loginLimiter, getClientIp } from "@/lib/rate-limiter";
+import { loginLimiter } from "@/lib/rate-limiter";
+import { getClientIp, getMaxBlockedSeconds, recordHits, resetKey } from "@/lib/rate-limit";
+import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_FAILURES_PER_IP, REGISTER_PER_IP } from "@/lib/rate-limit-core";
+
+function tooManyRequests(waitSeconds: number, message: string) {
+  return NextResponse.json({ error: message }, { status: 429, headers: { "Retry-After": String(waitSeconds) } });
+}
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +87,14 @@ export async function POST(req: NextRequest) {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
         return NextResponse.json({ error: "Địa chỉ email không hợp lệ." }, { status: 400 });
       }
+
+      // Giới hạn số lần đăng ký theo IP để chống tạo tài khoản và gửi email hàng loạt.
+      const registerKey = `customer-register:ip:${getClientIp(req)}`;
+      const registerWait = await getMaxBlockedSeconds([registerKey]);
+      if (registerWait > 0) {
+        return tooManyRequests(registerWait, `Bạn đã thao tác quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(registerWait / 60)} phút.`);
+      }
+      await recordHits([registerKey], REGISTER_PER_IP);
       const existing = await prisma.customer.findUnique({
         where: { email: cleanEmail },
       });
@@ -150,11 +164,23 @@ export async function POST(req: NextRequest) {
       }
 
       const cleanEmail = email.toLowerCase().trim();
+      if (cleanEmail.length > 254) {
+        return NextResponse.json({ error: "Tài khoản hoặc mật khẩu không chính xác." }, { status: 401 });
+      }
+      const accountKey = `customer-login:email:${cleanEmail}`;
+      const ipKey = `customer-login:ip:${getClientIp(req)}`;
+      const loginWait = await getMaxBlockedSeconds([accountKey, ipKey]);
+      if (loginWait > 0) {
+        return tooManyRequests(loginWait, `Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(loginWait / 60)} phút.`);
+      }
+
       const customer = await prisma.customer.findUnique({
         where: { email: cleanEmail },
       });
 
       if (!customer) {
+        await recordHits([accountKey], LOGIN_FAILURES_PER_ACCOUNT);
+        await recordHits([ipKey], LOGIN_FAILURES_PER_IP);
         return NextResponse.json(
           { error: "Tài khoản hoặc mật khẩu không chính xác." },
           { status: 401 }
@@ -163,11 +189,15 @@ export async function POST(req: NextRequest) {
 
       const passwordCheck = verifyCustomerPassword(password, customer.passwordHash);
       if (!passwordCheck.valid) {
+        await recordHits([accountKey], LOGIN_FAILURES_PER_ACCOUNT);
+        await recordHits([ipKey], LOGIN_FAILURES_PER_IP);
         return NextResponse.json(
           { error: "Tài khoản hoặc mật khẩu không chính xác." },
           { status: 401 }
         );
       }
+
+      await resetKey(accountKey);
 
       if (!customer.emailVerifiedAt) {
         try {

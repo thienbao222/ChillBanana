@@ -15,7 +15,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
@@ -42,9 +44,8 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   const { id: taskId } = await params;
   if (!taskId) {
@@ -135,6 +136,16 @@ export async function PATCH(
     where: { id: taskId },
     data: updateData,
     include: { order: { select: { orderCode: true, productName: true } } },
+  });
+
+  await writeAuditLog({
+    actor: adminUsername,
+    action: "PURCHASE_TASK_STATUS_CHANGED",
+    entityType: "PurchaseTask",
+    entityId: taskId,
+    summary: `Cập nhật trạng thái tác vụ mua hộ: ${task.status} → ${targetStatus}.`,
+    metadata: { action, fromStatus: task.status, toStatus: targetStatus },
+    req,
   });
 
   console.log(

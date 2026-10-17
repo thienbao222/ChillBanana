@@ -14,9 +14,10 @@ Mỗi công cụ nên có schema đầu vào/đầu ra được kiểm tra, quy�
 
 ## Các giai đoạn
 
-1. **Tư vấn khách hàng, chỉ đọc:** tìm sản phẩm và tồn kho, tính báo giá tham khảo, hướng dẫn mua hàng, tra trạng thái đơn thuộc khách hiện tại. Nguồn tồn kho, tỷ giá và phí lấy từ API nghiệp vụ; AI chỉ diễn giải kết quả.
-2. **Trợ lý admin, báo cáo:** gọi các truy vấn thống kê có phạm vi ngày rõ ràng; tách doanh thu đã ghi nhận khỏi giá trị đơn dự kiến; trả về nguồn dữ liệu, thời điểm tổng hợp và giới hạn mẫu. AI tóm tắt, không tự đặt số liệu.
-3. **Hỗ trợ thao tác có kiểm soát:** AI chuẩn bị bản xem trước cho các hành động như cập nhật ghi chú, tiến độ, tồn kho hay nội dung catalog. Admin phải xác nhận; server kiểm tra lại trạng thái và quyền trước khi ghi. Mỗi thao tác cần mã chống lặp và audit log gồm người yêu cầu, dữ liệu trước/sau, công cụ, thời điểm và kết quả.
+1. **Nền tảng an toàn (đã hoàn thành):** chia mã theo feature, dùng chung bộ tính giá, bảo vệ quyền xem đơn và lưu insight quản trị.
+2. **Công cụ tư vấn khách hàng chỉ đọc (đã triển khai trên nhánh riêng):** tìm danh mục, ước tính giá, tra đơn sau xác minh, giải thích vận chuyển và ghi chú tương thích. Server kiểm tra quyền và chạy quy tắc; Neo diễn giải dữ liệu có nguồn/thời điểm. Mã kiểm tra cục bộ: `npm run eval:customer-support`.
+3. **Trợ lý admin, báo cáo:** gọi các truy vấn thống kê có phạm vi ngày rõ ràng; tách doanh thu đã ghi nhận khỏi giá trị đơn dự kiến; trả về nguồn dữ liệu, thời điểm tổng hợp và giới hạn mẫu. AI tóm tắt, không tự đặt số liệu.
+4. **Hỗ trợ thao tác có kiểm soát:** AI chuẩn bị bản xem trước cho các hành động như cập nhật ghi chú, tiến độ, tồn kho hay nội dung catalog. Admin phải xác nhận; server kiểm tra lại trạng thái và quyền trước khi ghi. Mỗi thao tác cần mã chống lặp và audit log gồm người yêu cầu, dữ liệu trước/sau, công cụ, thời điểm và kết quả.
 
 ## Điều kiện trước khi cho agent ghi dữ liệu
 

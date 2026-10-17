@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
-import { isAdminRequest, getCustomerFromRequest } from "@/lib/auth-session";
-import { isNextOrderStatus } from "@/lib/order-policy";
-import { getDepositAmount, getRecordedPaymentStatus } from "@/lib/payment-policy";
-
-function isAdmin(req: NextRequest): boolean {
-  return isAdminRequest(req);
-}
+import {
+  getCustomerFromRequest,
+  hasGuestOrderAccessForEmail,
+  getAdminUsernameFromRequest,
+  ORDER_ACCESS_COOKIE_NAME,
+  verifyGuestOrderAccessToken,
+} from "@/lib/auth-session";
+import { isVerifiedAdmin } from "@/lib/admin-guard";
+import { isNextOrderStatus } from "@/features/orders/policy";
+import { getDepositAmount } from "@/features/payments/policy";
+import { writeAuditLog } from "@/lib/audit";
+import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { getCurrentPricingConfig } from "@/features/pricing/config";
 
 export const dynamic = "force-dynamic";
 
@@ -17,11 +23,19 @@ export async function GET(
 ) {
   try {
     const { id: orderCode } = await params;
+    const customerSession = getCustomerFromRequest(req);
+    const adminSession = await isVerifiedAdmin(req);
+    const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
+    const guestAccess = verifyGuestOrderAccessToken(accessToken || "");
+    if (!adminSession && !customerSession && guestAccess?.orderCode !== orderCode) {
+      return NextResponse.json({ error: "Không tìm thấy đơn hàng hoặc cần xác minh quyền truy cập." }, { status: 404 });
+    }
 
     const dbOrder = await prisma.order.findFirst({
       where: { orderCode },
       select: {
         customerId: true,
+        customerEmail: true,
         orderCode: true,
         productName: true,
         category: true,
@@ -58,13 +72,20 @@ export async function GET(
       );
     }
 
-    const customerSession = getCustomerFromRequest(req);
-    const { customerId, ...publicOrder } = dbOrder;
+    const authorized = adminSession ||
+      Boolean(customerSession && dbOrder.customerId === customerSession.id) ||
+      hasGuestOrderAccessForEmail(accessToken, orderCode, dbOrder.customerEmail);
+    if (!authorized) {
+      // Same response for unknown codes and unauthorized users to avoid order-code enumeration.
+      return NextResponse.json({ error: "Không tìm thấy đơn hàng hoặc cần xác minh quyền truy cập." }, { status: 404 });
+    }
+
+    const publicOrder = { ...dbOrder, customerId: undefined, customerEmail: undefined };
     return NextResponse.json({
       success: true,
       order: {
         ...publicOrder,
-        canCancel: Boolean(customerSession && customerId === customerSession.id && dbOrder.status === "PENDING_DEPOSIT" && dbOrder.paymentStatus === "UNPAID"),
+        canCancel: Boolean(customerSession && dbOrder.customerId === customerSession.id && dbOrder.status === "PENDING_DEPOSIT" && dbOrder.paymentStatus === "UNPAID"),
       },
     });
   } catch (error) {
@@ -73,6 +94,43 @@ export async function GET(
       { error: "Lỗi khi tra cứu thông tin đơn hàng" },
       { status: 500 }
     );
+  }
+}
+
+/** Exchange a signed email link for a short-lived HttpOnly cookie. */
+export async function POST(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id: orderCode } = await params;
+    const body = await req.json().catch(() => null);
+    const token = body && typeof body.accessToken === "string" ? body.accessToken : "";
+    const access = verifyGuestOrderAccessToken(token);
+    if (!access || access.orderCode !== orderCode) {
+      return NextResponse.json({ error: "Liên kết xác minh không hợp lệ hoặc đã hết hạn." }, { status: 401 });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { orderCode },
+      select: { customerEmail: true },
+    });
+    if (!order || !hasGuestOrderAccessForEmail(token, orderCode, order.customerEmail)) {
+      return NextResponse.json({ error: "Liên kết xác minh không hợp lệ hoặc đã hết hạn." }, { status: 401 });
+    }
+
+    const response = NextResponse.json({ success: true });
+    response.cookies.set(ORDER_ACCESS_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/api",
+      expires: new Date(access.exp),
+    });
+    return response;
+  } catch (error) {
+    console.error("Lỗi xác minh quyền truy cập đơn hàng:", error);
+    return NextResponse.json({ error: "Không thể xác minh liên kết đơn hàng." }, { status: 500 });
   }
 }
 
@@ -131,7 +189,7 @@ export async function PATCH(
       );
     }
 
-    const isAdminUser = isAdmin(req);
+    const isAdminUser = await isVerifiedAdmin(req);
     const customerInfo = getCustomerFromRequest(req);
     const priceWasJustApproved = isAdminUser && isPriceVerified === true && !existingOrder.isPriceVerified;
 
@@ -246,17 +304,16 @@ export async function PATCH(
         if (!Number.isSafeInteger(finalPriceJpy) || finalPriceJpy < 100 || !Number.isFinite(finalWeightKg) || finalWeightKg < 0 || finalWeightKg > 100) {
           return NextResponse.json({ error: "Để duyệt giá, vui lòng nhập giá JPY hợp lệ và cân nặng từ 0 đến 100 kg." }, { status: 400 });
         }
-        const finalProductPriceVnd = Math.round(finalPriceJpy * existingOrder.exchangeRate);
-        const finalServiceFeeVnd = Math.max(20000, Math.round(finalProductPriceVnd * 0.04));
-        const shipRate = existingOrder.isGroupBuy && finalWeightKg <= 0.5 ? Math.round(185000 * 0.75) : 185000;
-        const finalShippingFeeVnd = finalWeightKg > 0 ? Math.round(finalWeightKg * shipRate) : 0;
-        const finalTotalVnd = finalProductPriceVnd + finalServiceFeeVnd + finalShippingFeeVnd;
+        const pricingConfig = await getCurrentPricingConfig();
+        const finalPrice = calculateOrderPrice(finalPriceJpy, finalWeightKg, existingOrder.exchangeRate, existingOrder.isGroupBuy, pricingConfig.values);
+        const { productPriceVnd: finalProductPriceVnd, serviceFeeVnd: finalServiceFeeVnd, shippingFeeVnd: finalShippingFeeVnd, totalVnd: finalTotalVnd } = finalPrice;
         updateData.priceJpy = finalPriceJpy;
         updateData.weightKg = finalWeightKg;
         updateData.productPriceVnd = finalProductPriceVnd;
         updateData.serviceFeeVnd = finalServiceFeeVnd;
         updateData.shippingFeeVnd = finalShippingFeeVnd;
         updateData.totalVnd = finalTotalVnd;
+        updateData.pricingConfigVersion = pricingConfig.version || null;
         updateData.depositAmountVnd = getDepositAmount(
           finalProductPriceVnd + finalServiceFeeVnd,
           existingOrder.depositPercent === 100 ? 100 : 50
@@ -322,6 +379,23 @@ export async function PATCH(
           data: updateData,
           include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
         });
+
+    if (isAdminUser) {
+      await writeAuditLog({
+        actor: getAdminUsernameFromRequest(req) ?? "admin",
+        action: priceWasJustApproved ? "ORDER_PRICE_APPROVED" : action === "cancel" ? "ORDER_CANCELLED" : "ORDER_UPDATED",
+        entityType: "Order",
+        entityId: existingOrder.orderCode,
+        summary: `Cập nhật đơn ${existingOrder.orderCode}${status ? ` → ${status}` : ""}.`,
+        metadata: {
+          fromStatus: existingOrder.status,
+          toStatus: status ?? null,
+          priceApproved: priceWasJustApproved,
+          changedFields: Object.keys(updateData).filter((k) => k !== "trackingLogs"),
+        },
+        req,
+      });
+    }
 
     // Duyệt báo giá cần email riêng, có kết quả để giao diện báo chính xác cho admin.
     // Các thay đổi trạng thái khác tiếp tục gửi email cập nhật tiến độ như trước.

@@ -3,9 +3,14 @@ import { prisma } from "@/lib/prisma";
 import {
   ADMIN_COOKIE_NAME,
   hashAdminPassword,
+  verifyAdminPassword,
   createAdminSessionTokenWithRole,
   verifyAdminSessionToken,
+  getAdminUsernameFromRequest,
 } from "@/lib/auth-session";
+import { writeAuditLog } from "@/lib/audit";
+import { getClientIp, getMaxBlockedSeconds, recordHits, resetKey } from "@/lib/rate-limit";
+import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_FAILURES_PER_IP } from "@/lib/rate-limit-core";
 
 
 export const dynamic = "force-dynamic";
@@ -54,8 +59,25 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    if (typeof username !== "string" || typeof password !== "string" || username.length > 100 || password.length > 256) {
+      return NextResponse.json({ error: "Thông tin đăng nhập không hợp lệ." }, { status: 400 });
+    }
+
     const trimmedUser = username.trim().toLowerCase();
-    const inputHash = hashAdminPassword(password);
+    const ip = getClientIp(req);
+    const userKey = `admin-login:user:${trimmedUser}`;
+    const ipKey = `admin-login:ip:${ip}`;
+
+    // Giới hạn đăng nhập sai theo tài khoản và theo IP.
+    const waitSeconds = await getMaxBlockedSeconds([userKey, ipKey]);
+    if (waitSeconds > 0) {
+      console.warn(`[AdminAuth] Chặn đăng nhập "${trimmedUser}" từ ${ip}: còn ${waitSeconds}s.`);
+      return NextResponse.json(
+        { error: `Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(waitSeconds / 60)} phút.` },
+        { status: 429, headers: { "Retry-After": String(waitSeconds) } }
+      );
+    }
+
     let isAuthenticated = false;
     let adminName = "Quản Trị Viên ChillBanana";
     let adminRole = "SUPER_ADMIN";
@@ -67,26 +89,43 @@ export async function POST(req: NextRequest) {
       });
 
       if (dbAdmin) {
-        if (dbAdmin.passwordHash === inputHash) {
+        const check = verifyAdminPassword(password, dbAdmin.passwordHash);
+        if (check.valid) {
           isAuthenticated = true;
           adminName = dbAdmin.name;
           adminRole = dbAdmin.role;
+          if (check.needsRehash) {
+            // Hash HMAC cũ: nâng cấp sang scrypt có salt ngay sau khi đăng nhập đúng.
+            await prisma.adminUser.update({
+              where: { id: dbAdmin.id },
+              data: { passwordHash: hashAdminPassword(password) },
+            });
+            await writeAuditLog({ actor: trimmedUser, action: "ADMIN_PASSWORD_REHASHED", summary: "Nâng cấp hash mật khẩu sang scrypt.", req });
+          }
         }
+      } else {
+        // Tài khoản không tồn tại: vẫn tốn thời gian băm tương đương để khó dò tên đăng nhập qua độ trễ.
+        verifyAdminPassword(password, hashAdminPassword("dummy-password"));
       }
     } catch (dbErr) {
-      console.warn("DB check error in admin auth, testing fallback:", dbErr);
+      console.warn("DB check error in admin auth:", dbErr);
     }
 
     if (!isAuthenticated) {
+      await recordHits([userKey], LOGIN_FAILURES_PER_ACCOUNT);
+      await recordHits([ipKey], LOGIN_FAILURES_PER_IP);
+      await writeAuditLog({ actor: trimmedUser, action: "ADMIN_LOGIN_FAILED", summary: "Đăng nhập quản trị thất bại.", req });
       return NextResponse.json(
         { error: "Tên đăng nhập hoặc mật khẩu quản trị không chính xác." },
         { status: 401 }
       );
     }
 
+    await resetKey(userKey);
+    await writeAuditLog({ actor: trimmedUser, action: "ADMIN_LOGIN", summary: "Đăng nhập quản trị thành công.", req });
+
     // Thiết lập Cookie phiên đăng nhập bảo mật — nhúng role vào token để RBAC
     const token = createAdminSessionTokenWithRole(trimmedUser, adminRole);
-
     const response = NextResponse.json({
       success: true,
       message: "Đăng nhập thành công!",
@@ -115,7 +154,11 @@ export async function POST(req: NextRequest) {
 }
 
 // DELETE: Đăng xuất
-export async function DELETE() {
+export async function DELETE(req: NextRequest) {
+  const username = getAdminUsernameFromRequest(req);
+  if (username) {
+    await writeAuditLog({ actor: username, action: "ADMIN_LOGOUT", summary: "Đăng xuất quản trị.", req });
+  }
   const response = NextResponse.json({ success: true, message: "Đã đăng xuất thành công." });
   response.cookies.set({
     name: ADMIN_COOKIE_NAME,

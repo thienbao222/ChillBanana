@@ -1,11 +1,6 @@
-/**
- * prisma/seed.js
- * ─────────────────────────────────────────────────────────────────────────────
- * Seed dữ liệu khởi tạo cho SystemConfig (CommonJS, chạy trực tiếp bằng node).
- * ─────────────────────────────────────────────────────────────────────────────
- */
-
 const { PrismaClient } = require("@prisma/client");
+const { hashPassword } = require("./hash-password");
+const curatedProducts = require("../src/lib/curated-products.json");
 
 const prisma = new PrismaClient();
 
@@ -43,8 +38,43 @@ const systemConfigSeed = [
 ];
 
 async function main() {
-  console.log("🌱 Bắt đầu seed SystemConfig...");
+  console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma + Neon Postgres)...");
 
+  // 1. Tạo tài khoản Admin mặc định
+  if (process.env.VERCEL_ENV === "production" || process.env.APP_ENV === "production") {
+    console.log("ℹ️ Môi trường production — bỏ qua cập nhật mật khẩu admin từ seed.");
+  } else {
+    const adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    if (adminPassword) {
+      const adminHash = hashPassword(adminPassword);
+      const admin = await prisma.adminUser.upsert({
+        where: { username: "admin" },
+        update: { passwordHash: adminHash },
+        create: {
+          username: "admin",
+          passwordHash: adminHash,
+          name: "Quản Trị Viên ChillBanana",
+          role: "SUPER_ADMIN",
+        },
+      });
+      console.log(`✅ Đã tạo/cập nhật tài khoản quản trị: ${admin.username}`);
+    }
+  }
+
+  // 2. Đồng bộ sản phẩm catalog
+  if (Array.isArray(curatedProducts)) {
+    for (const product of curatedProducts) {
+      const { stockSlots, ...catalogDetails } = product;
+      await prisma.product.upsert({
+        where: { slug: product.slug },
+        update: catalogDetails,
+        create: product,
+      });
+    }
+    console.log(`✅ Đã đồng bộ ${curatedProducts.length} sản phẩm trong catalog.`);
+  }
+
+  // 3. Khởi tạo cấu hình hệ thống SystemConfig
   for (const config of systemConfigSeed) {
     await prisma.systemConfig.upsert({
       where: { key: config.key },
@@ -58,15 +88,15 @@ async function main() {
         updatedBy: "system:seed",
       },
     });
-    console.log(`  ✅ ${config.key} = ${config.value}`);
   }
+  console.log(`✅ Đã khởi tạo ${systemConfigSeed.length} cấu hình SystemConfig.`);
 
-  console.log(`\n🎉 Seed hoàn tất! ${systemConfigSeed.length} cấu hình đã được khởi tạo.`);
+  console.log("🎉 Seed hoàn tất!");
 }
 
 main()
   .catch((e) => {
-    console.error("❌ Seed thất bại:", e);
+    console.error("Lỗi seed dữ liệu:", e);
     process.exit(1);
   })
   .finally(async () => {

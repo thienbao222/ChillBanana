@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { prisma } from "@/lib/prisma";
 import { recentVietnamDateKeys, vietnamDayEnd, vietnamDayStart } from "@/lib/vietnam-time";
 
@@ -8,9 +8,8 @@ export const dynamic = "force-dynamic";
 
 
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
     const dateFrom = searchParams.get("dateFrom");     // ISO date string "YYYY-MM-DD"
