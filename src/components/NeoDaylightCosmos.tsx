@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MotionConfig } from "framer-motion";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, QrCode, CreditCard, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ExternalLink, CreditCard, ShoppingCart } from "lucide-react";
 import "@/styles/NeoDaylightCosmos.css";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -13,6 +13,14 @@ import NewsCorner from "@/components/NewsCorner";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
 import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+
+// Bảng cấu hình danh mục hàng hóa & phụ phí thông quan
+const CATEGORY_MAP: Record<string, { label: string; surchargePercent: number; suggestedWeight: number; note: string }> = {
+  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 3, suggestedWeight: 0.3, note: "Phụ thu kiểm định mỹ phẩm 3%" },
+  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 3, suggestedWeight: 0.4, note: "Phụ thu kiểm định BYT 3%" },
+  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 5, suggestedWeight: 0.8, note: "Phụ thu kiểm định linh kiện/pin 5%" },
+  anime: { label: "Anime, Figure & Sưu Tầm", surchargePercent: 0, suggestedWeight: 0.5, note: "Miễn phụ phí thông quan" },
+};
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
@@ -30,10 +38,18 @@ export default function NeoDaylightCosmos() {
   const [detectedStore, setDetectedStore] = useState("");
   const [category, setCategory] = useState("cosmetics");
   const [priceJpy, setPriceJpy] = useState<number>(3500);
-  const [weightKg] = useState<number>(0);
+  const [weightKg, setWeightKg] = useState<number>(0);
   const [isGroupBuy, setIsGroupBuy] = useState(false);
   const [isScanning, setIsScanning] = useState(false);
   const [activeTab, setActiveTab] = useState<"JP_VN" | "VN_JP">("JP_VN");
+
+  // VN -> JP Form state
+  const [vnJpSenderName, setVnJpSenderName] = useState("");
+  const [vnJpSenderPhone, setVnJpSenderPhone] = useState("");
+  const [vnJpCargoType, setVnJpCargoType] = useState("gift");
+  const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
+  const [vnJpCity, setVnJpCity] = useState("Tokyo");
+  const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
 
   // Order form state
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -43,9 +59,10 @@ export default function NeoDaylightCosmos() {
   const [custEmail, setCustEmail] = useState("");
   const [custNote, setCustNote] = useState("");
   const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
+  const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingVnpay, setIsRedirectingVnpay] = useState(false);
-  const [createdOrder, setCreatedOrder] = useState<any>(null);
+  const [createdOrder, setCreatedOrder] = useState<Record<string, any> | null>(null);
 
   // Exchange rate state (live from API)
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
@@ -91,13 +108,13 @@ export default function NeoDaylightCosmos() {
       .catch(() => {/* fallback */});
   }, []);
 
-  // Auto-fill customer info if logged in
+  // Auto-fill customer info if logged in (dùng functional update để tránh thiếu deps)
   useEffect(() => {
     if (customer) {
-      if (customer.name && !custName) setCustName(customer.name);
-      if (customer.phone && !custPhone) setCustPhone(customer.phone);
-      if (customer.address && !custAddress) setCustAddress(customer.address);
-      if (customer.email && !custEmail) setCustEmail(customer.email);
+      setCustName((prev) => prev || customer.name || "");
+      setCustPhone((prev) => prev || customer.phone || "");
+      setCustAddress((prev) => prev || customer.address || "");
+      setCustEmail((prev) => prev || customer.email || "");
     }
   }, [customer]);
 
@@ -113,7 +130,7 @@ export default function NeoDaylightCosmos() {
 
       if (!product) return;
       if (product.name) setProductName(product.name);
-      if (typeof product.priceJpy === "number" && product.priceJpy > 0) setPriceJpy(product.priceJpy);
+      if (typeof product.priceJpy === "number" && product.priceJpy > 0) setPriceJpy(Math.floor(product.priceJpy));
       if (product.imageUrl) setProductImage(product.imageUrl);
       if (product.originalStore) setDetectedStore(product.originalStore);
       if (product.category) setCategory(product.category);
@@ -147,30 +164,45 @@ export default function NeoDaylightCosmos() {
     window.dispatchEvent(new CustomEvent("open-ai-chat"));
   };
 
-  // Quét link tự động (gửi POST đến /api/scrape-link)
+  // Quét link tự động (kiểm tra client-side và fallback thân thiện)
   const handleScanLink = async () => {
-    if (!inputUrl.trim()) {
+    const trimmed = inputUrl.trim();
+    if (!trimmed) {
       showToast("Vui lòng dán link sản phẩm (Amazon JP, Mercari, Rakuten...)");
       return;
     }
+    if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+      showToast("Đường dẫn không hợp lệ. Vui lòng nhập link đầy đủ (bắt đầu bằng https://).");
+      return;
+    }
+
+    const isKnownJapanPlatform = /amazon\.(co\.jp|com)|mercari\.com|rakuten\.co\.jp|yahoo\.co\.jp|suruga-ya\.jp|uniqlo\.com|biccamera\.com|yodobashi\.com/i.test(trimmed);
+    if (!isKnownJapanPlatform) {
+      showToast("Hệ thống tối ưu cho các sàn Nhật. Bạn có thể thử quét hoặc nhập tay thông tin.");
+    }
+
     setIsScanning(true);
     showToast("Đang bóc tách dữ liệu từ link...");
     try {
       const res = await fetch("/api/scrape-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: inputUrl.trim() }),
+        body: JSON.stringify({ url: trimmed }),
       });
       const data = await res.json();
       if (res.ok && data.success && data.data) {
         if (data.data.title) setProductName(data.data.title);
-        if (data.data.priceJpy && data.data.priceJpy > 0) setPriceJpy(Number(data.data.priceJpy));
+        if (data.data.priceJpy && data.data.priceJpy > 0) {
+          setPriceJpy(Math.floor(Number(data.data.priceJpy)));
+          showToast("Đã trích xuất thông tin sản phẩm và giá Yên!");
+        } else {
+          showToast("Đã nhận diện sản phẩm! Do sàn bảo mật giá, vui lòng nhập giá Yên (¥) vào ô bên dưới.");
+        }
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
         if (data.data.category) setCategory(data.data.category);
-        showToast("Đã trích xuất thông tin sản phẩm thành công!");
       } else {
-        showToast(data.error || "Không thể tự động bóc tách link này. Vui lòng nhập thông tin thủ công.");
+        showToast(data.error || "Không thể tự động bóc tách link này (do tường lửa bảo mật). Vui lòng nhập thông tin thủ công.");
       }
     } catch {
       showToast("Lỗi kết nối khi quét link. Bạn có thể nhập giá thủ công.");
@@ -179,10 +211,20 @@ export default function NeoDaylightCosmos() {
     }
   };
 
-  // Tính toán chi phí theo tỷ giá live
+  // Tính toán chi phí theo tỷ giá live và danh mục
+  const currentCategory = CATEGORY_MAP[category] || CATEGORY_MAP.cosmetics;
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
   const serviceFeeVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(productPriceVnd * pricingConfig.serviceFeePercent / 100));
-  const baseOrderCost = productPriceVnd + serviceFeeVnd;
+  const customsFeeVnd = Math.round(productPriceVnd * (currentCategory.surchargePercent / 100));
+  const baseOrderCost = productPriceVnd + serviceFeeVnd + customsFeeVnd;
+
+  // Cước bay quốc tế ước tính & tiết kiệm gộp đơn
+  const standardShippingVnd = weightKg > 0 ? Math.round(weightKg * pricingConfig.airShippingPerKgVnd) : 0;
+  const isGroupBuyEligible = isGroupBuy && weightKg > 0 && weightKg <= pricingConfig.groupBuyMaxWeightKg;
+  const groupBuySavingsVnd = isGroupBuyEligible
+    ? Math.round(weightKg * pricingConfig.airShippingPerKgVnd * (pricingConfig.groupBuyShippingDiscountPercent / 100))
+    : 0;
+  const estimatedShippingVnd = standardShippingVnd - groupBuySavingsVnd;
   const depositVnd = depositChoice === "100" ? baseOrderCost : Math.round(baseOrderCost * 0.5);
 
   // Thêm vào giỏ hàng
@@ -196,7 +238,7 @@ export default function NeoDaylightCosmos() {
       name: productName.trim() || "Sản phẩm mua hộ từ Nhật Bản",
       priceJpy,
       priceVnd: productPriceVnd,
-      weightKg: 0,
+      weightKg,
       imageUrl: productImage || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
       originalStore: detectedStore || "Sàn thương mại Nhật Bản",
       originalUrl: inputUrl.trim() || undefined,
@@ -215,8 +257,25 @@ export default function NeoDaylightCosmos() {
       showToast("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng.");
       return;
     }
+    const phoneClean = custPhone.replace(/\s+/g, "");
+    if (!/^(03|05|07|08|09)\d{8}$/.test(phoneClean)) {
+      showToast("Số điện thoại không hợp lệ (cần đúng 10 số, đầu số 03, 05, 07, 08, 09).");
+      return;
+    }
+    if (custEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(custEmail.trim())) {
+      showToast("Định dạng email không hợp lệ. Vui lòng kiểm tra lại.");
+      return;
+    }
+    if (!policyAgreed) {
+      showToast("Vui lòng tích chọn đồng ý với Chính sách mua hộ & đặt cọc.");
+      return;
+    }
     if (!inputUrl.trim()) {
       showToast("Vui lòng dán link sản phẩm trước khi tạo đơn đặt cọc.");
+      return;
+    }
+    if (priceJpy < 100 || !Number.isInteger(priceJpy)) {
+      showToast("Giá sản phẩm tối thiểu là 100 JPY và phải là số nguyên (đồng Yên không có số thập phân).");
       return;
     }
     if (baseOrderCost < pricingConfig.minimumBaseOrderVnd) {
@@ -231,7 +290,7 @@ export default function NeoDaylightCosmos() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           customerName: custName.trim(),
-          customerPhone: custPhone.trim(),
+          customerPhone: phoneClean,
           customerAddress: custAddress.trim(),
           customerEmail: custEmail.trim() || undefined,
           customerNote: custNote.trim() || undefined,
@@ -512,11 +571,11 @@ export default function NeoDaylightCosmos() {
             </div>
             <div className="q">
               <b>Khách hàng hỏi:</b>
-              "Mình muốn mua mô hình Gundam RG RX-78-2 Ver 2.0 trên Amazon Nhật, bên bạn có nhận mua hộ không và bảo quản hộp seal thế nào?"
+              &quot;Mình muốn mua mô hình Gundam RG RX-78-2 Ver 2.0 trên Amazon Nhật, bên bạn có nhận mua hộ không và bảo quản hộp seal thế nào?&quot;
             </div>
             <div className="a">
               <b>ChillBanana AI:</b>
-              "Dạ chào bạn! ChillBanana chuyên săn deal Gunpla Bandai và Figure chính hãng từ Amazon JP/Surugaya. Mọi kiện hàng đều được bọc xốp bóng khí 4 lớp, bảo vệ hộp nguyên seal. Bạn chỉ cần dán link vào ô tính giá là hệ thống tự động bóc tách giá Yên và tính chi phí trọn gói ngay ạ!"
+              &quot;Dạ chào bạn! ChillBanana chuyên săn deal Gunpla Bandai và Figure chính hãng từ Amazon JP/Surugaya. Mọi kiện hàng đều được bọc xốp bóng khí 4 lớp, bảo vệ hộp nguyên seal. Bạn chỉ cần dán link vào ô tính giá là hệ thống tự động bóc tách giá Yên và tính chi phí trọn gói ngay ạ!&quot;
             </div>
             <div className="af">
               <b>Guardrail chuyên sâu mua sắm Nhật – Việt</b>
@@ -551,15 +610,168 @@ export default function NeoDaylightCosmos() {
             <button
               role="tab"
               aria-selected={activeTab === "VN_JP"}
-              onClick={() => {
-                setActiveTab("VN_JP");
-                showToast("Chiều VN → JP hiện đang tiếp nhận qua hotline 1900 6868 & tư vấn viên trực tiếp!");
-              }}
+              onClick={() => setActiveTab("VN_JP")}
             >
               {t("VN → JP · Gửi Quà / Hàng Sang Nhật Bản")}
             </button>
           </div>
 
+          {activeTab === "VN_JP" ? (
+            <div className="card" style={{ maxWidth: "880px", margin: "0 auto", padding: "32px", background: "rgba(255,255,255,0.95)" }}>
+              {/* Header tuyến VN -> JP */}
+              <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "1.5rem" }}>
+                <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
+                  🇻🇳➔🇯🇵
+                </div>
+                <div>
+                  <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0 }}>
+                    Tuyến Vận Chuyển Hàng & Quà Tặng Từ Việt Nam Sang Nhật Bản
+                  </h3>
+                  <p style={{ margin: "4px 0 0", fontSize: "0.85rem", color: "var(--muted)" }}>
+                    Bay thẳng hàng không Tân Sơn Nhất / Nội Bài ➔ Sân bay Tokyo (Haneda/Narita), Osaka (KIX). Thời gian giao tận tay người nhận: 2 – 4 ngày làm việc.
+                  </p>
+                </div>
+              </div>
+
+              {/* Bảng biểu phí VN -> JP */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "2rem" }}>
+                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <b style={{ display: "block", color: "var(--blue-d)", fontSize: "0.9rem" }}>📦 Kiện Quà / Đồ Khô / Quần Áo</b>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
+                    180.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
+                  </div>
+                  <small style={{ color: "var(--muted)", display: "block" }}>Từ 1kg trở lên · Miễn phí đóng thùng carton đạt chuẩn bay</small>
+                </div>
+                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <b style={{ display: "#d97706", color: "#d97706", fontSize: "0.9rem" }}>⚡ Chuyển Phát Hỏa Tốc EMS</b>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
+                    210.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
+                  </div>
+                  <small style={{ color: "var(--muted)", display: "block" }}>Hồ sơ du học, giấy tờ, hợp đồng · Giao trong 48h tại Tokyo/Osaka</small>
+                </div>
+                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+                  <b style={{ display: "block", color: "#16a34a", fontSize: "0.9rem" }}>🍲 Thực Phẩm & Đặc Sản Quê</b>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
+                    220.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
+                  </div>
+                  <small style={{ color: "var(--muted)", display: "block" }}>Cà phê, trà, bánh pía, đồ khô có tem nhãn · Hỗ trợ thủ tục kiểm dịch</small>
+                </div>
+              </div>
+
+              {/* Form nhận báo giá VN -> JP */}
+              {!vnJpSubmitted ? (
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim()) {
+                      showToast("Vui lòng điền họ tên và số điện thoại liên hệ.");
+                      return;
+                    }
+                    if (!/^(03|05|07|08|09)\d{8}$/.test(vnJpSenderPhone.replace(/\s+/g, ""))) {
+                      showToast("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
+                      return;
+                    }
+                    setVnJpSubmitted(true);
+                    showToast("Đã tiếp nhận yêu cầu gửi hàng sang Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
+                  }}
+                  style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "1.5rem" }}
+                >
+                  <h4 style={{ fontWeight: 800, fontSize: "1.05rem", marginBottom: "1rem" }}>
+                    Đăng Ký Nhận Báo Giá Tuyến VN ➔ JP & Điều Phối Lấy Hàng Tận Nơi
+                  </h4>
+                  <div className="fg" style={{ marginBottom: "12px" }}>
+                    <div className="f">
+                      <label>Họ tên người gửi tại Việt Nam *</label>
+                      <input
+                        placeholder="VD: Trần Hoàng Long"
+                        value={vnJpSenderName}
+                        onChange={(e) => setVnJpSenderName(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="f">
+                      <label>Số điện thoại / Zalo người gửi *</label>
+                      <input
+                        placeholder="0912 345 678"
+                        value={vnJpSenderPhone}
+                        onChange={(e) => setVnJpSenderPhone(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="fg" style={{ marginBottom: "12px" }}>
+                    <div className="f">
+                      <label>Loại mặt hàng gửi sang Nhật</label>
+                      <select value={vnJpCargoType} onChange={(e) => setVnJpCargoType(e.target.value)}>
+                        <option value="gift">Quà biếu / Quần áo / Đồ dùng cá nhân</option>
+                        <option value="food">Thực phẩm khô / Bánh kẹo / Cà phê / Trà</option>
+                        <option value="doc">Tài liệu / Hồ sơ du học / Bằng cấp</option>
+                        <option value="other">Hàng mẫu kinh doanh / Mặt hàng khác</option>
+                      </select>
+                    </div>
+                    <div className="f">
+                      <label>Trọng lượng ước tính (kg)</label>
+                      <input
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        value={vnJpWeightKg}
+                        onChange={(e) => setVnJpWeightKg(Math.max(0.5, Number(e.target.value) || 0.5))}
+                      />
+                    </div>
+                    <div className="f">
+                      <label>Tỉnh/Thành người nhận tại Nhật Bản</label>
+                      <select value={vnJpCity} onChange={(e) => setVnJpCity(e.target.value)}>
+                        <option value="Tokyo">Tokyo (東京都)</option>
+                        <option value="Osaka">Osaka (大阪府)</option>
+                        <option value="Kanagawa">Kanagawa (神奈川県 - Yokohama)</option>
+                        <option value="Aichi">Aichi (愛知県 - Nagoya)</option>
+                        <option value="Saitama">Saitama (埼玉県)</option>
+                        <option value="Chiba">Chiba (千葉県)</option>
+                        <option value="Fukuoka">Fukuoka (福岡県)</option>
+                        <option value="Other">Tỉnh thành khác tại Nhật</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "12px", alignItems: "center", marginTop: "1.2rem", flexWrap: "wrap" }}>
+                    <button className="cta" type="submit">
+                      Gửi Yêu Cầu Báo Giá & Đón Hàng <svg><use href="#i-arrow" /></svg>
+                    </button>
+                    <a
+                      href="tel:19006868"
+                      className="btn2"
+                      style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                    >
+                      📞 Hotline 1900 6868 (Miễn cước)
+                    </a>
+                  </div>
+                </form>
+              ) : (
+                <div style={{ padding: "20px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "16px", textAlign: "center", marginTop: "1.5rem" }}>
+                  <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>✅</div>
+                  <h4 style={{ fontWeight: 800, color: "#166534", margin: "0 0 6px" }}>
+                    Đã Ghi Nhận Yêu Cầu Gửi Hàng Tuyến VN ➔ JP!
+                  </h4>
+                  <p style={{ color: "#15803d", fontSize: "0.85rem", margin: "0 0 12px" }}>
+                    Nhân viên điều phối ChillBanana sẽ gọi điện tới số <b>{vnJpSenderPhone}</b> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng gói cho bạn.
+                  </p>
+                  <button
+                    type="button"
+                    className="btn2"
+                    onClick={() => {
+                      setVnJpSubmitted(false);
+                      setVnJpSenderName("");
+                      setVnJpSenderPhone("");
+                    }}
+                  >
+                    Gửi yêu cầu kiện khác
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : (
           <div className="qgrid">
             {/* Form nhập liệu */}
             <form className="card form" onSubmit={(e) => e.preventDefault()}>
@@ -616,12 +828,14 @@ export default function NeoDaylightCosmos() {
                   />
                 </div>
                 <div className="f">
-                  <label htmlFor="c">{t("3. Danh mục hàng hóa")}</label>
+                  <label htmlFor="c">
+                    {t("3. Danh mục hàng hóa")} <em>({currentCategory.note})</em>
+                  </label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da")}</option>
-                    <option value="health">{t("Thực Phẩm Chức Năng")}</option>
-                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini")}</option>
-                    <option value="anime">{t("Anime, Figure & Sưu Tầm")}</option>
+                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da (+3% phụ thu HQ)")}</option>
+                    <option value="health">{t("Thực Phẩm Chức Năng (+3% kiểm dịch)")}</option>
+                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini (+5% an toàn pin)")}</option>
+                    <option value="anime">{t("Anime, Figure & Sưu Tầm (0% Miễn phí HQ)")}</option>
                   </select>
                 </div>
               </div>
@@ -629,19 +843,52 @@ export default function NeoDaylightCosmos() {
               <div className="fg">
                 <div className="f">
                   <label htmlFor="y">
-                    {t("4. Giá gốc tại Nhật (¥ Yên)")} <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ</em>
+                    {t("4. Giá gốc tại Nhật (¥ Yên)")} <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ (Tối thiểu 100 ¥)</em>
                   </label>
                   <input
                     id="y"
                     type="number"
+                    min={100}
+                    step={1}
                     value={priceJpy}
-                    onChange={(e) => setPriceJpy(Math.max(0, Number(e.target.value) || 0))}
+                    onChange={(e) => {
+                      const v = parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
+                      setPriceJpy(Math.max(0, v));
+                    }}
                   />
                 </div>
                 <div className="f">
-                  <label>{t("5. Trọng lượng kiện hàng")} <em>{t("Cân đo thực tế tại kho")}</em></label>
-                  <div className="box">
-                    {t("Hệ thống không áp đặt số kg mặc định vào tiền cọc. Kiện hàng về kho Tokyo sẽ được cân đo chính xác theo gram để bảo đảm công bằng nhất.")}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label>{t("5. Trọng lượng kiện hàng (kg)")}</label>
+                    <span style={{ fontSize: "0.75rem", color: "var(--muted)" }}>
+                      {weightKg > 0 ? `${weightKg} kg (Ước tính)` : "0 kg (Chờ cân kho)"}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "4px" }}>
+                    {[
+                      { label: "0 kg (Kho cân)", w: 0 },
+                      { label: "0.3 kg (Mỹ phẩm)", w: 0.3 },
+                      { label: "0.5 kg (Figure/Giày)", w: 0.5 },
+                      { label: "1.0 kg (Điện tử)", w: 1.0 },
+                    ].map((chip) => (
+                      <button
+                        key={chip.w}
+                        type="button"
+                        onClick={() => setWeightKg(chip.w)}
+                        style={{
+                          fontSize: "0.75rem",
+                          padding: "4px 8px",
+                          borderRadius: "8px",
+                          border: weightKg === chip.w ? "1.5px solid var(--blue-d)" : "1px solid #cbd5e1",
+                          background: weightKg === chip.w ? "rgba(74, 174, 224, 0.15)" : "#fff",
+                          color: weightKg === chip.w ? "var(--blue-d)" : "var(--ink)",
+                          fontWeight: weightKg === chip.w ? 700 : 500,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -674,13 +921,27 @@ export default function NeoDaylightCosmos() {
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>{t("Cước bay quốc tế:")}</span>
-                <b className="ok">{isGroupBuy ? `Ưu đãi Mua Chung (-${pricingConfig.groupBuyShippingDiscountPercent}%)` : t("Cân đo thực tế khi về kho (0 đ)")}</b>
+                <span>{`Phụ phí hải quan (${currentCategory.label}):`}</span>
+                <b className={customsFeeVnd > 0 ? "" : "ok"}>
+                  {customsFeeVnd > 0 ? `${customsFeeVnd.toLocaleString("vi-VN")} đ (+${currentCategory.surchargePercent}%)` : "0 đ (Miễn phí)"}
+                </b>
               </div>
               <div className="row">
-                <span>{t("Phụ phí hải quan & đóng gói:")}</span>
-                <b className="ok">{t("0 đ (Miễn phí)")}</b>
+                <span>{t("Cước bay quốc tế (ước tính):")}</span>
+                <b className="ok">
+                  {weightKg > 0
+                    ? (isGroupBuyEligible
+                        ? `${estimatedShippingVnd.toLocaleString("vi-VN")} đ (-${pricingConfig.groupBuyShippingDiscountPercent}% Gộp)`
+                        : `${standardShippingVnd.toLocaleString("vi-VN")} đ`)
+                    : "0 đ (Cân đo thực tế khi về kho)"}
+                </b>
               </div>
+              {isGroupBuyEligible && (
+                <div className="row" style={{ color: "#16a34a", fontSize: "0.8rem", fontWeight: 700 }}>
+                  <span>🎉 Tiết kiệm từ Gộp Đơn:</span>
+                  <b>-{groupBuySavingsVnd.toLocaleString("vi-VN")} đ</b>
+                </div>
+              )}
               <div className="total">
                 <span>{t("Tiền Hàng & Phí Mua Hộ:")}</span>
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
@@ -723,6 +984,7 @@ export default function NeoDaylightCosmos() {
               )}
             </aside>
           </div>
+          )}
 
           {/* Form đặt cọc mở rộng */}
           {showOrderForm && !createdOrder && (
@@ -756,7 +1018,7 @@ export default function NeoDaylightCosmos() {
                     />
                   </div>
                   <div className="f">
-                    <label>{t("Số điện thoại nhận hàng *")}</label>
+                    <label>{t("Số điện thoại nhận hàng *")} <small style={{ color: "var(--muted)", fontWeight: "normal" }}>(10 số, đầu 03/05/07/08/09)</small></label>
                     <input
                       placeholder="0901 234 567"
                       value={custPhone}
@@ -811,6 +1073,20 @@ export default function NeoDaylightCosmos() {
                   <span>Số tiền cần thanh toán ngay:</span>
                   <b>{depositVnd.toLocaleString("vi-VN")} đ</b>
                 </div>
+
+                {/* Điều khoản & Cam kết không hoàn cọc khi đã mua hàng tại Nhật */}
+                <label style={{ display: "flex", gap: "10px", alignItems: "flex-start", margin: "1rem 0", fontSize: "0.82rem", color: "var(--ink)", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={policyAgreed}
+                    onChange={(e) => setPolicyAgreed(e.target.checked)}
+                    style={{ marginTop: "3px" }}
+                    required
+                  />
+                  <span>
+                    Tôi xác nhận đã đọc và đồng ý với <b>Chính sách mua hộ &amp; đặt cọc của ChillBanana</b> (đơn hàng không hoàn lại cọc nếu tự ý hủy sau khi nhân viên đã mua hàng tại Nhật Bản).
+                  </span>
+                </label>
 
                 <div className="bt">
                   <button

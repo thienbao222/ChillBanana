@@ -67,7 +67,7 @@ export default function ForgotPasswordPage() {
                 Kiểm tra hộp thư đến (và thư mục Spam nếu không thấy).
               </p>
               <Link
-                href="/login"
+                href="/?auth=login"
                 className="mt-6 inline-block text-yellow-600 hover:text-yellow-700 font-medium text-sm"
               >
                 ← Quay lại đăng nhập
@@ -120,7 +120,7 @@ export default function ForgotPasswordPage() {
 
               <p className="text-center text-sm text-gray-500">
                 Nhớ mật khẩu rồi?{" "}
-                <Link href="/login" className="text-yellow-600 hover:text-yellow-700 font-medium">
+                <Link href="/?auth=login" className="text-yellow-600 hover:text-yellow-700 font-medium">
                   Đăng nhập
                 </Link>
               </p>

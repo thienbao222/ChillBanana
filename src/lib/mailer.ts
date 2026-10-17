@@ -4,7 +4,7 @@ import { deliverLoggedEmail } from "@/features/notifications/email-delivery";
 import { resolvePaymentMode } from "@/features/payments/provider";
 import { prisma } from "@/lib/prisma";
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
   // 1. Ưu tiên APP_URL do người dùng cài đặt
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/+$/, "");
 

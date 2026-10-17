@@ -51,7 +51,7 @@ function ResetPasswordForm() {
         setStatus("done");
         setMessage(data.message || "Mật khẩu đã được đặt lại thành công.");
         // Redirect về login sau 3 giây
-        setTimeout(() => router.push("/login"), 3000);
+        setTimeout(() => router.push("/?auth=login"), 3000);
       } else {
         setStatus("error");
         setMessage(data.error || "Không thể đặt lại mật khẩu. Vui lòng thử lại.");
@@ -83,7 +83,7 @@ function ResetPasswordForm() {
               <p className="text-green-700 font-semibold">{message}</p>
               <p className="text-gray-400 text-sm mt-2">Đang chuyển hướng về trang đăng nhập...</p>
               <Link
-                href="/login"
+                href="/?auth=login"
                 className="mt-6 inline-block bg-gradient-to-r from-yellow-400 to-orange-400 text-gray-900 font-bold py-2 px-6 rounded-xl"
               >
                 Đăng nhập ngay

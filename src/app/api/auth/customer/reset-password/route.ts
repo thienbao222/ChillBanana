@@ -21,6 +21,7 @@ import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { hashCustomerPassword } from "@/lib/auth-session";
 import { resetPasswordLimiter, getClientIp } from "@/lib/rate-limiter";
+import { getBaseUrl } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
       if (customer?.emailVerifiedAt) {
         // Tạo token và gửi email (chỉ khi tài khoản tồn tại và đã verify)
         const token = createResetToken(customer.id, customer.email);
-        const resetUrl = `${process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"}/reset-password?token=${token}`;
+        const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
 
         // Gọi mailer — không throw nếu lỗi để giữ anti-enumeration
         try {

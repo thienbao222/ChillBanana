@@ -145,7 +145,7 @@ export default function HeroSection() {
               <div className="space-y-2.5 text-xs">
                 <div className="bg-slate-100 p-3 rounded-2xl rounded-tl-sm text-slate-700 shadow-sm">
                   <p className="font-semibold text-slate-900 text-[11px] mb-0.5">Khách hàng hỏi:</p>
-                  "Mình muốn mua mô hình Gundam RG RX-78-2 Ver 2.0 trên Amazon Nhật, bên bạn có nhận mua hộ không và bảo quản hộp seal thế nào?"
+                  &quot;Mình muốn mua mô hình Gundam RG RX-78-2 Ver 2.0 trên Amazon Nhật, bên bạn có nhận mua hộ không và bảo quản hộp seal thế nào?&quot;
                 </div>
 
                 <div className="bg-gradient-to-br from-banana-50 to-amber-50 p-3.5 rounded-2xl rounded-tr-sm border border-banana-200 text-slate-800 space-y-1.5 shadow-sm">
@@ -154,7 +154,7 @@ export default function HeroSection() {
                     ChillBanana Gemini AI:
                   </p>
                   <p className="leading-relaxed">
-                    "Dạ chào bạn! ChillBanana chuyên săn deal Gunpla Bandai và Figure chính hãng từ Amazon JP/Surugaya. Mọi kiện hàng đều được đóng gói bọc xốp bóng khí 4 lớp bảo vệ hộp nguyên seal, không móp méo khi vận chuyển. Bạn chỉ cần dán link sản phẩm vào ô tính giá là hệ thống tự động bóc tách giá Yên và tính chi phí trọn gói ngay ạ! 🍌"
+                    &quot;Dạ chào bạn! ChillBanana chuyên săn deal Gunpla Bandai và Figure chính hãng từ Amazon JP/Surugaya. Mọi kiện hàng đều được đóng gói bọc xốp bóng khí 4 lớp bảo vệ hộp nguyên seal, không móp méo khi vận chuyển. Bạn chỉ cần dán link sản phẩm vào ô tính giá là hệ thống tự động bóc tách giá Yên và tính chi phí trọn gói ngay ạ! 🍌&quot;
                   </p>
                 </div>
               </div>

@@ -371,7 +371,7 @@ export default function AIChatBot() {
     setAmbientHint(preview);
     const timer = window.setTimeout(() => setAmbientHint(""), 7000);
     return () => window.clearTimeout(timer);
-  }, [isOpen, petConversationOpen, petVisible, latestAssistantMessage?.id]);
+  }, [isOpen, petConversationOpen, petVisible, latestAssistantMessage]);
 
   useEffect(() => {
     if (!(isOpen || petConversationOpen) || !latestBotMessage) return;
@@ -385,7 +385,7 @@ export default function AIChatBot() {
       if (cursor >= response.text.length) window.clearInterval(timer);
     }, 24);
     return () => window.clearInterval(timer);
-  }, [isOpen, petConversationOpen, latestBotMessage?.id]);
+  }, [isOpen, petConversationOpen, latestBotMessage]);
 
   const responseAnimation = (text: string): NeoUniverseAnimation => {
     if (/đặt cọc|xác nhận đơn|xác nhận đặt|hoàn tất giao dịch|đã tạo đơn/i.test(text)) return "confirm";
@@ -948,7 +948,7 @@ export default function AIChatBot() {
       {!isOpen && (petVisible ? (
         <div
           ref={petRef}
-          className="pointer-events-none fixed z-[9999]"
+          className="pointer-events-none fixed z-40"
           style={{ ...(petPosition ? { left: petPosition.left, top: petPosition.top } : { right: 12, bottom: 12 }), transition: isPetDragging ? "none" : "left 2.1s cubic-bezier(.2,.8,.2,1), top 2.1s cubic-bezier(.2,.8,.2,1)" }}
         >
           {ambientHint && !petConversationOpen && <div role="status" className="pointer-events-none absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{typedHint}<span className="animate-pulse">▍</span></div>}
@@ -978,7 +978,7 @@ export default function AIChatBot() {
               role="dialog"
               aria-label="Trò chuyện trực tiếp với Neo Universe"
               onPaste={handleClipboardPaste}
-              className="pointer-events-auto fixed z-[10000] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
+              className="pointer-events-auto fixed z-40 flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
               style={{ left: petConversationPosition.left, top: petConversationPosition.top, width: petConversationPosition.width }}
             >
               <header className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-navy-950 to-navy-800 px-3 py-2.5 text-white">
@@ -1057,7 +1057,7 @@ export default function AIChatBot() {
           </div>
         </div>
       ) : (
-        <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-[9999] rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
+        <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-40 rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>
       ))}
 
       {/* Chat Window Panel */}

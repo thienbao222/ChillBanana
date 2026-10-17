@@ -833,7 +833,7 @@ function TrackingCosmosContent() {
                       <p style={{ margin: "2px 0", color: "var(--muted)" }}>Người nhận: <b style={{ color: "var(--ink)" }}>{order.customerName}</b> · SĐT: <b style={{ color: "var(--ink)" }}>{order.customerPhone}</b></p>
                       <p style={{ margin: "2px 0", color: "var(--muted)" }}>Địa chỉ giao hàng: <span style={{ color: "var(--ink)" }}>{order.customerAddress}</span></p>
                       {order.customerNote && (
-                        <p style={{ margin: "4px 0 0", color: "var(--muted)", fontStyle: "italic" }}>Ghi chú: "{order.customerNote}"</p>
+                        <p style={{ margin: "4px 0 0", color: "var(--muted)", fontStyle: "italic" }}>Ghi chú: &quot;{order.customerNote}&quot;</p>
                       )}
                     </div>
                   </div>

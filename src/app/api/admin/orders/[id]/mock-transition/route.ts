@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { isAdminRequest, getAdminUsernameFromRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
+import { isNextOrderStatus } from "@/features/orders/policy";
 import { sendOrderStatusUpdateEmail, sendZaloTrackingNotification } from "@/lib/mailer";
-
 
 export const dynamic = "force-dynamic";
 
@@ -44,12 +44,11 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
+  const adminUsername = guard.username;
   const { id } = await params;
-  const adminUsername = getAdminUsernameFromRequest(req) || "admin";
 
   let body: { targetStatus?: string; description?: string; location?: string };
   try {
@@ -87,6 +86,47 @@ export async function POST(
       return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
     }
 
+    if (order.status === "COMPLETED" || order.status === "CANCELLED") {
+      return NextResponse.json(
+        { error: `Đơn hàng đã ${order.status === "COMPLETED" ? "hoàn tất" : "hủy"}, không thể chuyển trạng thái.` },
+        { status: 400 }
+      );
+    }
+
+    // RÀNG BUỘC STATE MACHINE: Chỉ cho phép sang đúng bước kế tiếp, không nhảy cóc
+    if (!isNextOrderStatus(order.status, targetStatus)) {
+      return NextResponse.json(
+        {
+          error: `Không thể nhảy cóc từ "${order.status}" sang "${targetStatus}". Đơn hàng chỉ được chuyển tuần tự theo đúng quy trình 7 bước.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Điều kiện sang bước 2 (PURCHASING_JP): Phải đã duyệt giá và đã nhận cọc
+    if (targetStatus === "PURCHASING_JP") {
+      if (!order.isPriceVerified) {
+        return NextResponse.json(
+          { error: "Đơn hàng chưa được duyệt giá. Cần duyệt báo giá trước khi chuyển sang bước Mua Hàng Tại Tokyo." },
+          { status: 409 }
+        );
+      }
+      if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "PAID_100") {
+        return NextResponse.json(
+          { error: "Đơn hàng chưa thanh toán tiền cọc. Bắt buộc phải có xác nhận thanh toán trước khi chuyển sang bước Mua Hàng Tại Tokyo." },
+          { status: 409 }
+        );
+      }
+    }
+
+    // Điều kiện xuất kho Tokyo bay về VN (IN_TRANSIT_AIR): Phải có trọng lượng thực tế
+    if (targetStatus === "IN_TRANSIT_AIR" && (!order.weightKg || order.weightKg <= 0)) {
+      return NextResponse.json(
+        { error: "Đơn hàng chưa có trọng lượng thực tế tại kho Tokyo. Cần cập nhật cân nặng kiện hàng trước khi xuất kho bay về Việt Nam." },
+        { status: 409 }
+      );
+    }
+
     const mockJpTrack = targetStatus === "WAREHOUSE_JP" && !order.jpDomesticTrack
       ? `YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`
       : undefined;
@@ -104,7 +144,7 @@ export async function POST(
           paymentStatus: targetStatus === "COMPLETED" && order.paymentStatus === "DEPOSITED_50" ? "PAID_100" : undefined,
           jpDomesticTrack: mockJpTrack || undefined,
           vnDomesticTrack: mockVnTrack || undefined,
-          adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} tua nhanh sang ${targetStatus}.`,
+          adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} chuyển trạng thái sang ${targetStatus}.`,
         },
       });
 
@@ -141,7 +181,6 @@ export async function POST(
         finalDesc
       ).catch((err: unknown) => console.warn("[Mock Transition Zalo Error]", err));
     }
-
 
     return NextResponse.json({
       success: true,

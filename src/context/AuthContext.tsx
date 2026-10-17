@@ -55,6 +55,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     refreshSession();
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get("auth") === "login" || params.get("login") === "true") {
+        openAuthModal("login");
+      }
+    }
   }, []);
 
   const openAuthModal = (tab: "login" | "register" = "login") => {

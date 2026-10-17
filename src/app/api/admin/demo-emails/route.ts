@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isAdminRequest } from "@/lib/auth-session";
+import { requireAdmin } from "@/lib/admin-guard";
 import { getRecentSentEmails, clearSentEmails } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
@@ -9,9 +9,8 @@ export const dynamic = "force-dynamic";
  * Dùng cho Demo Email Viewer trong Sandbox Admin Portal.
  */
 export async function GET(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   const emails = getRecentSentEmails();
   return NextResponse.json({
@@ -25,9 +24,8 @@ export async function GET(req: NextRequest) {
  * DELETE: Xóa sạch bộ đệm email demo
  */
 export async function DELETE(req: NextRequest) {
-  if (!isAdminRequest(req)) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
 
   clearSentEmails();
   return NextResponse.json({

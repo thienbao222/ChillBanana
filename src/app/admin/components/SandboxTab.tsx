@@ -58,6 +58,7 @@ export default function SandboxTab() {
   const [selectedOrderCode, setSelectedOrderCode] = useState("");
   const [transitioning, setTransitioning] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [creatingPayment, setCreatingPayment] = useState(false);
 
   // State Demo Emails
   const [emails, setEmails] = useState<DemoEmail[]>([]);
@@ -164,6 +165,28 @@ export default function SandboxTab() {
   };
 
   const selectedOrder = orders.find((o) => o.orderCode === selectedOrderCode);
+
+  const handleOpenMockPayment = async () => {
+    if (!selectedOrder) return;
+    setCreatingPayment(true);
+    try {
+      const res = await fetch("/api/payment/vnpay-create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderCode: selectedOrder.orderCode }),
+      });
+      const data = await res.json();
+      if (res.ok && data.paymentUrl) {
+        window.open(data.paymentUrl, "_blank");
+      } else {
+        adminToast.error(data.error || "Không thể tạo phiên thanh toán test");
+      }
+    } catch {
+      adminToast.error("Lỗi kết nối máy chủ");
+    } finally {
+      setCreatingPayment(false);
+    }
+  };
 
   // ─── Handlers Email ────────────────────────────────────────────────────────
 
@@ -352,15 +375,15 @@ export default function SandboxTab() {
                 Mở giao diện cổng thanh toán độc lập để test toàn diện luồng: nhập thẻ test, chọn mã kết quả 00 (thành công) / 51 (hết tiền) / 24 (hủy).
               </p>
               {selectedOrder && (
-                <a
-                  href={`/payment/mock-sandbox?orderCode=${encodeURIComponent(selectedOrder.orderCode)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs transition"
+                <button
+                  type="button"
+                  onClick={handleOpenMockPayment}
+                  disabled={creatingPayment}
+                  className="inline-flex items-center gap-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl text-xs transition"
                 >
-                  <span>Mở Sandbox Đơn #{selectedOrder.orderCode}</span>
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+                  {creatingPayment ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                  <span>{creatingPayment ? "Đang tạo phiên..." : `Mở Sandbox Đơn #${selectedOrder.orderCode}`}</span>
+                </button>
               )}
             </div>
           </div>

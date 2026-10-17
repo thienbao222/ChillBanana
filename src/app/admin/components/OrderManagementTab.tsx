@@ -855,13 +855,19 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         </div>
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
-                            onClick={() => quickMoveStatus(
-                              ord.orderCode,
-                              "IN_TRANSIT_AIR",
-                              "Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam",
-                              "Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.",
-                              "Tokyo, Nhật Bản"
-                            )}
+                            onClick={() => {
+                              if (!ord.weightKg || ord.weightKg <= 0) {
+                                adminToast.error(`Đơn #${ord.orderCode} chưa có trọng lượng thực tế. Vui lòng bấm "Chi Tiết" để cập nhật cân nặng trước khi xuất kho.`);
+                                return;
+                              }
+                              quickMoveStatus(
+                                ord.orderCode,
+                                "IN_TRANSIT_AIR",
+                                "Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam",
+                                "Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.",
+                                "Tokyo, Nhật Bản"
+                              );
+                            }}
                             className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
                             <span>Xuất Kho $\rightarrow$ Bay Về VN</span>

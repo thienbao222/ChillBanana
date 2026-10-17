@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ShieldCheck, Lock, User, ArrowRight, AlertCircle, Sparkles } from "lucide-react";
+import { ShieldCheck, Lock, User, ArrowRight, AlertCircle } from "lucide-react";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -126,22 +126,10 @@ export default function AdminLoginPage() {
             </button>
           </form>
 
-          {/* Demo Credentials Box */}
           <div className="mt-6 pt-5 border-t border-slate-100 text-center">
-            <div className="bg-banana-50 border border-banana-200 rounded-2xl p-3 text-[11px] text-banana-900 text-left space-y-1">
-              <span className="font-bold flex items-center text-banana-800">
-                <Sparkles className="w-3 h-3 mr-1 text-banana-600" />
-                Tài khoản mặc định:
-              </span>
-              <p>Username: <strong className="font-mono text-navy-900">admin</strong></p>
-              <p>Mật khẩu: <strong className="font-mono text-navy-900">ChillBanana@2026</strong> (hoặc <strong className="font-mono text-navy-900">admin123</strong>)</p>
-            </div>
-
-            <div className="mt-4">
-              <Link href="/" className="text-xs text-slate-500 hover:text-navy-900 underline font-medium">
-                ← Quay lại Trang Chủ Khách Hàng
-              </Link>
-            </div>
+            <Link href="/" className="text-xs text-slate-500 hover:text-navy-900 underline font-medium">
+              ← Quay lại Trang Chủ Khách Hàng
+            </Link>
           </div>
 
         </div>

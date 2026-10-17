@@ -14,12 +14,18 @@ import {
   RefreshCw,
   Activity
 } from "lucide-react";
-import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { calculateOrderPrice, DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+const CATEGORY_CUSTOMS: Record<string, { label: string; surchargePercent: number; note: string }> = {
+  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 3, note: "Phụ thu kiểm định mỹ phẩm 3%" },
+  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 3, note: "Phụ thu kiểm định BYT 3%" },
+  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 5, note: "Phụ thu kiểm định linh kiện/pin 5%" },
+  anime: { label: "Anime, Manga & Figure Chính Hãng", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
+  other: { label: "Danh Mục Khác", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
+};
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
@@ -66,9 +72,18 @@ export default function OrderCalculator() {
   const [customerAddress, setCustomerAddress] = useState("");
   const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
   const [customerNote, setCustomerNote] = useState("");
+  const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [orderSuccessData, setOrderSuccessData] = useState<any>(null);
+
+  // VN -> JP Form state
+  const [vnJpSenderName, setVnJpSenderName] = useState("");
+  const [vnJpSenderPhone, setVnJpSenderPhone] = useState("");
+  const [vnJpCargoType, setVnJpCargoType] = useState("gift");
+  const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
+  const [vnJpCity, setVnJpCity] = useState("Tokyo");
+  const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
 
   // Lắng nghe URL param để tự động dán và cào dữ liệu khi từ chat qua
   useEffect(() => {
@@ -87,13 +102,13 @@ export default function OrderCalculator() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Auto-fill from customer account if logged in
+  // Auto-fill from customer account if logged in (functional updates)
   useEffect(() => {
     if (customer) {
-      if (customer.name && !customerName) setCustomerName(customer.name);
-      if (customer.email && !customerEmail) setCustomerEmail(customer.email);
-      if (customer.phone && !customerPhone) setCustomerPhone(customer.phone);
-      if (customer.address && !customerAddress) setCustomerAddress(customer.address);
+      setCustomerName((prev) => prev || customer.name || "");
+      setCustomerEmail((prev) => prev || customer.email || "");
+      setCustomerPhone((prev) => prev || customer.phone || "");
+      setCustomerAddress((prev) => prev || customer.address || "");
     }
   }, [customer]);
 
@@ -188,7 +203,12 @@ export default function OrderCalculator() {
     setCategory(newCat);
   };
 
+  const currentCategoryInfo = CATEGORY_CUSTOMS[category] || CATEGORY_CUSTOMS.cosmetics;
   const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy, pricingConfig);
+  const customsFeeVnd = Math.round(calc.productPriceVnd * (currentCategoryInfo.surchargePercent / 100));
+  const effectiveBaseOrderCostVnd = calc.baseOrderCostVnd + customsFeeVnd;
+  const effectiveDeposit50Vnd = Math.round(effectiveBaseOrderCostVnd * 0.5);
+  const effectiveTotalVnd = effectiveBaseOrderCostVnd + calc.shippingFeeVnd;
 
   // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
   const handleVnpayPayment = async (order: any) => {
@@ -233,13 +253,30 @@ export default function OrderCalculator() {
       toast.warning("Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ giao hàng.");
       return;
     }
+    const cleanPhone = customerPhone.replace(/\s+/g, "");
+    if (!/^(03|05|07|08|09)\d{8}$/.test(cleanPhone)) {
+      toast.warning("Số điện thoại không hợp lệ (cần đúng 10 số, đầu 03, 05, 07, 08, 09).");
+      return;
+    }
+    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      toast.warning("Định dạng email không hợp lệ.");
+      return;
+    }
+    if (!policyAgreed) {
+      toast.warning("Vui lòng xác nhận đồng ý với chính sách mua hộ và đặt cọc.");
+      return;
+    }
+    if (priceJpy < 100 || !Number.isInteger(priceJpy)) {
+      toast.warning("Giá sản phẩm tối thiểu là 100 JPY và phải là số nguyên (đồng Yên không có số thập phân).");
+      return;
+    }
 
     setIsSubmitting(true);
     try {
       const orderPayload = {
         customerName,
         customerEmail,
-        customerPhone,
+        customerPhone: cleanPhone,
         customerAddress,
         originalUrl: productUrl || "",
         productName: productName,
@@ -250,7 +287,7 @@ export default function OrderCalculator() {
         productPriceVnd: calc.productPriceVnd,
         serviceFeeVnd: calc.serviceFeeVnd,
         shippingFeeVnd: calc.shippingFeeVnd,
-        totalVnd: calc.totalVnd,
+        totalVnd: effectiveTotalVnd,
         depositPercent: Number(depositChoice),
         paymentMethod: "VNPAY",
         isGroupBuy,
@@ -324,7 +361,171 @@ export default function OrderCalculator() {
         </div>
       </div>
 
-      {/* Main Calculator Grid */}
+      {/* Main Calculator Grid or VN -> JP Dedicated Panel */}
+      {direction === "VN_TO_JP" ? (
+        <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm max-w-4xl mx-auto space-y-6">
+          <div className="flex items-center space-x-3 pb-4 border-b">
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl font-bold">
+              🇻🇳➔🇯🇵
+            </div>
+            <div>
+              <h3 className="text-xl font-serif font-bold text-navy-900">
+                Tuyến Vận Chuyển Hàng & Quà Tặng Từ Việt Nam Sang Nhật Bản
+              </h3>
+              <p className="text-xs text-slate-500">
+                Bay thẳng hàng không Tân Sơn Nhất / Nội Bài ➔ Tokyo (Haneda/Narita), Osaka (KIX). Giao hàng tận tay trong 2 - 4 ngày làm việc.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl border border-slate-200 bg-slate-50">
+              <span className="text-xs font-bold text-blue-700 block mb-1">📦 Kiện Quà / Đồ Khô / Quần Áo</span>
+              <span className="text-2xl font-bold font-serif text-navy-900">180.000 <small className="text-xs font-normal">đ/kg</small></span>
+              <p className="text-[11px] text-slate-500 mt-1">Từ 1kg trở lên · Miễn phí đóng thùng carton đạt chuẩn bay</p>
+            </div>
+            <div className="p-4 rounded-2xl border border-amber-200 bg-amber-50/50">
+              <span className="text-xs font-bold text-amber-800 block mb-1">⚡ Chuyển Phát Hỏa Tốc EMS</span>
+              <span className="text-2xl font-bold font-serif text-navy-900">210.000 <small className="text-xs font-normal">đ/kg</small></span>
+              <p className="text-[11px] text-slate-500 mt-1">Hồ sơ du học, giấy tờ, hợp đồng · Giao trong 48h tại Tokyo/Osaka</p>
+            </div>
+            <div className="p-4 rounded-2xl border border-emerald-200 bg-emerald-50/50">
+              <span className="text-xs font-bold text-emerald-800 block mb-1">🍲 Thực Phẩm & Đặc Sản Quê</span>
+              <span className="text-2xl font-bold font-serif text-navy-900">220.000 <small className="text-xs font-normal">đ/kg</small></span>
+              <p className="text-[11px] text-slate-500 mt-1">Cà phê, trà, bánh pía, đồ khô · Hỗ trợ thủ tục kiểm dịch</p>
+            </div>
+          </div>
+
+          {!vnJpSubmitted ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim()) {
+                  toast.warning("Vui lòng điền họ tên và số điện thoại liên hệ.");
+                  return;
+                }
+                const phoneClean = vnJpSenderPhone.replace(/\s+/g, "");
+                if (!/^(03|05|07|08|09)\d{8}$/.test(phoneClean)) {
+                  toast.warning("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
+                  return;
+                }
+                setVnJpSubmitted(true);
+                toast.success("Đã ghi nhận yêu cầu gửi hàng đi Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
+              }}
+              className="space-y-4 pt-4 border-t border-slate-200"
+            >
+              <h4 className="font-bold text-sm text-navy-900">
+                Đăng Ký Nhận Báo Giá Tuyến VN ➔ JP & Điều Phối Lấy Hàng Tận Nơi
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Họ tên người gửi tại Việt Nam *</label>
+                  <input
+                    type="text"
+                    required
+                    value={vnJpSenderName}
+                    onChange={(e) => setVnJpSenderName(e.target.value)}
+                    placeholder="VD: Trần Hoàng Long"
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại / Zalo người gửi *</label>
+                  <input
+                    type="tel"
+                    required
+                    value={vnJpSenderPhone}
+                    onChange={(e) => setVnJpSenderPhone(e.target.value)}
+                    placeholder="VD: 0912 345 678"
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Loại mặt hàng</label>
+                  <select
+                    value={vnJpCargoType}
+                    onChange={(e) => setVnJpCargoType(e.target.value)}
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                  >
+                    <option value="gift">Quà biếu / Quần áo / Đồ dùng cá nhân</option>
+                    <option value="food">Thực phẩm khô / Cà phê / Trà / Bánh kẹo</option>
+                    <option value="doc">Tài liệu / Hồ sơ du học / Bằng cấp</option>
+                    <option value="other">Hàng mẫu / Hàng hóa khác</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Cân nặng dự kiến (kg)</label>
+                  <input
+                    type="number"
+                    min={0.5}
+                    step={0.5}
+                    value={vnJpWeightKg}
+                    onChange={(e) => setVnJpWeightKg(Math.max(0.5, Number(e.target.value) || 0.5))}
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Tỉnh/Thành tại Nhật Bản</label>
+                  <select
+                    value={vnJpCity}
+                    onChange={(e) => setVnJpCity(e.target.value)}
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                  >
+                    <option value="Tokyo">Tokyo (東京都)</option>
+                    <option value="Osaka">Osaka (大阪府)</option>
+                    <option value="Kanagawa">Kanagawa (神奈川県)</option>
+                    <option value="Aichi">Aichi (愛知県)</option>
+                    <option value="Saitama">Saitama (埼玉県)</option>
+                    <option value="Chiba">Chiba (千葉県)</option>
+                    <option value="Fukuoka">Fukuoka (福岡県)</option>
+                    <option value="Other">Tỉnh khác</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  className="px-6 py-3 bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center space-x-1.5"
+                >
+                  <span>Gửi Yêu Cầu Báo Giá & Đón Hàng</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+                <a
+                  href="tel:19006868"
+                  className="px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm rounded-xl transition-all"
+                >
+                  📞 Hotline 1900 6868 (Miễn cước)
+                </a>
+              </div>
+            </form>
+          ) : (
+            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
+              <span className="text-3xl">✅</span>
+              <h4 className="font-bold text-base text-emerald-900">
+                Đã Ghi Nhận Yêu Cầu Tuyến VN ➔ JP Thành Công!
+              </h4>
+              <p className="text-xs text-emerald-700">
+                Nhân viên điều phối ChillBanana sẽ liên hệ tới số <strong>{vnJpSenderPhone}</strong> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng thùng carton chuẩn bay.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setVnJpSubmitted(false);
+                  setVnJpSenderName("");
+                  setVnJpSenderPhone("");
+                }}
+                className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl"
+              >
+                Gửi yêu cầu kiện hàng khác
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Left Form: Input link & params (7 cols) */}
         <div className="lg:col-span-7 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm space-y-5">
@@ -419,11 +620,11 @@ export default function OrderCalculator() {
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white cursor-pointer"
               >
-                <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da</option>
-                <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe</option>
-                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini</option>
-                <option value="anime">🎎 Anime, Manga & Figure Chính Hãng</option>
-                <option value="other">📦 Danh Mục Khác</option>
+                <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da (+3% phụ thu HQ)</option>
+                <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe (+3% kiểm dịch BYT)</option>
+                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (+5% an toàn pin)</option>
+                <option value="anime">🎎 Anime, Manga & Figure Chính Hãng (0% Miễn phụ phí)</option>
+                <option value="other">📦 Danh Mục Khác (0% Miễn phụ phí)</option>
               </select>
             </div>
           </div>
@@ -463,10 +664,13 @@ export default function OrderCalculator() {
                 <input
                   type="number"
                   min={100}
-                  step={100}
+                  step={1}
                   value={priceJpy}
                   readOnly={isPriceLocked}
-                  onChange={(e) => setPriceJpy(Math.max(0, Number(e.target.value)))}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
+                    setPriceJpy(Math.max(0, v));
+                  }}
                   className={`w-full pl-8 pr-9 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all ${
                     isPriceLocked
                       ? "bg-slate-100 border border-slate-300 text-slate-700 cursor-not-allowed select-none"
@@ -571,10 +775,10 @@ export default function OrderCalculator() {
                   {calc.isUnderMinOrder ? (
                     <>
                       <p className="font-bold text-amber-900">
-                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({pricingConfig.minimumBaseOrderVnd.toLocaleString("vi-VN")} đ)
+                        Giá trị tiền hàng và phí dịch vụ ({effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({pricingConfig.minimumBaseOrderVnd.toLocaleString("vi-VN")} đ)
                       </p>
                       <p className="text-slate-600">
-                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm {pricingConfig.groupBuyShippingDiscountPercent}% cước vận chuyển quốc tế!
+                        👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>&quot;Gộp Đơn (Group Buy)&quot;</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm {pricingConfig.groupBuyShippingDiscountPercent}% cước vận chuyển quốc tế!
                       </p>
                     </>
                   ) : (
@@ -610,10 +814,10 @@ export default function OrderCalculator() {
                 <ShieldCheck className="w-4 h-4 mr-1 text-banana-400" />
                 Bảng Kê Chi Phí Trọn Gói
               </span>
-              <div className="flex items-center space-x-1.5 bg-white/10 px-2.5 py-1 rounded-full text-[11px] text-slate-300">
+              <div className="flex items-center space-x-1.5 bg-white/10 px-2.5 py-1 rounded-full text-[11px] text-slate-300" title={`Nguồn: ${rateSource}`}>
                 <Activity className="w-3 h-3 text-emerald-400 animate-pulse" />
                 <span>1 JPY = {exchangeRate} đ</span>
-                <button onClick={loadLiveRate} title="Cập nhật tỷ giá live">
+                <button onClick={loadLiveRate} title={`Cập nhật tỷ giá live (${rateSource})`}>
                   <RefreshCw className={`w-2.5 h-2.5 text-banana-300 ${rateLoading ? "animate-spin" : ""}`} />
                 </button>
               </div>
@@ -634,16 +838,20 @@ export default function OrderCalculator() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
+                  Phụ phí hải quan ({currentCategoryInfo.label}):
+                </span>
+                <span className={`font-medium ${customsFeeVnd > 0 ? "text-white" : "text-emerald-400"}`}>
+                  {customsFeeVnd > 0 ? `${customsFeeVnd.toLocaleString("vi-VN")} đ (+${currentCategoryInfo.surchargePercent}%)` : "0 đ (Miễn phí)"}
+                </span>
+              </div>
+              <div className="flex justify-between text-slate-300">
+                <span className="flex items-center">
                   Cước bay quốc tế:
                   {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-{pricingConfig.groupBuyShippingDiscountPercent}% Gộp</span>}
                 </span>
                 <span className="font-medium text-emerald-400">
                   {weightKg > 0 ? `${calc.shippingFeeVnd.toLocaleString("vi-VN")} đ (${weightKg}kg tham khảo)` : "Cân đo thực tế khi về kho (0 đ)"}
                 </span>
-              </div>
-              <div className="flex justify-between text-slate-300">
-                <span>Phụ phí hải quan & đóng gói:</span>
-                <span className="font-medium text-emerald-400">0 đ (Miễn phí)</span>
               </div>
             </div>
 
@@ -653,7 +861,7 @@ export default function OrderCalculator() {
                 <span className="text-sm font-bold text-slate-200">Tiền Hàng &amp; Phí Mua Hộ:</span>
                 <div className="text-right">
                   <span className="text-2xl sm:text-3xl font-bold font-serif text-banana-400">
-                    {calc.baseOrderCostVnd.toLocaleString("vi-VN")} <span className="text-base font-normal">đ</span>
+                    {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} <span className="text-base font-normal">đ</span>
                   </span>
                 </div>
               </div>
@@ -664,7 +872,7 @@ export default function OrderCalculator() {
                   <span className="text-[10px] text-emerald-400 font-medium">{depositChoice}% tiền hàng + phí mua hộ</span>
                 </div>
                 <strong className="text-banana-300 text-sm sm:text-base font-mono">
-                  {(depositChoice === "50" ? calc.deposit50Vnd : calc.baseOrderCostVnd).toLocaleString("vi-VN")} đ
+                  {(depositChoice === "50" ? effectiveDeposit50Vnd : effectiveBaseOrderCostVnd).toLocaleString("vi-VN")} đ
                 </strong>
               </div>
 
@@ -688,54 +896,37 @@ export default function OrderCalculator() {
 
           {/* CTA Buttons */}
           <div className="mt-8 space-y-2.5">
-            {direction === "VN_TO_JP" ? (
-              <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-center space-y-2">
-                <p className="text-sm font-bold text-amber-900">🇻🇳 ➔ 🇯🇵 Dịch Vụ Gửi Hàng Sang Nhật</p>
-                <p className="text-xs text-amber-800 leading-relaxed">
-                  Dịch vụ gửi hàng từ Việt Nam sang Nhật cần nhân viên tư vấn trực tiếp. Vui lòng liên hệ qua Facebook hoặc Zalo để được hỗ trợ báo giá.
-                </p>
-                <a
-                  href="https://m.me/chillbanana.vn"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-block mt-1 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs rounded-xl transition-all"
-                >
-                  💬 Nhắn Tin Tư Vấn Ngay
-                </a>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    addToCart({
-                      id: "calc-" + Date.now(),
-                      name: productName || "Sản phẩm mua hộ Nhật Bản",
-                      priceJpy,
-                      priceVnd: calc.productPriceVnd,
-                      weightKg,
-                      imageUrl: productImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80",
-                      originalStore: detectedStore || "Sàn thương mại Nhật Bản",
-                      originalUrl: productUrl || undefined,
-                      category,
-                    });
-                  }}
-                  className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
-                >
-                  <ShoppingCart className="w-4 h-4 text-banana-400" />
-                  <span>Thêm Vào Giỏ Hàng</span>
-                </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  addToCart({
+                    id: "calc-" + Date.now(),
+                    name: productName || "Sản phẩm mua hộ Nhật Bản",
+                    priceJpy,
+                    priceVnd: calc.productPriceVnd,
+                    weightKg,
+                    imageUrl: productImage || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80",
+                    originalStore: detectedStore || "Sàn thương mại Nhật Bản",
+                    originalUrl: productUrl || undefined,
+                    category,
+                  });
+                }}
+                className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
+              >
+                <ShoppingCart className="w-4 h-4 text-banana-400" />
+                <span>Thêm Vào Giỏ Hàng</span>
+              </button>
 
-                <button
-                  type="button"
-                  onClick={() => setShowOrderModal(true)}
-                  className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
-                >
-                  <span>Đặt Cọc & Mua Ngay</span>
-                  <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </button>
-              </div>
-            )}
+              <button
+                type="button"
+                onClick={() => setShowOrderModal(true)}
+                className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
+              >
+                <span>Đặt Cọc & Mua Ngay</span>
+                <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
 
             <button
               type="button"
@@ -751,6 +942,7 @@ export default function OrderCalculator() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Modal Điền Thông Tin Đặt Hàng & Thanh Toán VietQR */}
       {showOrderModal && (
@@ -798,7 +990,7 @@ export default function OrderCalculator() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Số Điện Thoại Nhận Hàng *
+                        Số Điện Thoại Nhận Hàng * <span className="text-slate-400 font-normal">(10 số, đầu 03/05/07/08/09)</span>
                       </label>
                       <input
                         type="tel"
@@ -857,7 +1049,7 @@ export default function OrderCalculator() {
                         <div>
                           <p className="text-xs font-bold text-slate-800">Đặt cọc 50%</p>
                           <p className="text-[11px] text-banana-800 font-bold">
-                            {calc.deposit50Vnd.toLocaleString("vi-VN")} đ
+                            {effectiveDeposit50Vnd.toLocaleString("vi-VN")} đ
                           </p>
                         </div>
                       </label>
@@ -876,7 +1068,7 @@ export default function OrderCalculator() {
                         <div>
                           <p className="text-xs font-bold text-slate-800">Thanh toán 100% tiền hàng + phí mua hộ</p>
                           <p className="text-[11px] text-banana-800 font-bold">
-                            {calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ
+                            {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ
                           </p>
                         </div>
                       </label>
@@ -895,6 +1087,20 @@ export default function OrderCalculator() {
                       className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
                     />
                   </div>
+
+                  {/* Checkbox cam kết chính sách mua hộ */}
+                  <label className="flex items-start space-x-2 text-xs text-slate-700 cursor-pointer pt-2">
+                    <input
+                      type="checkbox"
+                      checked={policyAgreed}
+                      onChange={(e) => setPolicyAgreed(e.target.checked)}
+                      className="w-4 h-4 text-banana-500 rounded border-slate-300 focus:ring-banana-500 mt-0.5 cursor-pointer"
+                      required
+                    />
+                    <span>
+                      Tôi xác nhận đã đọc và đồng ý với <strong>Chính sách mua hộ &amp; đặt cọc của ChillBanana</strong> (đơn hàng không hoàn lại cọc nếu tự ý hủy sau khi nhân viên đã mua hàng tại Nhật Bản).
+                    </span>
+                  </label>
                 </div>
 
                 <div className="pt-3">

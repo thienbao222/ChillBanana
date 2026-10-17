@@ -112,7 +112,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoaded(true);
     }
-  }, []);
+  }, [toast]);
 
   // Lưu giỏ hàng mỗi khi thay đổi
   useEffect(() => {

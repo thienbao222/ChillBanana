@@ -138,8 +138,8 @@ export async function POST(req: NextRequest) {
         }
         const itemPrice = Number(item.priceJpy);
         const itemWeight = Number(item.weightKg);
-        if (!Number.isSafeInteger(itemPrice) || itemPrice < 1 || !Number.isFinite(itemWeight) || itemWeight < 0 || itemWeight > 100) {
-          return NextResponse.json({ error: "Giá hoặc cân nặng sản phẩm không hợp lệ." }, { status: 400 });
+        if (!Number.isSafeInteger(itemPrice) || itemPrice < 100 || !Number.isFinite(itemWeight) || itemWeight < 0 || itemWeight > 100) {
+          return NextResponse.json({ error: "Giá sản phẩm phải là số nguyên tối thiểu từ 100 ¥; cân nặng từ 0 đến 100 kg." }, { status: 400 });
         }
       }
     }
@@ -392,7 +392,7 @@ export async function POST(req: NextRequest) {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
             sameSite: "lax",
-            path: "/api",
+            path: "/",
             maxAge: 60 * 60 * 24 * 7,
           }
         );

@@ -51,10 +51,10 @@ export default function CartDrawer() {
   // Auto-fill from customer account if available
   useEffect(() => {
     if (customer) {
-      if (customer.name && !customerName) setCustomerName(customer.name);
-      if (customer.email && !customerEmail) setCustomerEmail(customer.email);
-      if (customer.phone && !customerPhone) setCustomerPhone(customer.phone);
-      if (customer.address && !customerAddress) setCustomerAddress(customer.address);
+      if (customer.name) setCustomerName((prev) => prev || customer.name || "");
+      if (customer.email) setCustomerEmail((prev) => prev || customer.email || "");
+      if (customer.phone) setCustomerPhone((prev) => prev || customer.phone || "");
+      if (customer.address) setCustomerAddress((prev) => prev || customer.address || "");
     }
   }, [customer]);
 

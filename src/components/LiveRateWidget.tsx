@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   RefreshCw,
   Activity,
@@ -28,7 +28,7 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
   });
   const [loading, setLoading] = useState(false);
 
-  const loadRate = async () => {
+  const loadRate = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch("/api/exchange-rate");
@@ -44,14 +44,14 @@ export default function LiveRateWidget({ onRateChange, compact = false }: LiveRa
     } finally {
       setLoading(false);
     }
-  };
+  }, [onRateChange]);
 
   useEffect(() => {
     loadRate();
     // Tự động cập nhật mỗi 5 phút
     const timer = setInterval(loadRate, 5 * 60 * 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [loadRate]);
 
   if (compact) {
     return (
