@@ -8,9 +8,9 @@ import {
   getCustomerFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
 } from "@/lib/auth-session";
-import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { buildPricingSnapshot, getActivePricingConfig } from "@/features/pricing/config-store";
 
 export const dynamic = "force-dynamic";
 
@@ -200,6 +200,8 @@ export async function POST(req: NextRequest) {
       );
     }
     const liveRate = liveRateData.roundedRate || liveRateData.rate || 172;
+    const activePricing = await getActivePricingConfig();
+    const pricingValues = activePricing.values;
 
     // Khởi tạo mã đơn hàng
     const timestamp = Date.now().toString(36).toUpperCase();
@@ -315,16 +317,16 @@ export async function POST(req: NextRequest) {
         }
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
-        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy);
+        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingValues);
         const { productPriceVnd, serviceFeeVnd, baseOrderCostVnd, shippingFeeVnd, totalVnd } = price;
-        if (baseOrderCostVnd < MIN_ORDER_THRESHOLD_VND) {
-          throw new Error(`ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`);
+        if (baseOrderCostVnd < pricingValues.minOrderThresholdVnd) {
+          throw new Error(`ORDER_BELOW_MINIMUM:${pricingValues.minOrderThresholdVnd}`);
         }
 
         const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
         const hasCatalogReservation = orderItemsData.some((item) => item.itemType === "CATALOG");
         const reservationExpiresAt = hasCatalogReservation && isOnlyCatalogItems
-          ? new Date(Date.now() + 30 * 60 * 1000)
+          ? new Date(Date.now() + pricingValues.reservationMinutes * 60 * 1000)
           : null;
 
         // Tạo đơn hàng + OrderItems trong cùng một transaction
@@ -359,6 +361,13 @@ export async function POST(req: NextRequest) {
             isPriceVerified: isOnlyCatalogItems,
             priceVerifiedAt: isOnlyCatalogItems ? new Date() : null,
             reservationExpiresAt,
+            pricingSnapshot: buildPricingSnapshot({
+              active: activePricing,
+              exchangeRate: { value: liveRate, source: liveRateData.source, fetchedAt: liveRateData.updatedAt || null },
+              breakdown: { productPriceVnd, serviceFeeVnd, shippingFeeVnd, totalVnd, depositAmountVnd },
+              isGroupBuy: !!body.isGroupBuy,
+              weightKg: verifiedWeightKg,
+            }),
             orderItems: {
               create: orderItemsData,
             },
@@ -400,8 +409,8 @@ export async function POST(req: NextRequest) {
       if (dbErr.message === "ORDER_PRICE_TOO_LOW") {
         return NextResponse.json({ error: "Tổng giá sản phẩm phải từ 100 ¥ trở lên." }, { status: 400 });
       }
-      if (dbErr.message === `ORDER_BELOW_MINIMUM:${MIN_ORDER_THRESHOLD_VND}`) {
-        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
+      if (typeof dbErr.message === "string" && dbErr.message.startsWith("ORDER_BELOW_MINIMUM:")) {
+        return NextResponse.json({ error: `Giá trị tiền hàng và phí dịch vụ phải đạt tối thiểu ${Number(dbErr.message.split(":")[1] || activePricing.values.minOrderThresholdVnd).toLocaleString("vi-VN")}đ (chưa gồm vận chuyển).` }, { status: 400 });
       }
       if (dbErr.message && dbErr.message.startsWith("INSUFFICIENT_STOCK:")) {
         const productName = dbErr.message.split(":")[2] || "Sản phẩm này";

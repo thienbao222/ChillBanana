@@ -15,6 +15,9 @@ const TABLES = [
   "Customer",
   "RateLimit",
   "AuditLog",
+  "PricingConfig",
+  "ExchangeRateSnapshot",
+  "EmailLog",
 ];
 
 /** Xóa sạch dữ liệu giữa các test. Chỉ gọi sau khi integration-setup đã kiểm tra DATABASE_URL. */

@@ -65,6 +65,9 @@ model Order {
   isPriceVerified  Boolean       @default(false)
   priceVerifiedAt  DateTime?
 
+  // Ảnh chụp cấu hình giá + tỷ giá đã dùng khi tạo đơn, để truy xuất lại báo giá
+  pricingSnapshot  Json?
+
   trackingLogs     TrackingLog[]
   orderItems       OrderItem[]
   paymentTransactions PaymentTransaction[]
@@ -84,9 +87,9 @@ model PaymentTransaction {
   id                    String   @id @default(cuid())
   orderId               String
   order                 Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  provider              String   // VNPAY | MANUAL_BANK_TRANSFER
+  provider              String   // VNPAY | MOCK | MANUAL_BANK_TRANSFER
   amountVnd             Int
-  status                String   @default("CONFIRMED") // CONFIRMED | REFUNDED
+  status                String   @default("CONFIRMED") // CONFIRMED | PENDING | FAILED | CANCELLED | TIMEOUT | REFUNDED
   providerTransactionId String?
   reference             String?
   confirmedByAdmin      String?
@@ -322,4 +325,53 @@ model AuditLog {
   @@index([actor, createdAt])
   @@index([action, createdAt])
   @@index([entityType, entityId])
+}
+
+// Cấu hình giá có hiệu lực theo thời điểm. Bản ghi mới nhất có effectiveFrom <= hiện tại là bản đang áp dụng.
+// Không sửa/xóa bản cũ: mỗi thay đổi là một dòng mới để giữ lịch sử.
+model PricingConfig {
+  id                   String   @id @default(cuid())
+  serviceFeeRate       Float    // 0.04 = 4% phí mua hộ
+  minServiceFeeVnd     Int
+  airShippingPerKgVnd  Int
+  groupBuyDiscountRate Float    // 0.25 = giảm 25% cước cho đơn gộp
+  groupBuyMaxWeightKg  Float
+  minOrderThresholdVnd Int
+  reservationMinutes   Int
+  effectiveFrom        DateTime
+  createdBy            String
+  note                 String?
+  createdAt            DateTime @default(now())
+
+  @@index([effectiveFrom])
+}
+
+// Mỗi lần lấy tỷ giá JPY/VND thật từ nguồn ngoài được lưu lại để truy vết.
+model ExchangeRateSnapshot {
+  id          String   @id @default(cuid())
+  rate        Float
+  roundedRate Int
+  source      String
+  isFallback  Boolean  @default(false)
+  fetchedAt   DateTime @default(now())
+
+  @@index([fetchedAt])
+}
+
+// Nhật ký email: SIMULATED (chưa cấu hình SMTP, chưa gửi thật), SENT, FAILED.
+model EmailLog {
+  id        String   @id @default(cuid())
+  type      String   // ORDER_CREATED, PRICE_APPROVED, PAYMENT_SUCCESS, ORDER_STATUS, ...
+  recipient String
+  subject   String?
+  status    String   // SIMULATED | SENT | FAILED
+  attempts  Int      @default(0)
+  error     String?
+  orderCode String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+  @@index([status, createdAt])
+  @@index([orderCode])
 }

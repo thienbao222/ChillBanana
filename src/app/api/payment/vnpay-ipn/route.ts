@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { confirmVnpayPayment, verifyVnpaySignature } from "@/lib/vnpay-payment";
+import { VnpayProvider } from "@/features/payments/providers/vnpay";
+import { applyPaymentCallback } from "@/features/payments/service";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +14,13 @@ export async function GET(req: NextRequest) {
   const orderCode = params.get("vnp_TxnRef") || "";
   if (!orderCode) return NextResponse.json({ RspCode: "01", Message: "Order not found" });
   if (params.get("vnp_ResponseCode") !== "00" || params.get("vnp_TransactionStatus") !== "00") {
+    // Giao dịch không thành công: ghi lại để đối soát (không đổi trạng thái đơn), rồi báo VNPAY đã nhận.
+    try {
+      const verified = new VnpayProvider("vnpay-sandbox").verifyCallback(params);
+      if (verified.valid) await applyPaymentCallback(verified.callback);
+    } catch (error) {
+      console.error("[VNPAY IPN] Không ghi được giao dịch thất bại:", error);
+    }
     return NextResponse.json({ RspCode: "00", Message: "Confirm Success" });
   }
 

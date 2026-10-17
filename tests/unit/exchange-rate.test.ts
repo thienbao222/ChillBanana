@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+// Không để test đơn vị chạm database khi lưu ảnh chụp tỷ giá.
+vi.mock("@/features/pricing/rate-snapshots", () => ({ recordExchangeRateSnapshot: vi.fn().mockResolvedValue(undefined) }));
+
 type Responder = (url: string) => { ok: boolean; json: () => Promise<unknown> } | Error;
 
 function stubFetch(responder: Responder) {

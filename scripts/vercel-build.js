@@ -26,6 +26,16 @@ function runNpm(args, extraEnv = {}) {
 }
 
 if (isProductionDeployment) {
+  // Kiểm tra cấu hình bắt buộc trước khi chạm vào database. Lỗi ở đây làm deploy thất bại
+  // và bản đang chạy vẫn được giữ nguyên.
+  const { validateProductionEnv } = require("./env-rules.js");
+  const { errors, warnings } = validateProductionEnv(process.env);
+  for (const w of warnings) console.warn(`[vercel-build] Cảnh báo: ${w}`);
+  if (errors.length > 0) {
+    console.error("\n[vercel-build] TỪ CHỐI deploy production vì cấu hình chưa đạt:\n" + errors.map((e) => `  - ${e}`).join("\n") + "\n");
+    process.exit(1);
+  }
+
   // Production chỉ được áp dụng migration đã commit (prisma migrate deploy).
   // Tuyệt đối KHÔNG dùng `prisma db push` ở đây: nó có thể xóa cột/bảng khi schema đổi.
   const migrationsDir = path.join(__dirname, "..", "prisma", "migrations");

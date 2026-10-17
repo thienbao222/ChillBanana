@@ -12,6 +12,7 @@ import {
   BarChart3,
   ShoppingBag,
   ShoppingCart,
+  Settings2,
   Columns,
   ExternalLink,
   RefreshCw,
@@ -20,6 +21,7 @@ import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
 import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
+import PricingConfigTab from "@/app/admin/components/PricingConfigTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
 import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
@@ -37,7 +39,7 @@ function AdminDashboardPageInner() {
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
   // Tab đang chọn
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase">("orders");
+  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase" | "pricing">("orders");
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
   const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("overview");
 
@@ -144,6 +146,7 @@ function AdminDashboardPageInner() {
                 { key: "customers", icon: <Users className="h-4 w-4" />, label: "Khách hàng" },
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
                 { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Tác vụ mua hộ" },
+                { key: "pricing", icon: <Settings2 className="h-4 w-4" />, label: "Cấu hình giá" },
                 { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
               ].map((tab) => (
                 <button
@@ -187,6 +190,7 @@ function AdminDashboardPageInner() {
             )}
             {activeTab === "products"  && <ProductsTab />}
             {activeTab === "purchase"  && <PurchaseTasksTab />}
+            {activeTab === "pricing"   && <PricingConfigTab />}
             {activeTab === "analytics" && (
               <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
             )}

@@ -89,8 +89,10 @@ async function fetchFromFrankfurter(): Promise<number | null> {
     const data = await res.json();
     const jpyToUsd: unknown = data?.rates?.USD;
     if (typeof jpyToUsd !== "number" || jpyToUsd <= 0) return null;
-    // USD/VND tham chiếu ngân hàng VN (cập nhật thủ công theo quý nếu cần)
-    const usdToVnd = 25400;
+    // USD/VND tham chiếu: cấu hình bằng USD_VND_REFERENCE_RATE (cập nhật định kỳ); mặc định chỉ để dự phòng.
+    // Nguồn này kém chính xác hơn nguồn 1 nên tên nguồn trả về ghi rõ "tỷ giá chéo".
+    const configuredUsdVnd = Number(process.env.USD_VND_REFERENCE_RATE);
+    const usdToVnd = Number.isFinite(configuredUsdVnd) && configuredUsdVnd > 10_000 ? configuredUsdVnd : 25400;
     const rate = jpyToUsd * usdToVnd;
     if (rate > 100 && rate < 300) return rate;
   } catch {
@@ -142,7 +144,7 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
   // Thử lần lượt từng nguồn theo thứ tự ưu tiên
   const sources: { name: string; fetch: () => Promise<number | null> }[] = [
     { name: "open.er-api.com", fetch: fetchFromOpenErApi },
-    { name: "frankfurter.app (ECB)", fetch: fetchFromFrankfurter },
+    { name: "frankfurter.app (ECB, tỷ giá chéo qua USD/VND tham chiếu)", fetch: fetchFromFrankfurter },
   ];
 
   for (const source of sources) {
@@ -173,6 +175,12 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
       };
       lastFetchTime = now;
       lastFetchSucceeded = true;
+      // Lưu vết mỗi lần lấy tỷ giá thật (không chặn luồng chính, lỗi chỉ ghi log). Dynamic import để file này
+      // không kéo Prisma vào bundle trình duyệt.
+      const saved = cachedRate;
+      void import("./rate-snapshots")
+        .then((m) => m.recordExchangeRateSnapshot({ rate: saved.rate, roundedRate: saved.roundedRate, source: saved.source, isFallback: saved.isFallback }))
+        .catch(() => undefined);
       return cachedRate;
     }
   }

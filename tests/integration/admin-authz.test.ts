@@ -10,6 +10,8 @@ import * as purchaseTasks from "@/app/api/admin/purchase-tasks/route";
 import * as purchaseTaskById from "@/app/api/admin/purchase-tasks/[id]/route";
 import * as purchaseOrders from "@/app/api/admin/purchase-tasks/orders/route";
 import * as stitchAll from "@/app/api/admin/stitch-all/route";
+import * as pricingConfig from "@/app/api/admin/pricing-config/route";
+import * as refund from "@/app/api/admin/orders/[id]/refund/route";
 import * as payments from "@/app/api/admin/orders/[id]/payments/route";
 import * as analyticsChats from "@/app/api/analytics/chats/route";
 import * as products from "@/app/api/products/route";
@@ -36,6 +38,9 @@ const anonymous: [string, Call][] = [
   ["GET /api/admin/purchase-tasks/orders", () => purchaseOrders.GET(get("/api/admin/purchase-tasks/orders"))],
   ["POST /api/admin/stitch-all", () => stitchAll.POST(post("/api/admin/stitch-all", {}))],
   ["POST /api/admin/orders/[id]/payments", () => payments.POST(post("/api/admin/orders/x/payments", { amountVnd: 1, reference: "abcd" }), params({ id: "x" }))],
+  ["GET /api/admin/pricing-config", () => pricingConfig.GET(get("/api/admin/pricing-config"))],
+  ["POST /api/admin/pricing-config", () => pricingConfig.POST(post("/api/admin/pricing-config", {}))],
+  ["POST /api/admin/orders/[id]/refund", () => refund.POST(post("/api/admin/orders/x/refund", {}), params({ id: "x" }))],
   ["GET /api/analytics/chats", () => analyticsChats.GET(get("/api/analytics/chats"))],
   ["POST /api/products", () => products.POST(post("/api/products", { name: "x" }))],
   ["PUT /api/products", () => products.PUT(put("/api/products", { id: "x", name: "y" }))],

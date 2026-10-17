@@ -38,6 +38,22 @@ Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa ki�
 | End-to-end (server production thật) | ✅ | 18 test Playwright: vòng đời đơn guest (đặt → tra cứu → chuyển khoản → 6 bước → hoàn tất), VNPAY, tranh suất cuối, hủy đơn hoàn kho, bảo mật HTTP, tải 8 trang chính. |
 | Test xử lý đồng thời | ✅ | 20 yêu cầu cùng vào 5 suất: đúng 5 đơn thành công; hai yêu cầu vào suất cuối: chỉ một thành công (tồn kho = 0); hai IPN VNPAY đồng thời: chỉ một giao dịch được ghi; hai lần chạy cron hết hạn: hoàn kho một lần. |
 
+### Giai đoạn 3: Cấu hình nghiệp vụ và lớp provider (nhánh `feat/phase-3-pricing-providers`)
+
+| Hạng mục | Trạng thái | Bằng chứng / ghi chú |
+| --- | --- | --- |
+| Cấu hình môi trường tập trung, production từ chối provider mock / thiếu biến | 🟡 | `src/lib/env.ts`, `scripts/env-rules.js` (build production dừng nếu thiếu biến bắt buộc, `PAYMENT_PROVIDER=mock`, `APP_ENV=test`, URL không https). Test `tests/unit/env-rules.test.ts`. **Lưu ý:** production giờ bắt buộc có `NEXT_PUBLIC_APP_URL` (https). |
+| Cấu hình giá có lịch sử (`PricingConfig`) | 🟡 | Phí mua hộ, phí tối thiểu, cước/kg, giảm cước gộp đơn, ngưỡng đơn tối thiểu, thời gian giữ hàng đọc từ database; mặc định trong code khi chưa có bản ghi. Mỗi lần lưu là một dòng mới (không sửa bản cũ), có ngày hiệu lực, người đổi, ghi chú, audit `PRICING_CONFIG_CREATED`. Tab "Cấu hình giá" trong trang admin (chỉ SUPER_ADMIN được lưu). Giao diện khách ước tính theo `/api/pricing-config`. |
+| Snapshot giá theo đơn | 🟡 | `Order.pricingSnapshot`: cấu hình, tỷ giá + nguồn + thời điểm, khoản tính và cờ gộp đơn tại lúc tạo đơn. Đơn cũ không bị đổi khi đổi cấu hình (có test). Đơn tạo trước Giai đoạn 3 không có snapshot. |
+| Tỷ giá | 🟡 | Mỗi lần lấy tỷ giá thật được lưu vào `ExchangeRateSnapshot`. USD/VND dự phòng đọc từ `USD_VND_REFERENCE_RATE` (mặc định 25400) và nguồn dự phòng ghi rõ là tỷ giá chéo. Chính sách stale thì từ chối tạo đơn giữ nguyên. Hook tỷ giá cố định cho test (`APP_ENV=test`) vẫn còn, chưa chuyển thành provider riêng. |
+| Provider thanh toán (`PaymentProvider`) | 🟡 | `MockPaymentProvider` (thành công, thất bại, pending, timeout, hủy, webhook trùng, hoàn tiền) và `VnpayProvider` (sandbox/live). Chọn bằng `PAYMENT_PROVIDER`. Route `/api/payment/mock-callback` chỉ hoạt động ở chế độ mock. |
+| Ghi giao dịch thất bại | 🟡 | `PaymentTransaction` có thêm trạng thái PENDING, FAILED, CANCELLED, TIMEOUT; IPN VNPAY thất bại được lưu (không đổi đơn); chống ghi trùng. |
+| Hoàn tiền | 🟡 | `POST /api/admin/orders/[id]/refund` (SUPER_ADMIN, audit `ORDER_REFUNDED`), chỉ cho đơn đã hủy và đã thanh toán. Hoàn tiền mô phỏng hoạt động; **VNPAY chưa tích hợp hoàn tiền tự động** (báo rõ để hoàn thủ công). |
+| `EmailLog` và thử lại | 🟡 | Mọi email đi qua `deliverEmail`: SIMULATED (chưa có SMTP, không gửi gì), SENT, FAILED, tối đa 3 lần thử. Không lưu nội dung email. Chưa có hàng đợi bền hay cron gửi lại: lỗi sau 3 lần thử chỉ được ghi log. `sendPriceApprovedEmail` trả `true` chỉ khi SMTP thật sự nhận. |
+| `ShippingProvider` | 🟡 | Interface + `MockShippingProvider` (báo cước theo cấu hình giá, vận đơn và hành trình mô phỏng, luôn gắn `isSimulated`). Chưa nối vào luồng đơn hàng thật. |
+
+Trạng thái 🟡: đã viết và có test, chờ GitHub Actions xác nhận trước khi đổi sang ✅.
+
 ## 2. Hiện trạng từng chức năng
 
 | Chức năng | Trạng thái | Ghi chú |

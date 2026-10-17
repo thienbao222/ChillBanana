@@ -93,12 +93,15 @@ describe("VNPAY IPN", () => {
     expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
   });
 
-  it("giao dịch thất bại tại VNPAY: không ghi nhận tiền", async () => {
+  it("giao dịch thất bại tại VNPAY: không ghi nhận tiền nhưng lưu lại giao dịch để đối soát", async () => {
     const o = await makeOrder();
     const r = await callIpn(ipnPath({ orderCode: o.orderCode, amountVnd: 530_400, responseCode: "24", status: "02" }));
-    expect(r.RspCode).toBe("00"); // đã nhận thông báo; hiện chưa lưu giao dịch thất bại (xem docs/STATUS.md)
-    expect((await prisma.order.findUniqueOrThrow({ where: { id: o.id } })).paymentStatus).toBe("UNPAID");
-    expect(await prisma.paymentTransaction.count()).toBe(0);
+    expect(r.RspCode).toBe("00"); // đã nhận thông báo
+    const after = await prisma.order.findUniqueOrThrow({ where: { id: o.id }, include: { paymentTransactions: true } });
+    expect(after.paymentStatus).toBe("UNPAID");
+    expect(after.status).toBe("PENDING_DEPOSIT");
+    expect(after.paymentTransactions).toHaveLength(1);
+    expect(after.paymentTransactions[0]).toMatchObject({ provider: "VNPAY", status: "CANCELLED", amountVnd: 530_400 });
   });
 
   it("thiếu VNPAY_HASH_SECRET thì từ chối mọi IPN", async () => {

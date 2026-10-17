@@ -14,11 +14,8 @@ import {
   RefreshCw,
   Activity
 } from "lucide-react";
-import {
-  AIR_SHIPPING_PER_KG,
-  MIN_ORDER_THRESHOLD_VND,
-  calculateOrderPrice
-} from "@/lib/data";
+import { calculateOrderPrice } from "@/lib/data";
+import { usePricingConfig } from "@/hooks/usePricingConfig";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -191,7 +188,8 @@ export default function OrderCalculator() {
     setCategory(newCat);
   };
 
-  const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy);
+  const pricingConfig = usePricingConfig();
+  const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy, pricingConfig);
 
   // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
   const handleVnpayPayment = async (order: any) => {
@@ -574,7 +572,7 @@ export default function OrderCalculator() {
                   {calc.isUnderMinOrder ? (
                     <>
                       <p className="font-bold text-amber-900">
-                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({MIN_ORDER_THRESHOLD_VND.toLocaleString("vi-VN")} đ)
+                        Giá trị tiền hàng và phí dịch vụ ({calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ, chưa gồm vận chuyển) chưa đạt mức tối thiểu ({pricingConfig.minOrderThresholdVnd.toLocaleString("vi-VN")} đ)
                       </p>
                       <p className="text-slate-600">
                         👉 <strong>Giải pháp Chill:</strong> Hãy tích chọn <strong>"Gộp Đơn (Group Buy)"</strong> để ghép chung chuyến vận chuyển, nhận ưu đãi giảm 25% cước vận chuyển quốc tế!
