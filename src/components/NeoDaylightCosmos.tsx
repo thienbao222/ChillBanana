@@ -16,9 +16,9 @@ import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 
 // Bảng cấu hình danh mục hàng hóa & phụ phí thông quan
 const CATEGORY_MAP: Record<string, { label: string; surchargePercent: number; suggestedWeight: number; note: string }> = {
-  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 3, suggestedWeight: 0.3, note: "Phụ thu kiểm định mỹ phẩm 3%" },
-  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 3, suggestedWeight: 0.4, note: "Phụ thu kiểm định BYT 3%" },
-  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 5, suggestedWeight: 0.8, note: "Phụ thu kiểm định linh kiện/pin 5%" },
+  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 0, suggestedWeight: 0.3, note: "Đã bao gồm thông quan tiêu chuẩn" },
+  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 0, suggestedWeight: 0.4, note: "Đã bao gồm thông quan tiêu chuẩn" },
+  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 0, suggestedWeight: 0.8, note: "Đã bao gồm thông quan tiêu chuẩn" },
   anime: { label: "Anime, Figure & Sưu Tầm", surchargePercent: 0, suggestedWeight: 0.5, note: "Miễn phụ phí thông quan" },
 };
 
@@ -31,8 +31,15 @@ export default function NeoDaylightCosmos() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
+  // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường)
+  const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
+  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "0901234567";
+  const bankOwner = process.env.NEXT_PUBLIC_BANK_OWNER || "CHILLBANANA VIETNAM";
+  const bankName = process.env.NEXT_PUBLIC_BANK_NAME || "MB Bank (Quân Đội)";
+
   // Form quote state
   const [inputUrl, setInputUrl] = useState("");
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [productName, setProductName] = useState("");
   const [productImage, setProductImage] = useState("");
   const [detectedStore, setDetectedStore] = useState("");
@@ -121,16 +128,20 @@ export default function NeoDaylightCosmos() {
   useEffect(() => {
     const handleSelectProduct = (event: Event) => {
       const product = (event as CustomEvent<{
+        id?: string;
         name?: string;
         priceJpy?: number;
+        weightKg?: number;
         imageUrl?: string;
         originalStore?: string;
         category?: string;
       }>).detail;
 
       if (!product) return;
+      setSelectedProductId(product.id || `catalog-${Date.now()}`);
       if (product.name) setProductName(product.name);
       if (typeof product.priceJpy === "number" && product.priceJpy > 0) setPriceJpy(Math.floor(product.priceJpy));
+      if (typeof product.weightKg === "number" && product.weightKg >= 0) setWeightKg(product.weightKg);
       if (product.imageUrl) setProductImage(product.imageUrl);
       if (product.originalStore) setDetectedStore(product.originalStore);
       if (product.category) setCategory(product.category);
@@ -139,6 +150,7 @@ export default function NeoDaylightCosmos() {
       setInputUrl("");
       setShowOrderForm(false);
       setCreatedOrder(null);
+      showToast("Đã nạp sản phẩm vào bảng báo giá! Bạn có thể bấm Đặt Cọc & Mua Ngay.");
     };
 
     window.addEventListener("chillbanana:select_product", handleSelectProduct);
@@ -153,15 +165,32 @@ export default function NeoDaylightCosmos() {
     }, 2800);
   };
 
-  const scrollToSection = (id: string) => {
+  const scrollToSection = (id: string, focusInputId?: string) => {
     const el = document.getElementById(id);
     if (el) {
       el.scrollIntoView({ behavior: preferences.effectsEnabled ? "smooth" : "auto", block: "start" });
+      if (focusInputId) {
+        setTimeout(() => {
+          const inputEl = document.getElementById(focusInputId) as HTMLInputElement | null;
+          inputEl?.focus();
+        }, 350);
+      }
     }
+  };
+
+  const handleSelectCategoryAndScroll = (catKey: string) => {
+    window.dispatchEvent(
+      new CustomEvent("chillbanana:filter_products", {
+        detail: { category: catKey },
+      })
+    );
+    scrollToSection("stock");
   };
 
   const handleOpenAIChat = () => {
     window.dispatchEvent(new CustomEvent("open-ai-chat"));
+    const chatToggle = document.getElementById("ai-chat-toggle-btn");
+    if (chatToggle) chatToggle.click();
   };
 
   // Quét link tự động (kiểm tra client-side và fallback thân thiện)
@@ -270,8 +299,8 @@ export default function NeoDaylightCosmos() {
       showToast("Vui lòng tích chọn đồng ý với Chính sách mua hộ & đặt cọc.");
       return;
     }
-    if (!inputUrl.trim()) {
-      showToast("Vui lòng dán link sản phẩm trước khi tạo đơn đặt cọc.");
+    if (!inputUrl.trim() && !selectedProductId && !productName.trim()) {
+      showToast("Vui lòng dán link hoặc chọn sản phẩm trước khi tạo đơn đặt cọc.");
       return;
     }
     if (priceJpy < 100 || !Number.isInteger(priceJpy)) {
@@ -295,13 +324,21 @@ export default function NeoDaylightCosmos() {
           customerEmail: custEmail.trim() || undefined,
           customerNote: custNote.trim() || undefined,
           productName: productName.trim() || "Đơn mua hộ từ Nhật Bản",
-          originalUrl: inputUrl.trim(),
+          originalUrl: inputUrl.trim() || undefined,
           priceJpy,
           weightKg,
           category,
           isGroupBuy,
           depositPercent: Number(depositChoice),
-          items: [],
+          items: [
+            {
+              id: selectedProductId || `calc-${Date.now()}`,
+              name: productName.trim() || "Đơn mua hộ từ Nhật Bản",
+              quantity: 1,
+              priceJpy,
+              weightKg,
+            },
+          ],
         }),
       });
       const data = await res.json();
@@ -489,7 +526,7 @@ export default function NeoDaylightCosmos() {
                 </button>
               )}
               <WebsitePreferencesTrigger />
-              <button className="cta" onClick={() => scrollToSection("quote")}>
+              <button type="button" className="cta" onClick={() => { setActiveTab("JP_VN"); scrollToSection("quote", "u"); }}>
                 {t("Đặt Mua Hộ Ngay")}
               </button>
             </div>
@@ -515,19 +552,23 @@ export default function NeoDaylightCosmos() {
       {/* Thanh Mini Header khi cuộn chuột xuống */}
       <nav className={`mini ${showMini ? "on" : ""}`} id="mini" aria-label={t("Điều hướng nhanh")}>
         <Link className="mlogo" href="/" aria-label="ChillBanana" />
-        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }} title={t("Dán Link Tính Giá")} style={{ "--c": "#f2c21b" } as any}>
+        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote", "u"); }} title={t("Dán Link Tính Giá")} style={{ "--c": "#f2c21b" } as any}>
           <i><svg><use href="#i-link" /></svg></i>
+          <span>{t("Tính Giá")}</span>
         </a>
-        <a className="mp" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} title="Sản Phẩm Có Sẵn" style={{ "--c": "#4aaee0" } as any}>
+        <a className="mp" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} title={t("Sản Phẩm Có Sẵn")} style={{ "--c": "#4aaee0" } as any}>
           <i><svg><use href="#i-bag" /></svg></i>
+          <span>{t("Sẵn Hàng")}</span>
         </a>
         <Link className="mp" href="/tracking" title={t("Tra Cứu Đơn Hàng")} style={{ "--c": "#a58bff" } as any}>
           <i><svg><use href="#i-box" /></svg></i>
+          <span>{t("Tra Cứu")}</span>
         </Link>
         <a className="mp" href="#news" onClick={(e) => { e.preventDefault(); scrollToSection("news"); }} title={t("Cẩm Nang Hàng Nhật")} style={{ "--c": "#4fcf9b" } as any}>
           <i><svg><use href="#i-book" /></svg></i>
+          <span>{t("Cẩm Nang")}</span>
         </a>
-        <button className="cta" onClick={() => scrollToSection("quote")}>
+        <button type="button" className="cta" onClick={() => { setActiveTab("JP_VN"); scrollToSection("quote", "u"); }}>
           {t("Đặt Mua Hộ Ngay")}
         </button>
       </nav>
@@ -969,9 +1010,9 @@ export default function NeoDaylightCosmos() {
                     className="cta"
                     type="button"
                     onClick={() => {
-                      if (!inputUrl.trim()) {
-                        showToast(t("Vui lòng dán link sản phẩm trước."));
-                        scrollToSection("quote");
+                      if (!inputUrl.trim() && !selectedProductId && !productName.trim()) {
+                        showToast(t("Vui lòng dán link hoặc nhập tên sản phẩm trước."));
+                        scrollToSection("quote", "u");
                         return;
                       }
                       setShowOrderForm(true);
@@ -1161,7 +1202,7 @@ export default function NeoDaylightCosmos() {
 
                   {/* Nút tra cứu đơn */}
                   <Link
-                    href={`/tracking?code=${createdOrder.orderCode}`}
+                    href={`/tracking?orderCode=${createdOrder.orderCode}`}
                     style={{
                       display: "flex",
                       flexDirection: "column",
@@ -1191,14 +1232,14 @@ export default function NeoDaylightCosmos() {
                   </p>
                   <div style={{ display: "inline-block", padding: "10px", background: "#fff", borderRadius: "16px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", marginBottom: "12px" }}>
                     <img
-                      src={`https://img.vietqr.io/image/970422-0901234567-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=CHILLBANANA`}
+                      src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`}
                       alt="Mã VietQR đặt cọc"
                       style={{ width: "220px", height: "auto", display: "block" }}
                     />
                   </div>
                   <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                    Ngân hàng: <b>MB Bank (Quân Đội)</b> · STK: <b>0901 234 567</b><br />
-                    Chủ TK: <b>CHILLBANANA VIETNAM</b><br />
+                    Ngân hàng: <b>{bankName}</b> · STK: <b>{bankAccount}</b><br />
+                    Chủ TK: <b>{bankOwner}</b><br />
                     Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
                   </div>
                 </div>}
@@ -1223,44 +1264,44 @@ export default function NeoDaylightCosmos() {
           )}
         </section>
 
-        {/* SẢN PHẨM CÓ SẴN TỪ DB NEON */}
-        <section className="sec" id="stock" style={{ scrollMarginTop: "90px" }}>
-          {/* CuratedProducts tự fetch /api/products và quản lý giỏ hàng */}
-          <CuratedProducts quoteSectionId="quote" quoteHref="#quote" />
-        </section>
-
         {/* 4 DANH MỤC HOT */}
-        <section className="sec" id="hot">
+        <section className="sec" id="hot" style={{ scrollMarginTop: "90px" }}>
           <div className="center">
             <span className="tag">Danh mục nổi bật</span>
             <h2>4 Danh Mục Hàng Nhật Bán Chạy</h2>
           </div>
           <div className="hot">
-            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} style={{ "--c": "#ff8fb8" } as any}>
+            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); handleSelectCategoryAndScroll("cosmetics"); }} style={{ "--c": "#ff8fb8" } as any}>
               <i><svg><use href="#i-ai" /></svg></i>
               <h3>Mỹ Phẩm &amp; Chăm Sóc Da</h3>
               <p>Hàng chính hãng Cosme Nhật: DHC, Hada Labo, Anessa, Shiseido</p>
-              <b>Xem sản phẩm hot <svg><use href="#i-arrow" /></svg></b>
+              <b>Xem sản phẩm mỹ phẩm <svg><use href="#i-arrow" /></svg></b>
             </a>
-            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} style={{ "--c": "#4fcf9b" } as any}>
+            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); handleSelectCategoryAndScroll("health"); }} style={{ "--c": "#4fcf9b" } as any}>
               <i><svg><use href="#i-ok" /></svg></i>
               <h3>Thực Phẩm Chức Năng</h3>
               <p>Bảo vệ sức khỏe gia đình: Tảo xoắn, Nattokinase, Orihiro</p>
-              <b>Xem sản phẩm hot <svg><use href="#i-arrow" /></svg></b>
+              <b>Xem sản phẩm sức khỏe <svg><use href="#i-arrow" /></svg></b>
             </a>
-            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} style={{ "--c": "#4aaee0" } as any}>
+            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); handleSelectCategoryAndScroll("gadgets"); }} style={{ "--c": "#4aaee0" } as any}>
               <i><svg><use href="#i-box" /></svg></i>
               <h3>Gia Dụng &amp; Điện Tử Mini</h3>
               <p>Bình giữ nhiệt, máy cạo râu, tai nghe (Kèm hướng dẫn điện 100V)</p>
-              <b>Xem sản phẩm hot <svg><use href="#i-arrow" /></svg></b>
+              <b>Xem đồ gia dụng 100V <svg><use href="#i-arrow" /></svg></b>
             </a>
-            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} style={{ "--c": "#a58bff" } as any}>
+            <a className="card hc" href="#stock" onClick={(e) => { e.preventDefault(); handleSelectCategoryAndScroll("anime"); }} style={{ "--c": "#a58bff" } as any}>
               <i><svg><use href="#i-book" /></svg></i>
               <h3>Anime, Figure &amp; Sưu Tầm</h3>
               <p>Figure chính hãng Bandai, Good Smile, Nendoroid, Gunpla</p>
-              <b>Xem sản phẩm hot <svg><use href="#i-arrow" /></svg></b>
+              <b>Xem mô hình Figure <svg><use href="#i-arrow" /></svg></b>
             </a>
           </div>
+        </section>
+
+        {/* SẢN PHẨM CÓ SẴN TỪ DB NEON (CÓ FALLBACK MẪU) */}
+        <section className="sec" id="stock" style={{ scrollMarginTop: "90px" }}>
+          {/* CuratedProducts tự fetch /api/products và quản lý giỏ hàng */}
+          <CuratedProducts quoteSectionId="quote" quoteHref="#quote" />
         </section>
 
         {/* 4 GIÁ TRỊ CỐT LÕI (CHÍNH SÁCH BẢO HIỂM & VẬN CHUYỂN) */}
@@ -1274,21 +1315,7 @@ export default function NeoDaylightCosmos() {
         </section>
       </main>
 
-      {/* Floating Mascot Button: Mở ChillBanana Gemini AI */}
-      <aside className="neo" aria-label="Trợ lý ChillBanana AI">
-        <button
-          aria-label="Hỏi ChillBanana AI"
-          onClick={handleOpenAIChat}
-          title="Bấm để trò chuyện cùng trợ lý ChillBanana Gemini AI"
-        >
-          <svg viewBox="0 0 34 34" aria-hidden="true">
-            <circle cx="17" cy="17" r="12" fill="#fff" stroke="#2b7fb0" strokeWidth="2" />
-            <rect x="9" y="12" width="16" height="10" rx="5" fill="#5abae6" />
-            <circle cx="14" cy="17" r="1.6" fill="#fff" />
-            <circle cx="20" cy="17" r="1.6" fill="#fff" />
-          </svg>
-        </button>
-      </aside>
+{/* Đã hợp nhất nút nổi AI vào component AIChatBot toàn cục trong LayoutWrapper */}
 
       {/* Toast thông báo popup */}
       <div className={`toast ${toastMsg ? "on" : ""}`} role="status">

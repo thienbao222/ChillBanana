@@ -20,6 +20,18 @@ export default function FeaturedCategories() {
     }
   };
 
+  const handleSelectCategory = (categoryId: string) => {
+    window.dispatchEvent(
+      new CustomEvent("chillbanana:filter_products", {
+        detail: { category: categoryId },
+      })
+    );
+    const target = document.getElementById("stock") || document.getElementById("products");
+    if (target) {
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <section id="categories" className="py-12 max-w-[1600px] w-[95%] mx-auto px-4 sm:px-6 lg:px-8">
       <div className="flex flex-col md:flex-row md:items-end justify-between mb-8">
@@ -32,19 +44,21 @@ export default function FeaturedCategories() {
             Hàng Nội Địa Nhật Đang Có Sẵn Slot Gom
           </h2>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Tập trung các nhóm mặt hàng được ưa chuộng nhất, đảm bảo 100% nguồn gốc rõ ràng từ Tokyo & Osaka.
+            Tập trung các nhóm mặt hàng được ưa chuộng nhất, đảm bảo 100% nguồn gốc rõ ràng từ Tokyo &amp; Osaka.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {CATEGORIES.map((cat) => (
-          <div
+          <button
             key={cat.id}
-            className="group bg-white p-6 rounded-3xl border border-slate-200 hover:border-banana-400 shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col justify-between"
+            type="button"
+            onClick={() => handleSelectCategory(cat.id)}
+            className="text-left group bg-white p-6 rounded-3xl border border-slate-200 hover:border-banana-400 shadow-sm hover:shadow-md transition-all relative overflow-hidden flex flex-col justify-between cursor-pointer"
           >
             {/* Badge */}
-            <div className="flex justify-between items-start mb-4">
+            <div className="w-full flex justify-between items-start mb-4">
               <div className="w-12 h-12 rounded-2xl bg-slate-50 border border-slate-100 flex items-center justify-center group-hover:scale-110 transition-transform">
                 {getIcon(cat.icon)}
               </div>
@@ -62,11 +76,11 @@ export default function FeaturedCategories() {
               </p>
             </div>
 
-            <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-600 group-hover:text-banana-600">
+            <div className="w-full mt-5 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-600 group-hover:text-banana-600">
               <span>Xem sản phẩm hot</span>
               <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
             </div>
-          </div>
+          </button>
         ))}
       </div>
     </section>

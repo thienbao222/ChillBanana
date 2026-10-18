@@ -51,7 +51,9 @@ if (isProductionDeployment) {
     );
     process.exit(1);
   }
-  runNpm(["run", "prisma:migrate:deploy"], databaseUrl ? { DATABASE_URL: databaseUrl } : {});
+  const migrationEnv = databaseUrl ? { DATABASE_URL: databaseUrl } : {};
+  runNpm(["run", "prisma:migrate:deploy"], migrationEnv);
+  runNpm(["run", "prisma:seed"], migrationEnv);
 } else {
   console.log("Skipping database migration outside a Vercel production deployment.");
 }

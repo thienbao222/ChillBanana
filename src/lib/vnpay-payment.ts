@@ -1,6 +1,8 @@
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { resolvePaymentMode } from "@/features/payments/provider";
+import { getRecordedPaymentStatus } from "@/features/payments/policy";
+import { sendPaymentSuccessEmail } from "@/lib/mailer";
 
 function sortObject(obj: Record<string, string>) {
   return Object.fromEntries(Object.keys(obj).sort().map((key) => [key, obj[key]]));
@@ -70,21 +72,57 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
     return { result: "invalid_amount" as const };
   }
 
+  const autoSettleOrder = process.env.PAYMENT_AUTO_CONFIRM_ORDER === "true";
+
   const updated = await prisma.$transaction(async (tx) => {
     const claimedAttempt = await tx.paymentAttempt.updateMany({
       where: { id: attempt.id, status: { in: ["INITIATED", "PENDING"] }, expiresAt: { gt: new Date() }, amountVnd },
       data: { status: "CONFIRMED", providerReference: transactionId, failureCode: null, completedAt: new Date() },
     });
     if (claimedAttempt.count !== 1) return null;
-    await tx.trackingLog.create({
-      data: {
-        orderId: order.id,
-        status: "PENDING_DEPOSIT",
-        title: order.depositPercent === 100 ? "Thanh toán VNPAY sandbox mô phỏng thành công (100%)" : "Thanh toán VNPAY sandbox mô phỏng thành công (50%)",
-        description: `Sandbox VNPAY ghi nhận kịch bản ${amountVnd.toLocaleString("vi-VN")} đ. Đây không phải khoản tiền thật và chưa cho phép bắt đầu mua hàng thực tế.`,
-        location: "Môi trường sandbox",
-      },
-    });
+
+    if (autoSettleOrder) {
+      const recordedStatus = getRecordedPaymentStatus(order.depositPercent);
+      await tx.order.updateMany({
+        where: { id: order.id, paymentStatus: "UNPAID" },
+        data: {
+          paymentStatus: recordedStatus,
+          paymentMethod: "VNPAY_SANDBOX",
+          status: "PURCHASING_JP",
+          reservationExpiresAt: null,
+        },
+      });
+      await tx.paymentTransaction.create({
+        data: {
+          orderId: order.id,
+          provider: "VNPAY_SANDBOX",
+          amountVnd,
+          providerTransactionId: transactionId || `VNPAY_${Date.now()}`,
+          reference: `VNPAY IPN Auto-Confirm (${order.depositPercent}%)`,
+          status: "CONFIRMED",
+          confirmedByAdmin: "VNPAY_IPN",
+        },
+      });
+      await tx.trackingLog.create({
+        data: {
+          orderId: order.id,
+          status: "PURCHASING_JP",
+          title: order.depositPercent === 100 ? "Đã thanh toán 100% qua VNPAY" : "Đã đặt cọc 50% qua VNPAY",
+          description: `Cổng VNPAY xác nhận thanh toán ${amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng tự động chuyển sang bước mua hộ tại Nhật.`,
+          location: "Cổng thanh toán VNPAY",
+        },
+      });
+    } else {
+      await tx.trackingLog.create({
+        data: {
+          orderId: order.id,
+          status: "PENDING_DEPOSIT",
+          title: order.depositPercent === 100 ? "Thanh toán VNPAY sandbox mô phỏng thành công (100%)" : "Thanh toán VNPAY sandbox mô phỏng thành công (50%)",
+          description: `Sandbox VNPAY ghi nhận kịch bản ${amountVnd.toLocaleString("vi-VN")} đ. Đây không phải khoản tiền thật và chưa cho phép bắt đầu mua hàng thực tế.`,
+          location: "Môi trường sandbox",
+        },
+      });
+    }
     return tx.paymentAttempt.findUnique({ where: { id: attempt.id } });
   });
 
@@ -93,6 +131,13 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
     return current?.status === "CONFIRMED"
       ? { result: "already_paid" as const }
       : { result: "not_payable" as const };
+  }
+
+  if (autoSettleOrder) {
+    const settledOrder = await prisma.order.findUnique({ where: { id: order.id } });
+    if (settledOrder) {
+      sendPaymentSuccessEmail(settledOrder).catch((err) => console.warn("[VNPAY Auto-Settle Email Error]", err));
+    }
   }
 
   return { result: "confirmed" as const };

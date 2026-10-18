@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import React, { useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
@@ -187,9 +188,18 @@ export default function AuthModal() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Mật khẩu
-              </label>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="block text-xs font-bold text-slate-700">
+                  Mật khẩu
+                </label>
+                <Link
+                  href="/forgot-password"
+                  onClick={closeAuthModal}
+                  className="text-xs font-semibold text-amber-600 hover:text-amber-500 transition-colors"
+                >
+                  Quên mật khẩu?
+                </Link>
+              </div>
               <div className="relative">
                 <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                 <input

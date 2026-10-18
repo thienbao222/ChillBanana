@@ -627,8 +627,33 @@
 }
 
 .cosmos-root .mp {
-  display: block;
-  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-right: 10px;
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--ink);
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--line);
+  transition: background 0.2s, transform 0.2s;
+}
+.cosmos-root .mp:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+@media (max-width: 760px) {
+  .cosmos-root .mp {
+    padding-right: 0;
+    background: transparent;
+    border: 0;
+  }
+  .cosmos-root .mp span {
+    display: none;
+  }
 }
 
 .cosmos-root .mp i {

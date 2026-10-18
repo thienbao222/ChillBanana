@@ -16,6 +16,7 @@
     "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
     "eval:customer-support": "node scripts/evals/customer-support-evals.cjs",
+    "eval:support": "node scripts/evals/customer-support-evals.cjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:coverage": "vitest run --coverage",

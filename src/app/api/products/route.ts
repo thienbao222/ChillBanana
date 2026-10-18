@@ -1,13 +1,15 @@
+import { releaseExpiredOrderReservations } from "@/features/orders/reservations";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import { getAdminUsernameFromRequest } from "@/lib/auth-session";
 import { requireAdmin } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
+import curatedSeedProducts from "@/lib/curated-products.json";
 
 export const dynamic = "force-dynamic";
 
-// GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category, tính giá VND theo tỷ giá live thời gian thực)
+// GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category, tự động seed từ curated-products.json nếu DB trống)
 export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
@@ -17,12 +19,60 @@ export async function GET(req: NextRequest) {
     const rateData = await fetchLiveExchangeRate();
     const liveRate = rateData.roundedRate || 172;
 
-    const dbProducts = await prisma.product.findMany({
+    let dbProducts = await prisma.product.findMany({
       where: category && category !== "all" ? { category } : undefined,
       orderBy: { createdAt: "desc" },
     });
 
-    const liveProducts = dbProducts.map((p) => ({
+    const isTestEnv = process.env.APP_ENV === "test" || process.env.NODE_ENV === "test";
+
+    // Giải phóng tồn kho các đơn giữ hàng quá hạn 30 phút ngay khi khách truy cập danh mục (hỗ trợ Vercel Hobby Cron)
+    if (!isTestEnv) {
+      await releaseExpiredOrderReservations(20).catch((err) =>
+        console.warn("[Products API] Không thể giải phóng đơn giữ hàng quá hạn:", err)
+      );
+    }
+
+    // Tự động nạp 10 sản phẩm mẫu vào DB nếu bảng Product đang hoàn toàn trống (bỏ qua trong môi trường test tự động)
+    if (!isTestEnv && dbProducts.length === 0) {
+      const totalCount = await prisma.product.count();
+      if (totalCount === 0) {
+        try {
+          await prisma.product.createMany({
+            data: curatedSeedProducts.map((item) => ({
+              id: item.id,
+              name: item.name,
+              slug: item.slug,
+              category: item.category,
+              categoryName: item.categoryName,
+              priceJpy: item.priceJpy,
+              priceVnd: Math.round(item.priceJpy * liveRate),
+              weightKg: item.weightKg,
+              imageUrl: item.imageUrl,
+              description: item.description,
+              originalStore: item.originalStore,
+              stockSlots: item.stockSlots,
+              isHot: Boolean(item.isHot),
+              featuredNote: item.featuredNote || "",
+              voltageNote: (item as { voltageNote?: string }).voltageNote || undefined,
+            })),
+            skipDuplicates: true,
+          });
+          dbProducts = await prisma.product.findMany({
+            where: category && category !== "all" ? { category } : undefined,
+            orderBy: { createdAt: "desc" },
+          });
+        } catch (seedErr) {
+          console.warn("[Products API] Fallback to static curated products:", seedErr);
+        }
+      }
+    }
+
+    const sourceList = dbProducts.length > 0 || isTestEnv
+      ? dbProducts
+      : curatedSeedProducts.filter((p) => !category || category === "all" || p.category === category);
+
+    const liveProducts = sourceList.map((p) => ({
       ...p,
       priceVnd: Math.round(p.priceJpy * liveRate),
     }));

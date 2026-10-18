@@ -12,11 +12,14 @@ import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+import fallbackProductsData from "@/lib/curated-products.json";
 
 type CuratedProductsProps = {
   quoteSectionId?: string;
   quoteHref?: string;
 };
+
+const FALLBACK_PRODUCTS = fallbackProductsData as CuratedProduct[];
 
 export default function CuratedProducts({
   quoteSectionId = "calculator",
@@ -26,26 +29,25 @@ export default function CuratedProducts({
   const { toast } = useToast();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
 
-  const [products, setProducts] = useState<CuratedProduct[]>([]);
+  const [products, setProducts] = useState<CuratedProduct[]>(FALLBACK_PRODUCTS);
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
-    setLoadError(false);
     try {
       const res = await fetch("/api/products", { cache: "no-store" });
       const data = await res.json();
-      if (!res.ok || !Array.isArray(data.products)) {
-        throw new Error(data.error || "Không thể tải danh sách sản phẩm.");
+      if (res.ok && Array.isArray(data.products) && data.products.length > 0) {
+        setProducts(data.products);
+      } else {
+        setProducts(FALLBACK_PRODUCTS);
       }
-      setProducts(data.products);
       if (Number.isFinite(data.exchangeRate) && data.exchangeRate > 0) {
         setExchangeRate(data.exchangeRate);
       }
     } catch {
-      setLoadError(true);
+      setProducts(FALLBACK_PRODUCTS);
     } finally {
       setLoading(false);
     }
@@ -70,6 +72,8 @@ export default function CuratedProducts({
   const filteredProducts = selectedCategory === "all"
     ? products
     : products.filter((p) => p.category === selectedCategory);
+
+  const countByCategory = (cat: string) => products.filter((p) => p.category === cat).length;
 
   const handleOrderThis = (product: CuratedProduct) => {
     window.dispatchEvent(
@@ -157,7 +161,7 @@ export default function CuratedProducts({
                 : "text-slate-600 hover:text-pink-600 hover:bg-slate-200/50"
             }`}
           >
-            🌸 Mỹ Phẩm
+            🌸 Mỹ Phẩm ({countByCategory("cosmetics")})
           </button>
           <button
             onClick={() => setSelectedCategory("health")}
@@ -168,7 +172,7 @@ export default function CuratedProducts({
                 : "text-slate-600 hover:text-emerald-600 hover:bg-slate-200/50"
             }`}
           >
-            🌿 Sức Khỏe
+            🌿 Sức Khỏe ({countByCategory("health")})
           </button>
           <button
             onClick={() => setSelectedCategory("gadgets")}
@@ -179,7 +183,7 @@ export default function CuratedProducts({
                 : "text-slate-600 hover:text-banana-700 hover:bg-slate-200/50"
             }`}
           >
-            ⚡ Gia Dụng 100V
+            ⚡ Gia Dụng 100V ({countByCategory("gadgets")})
           </button>
           <button
             onClick={() => setSelectedCategory("anime")}
@@ -190,7 +194,7 @@ export default function CuratedProducts({
                 : "text-slate-600 hover:text-purple-600 hover:bg-slate-200/50"
             }`}
           >
-            🎎 Anime Figure
+            🎎 Anime Figure ({countByCategory("anime")})
           </button>
         </motion.div>
       </div>
@@ -207,17 +211,9 @@ export default function CuratedProducts({
             </div>
           ))}
         </div>
-      ) : loadError ? (
-        <div className="rounded-3xl border border-rose-200 bg-rose-50 px-6 py-10 text-center" role="alert">
-          <p className="font-bold text-rose-900">Chưa tải được danh sách sản phẩm.</p>
-          <p className="mt-1 text-sm text-rose-700">Vui lòng thử lại sau ít phút.</p>
-          <button onClick={() => void fetchProducts()} className="mt-4 rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white hover:bg-slate-800">
-            Thử tải lại
-          </button>
-        </div>
       ) : filteredProducts.length === 0 ? (
         <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center">
-          <p className="font-bold text-navy-900">{products.length === 0 ? "Hiện chưa có sản phẩm được đăng bán." : "Chưa có sản phẩm trong danh mục này."}</p>
+          <p className="font-bold text-navy-900">Chưa có sản phẩm trong danh mục này.</p>
           <p className="mt-1 text-sm text-slate-500">Bạn có thể dùng công cụ báo giá để gửi link sản phẩm cần mua hộ.</p>
           <a href={quoteHref} className="mt-4 inline-flex rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800">
             Gửi link sản phẩm cần mua
@@ -296,7 +292,7 @@ export default function CuratedProducts({
                 <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
                   <div>
                     <p className="text-[11px] text-slate-400 font-medium">
-                      Giá tham khảo tại Nhật: {product.priceJpy.toLocaleString()} ¥
+                      Giá tham khảo tại Nhật: {product.priceJpy.toLocaleString("vi-VN")} ¥
                     </p>
                     <p className="text-base font-bold text-banana-700 font-serif">
                       {(product.priceVnd || Math.round(product.priceJpy * exchangeRate)).toLocaleString("vi-VN")} <span className="text-xs">đ</span>

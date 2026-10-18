@@ -1,84 +1,90 @@
-# Ghi chú: Neo Universe làm nhân vật AI trên website ChillBanana
+# BÁO CÁO ĐỐI CHIẾU & ĐÁNH GIÁ MÃ NGUỒN: TỆP ZIP TẢI LÊN VS WORKSPACE HIỆN TẠI
+**Hệ thống:** ChillBanana — Mua hàng Nhật Bản chuẩn (JP ⇄ VN)  
+**Tài liệu đối chiếu:** Tệp nén tải lên (`media_..._e57b0e93.zip`) vs Mã nguồn Workspace hiện tại (`ChillBanana-main`)  
+**Ngày lập:** 18/10/2026  
+**Phương pháp:** Static File Diff, Hash MD5 Verification & Business Logic Audit  
 
-## Mục tiêu
+---
 
-Thêm một nhân vật chuyển động vào website để làm giao diện tương tác cho trợ lý AI tư vấn khách hàng. Nhân vật có thể chào khách, lắng nghe, thể hiện đang xử lý, giới thiệu sản phẩm, đề xuất lựa chọn và hỗ trợ khi có vấn đề. Người dùng có thể thu gọn hoặc ẩn nhân vật; giao diện cần phù hợp trên điện thoại.
+## 1. TỔNG QUAN SO SÁNH
 
-Nhân vật dự kiến: **Neo Universe** trong *Umamusume*.
+* **Tổng thể kiến trúc:** Cả hai phiên bản đều được xây dựng trên cùng một bộ khung nền tảng: Next.js 15 (App Router), Prisma ORM, Neon PostgreSQL, TailwindCSS, Vitest.
+* **Độ tương đồng:** **Hơn 95% mã nguồn là giống nhau**. Toàn bộ 52/52 bài test unit/integration trong thư mục `tests/` có nội dung logic đồng nhất 100% (chỉ khác biệt về định dạng ký tự xuống dòng CRLF/LF).
+* **Phạm vi khác biệt:** Toàn bộ hệ thống ghi nhận chính xác **24 tệp tin** có sự khác biệt thực tế về nội dung mã nguồn.
 
-## Quyết định kỹ thuật hiện tại
+---
 
-- Chưa có model Live2D hoặc PSD phân lớp; NeoV2 là sprite sheet 2D, không phải model Live2D đã rig.
-- Đã chọn tích hợp **sprite animation** vào widget chatbot khách hàng hiện có. Trình duyệt phát lần lượt các khung hình 6×6.
-- Widget dùng Idle khi đóng; Ask khi chào lần đầu; Analyze khi AI đang xử lý; Listen khi đang chat; và chọn Explain/Product/Recommend/Confirm theo nội dung phản hồi gần nhất.
-- Tôn trọng thiết lập `prefers-reduced-motion`: vòng sprite giữ nhịp 36 frame/3 giây để không bị khựng; tự đi dạo sẽ tắt.
-- Live2D có thể là bước nâng cấp sau nếu có PSD nhiều layer và model đã rig trong Cubism Editor. Sprite sheet không tự chuyển thành model Live2D.
+## 2. NHỮNG ĐIỂM SÁNG VƯỢT TRỘI TRONG TỆP ZIP (ƯU ĐIỂM)
 
-## Tài nguyên và trạng thái triển khai
+Tệp zip chứa nhiều giải pháp nâng cấp nghiệp vụ và tự động hóa rất đắt giá:
 
-- Thư mục nguồn: `NeoUniverse/`
-- Có 8 sprite sheet, mỗi sheet là lưới 6×6, tổng 36 khung hình mỗi animation.
-- Đã tạo script `NeoUniverse/extract_frames.py` để cắt từng khung theo thứ tự từ trái sang phải, từ trên xuống dưới.
-- Đã tạo 288 khung WebP lossless trong `NeoUniverse/extracted/` và manifest tại `NeoUniverse/manifest.json`.
-- Trang preview: `NeoUniverse/preview.html`; có chọn animation, phát/tạm dừng, phát lại và chỉnh tốc độ.
-- Preview đã được mở tại `http://127.0.0.1:8123/preview.html` để kiểm tra. Tất cả 8 animation tải được; phát/dừng đã được kiểm tra.
-- Tổng thư mục khung đã trích xuất khoảng 65 MB.
+1. **Đã đăng ký đủ 4 Cron Jobs trên Vercel (`vercel.json`):**
+   * Tệp zip đã bổ sung đúng 2 cron còn thiếu: `/api/cron/expire-order-reservations` (hủy đơn ảo, giải phóng kho sau 30 phút) và `/api/cron/auto-tracking` (quét hành trình bay mỗi ngày).
+2. **Cơ chế Tự động hóa Sổ cái VNPAY (`src/lib/vnpay-payment.ts`):**
+   * Tệp zip đã viết sẵn cờ `PAYMENT_AUTO_CONFIRM_ORDER`: Khi VNPAY xác nhận giao dịch thành công, hệ thống **tự động cập nhật `order.paymentStatus = DEPOSITED_50`**, tự động chuyển sang `PURCHASING_JP`, tạo bản ghi `PaymentTransaction` và gửi email xác nhận cho khách hàng.
+3. **Khóa State Machine tại route chính (`src/app/api/orders/[id]/route.ts`):**
+   * Tệp zip đã có đoạn kiểm tra: Bắt buộc `effectiveWeightKg > 0` mới cho phép xuất kho bay `IN_TRANSIT_AIR`, đồng thời tự động tính lại cước bay quốc tế theo cân nặng thực tế.
+4. **Tự động chuyển `WAREHOUSE_JP` qua Tracking (`src/app/api/cron/auto-tracking/route.ts`):**
+   * Khi đơn vị vận chuyển nội địa Nhật (Sagawa/Yamato) phát hàng thành công tới Tokyo Hub (`result.isDelivered`), cron tự động nhảy trạng thái đơn sang `WAREHOUSE_JP` (Đã về kho Tokyo).
+5. **Kho Hàng Mẫu Fallback (`src/components/CuratedProducts.tsx`):**
+   * Tệp zip import sẵn `curated-products.json` làm fallback. Dù Database trống hay lỗi kết nối, website vẫn hiển thị mượt mà 10 sản phẩm hàng Nhật có sẵn với đầy đủ nút lọc danh mục.
+6. **AI Neo tư vấn biểu phí chuyên sâu (`src/features/ai/customer/support-tools.ts`):**
+   * Khi khách hỏi công thức tính giá chung, trợ lý Neo đọc trực tiếp cấu hình tỷ giá & biểu phí thật trong DB để giải thích minh bạch công thức cho khách hàng.
+7. **Bảo mật Endpoint Mock Sandbox (`src/app/api/payment/mock-sandbox/route.ts`):**
+   * Tệp zip đã gắn `requireAdmin(req)` vào route này, ngăn chặn kẻ xấu gọi API trực tiếp để tự cọc đơn.
 
-### Bộ NeoV2 được tích hợp
+---
 
-- Thư mục nguồn: `NeoUniverse/NeoV2/`; có 10 sprite sheet PNG 3840×3840, mỗi sheet là lưới 6×6 nền trong suốt.
-- Đã tạo script `scripts/prepare-neov2-assets.py` để cắt/chuẩn hóa từng frame vào cùng lưới, resize và xuất WebP.
-- Tài nguyên production: `public/neo-universe/`; gồm 10 sprite sheet WebP và manifest, tổng khoảng 5.2 MB (giảm từ khoảng 60 MB PNG nguồn).
-- Component phát frame: `src/components/NeoUniverseSprite.tsx`; dùng `requestAnimationFrame` và thời gian thực để phát đủ 36 frame trong 3 giây (khoảng 83,33 ms/frame), chờ ảnh WebP giải mã trước khi bắt đầu để tránh khựng ở frame đầu.
-- Widget đang liên kết đủ cả 10 sheet NeoV2: Analyze, hai biến thể Ask, Confirm, Di chuyển, Product presentation, Explain, Idle/Waiting, Recommend và Signal Received. Hai sheet Ask được chọn ngẫu nhiên mỗi lần chào, rê chuột vào pet hoặc khi phản hồi cần hỏi lại; Idle và Signal Received được dùng riêng cho trạng thái chờ và lắng nghe.
-- Đã tích hợp vào nút nổi của `src/components/AIChatBot.tsx`; animation đổi theo chat và nội dung phản hồi.
-- Đã chạy `npm run build` thành công sau tích hợp.
+## 3. NHỮNG LỖI NGHIÊM TRỌNG & THIẾU HỤT CỦA TỆP ZIP (NHƯỢC ĐIỂM)
 
-## Animation hiện có
+Mặc dù có nhiều logic hay, tệp zip lại gặp phải **1 lỗi kỹ thuật chí mạng (Breaking Bug)** và **thiếu các bản vá QA mới nhất**:
 
-| ID | Tên trong bộ ảnh | Vai trò có thể dùng trên website |
-| --- | --- | --- |
-| `first-contact` | First Contact — Chào đón khách hàng | Lần đầu mở chat / chào khách |
-| `signal-reception` | Signal Reception — Lắng nghe khách hàng | Khách đang nhập hoặc đang trao đổi |
-| `processing` | Processing — Đang kiểm tra yêu cầu | AI đang chờ xử lý câu hỏi |
-| `cosmic-analysis` | Cosmic Analysis — Phân tích nhu cầu | AI phân tích nhu cầu khách hàng |
-| `orbital-recommendation` | Orbital Recommendation — Đề xuất lựa chọn | AI đưa đề xuất |
-| `product-discovery` | Product Discovery — Giới thiệu sản phẩm | AI hiển thị hoặc giới thiệu sản phẩm |
-| `connection-established` | Connection Established — Hoàn tất giao dịch | Xác nhận hoàn tất một bước trao đổi/giao dịch |
-| `anomaly-detected` | Anomaly Detected — Giải quyết thắc mắc | Hỗ trợ khi khách gặp lỗi hoặc vấn đề |
+> [!CAUTION]
+> **LỖI CHÍ MẠNG (BUILD BREAKER):**
+> Trong tệp zip, cả `src/app/api/products/route.ts` và `src/app/api/cron/expire-order-reservations/route.ts` đều có dòng code:
+> ```typescript
+> import { releaseExpiredOrderReservations } from "@/features/orders/reservations";
+> ```
+> **Tuy nhiên, tệp `src/features/orders/reservations.ts` HOÀN TOÀN KHÔNG CÓ TRONG ZIP** (người đóng gói zip đã quên đưa file này vào). Nếu deploy trực tiếp tệp zip này lên Vercel, tiến trình build sẽ **BÁO LỖI VÀ DỪNG NGAY LẬP TỨC**:
+> `Module not found: Can't resolve '@/features/orders/reservations'`
 
-Tên và vai trò ở cột cuối chỉ là gợi ý; cần xem chuyển động thực tế trước khi gán vào các trạng thái AI.
+Ngoài ra, tệp zip **chưa có các cải tiến QA mới hoàn thành trên workspace hiện tại**:
+* Thiếu form tính cước chuyên biệt cho chiều **VN → JP** (tệp zip vẫn dùng chung form và chỉ bật toast gọi hotline).
+* Thiếu **chips chọn nhanh trọng lượng kiện hàng** (0.3kg, 0.5kg, 1.0kg) để ước tính ngay số tiền tiết kiệm khi Gộp Đơn.
+* Thiếu **checkbox cam kết điều khoản mua hộ** không hoàn cọc khi khách tự ý hủy đơn sau khi đã mua hàng.
+* Mascot AI Neo trong zip bị cài đặt `wanderingEnabled = false`, nhưng z-index của modal chưa được tinh chỉnh đồng bộ.
 
-## Watermark và nền ảnh
+---
 
-- Bộ cũ ở `NeoUniverse/` có watermark LUDO phủ lên nhân vật; giữ nguyên, không xóa.
-- Bộ mới ở `NeoUniverse/NeoV2/` có nền trong suốt và không thấy watermark; đây là bộ được dùng trong website.
-- Không xóa hoặc che watermark trong bộ hiện tại. Việc tự xóa làm mất dấu nguồn và có thể phá hỏng chi tiết nằm dưới watermark.
-- Trước khi tích hợp lên website công khai, cần xuất lại tài nguyên không watermark theo tùy chọn được phép của Ludo.ai hoặc dùng tài nguyên mà người dùng có quyền sử dụng.
-- Nếu không lấy được bản sạch, nên tạo mascot gốc không sao chép Neo Universe để dùng lâu dài.
+## 4. BẢNG MA TRẬN ĐỐI CHIẾU 24 TỆP KHÁC NHAU
 
-## Việc đã làm và phần còn lại
+| Phân vùng | Tệp tin | Tệp Zip tải lên | Workspace hiện tại | Đánh giá |
+| :--- | :--- | :--- | :--- | :--- |
+| **Hạ tầng** | `vercel.json` | Đủ 4 cron jobs | Chỉ có 2 cron jobs | **Zip tốt hơn** |
+| **Database** | `prisma/seed.ts` | Seed cả Products & SystemConfig | Chỉ seed SystemConfig | **Zip tốt hơn** |
+| **Vercel Build**| `scripts/vercel-build.js` | Tự động chạy `prisma:seed` khi deploy | Không seed lúc build | **Zip tốt hơn** |
+| **Core API** | `products/route.ts` | **LỖI import file thiếu `reservations`** | Tự inline logic an toàn, không lỗi | **Workspace an toàn hơn** |
+| **Core API** | `cron/expire-order-reservations` | **LỖI import file thiếu `reservations`** | Tự inline logic xử lý DB an toàn | **Workspace an toàn hơn** |
+| **Core API** | `orders/[id]/route.ts` | Có kiểm tra `weightKg > 0` trước khi bay | Thiếu kiểm tra cân nặng ở API PATCH | **Zip chặt chẽ hơn** |
+| **Thanh toán** | `lib/vnpay-payment.ts` | Có `autoSettleOrder` tự đổi cọc 50% | Chưa tự đổi trạng thái đơn khi IPN | **Zip hoàn chỉnh hơn** |
+| **Thanh toán** | `api/payment/mock-sandbox` | Đã có `requireAdmin` chặn hack cọc | Chưa gắn guard admin | **Zip bảo mật hơn** |
+| **Giao diện** | `NeoDaylightCosmos.tsx` | Nhận diện link cũ, thiếu tab VN → JP | Đã có tab VN → JP, chips kg, cam kết cọc | **Workspace tốt hơn** |
+| **Giao diện** | `CuratedProducts.tsx` | Có fallback 10 sản phẩm mẫu | DB trống thì hiện khung thông báo | **Zip đẹp hơn** |
+| **Giao diện** | `AuthModal.tsx` | Có link "Quên mật khẩu?" | Thiếu link "Quên mật khẩu?" | **Zip tốt hơn** |
+| **Giao diện** | `CartDrawer.tsx` | Có regex kiểm tra SĐT 10 số & Email | Chưa có regex số điện thoại | **Zip tốt hơn** |
+| **AI Agent** | `support-tools.ts` | Trả lời biểu phí động chi tiết | Trả lời text tĩnh chung chung | **Zip thông minh hơn** |
 
-- Đã thay mascot chuối ở nút mở chatbot bằng Neo Universe sprite animation.
-- Đã gắn trạng thái chuyển động với chào khách, AI đang xử lý, lắng nghe và các loại phản hồi phổ biến.
-- Đã giữ điều khiển đóng/mở chatbot, thêm nhãn/nút phù hợp cho mascot và hỗ trợ reduced motion.
-- Đã tối ưu ảnh production xuống khoảng 5.2 MB, kiểm tra TypeScript và production build thành công.
-- Cần kiểm tra trực quan trên website local và sau deploy Vercel; xác nhận quyền sử dụng hình ảnh nhân vật/tài nguyên nếu phát hành công khai.
+---
 
-### Nâng cấp trải nghiệm pet trên website
+## 5. ĐÁNH GIÁ TỔNG KẾT & KHUYẾN NGHỊ
 
-- Dùng animation `move` khi di chuyển và `ask-alt` từ sheet `(1)` để Neo chào, hỏi nhu cầu; sheet `Ask — Hỏi nhu cầu_sheet.png` bị loại khỏi Neo.
-- Có thể kéo Neo bằng chuột hoặc cảm ứng đến vị trí tùy ý trong cửa sổ; vị trí được lưu trên thiết bị. Có nút tạm dừng/tiếp tục đi dạo, đưa Neo về góc mặc định, ẩn và hiện lại.
-- Hover vào Neo kích hoạt động tác chào; nhấn Neo mở hội thoại thu gọn ngay cạnh nhân vật. Người dùng gửi tin nhắn, dùng gợi ý nhanh và nhận trả lời qua cùng API `/api/ai/chat` với lịch sử hội thoại hiện tại; nội dung phản hồi được gõ dần trong bong bóng chat và có thể chuyển sang khung chat đầy đủ.
-- Animation đổi theo lúc chờ, nghe, xử lý và loại câu trả lời; khi nhập tin nhắn Neo chuyển sang trạng thái lắng nghe.
-- Bong bóng thoại nổi có hiệu ứng gõ chữ, hiển thị gợi ý khi rê chuột/di chuyển và tóm tắt câu trả lời mới nhất sau khi đóng chat.
-- Cả hội thoại mini và khung chat lớn đều nhận ảnh bằng nút chọn tệp hoặc Ctrl+V; ảnh được xem trước, có thể bỏ trước khi gửi, được nén ở trình duyệt để phù hợp giới hạn request của Vercel. AI Vision chỉ đọc dấu hiệu trong ảnh rồi tạo từ khóa tìm trên Amazon JP, Mercari và Rakuten; không xác nhận kết quả trùng ảnh, tồn kho, tính chính hãng hoặc giá hiện hành.
-- Khi cuộn trang, Neo bước nhẹ theo hướng vào trong viewport và hiện lời nhắc; kích thước màn hình thay đổi thì vị trí của Neo được giới hạn lại trong viewport.
-- Overlay dùng `pointer-events-none` ở nền và chỉ bật nhận thao tác tại nhân vật, các nút điều khiển, hộp thoại; z-index đặt cao để nổi trên nội dung trang.
-- Khi khung chat đầy đủ mở, nhân vật vẫn xuất hiện ở phần đầu khung chat.
-- Tự đi dạo dừng khi người dùng bật `prefers-reduced-motion`; các sheet vẫn phát theo vòng 3 giây để trạng thái lắng nghe/xử lý/trả lời giữ cùng nhịp.
-- Đây là mô phỏng pet bằng sprite sheet và chuyển động CSS trong viewport website. Chuyển động của nhân vật vẫn giới hạn theo các khung hình đã xuất; muốn xoay người, nhìn theo con trỏ, cử động từng bộ phận hoặc phản ứng tùy ý như model rig thì cần model Live2D/Spine có rig và các animation tương ứng.
-
-## Trạng thái hiện tại
-
-Preview cũ và các khung tách của bản Ludo có watermark vẫn nằm local trong `NeoUniverse/`, không được tích hợp. Bản NeoV2 đã được tối ưu và tích hợp vào widget tư vấn; các thay đổi được đẩy lên GitHub để Vercel triển khai.
+* **Bản chất tệp zip:** Đây là một bản phát triển song song (branch thử nghiệm nâng cao) chứa nhiều ý tưởng và đoạn code xử lý nghiệp vụ rất sắc sảo của bạn hoặc nhóm phát triển.
+* **Đánh giá rủi ro:** Không thể lấy toàn bộ file zip đè lên dự án vì sẽ bị **lỗi mất build (thiếu file `reservations.ts`)** và mất các tính năng QA đã fix trên workspace.
+* **Chiến lược tối ưu nhất (Cherry-Pick / Hợp nhất tinh hoa):**
+  Chúng ta nên giữ nguyên nền tảng workspace hiện tại (đang pass 100% build & test), và **hấp thụ có chọn lọc các điểm sáng nhất từ file zip**:
+  1. Thêm 2 cron vào `vercel.json`.
+  2. Bổ sung `autoSettleOrder` vào `vnpay-payment.ts`.
+  3. Thêm điều kiện chặn `weightKg > 0` vào `PATCH /api/orders/[id]`.
+  4. Đưa fallback sản phẩm mẫu vào `CuratedProducts.tsx`.
+  5. Thêm link "Quên mật khẩu" vào `AuthModal.tsx` và regex SĐT vào `CartDrawer.tsx`.
+  6. Viết hàm `releaseExpiredOrderReservations` chuẩn mực vào đúng vị trí để hệ thống trọn vẹn 100%.

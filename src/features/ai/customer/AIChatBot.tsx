@@ -97,7 +97,7 @@ export default function AIChatBot() {
   const [typedHint, setTypedHint] = useState("");
   const [typedReply, setTypedReply] = useState<{ id: string; text: string } | null>(null);
   const [petPosition, setPetPosition] = useState<{ left: number; top: number } | null>(null);
-  const [wanderingEnabled, setWanderingEnabled] = useState(true);
+  const [wanderingEnabled, setWanderingEnabled] = useState(false);
   const [isPetHovered, setIsPetHovered] = useState(false);
   const [isPetDragging, setIsPetDragging] = useState(false);
   const [isPageScrolling, setIsPageScrolling] = useState(false);
@@ -151,6 +151,8 @@ export default function AIChatBot() {
   useEffect(() => {
     const handleOpen = () => {
       setPetVisible(true);
+      setPetConversationOpen(false);
+      setAmbientHint("");
       setIsOpen(true);
     };
     window.addEventListener("open-ai-chat", handleOpen);
@@ -249,7 +251,7 @@ export default function AIChatBot() {
       if (!petVisible || isOpen || petConversationOpen || isPetDragging) return;
       setIsPageScrolling(true);
       setAmbientHint("Neo đang theo dõi trang cùng bạn!");
-      if (!pageScrollActiveRef.current && petRef.current) {
+      if (wanderingEnabled && !pageScrollActiveRef.current && petRef.current) {
         const rect = petRef.current.getBoundingClientRect();
         const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
         const target = clampPetPosition(current.left + (current.left > window.innerWidth / 2 ? -52 : 52), current.top - 18);
@@ -275,7 +277,7 @@ export default function AIChatBot() {
       pageScrollActiveRef.current = false;
       setIsPageScrolling(false);
     };
-  }, [isOpen, petConversationOpen, petVisible, isPetDragging]);
+  }, [isOpen, petConversationOpen, petVisible, isPetDragging, wanderingEnabled]);
 
   useEffect(() => {
     if (!ambientHint) {
@@ -951,7 +953,7 @@ export default function AIChatBot() {
           className="pointer-events-none fixed z-40"
           style={{ ...(petPosition ? { left: petPosition.left, top: petPosition.top } : { right: 12, bottom: 12 }), transition: isPetDragging ? "none" : "left 2.1s cubic-bezier(.2,.8,.2,1), top 2.1s cubic-bezier(.2,.8,.2,1)" }}
         >
-          {ambientHint && !petConversationOpen && <div role="status" className="pointer-events-none absolute bottom-full right-4 mb-1.5 max-w-52 rounded-2xl border border-banana-200 bg-white px-3 py-2 text-xs font-semibold text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{typedHint}<span className="animate-pulse">▍</span></div>}
+          {ambientHint && !petConversationOpen && <div role="status" className="pointer-events-none absolute bottom-full right-2 mb-2 w-max max-w-[min(260px,calc(100vw-32px))] whitespace-normal break-words rounded-2xl border border-banana-200 bg-white px-3.5 py-2 text-xs font-semibold leading-snug text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{typedHint}{typedHint.length < ambientHint.length && <span className="animate-pulse text-banana-600">▍</span>}</div>}
           <button
             id="ai-chat-toggle-btn"
             onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setPetConversationOpen(true); }}
@@ -978,7 +980,7 @@ export default function AIChatBot() {
               role="dialog"
               aria-label="Trò chuyện trực tiếp với Neo Universe"
               onPaste={handleClipboardPaste}
-              className="pointer-events-auto fixed z-40 flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
+              className="pointer-events-auto fixed z-[9998] flex max-h-[min(360px,calc(100vh-24px))] flex-col overflow-hidden rounded-3xl border border-banana-200 bg-white shadow-2xl"
               style={{ left: petConversationPosition.left, top: petConversationPosition.top, width: petConversationPosition.width }}
             >
               <header className="flex items-center gap-2 border-b border-slate-100 bg-gradient-to-r from-navy-950 to-navy-800 px-3 py-2.5 text-white">

@@ -231,11 +231,10 @@ function createQuoteEvidence(scrapedProduct: ScrapedProductInput | null): {
       "Công cụ báo giá phía máy chủ",
       {},
       ["Liên kết sàn được hỗ trợ và giá JPY đọc được từ trang", "Cân nặng thực tế"],
-      [{ label: "Mở công cụ tính giá", href: "/" }]
+      [{ label: "Mở công cụ tính giá", href: "/#quote" }]
     );
     return {
       evidence,
-      guardedReply: "Để Neo ước tính đúng hơn, bạn gửi liên kết sản phẩm từ Amazon JP, Mercari, Rakuten hoặc sàn được hỗ trợ nhé. Nếu trang không đọc được giá, bạn có thể gửi giá JPY hiển thị. Cước vận chuyển chỉ tính được khi có cân nặng; báo giá cuối vẫn cần nhân viên xác nhận.",
     };
   }
 
@@ -249,8 +248,38 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
   guardedReply?: string;
   quoteFooter?: string;
 }> {
-  const inputResult = createQuoteEvidence(scrapedProduct);
-  if (inputResult.guardedReply) return inputResult;
+  const rawPrice = scrapedProduct?.priceJpy;
+  const url = scrapedProduct?.url;
+  if (!scrapedProduct || !isValidQuotePrice(rawPrice) || !isSupportedMarketplaceUrl(url)) {
+    const [rate, pricingConfig] = await Promise.all([
+      fetchLiveExchangeRate().catch(() => null),
+      getCurrentPricingConfig().catch(() => null),
+    ]);
+    const cfg = pricingConfig?.values;
+    const rateText = rate && !rate.isStale && rate.roundedRate > 0 ? `1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} đ` : "theo tỷ giá thực tế";
+    const feePct = cfg ? `${cfg.serviceFeePercent}% (tối thiểu ${cfg.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ)` : "5%";
+    const shipRate = cfg ? `${cfg.airShippingPerKgVnd.toLocaleString("vi-VN")} đ/kg` : "220.000 đ/kg";
+    const discountPct = cfg ? `${cfg.groupBuyShippingDiscountPercent}% (cho kiện ≤ ${cfg.groupBuyMaxWeightKg}kg)` : "25%";
+    return {
+      evidence: createEvidence(
+        "quote_estimate",
+        "needs_input",
+        "Biểu phí mua hộ chuẩn của ChillBanana",
+        {
+          formula: "Tổng về tay = Tiền hàng (JPY × Tỷ giá) + Phí mua hộ & bảo hiểm + Cước bay quốc tế theo cân thực tế",
+          exchangeRate: rateText,
+          serviceFee: feePct,
+          airShippingRate: shipRate,
+          groupBuyDiscount: discountPct,
+          depositPolicy: "Chỉ cần đặt cọc trước 50% (tiền hàng + phí mua hộ), cước bay cân thực tế khi hàng về kho.",
+        },
+        ["Link sản phẩm hoặc giá Yên cụ thể của món hàng khách đang muốn tính"],
+        [{ label: "Công cụ tính giá tự động", href: "/#quote" }]
+      ),
+      guardedReply:
+        `Công thức tính giá mua hộ tại Chill果 (Chill Banana): Tổng về tay = Tiền hàng (JPY × Tỷ giá ${rateText}) + Phí dịch vụ mua hộ ${feePct} + Cước bay quốc tế ${shipRate} (ưu đãi giảm ${discountPct} khi chọn Gộp đơn tiết kiệm), chỉ cần đặt cọc trước 50%. Để nhận báo giá chi tiết cho từng món, bạn vui lòng gửi liên kết sản phẩm từ các sàn Nhật hỗ trợ (Amazon JP, Mercari, Rakuten, Yahoo, Uniqlo...) kèm giá JPY nhé.`,
+    };
+  }
 
   const priceJpy = Number(scrapedProduct?.priceJpy);
   const title = cleanSingleLine(scrapedProduct?.title, "Sản phẩm từ liên kết", 160);

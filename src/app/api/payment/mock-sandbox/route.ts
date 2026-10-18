@@ -2,18 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
 import { getRecordedPaymentStatus } from "@/features/payments/policy";
+import { requireAdmin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
 
 /**
  * /api/payment/mock-sandbox
  * ─────────────────────────────────────────────────────────────────────────────
- * API mô phỏng kết quả cổng thanh toán Sandbox (dành cho pre-production / demo).
- * Nhận POST:
- *   { orderCode: string, action: "success" | "fail" | "cancel" }
+ * API mô phỏng kết quả cổng thanh toán Sandbox dành riêng cho Quản trị viên (Admin Testbed).
+ * Bắt buộc xác thực phiên Admin (requireAdmin) để ngăn chặn kích hoạt trái phép từ bên ngoài.
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function POST(req: NextRequest) {
+  const guard = await requireAdmin(req);
+  if (!guard.ok) return guard.response;
+
   try {
     const body = await req.json();
     const { orderCode, action } = body;
@@ -30,11 +34,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
     }
 
-    // Nếu người dùng chọn Hủy hoặc Thất bại
     if (action === "cancel") {
       return NextResponse.json({
         success: false,
-        message: "Giao dịch đã được hủy bởi khách hàng.",
+        message: "Giao dịch đã được hủy bởi người dùng.",
         redirectUrl: `/tracking?orderCode=${encodeURIComponent(order.orderCode)}&payment=cancelled`,
       });
     }
@@ -47,7 +50,6 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Xử lý Thành công (action === "success")
     if (action === "success") {
       if (order.paymentStatus !== "UNPAID") {
         return NextResponse.json({
@@ -62,7 +64,6 @@ export async function POST(req: NextRequest) {
       const mockTxnId = `SANDBOX_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
 
       const updated = await prisma.$transaction(async (tx) => {
-        // Cập nhật trạng thái đơn
         const claimed = await tx.order.updateMany({
           where: {
             id: order.id,
@@ -73,33 +74,31 @@ export async function POST(req: NextRequest) {
             paymentMethod: "VNPAY_SANDBOX",
             status: "PURCHASING_JP",
             reservationExpiresAt: null,
-            isPriceVerified: true, // Auto-verify khi thanh toán sandbox demo
+            isPriceVerified: true,
           },
         });
 
         if (claimed.count !== 1) return null;
 
-        // Ghi nhận PaymentTransaction
         await tx.paymentTransaction.create({
           data: {
             orderId: order.id,
             provider: "MOCK_SANDBOX",
             amountVnd,
             providerTransactionId: mockTxnId,
-            reference: `Mô phỏng thanh toán Sandbox (${order.depositPercent}%)`,
+            reference: `Mô phỏng thanh toán Admin Sandbox (${order.depositPercent}%)`,
             status: "CONFIRMED",
-            confirmedByAdmin: "SYSTEM_SANDBOX",
+            confirmedByAdmin: guard.username,
           },
         });
 
-        // Tạo TrackingLog
         await tx.trackingLog.create({
           data: {
             orderId: order.id,
             status: "PURCHASING_JP",
-            title: order.depositPercent === 100 ? "Thanh toán 100% thành công (Sandbox Demo)" : "Thanh toán cọc 50% thành công (Sandbox Demo)",
-            description: `Cổng Sandbox xác nhận thanh toán ${amountVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng tự động chuyển sang bước mua hàng tại Nhật.`,
-            location: "ChillBanana Payment Sandbox",
+            title: order.depositPercent === 100 ? "Thanh toán 100% thành công (Admin Sandbox)" : "Thanh toán cọc 50% thành công (Admin Sandbox)",
+            description: `Admin ${guard.username} xác nhận thanh toán Sandbox ${amountVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
+            location: "ChillBanana Admin Sandbox",
           },
         });
 
@@ -112,7 +111,15 @@ export async function POST(req: NextRequest) {
         }, { status: 409 });
       }
 
-      // Gửi email thông báo thanh toán thành công (ghi vào cả Demo Email buffer)
+      await writeAuditLog({
+        actor: guard.username,
+        action: "ORDER_PAYMENT_RECORDED",
+        entityType: "Order",
+        entityId: order.orderCode,
+        summary: `Admin ${guard.username} mô phỏng thanh toán Sandbox cho đơn ${order.orderCode}`,
+        metadata: { amountVnd, transactionId: mockTxnId, mode: "ADMIN_SANDBOX" },
+      });
+
       sendPaymentSuccessEmail(updated).catch((err) =>
         console.warn("[Sandbox Email Error]", err)
       );

@@ -20,9 +20,9 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 const CATEGORY_CUSTOMS: Record<string, { label: string; surchargePercent: number; note: string }> = {
-  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 3, note: "Phụ thu kiểm định mỹ phẩm 3%" },
-  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 3, note: "Phụ thu kiểm định BYT 3%" },
-  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 5, note: "Phụ thu kiểm định linh kiện/pin 5%" },
+  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
+  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
+  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
   anime: { label: "Anime, Manga & Figure Chính Hãng", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
   other: { label: "Danh Mục Khác", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
 };
@@ -968,7 +968,7 @@ export default function OrderCalculator() {
                     Điền Thông Tin Nhận Hàng & Nhận Mã VietQR
                   </h3>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Đơn hàng: <strong>{productName || "Đơn hàng Nhật Bản"}</strong> — Tiền hàng &amp; phí: <strong>{calc.baseOrderCostVnd.toLocaleString("vi-VN")} đ</strong> (Cước bay cân thực tế khi về kho)
+                    Đơn hàng: <strong>{productName || "Đơn hàng Nhật Bản"}</strong> — Tiền hàng &amp; phí: <strong>{effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ</strong> (Cước bay cân thực tế khi về kho)
                   </p>
                 </div>
 

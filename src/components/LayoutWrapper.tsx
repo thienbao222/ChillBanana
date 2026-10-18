@@ -28,7 +28,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
         <CartProvider>
           {!isCosmosRoute && <Navbar />}
           {isCosmosRoute ? children : <main className="flex-grow">{children}</main>}
-          {!isCosmosRoute && <Footer />}
+          <Footer />
           <AIChatBot />
           <CartDrawer />
           <AuthModal />
@@ -39,4 +39,3 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
     </WebsitePreferencesProvider>
   );
 }
-

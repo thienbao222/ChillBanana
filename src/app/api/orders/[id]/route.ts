@@ -258,6 +258,16 @@ export async function PATCH(
         return NextResponse.json({ error: "Cần xác nhận đã nhận tiền cọc trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
       }
     }
+    const effectiveWeightKg =
+      weightKg !== undefined && weightKg !== null && weightKg !== ""
+        ? Number(weightKg)
+        : existingOrder.weightKg;
+    if (requestedStatus === "IN_TRANSIT_AIR" && (!Number.isFinite(effectiveWeightKg) || effectiveWeightKg <= 0)) {
+      return NextResponse.json(
+        { error: "Đơn hàng chưa có trọng lượng thực tế tại kho Tokyo. Cần cập nhật cân nặng kiện hàng (> 0 kg) trước khi xuất kho bay về Việt Nam." },
+        { status: 409 }
+      );
+    }
 
     const logStatus = status || existingOrder.status;
     const logTitle =
@@ -336,7 +346,23 @@ export async function PATCH(
       updateData.vnDomesticTrack = vnTrack;
     }
     if (isAdminUser && weightKg !== undefined && weightKg !== null && weightKg !== "" && !updateData.weightKg) {
-      updateData.weightKg = typeof weightKg === "number" ? weightKg : parseFloat(weightKg) || 0;
+      const parsedWeightKg = typeof weightKg === "number" ? weightKg : parseFloat(String(weightKg));
+      if (!Number.isFinite(parsedWeightKg) || parsedWeightKg < 0 || parsedWeightKg > 100) {
+        return NextResponse.json({ error: "Trọng lượng kiện hàng không hợp lệ (cần từ 0 đến 100 kg)." }, { status: 400 });
+      }
+      updateData.weightKg = parsedWeightKg;
+      if (parsedWeightKg > 0) {
+        const pricingConfig = await getCurrentPricingConfig();
+        const recalc = calculateOrderPrice(
+          existingOrder.priceJpy,
+          parsedWeightKg,
+          existingOrder.exchangeRate,
+          existingOrder.isGroupBuy,
+          pricingConfig.values
+        );
+        updateData.shippingFeeVnd = recalc.shippingFeeVnd;
+        updateData.totalVnd = existingOrder.productPriceVnd + existingOrder.serviceFeeVnd + recalc.shippingFeeVnd;
+      }
     }
 
     // Cancellation, inventory restoration and audit log commit atomically once.

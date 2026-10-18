@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
         vnDomesticTrack: true,
         customer: { select: { zaloUserId: true } },
       },
+      orderBy: { updatedAt: "asc" }, // Ưu tiên đơn lâu chưa được cập nhật nhất để tránh bỏ sót đơn thứ 51+
       take: 50, // Giới hạn 50 đơn mỗi lần chạy để tránh timeout
     });
 
@@ -118,7 +119,9 @@ export async function GET(req: NextRequest) {
             : result.location;
 
           const shouldComplete = shouldCompleteOrder(leg as "JP" | "VN", order.status, result.isDelivered);
+          const shouldArriveJpWarehouse = leg === "JP" && order.status === "PURCHASING_JP" && result.isDelivered;
           let orderWasCompleted = false;
+          let orderArrivedJp = false;
 
           await prisma.$transaction(async (tx) => {
             if (shouldComplete) {
@@ -127,12 +130,30 @@ export async function GET(req: NextRequest) {
                 data: { status: "COMPLETED" },
               });
               orderWasCompleted = completion.count === 1;
+            } else if (shouldArriveJpWarehouse) {
+              const arrival = await tx.order.updateMany({
+                where: { id: order.id, status: "PURCHASING_JP" },
+                data: { status: "WAREHOUSE_JP" },
+              });
+              orderArrivedJp = arrival.count === 1;
+            } else {
+              // Touch updatedAt để xoay vòng thứ tự kiểm tra trong các lần chạy cron tiếp theo
+              await tx.order.update({
+                where: { id: order.id },
+                data: { updatedAt: new Date() },
+              });
             }
+
+            const nextRecordedStatus = orderWasCompleted
+              ? "COMPLETED"
+              : orderArrivedJp
+              ? "WAREHOUSE_JP"
+              : order.status;
 
             await tx.trackingLog.create({
               data: {
                 orderId: order.id,
-                status: orderWasCompleted ? "COMPLETED" : order.status,
+                status: nextRecordedStatus,
                 title: result.statusLabel,
                 description: `[${result.provider}] ${result.rawEvent || result.statusLabel}. Mã vận đơn: ${code}.`,
                 location: locationLabel,
@@ -141,6 +162,8 @@ export async function GET(req: NextRequest) {
 
             if (orderWasCompleted) {
               log.push(`AUTO-COMPLETE: ${order.orderCode} → COMPLETED`);
+            } else if (orderArrivedJp) {
+              log.push(`AUTO-WAREHOUSE-JP: ${order.orderCode} → WAREHOUSE_JP`);
             }
           });
 

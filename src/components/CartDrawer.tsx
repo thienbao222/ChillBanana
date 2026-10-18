@@ -92,8 +92,17 @@ export default function CartDrawer() {
     if (isSubmitting) return;
     if (items.length === 0) return;
 
-    if (!customerName || !customerPhone || !customerAddress) {
+    if (!customerName.trim() || !customerPhone.trim() || !customerAddress.trim()) {
       toast.warning("Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ giao hàng.");
+      return;
+    }
+    const cleanPhone = customerPhone.replace(/\s+/g, "");
+    if (!/^(03|05|07|08|09)\d{8}$/.test(cleanPhone)) {
+      toast.warning("Số điện thoại không hợp lệ (cần đúng 10 số, đầu 03, 05, 07, 08, 09).");
+      return;
+    }
+    if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      toast.warning("Định dạng email không hợp lệ.");
       return;
     }
 

@@ -797,7 +797,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                             )}
                             className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
-                            <span>Đã Mua $\rightarrow$ Về Kho Tokyo</span>
+                            <span>Đã Mua → Về Kho Tokyo</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">
@@ -870,7 +870,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                             }}
                             className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
-                            <span>Xuất Kho $\rightarrow$ Bay Về VN</span>
+                            <span>Xuất Kho → Bay Về VN</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">
@@ -1407,7 +1407,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                 <span className="font-bold text-[10px] uppercase text-slate-400 block mb-1">Người gửi / Đơn vị mua hộ:</span>
                 <p className="font-bold text-navy-950">Kho ChillBanana Express</p>
                 <p className="text-slate-600 text-[11px]">Tokyo Hub ⇄ Hà Nội / TP.HCM</p>
-                <p className="text-slate-600 text-[11px]">Hotline: 1900 8888</p>
+                <p className="text-slate-600 text-[11px]">Hotline: 1900 6868</p>
               </div>
 
               <div>

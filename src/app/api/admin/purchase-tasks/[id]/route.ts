@@ -132,10 +132,26 @@ export async function PATCH(
     updateData.attempts = { increment: 1 };
   }
 
-  const updated = await prisma.purchaseTask.update({
-    where: { id: taskId },
-    data: updateData,
-    include: { order: { select: { orderCode: true, productName: true } } },
+  const updated = await prisma.$transaction(async (tx) => {
+    const updatedTask = await tx.purchaseTask.update({
+      where: { id: taskId },
+      data: updateData,
+      include: { order: { select: { id: true, orderCode: true, productName: true, status: true } } },
+    });
+
+    if (action === "complete" && externalOrderId) {
+      await tx.trackingLog.create({
+        data: {
+          orderId: updatedTask.order.id,
+          status: updatedTask.order.status,
+          title: "Đã đặt mua thành công trên sàn Nhật",
+          description: `Nhân viên tại Nhật (${staffName ?? adminUsername}) đã hoàn tất mua hàng. Mã đơn hàng sàn: ${externalOrderId}.`,
+          location: "Tokyo, Nhật Bản",
+        },
+      });
+    }
+
+    return updatedTask;
   });
 
   await writeAuditLog({

@@ -189,18 +189,18 @@ export default function ProfilePage() {
                               <div className="mb-2 w-full text-left sm:text-right">
                                 <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider mb-1">Trạng thái</div>
                                 <div className="text-sm font-bold text-navy-900">
-                                  {order.status === "PENDING_DEPOSIT" && "⏳ Chờ đặt cọc"}
-                                  {order.status === "DEPOSITED_50" && "💸 Đã cọc - Chờ mua"}
-                                  {order.status === "PURCHASING_JP" && "🛒 Đang mua tại Nhật"}
-                                  {order.status === "SHIPPED_TO_VN" && "✈️ Đang bay về VN"}
-                                  {order.status === "ARRIVED_VN" && "🛬 Đã tới kho VN"}
-                                  {order.status === "DELIVERING_LOCAL" && "🚚 Đang giao hàng"}
+                                  {order.status === "PENDING_DEPOSIT" && "⏳ Chờ đặt cọc (50%)"}
+                                  {order.status === "PURCHASING_JP" && "🛒 Đã cọc • Đang mua tại Nhật"}
+                                  {order.status === "WAREHOUSE_JP" && "📦 Đã về kho Tokyo"}
+                                  {order.status === "IN_TRANSIT_AIR" && "✈️ Đang bay về Việt Nam"}
+                                  {order.status === "WAREHOUSE_VN" && "🛬 Đã về kho Việt Nam"}
+                                  {order.status === "LOCAL_DELIVERY" && "🚚 Đang giao hàng nội địa"}
                                   {order.status === "COMPLETED" && "✅ Đã hoàn thành"}
                                   {order.status === "CANCELLED" && "❌ Đã hủy"}
                                 </div>
                               </div>
                               <Link 
-                                href={`/tracking?code=${order.orderCode}`}
+                                href={`/tracking?orderCode=${order.orderCode}`}
                                 className="w-full text-center px-4 py-2 bg-navy-900 hover:bg-navy-800 text-white text-xs font-bold rounded-xl transition-colors shadow-sm"
                               >
                                 Xem Chi Tiết
