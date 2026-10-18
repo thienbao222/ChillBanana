@@ -100,7 +100,9 @@ function AdminDashboardPageInner() {
       <header className="admin-neoday-header sticky top-0 z-30">
         <div className="admin-neoday-topbar">
           <Link href="/admin" className="admin-neoday-brand" aria-label="ChillBanana Admin Portal">
-            <span className="admin-neoday-logo" aria-hidden="true">🍌</span>
+            <span className="admin-neoday-logo" aria-hidden="true">
+              <img src="/logo.png" alt="" className="w-6 h-6 object-contain" />
+            </span>
             <span className="admin-neoday-brand-name">Chill<span>Banana</span></span>
             <span className="admin-neoday-portal">Admin Portal</span>
           </Link>

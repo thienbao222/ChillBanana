@@ -50,8 +50,8 @@ export default function AdminLoginPage() {
           
           {/* Logo & Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-banana-400 to-amber-500 items-center justify-center text-3xl shadow-lg mb-4">
-              🍌
+            <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-banana-400 to-amber-500 items-center justify-center p-2 shadow-lg mb-4">
+              <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-navy-900 font-serif">
               Chill<span className="text-banana-600">Banana</span> Admin

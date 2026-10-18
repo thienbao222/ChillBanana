@@ -10,8 +10,8 @@ export default function Footer() {
           {/* Col 1: Brand & Intro */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-banana-500 flex items-center justify-center text-xl shadow">
-                🍌
+              <div className="w-10 h-10 rounded-2xl bg-banana-500 flex items-center justify-center p-1 shadow">
+                <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-bold font-serif text-white">
                 Chill<span className="text-banana-400">Banana</span>

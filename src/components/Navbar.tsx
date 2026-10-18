@@ -76,8 +76,8 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-20">
           {/* Logo Brand: ChillBanana */}
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-banana-400 to-banana-600 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform">
-              <span className="text-2xl">🍌</span>
+            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-banana-400 to-banana-600 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform p-1.5">
+              <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
             </div>
             <div>
               <div className="flex items-center space-x-1.5">

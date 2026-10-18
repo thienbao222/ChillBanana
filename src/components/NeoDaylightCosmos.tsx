@@ -437,10 +437,7 @@ export default function NeoDaylightCosmos() {
           {/* Cụm Quỹ Đạo Hành Tinh (Cluster Nav) */}
           <nav className="card cluster" aria-label={t("Danh mục chính")}>
             <Link className="logo" href="/" aria-label="ChillBanana - trang chủ">
-              <svg viewBox="0 0 64 64" aria-hidden="true">
-                <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
-                <path d="M50 16l3-3" stroke="#8a5a00" strokeWidth="3" strokeLinecap="round" />
-              </svg>
+              <img src="/logo.png" alt="ChillBanana" className="logo-banana-img" />
             </Link>
 
             {/* Quỹ đạo 1: Dán link */}
@@ -551,7 +548,9 @@ export default function NeoDaylightCosmos() {
 
       {/* Thanh Mini Header khi cuộn chuột xuống */}
       <nav className={`mini ${showMini ? "on" : ""}`} id="mini" aria-label={t("Điều hướng nhanh")}>
-        <Link className="mlogo" href="/" aria-label="ChillBanana" />
+        <Link className="mlogo" href="/" aria-label="ChillBanana">
+          <img src="/logo.png" alt="ChillBanana" className="mlogo-img" />
+        </Link>
         <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote", "u"); }} title={t("Dán Link Tính Giá")} style={{ "--c": "#f2c21b" } as any}>
           <i><svg><use href="#i-link" /></svg></i>
           <span>{t("Tính Giá")}</span>
@@ -597,7 +596,9 @@ export default function NeoDaylightCosmos() {
 
           <div className="card agent">
             <div className="ah">
-              <span className="mlogo" />
+              <span className="mlogo">
+                <img src="/logo.png" alt="ChillBanana" className="mlogo-img" />
+              </span>
               <div>
                 <b>ChillBanana Gemini AI Agent</b>
                 <small>● Google AI Studio Connected</small>
@@ -658,10 +659,10 @@ export default function NeoDaylightCosmos() {
           </div>
 
           {activeTab === "VN_JP" ? (
-            <div className="card" style={{ maxWidth: "880px", margin: "0 auto", padding: "32px", background: "rgba(255,255,255,0.95)" }}>
+            <div className="card" style={{ maxWidth: "1080px", margin: "0 auto", padding: "32px" }}>
               {/* Header tuyến VN -> JP */}
               <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "1.5rem" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "#fef3c7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
+                <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(248, 219, 85, 0.22)", border: "1px solid rgba(248, 219, 85, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
                   🇻🇳➔🇯🇵
                 </div>
                 <div>
@@ -675,23 +676,23 @@ export default function NeoDaylightCosmos() {
               </div>
 
               {/* Bảng biểu phí VN -> JP */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "2rem" }}>
-                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "16px", marginBottom: "2rem" }}>
+                <div className="tariff-box">
                   <b style={{ display: "block", color: "var(--blue-d)", fontSize: "0.9rem" }}>📦 Kiện Quà / Đồ Khô / Quần Áo</b>
                   <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
                     180.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
                   </div>
                   <small style={{ color: "var(--muted)", display: "block" }}>Từ 1kg trở lên · Miễn phí đóng thùng carton đạt chuẩn bay</small>
                 </div>
-                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                  <b style={{ display: "#d97706", color: "#d97706", fontSize: "0.9rem" }}>⚡ Chuyển Phát Hỏa Tốc EMS</b>
+                <div className="tariff-box">
+                  <b style={{ display: "block", color: "#f59e0b", fontSize: "0.9rem" }}>⚡ Chuyển Phát Hỏa Tốc EMS</b>
                   <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
                     210.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
                   </div>
                   <small style={{ color: "var(--muted)", display: "block" }}>Hồ sơ du học, giấy tờ, hợp đồng · Giao trong 48h tại Tokyo/Osaka</small>
                 </div>
-                <div style={{ padding: "16px", borderRadius: "16px", border: "1px solid #e2e8f0", background: "#f8fafc" }}>
-                  <b style={{ display: "block", color: "#16a34a", fontSize: "0.9rem" }}>🍲 Thực Phẩm & Đặc Sản Quê</b>
+                <div className="tariff-box">
+                  <b style={{ display: "block", color: "#10b981", fontSize: "0.9rem" }}>🍲 Thực Phẩm & Đặc Sản Quê</b>
                   <div style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", margin: "6px 0" }}>
                     220.000 <small style={{ fontSize: "0.8rem" }}>đ / kg</small>
                   </div>
@@ -841,11 +842,11 @@ export default function NeoDaylightCosmos() {
 
               {/* Preview sản phẩm cào được nếu có */}
               {productImage && (
-                <div style={{ display: "flex", gap: "12px", alignItems: "center", padding: "10px", background: "rgba(255,255,255,0.7)", borderRadius: "16px", border: "1px solid rgba(0,0,0,0.06)" }}>
+                <div className="preview-product">
                   <img
                     src={productImage}
                     alt={productName}
-                    style={{ width: "54px", height: "54px", objectFit: "contain", borderRadius: "10px", background: "#fff" }}
+                    style={{ width: "54px", height: "54px", objectFit: "contain", borderRadius: "10px", background: "rgba(255,255,255,0.15)" }}
                   />
                   <div style={{ flex: 1, minWidth: 0, fontSize: "0.82rem" }}>
                     <b style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -916,16 +917,7 @@ export default function NeoDaylightCosmos() {
                         key={chip.w}
                         type="button"
                         onClick={() => setWeightKg(chip.w)}
-                        style={{
-                          fontSize: "0.75rem",
-                          padding: "4px 8px",
-                          borderRadius: "8px",
-                          border: weightKg === chip.w ? "1.5px solid var(--blue-d)" : "1px solid #cbd5e1",
-                          background: weightKg === chip.w ? "rgba(74, 174, 224, 0.15)" : "#fff",
-                          color: weightKg === chip.w ? "var(--blue-d)" : "var(--ink)",
-                          fontWeight: weightKg === chip.w ? 700 : 500,
-                          cursor: "pointer",
-                        }}
+                        className={`weight-chip ${weightKg === chip.w ? "is-active" : ""}`}
                       >
                         {chip.label}
                       </button>
@@ -1154,10 +1146,10 @@ export default function NeoDaylightCosmos() {
             <div id="order-success" style={{ marginTop: "2.5rem" }}>
               <div
                 className="card"
-                style={{ maxWidth: "680px", margin: "0 auto", padding: "28px", background: "rgba(255,255,255,0.95)" }}
+                style={{ maxWidth: "780px", margin: "0 auto", padding: "28px" }}
               >
                 <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
-                  <span style={{ display: "inline-block", padding: "6px 14px", borderRadius: "999px", background: "#e8f8f0", color: "#1a7a55", fontWeight: 800, fontSize: "0.82rem" }}>
+                  <span style={{ display: "inline-block", padding: "6px 14px", borderRadius: "999px", background: "rgba(16, 185, 129, 0.16)", color: "#10b981", fontWeight: 800, fontSize: "0.82rem", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
                     ✓ KHỞI TẠO ĐƠN HÀNG THÀNH CÔNG
                   </span>
                   <h3 style={{ fontSize: "1.4rem", fontWeight: 800, marginTop: "8px" }}>
@@ -1169,9 +1161,9 @@ export default function NeoDaylightCosmos() {
                 </div>
 
                 {!createdOrder.isPriceVerified ? (
-                  <div style={{ padding: "16px", borderRadius: "16px", background: "#fff7ed", border: "1px solid #fed7aa", color: "#7c2d12", textAlign: "center", marginBottom: "1.5rem" }}>
+                  <div style={{ padding: "16px", borderRadius: "16px", background: "rgba(254, 215, 170, 0.15)", border: "1px solid rgba(254, 215, 170, 0.4)", color: "var(--ink)", textAlign: "center", marginBottom: "1.5rem" }}>
                     Báo giá đang chờ ChillBanana kiểm tra. Vui lòng chưa chuyển khoản. Khi được duyệt, bạn có thể thanh toán an toàn từ trang theo dõi đơn.
-                    <Link href={`/tracking?orderCode=${createdOrder.orderCode}`} style={{ display: "block", marginTop: "10px", color: "#075985", fontWeight: 800 }}>Theo dõi trạng thái báo giá →</Link>
+                    <Link href={`/tracking?orderCode=${createdOrder.orderCode}`} style={{ display: "block", marginTop: "10px", color: "var(--blue-d)", fontWeight: 800 }}>Theo dõi trạng thái báo giá →</Link>
                   </div>
                 ) : <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px", marginBottom: "1.5rem" }}>
                   {/* Nút thanh toán VNPAY */}

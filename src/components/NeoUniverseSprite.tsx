@@ -38,49 +38,48 @@ const SPRITES: Record<NeoUniverseAnimation, string> = {
 const FRAME_COUNT = 36;
 const LOOP_DURATION_MS = 3000;
 
+// Preload sprite sheets in the browser so transitions are instantaneous
+if (typeof window !== "undefined") {
+  Object.values(SPRITES).forEach((src) => {
+    const img = new Image();
+    img.src = src;
+    if (typeof img.decode === "function") {
+      void img.decode().catch(() => undefined);
+    }
+  });
+}
+
 export default function NeoUniverseSprite({ animation, className = "", flipX = false }: Props) {
   const spriteRef = useRef<HTMLSpanElement>(null);
 
   useEffect(() => {
     const sprite = spriteRef.current;
     if (!sprite) return;
-    sprite.style.backgroundPosition = "0% 0%";
     let disposed = false;
     let requestId = 0;
     let lastFrame = -1;
+    const startedAt = performance.now();
 
-    const startAnimation = () => {
+    const drawNextFrame = (now: number) => {
       if (disposed) return;
-      const startedAt = performance.now();
-      const drawNextFrame = (now: number) => {
-        const elapsed = (now - startedAt) % LOOP_DURATION_MS;
-        const frame = Math.min(FRAME_COUNT - 1, Math.floor((elapsed / LOOP_DURATION_MS) * FRAME_COUNT));
-        if (frame !== lastFrame) {
-          lastFrame = frame;
-          const row = Math.floor(frame / 6);
-          const column = frame % 6;
+      const elapsed = (now - startedAt) % LOOP_DURATION_MS;
+      const frame = Math.min(FRAME_COUNT - 1, Math.floor((elapsed / LOOP_DURATION_MS) * FRAME_COUNT));
+      if (frame !== lastFrame) {
+        lastFrame = frame;
+        const row = Math.floor(frame / 6);
+        const column = frame % 6;
+        if (sprite) {
           sprite.style.backgroundPosition = `${column * 20}% ${row * 20}%`;
         }
-        requestId = window.requestAnimationFrame(drawNextFrame);
-      };
+      }
       requestId = window.requestAnimationFrame(drawNextFrame);
     };
 
-    // Decode a newly selected sheet before starting its 3-second loop so the
-    // first visible frames do not stutter while the browser decodes the WebP.
-    const image = new Image();
-    image.src = SPRITES[animation];
-    if (typeof image.decode === "function") {
-      void image.decode().catch(() => undefined).then(startAnimation);
-    } else if (image.complete) {
-      startAnimation();
-    } else {
-      image.addEventListener("load", startAnimation, { once: true });
-    }
+    // Start immediately so the animation is never blocked or cancelled by decode delays
+    requestId = window.requestAnimationFrame(drawNextFrame);
 
     return () => {
       disposed = true;
-      image.removeEventListener("load", startAnimation);
       window.cancelAnimationFrame(requestId);
     };
   }, [animation]);

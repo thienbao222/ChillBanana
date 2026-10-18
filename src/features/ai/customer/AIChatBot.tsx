@@ -953,7 +953,15 @@ export default function AIChatBot() {
           className="pointer-events-none fixed z-40"
           style={{ ...(petPosition ? { left: petPosition.left, top: petPosition.top } : { right: 12, bottom: 12 }), transition: isPetDragging ? "none" : "left 2.1s cubic-bezier(.2,.8,.2,1), top 2.1s cubic-bezier(.2,.8,.2,1)" }}
         >
-          {ambientHint && !petConversationOpen && <div role="status" className="pointer-events-none absolute bottom-full right-2 mb-2 w-max max-w-[min(260px,calc(100vw-32px))] whitespace-normal break-words rounded-2xl border border-banana-200 bg-white px-3.5 py-2 text-xs font-semibold leading-snug text-navy-900 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-200">{typedHint}{typedHint.length < ambientHint.length && <span className="animate-pulse text-banana-600">▍</span>}</div>}
+          {ambientHint && !petConversationOpen && (
+            <div
+              role="status"
+              className="pointer-events-none absolute bottom-full right-2 mb-2 w-max max-w-[min(260px,calc(100vw-32px))] whitespace-normal break-words rounded-2xl border border-banana-300 bg-white/95 px-3.5 py-2 text-xs font-semibold leading-snug text-slate-800 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200 dark:border-banana-400/50 dark:bg-slate-900/95 dark:text-slate-100"
+            >
+              {typedHint}
+              {typedHint.length < ambientHint.length && <span className="animate-pulse text-banana-600 dark:text-banana-400">▍</span>}
+            </div>
+          )}
           <button
             id="ai-chat-toggle-btn"
             onClick={() => { if (draggedRef.current) return; setAmbientHint(""); setPetConversationOpen(true); }}
@@ -1046,15 +1054,38 @@ export default function AIChatBot() {
               </div>
             </section>
           )}
-          <div className="pointer-events-auto mt-0.5 flex justify-center gap-2">
-            <button type="button" onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"} title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}>
-              {wanderingEnabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+          <div className="pointer-events-auto mt-1 flex justify-center gap-1.5 rounded-full bg-white/85 p-1 shadow-md backdrop-blur-md border border-slate-200/80 dark:bg-slate-900/85 dark:border-slate-700/80">
+            <button
+              type="button"
+              onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-banana-100 dark:hover:bg-banana-950/60 hover:text-navy-900 dark:hover:text-banana-300 transition-colors"
+              aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"}
+              title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}
+            >
+              {wanderingEnabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
             </button>
-            <button type="button" onClick={() => { setPetPosition(null); setAmbientAnimation("move"); try { window.localStorage.removeItem("neo-universe-pet-position"); } catch { /* Storage is optional. */ } window.setTimeout(() => setAmbientAnimation("idle"), 1800); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-banana-100 hover:text-navy-900" aria-label="Đưa Neo về góc mặc định" title="Về góc mặc định">
-              <RotateCcw className="h-3.5 w-3.5" />
+            <button
+              type="button"
+              onClick={() => {
+                setPetPosition(null);
+                setAmbientAnimation("move");
+                try { window.localStorage.removeItem("neo-universe-pet-position"); } catch { /* Storage is optional. */ }
+                window.setTimeout(() => setAmbientAnimation("idle"), 1800);
+              }}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-banana-100 dark:hover:bg-banana-950/60 hover:text-navy-900 dark:hover:text-banana-300 transition-colors"
+              aria-label="Đưa Neo về góc mặc định"
+              title="Về góc mặc định"
+            >
+              <RotateCcw className="h-3 w-3" />
             </button>
-            <button type="button" onClick={() => { setPetVisible(false); setAmbientHint(""); }} className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-rose-100 hover:text-rose-700" aria-label="Ẩn Neo Universe" title="Ẩn Neo">
-              <X className="h-3.5 w-3.5" />
+            <button
+              type="button"
+              onClick={() => { setPetVisible(false); setAmbientHint(""); }}
+              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
+              aria-label="Ẩn Neo Universe"
+              title="Ẩn Neo"
+            >
+              <X className="h-3 w-3" />
             </button>
           </div>
         </div>

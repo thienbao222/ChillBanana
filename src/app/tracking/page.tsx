@@ -346,10 +346,7 @@ function TrackingCosmosContent() {
         <header className="track-nav">
           <div className="flex items-center gap-3">
             <Link className="logo" href="/" aria-label="ChillBanana - NeoDay">
-              <svg viewBox="0 0 64 64" aria-hidden="true" style={{ width: "100%", height: "100%" }}>
-                <path d="M17 43c2-17 15-27 33-27-9 5-14 12-15 24-5 5-13 6-18 3z" fill="#fff3a8" stroke="#c98a00" strokeWidth="1.8" strokeLinejoin="round" />
-                <path d="M50 16l3-3" stroke="#8a5a00" strokeWidth="3" strokeLinecap="round" />
-              </svg>
+              <img src="/logo.png" alt="ChillBanana" style={{ width: "75%", height: "75%", objectFit: "contain" }} />
             </Link>
             <div>
               <b style={{ fontSize: "1.1rem", fontFamily: "'Baloo 2', sans-serif", color: "var(--ink)" }}>ChillBanana</b>

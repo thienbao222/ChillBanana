@@ -230,16 +230,18 @@
 
 /* Header */
 .cosmos-root header {
-  --P: clamp(12px, 3vw, 32px);
+  --P: clamp(16px, 3.5vw, 40px);
   position: relative;
   z-index: 20;
   padding: 14px var(--P) 0;
+  max-width: 1440px;
+  margin: 0 auto;
 }
 
 .cosmos-root .top {
   display: grid;
-  grid-template-columns: minmax(450px, 470px) minmax(0, 1fr);
-  gap: 16px;
+  grid-template-columns: minmax(460px, 490px) minmax(0, 1fr);
+  gap: 20px;
 }
 
 .cosmos-root .card {
@@ -282,6 +284,7 @@
   inset: 0;
   border-radius: 50%;
   background: repeating-linear-gradient(100deg, transparent 0 9px, rgba(176, 110, 0, 0.14) 9px 10px);
+  pointer-events: none;
 }
 
 .cosmos-root .logo::before {
@@ -291,17 +294,25 @@
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.9);
   transform: rotate(-20deg) scaleY(0.42);
+  pointer-events: none;
 }
 
-.cosmos-root .logo svg {
-  width: calc(var(--lr) * 1.2);
-  height: calc(var(--lr) * 1.2);
-  translate: calc(var(--lr) * 0.24) calc(var(--lr) * 0.24);
+.cosmos-root .logo svg,
+.cosmos-root .logo .logo-banana-img {
+  width: calc(var(--lr) * 1.3);
+  height: calc(var(--lr) * 1.3);
+  object-fit: contain;
   z-index: 1;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22));
+  transition: transform 0.3s var(--ease);
 }
 
 .cosmos-root .logo:hover {
   scale: 1.05;
+}
+
+.cosmos-root .logo:hover .logo-banana-img {
+  transform: scale(1.08) rotate(-4deg);
 }
 
 @keyframes cosmosGlow {
@@ -623,6 +634,18 @@
   border-radius: 50%;
   background: radial-gradient(circle at 34% 28%, #fffbe0, var(--banana) 44%, var(--banana-d));
   box-shadow: 0 4px 12px rgba(227, 169, 18, 0.5);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 4px;
+  flex: none;
+}
+
+.cosmos-root .mlogo img,
+.cosmos-root .mlogo .mlogo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
   display: block;
 }
 
@@ -675,22 +698,24 @@
 .cosmos-root main {
   position: relative;
   z-index: 1;
-  max-width: 1100px;
+  max-width: 1440px;
+  width: 100%;
   margin: 0 auto;
-  padding: clamp(20px, 4vw, 56px) clamp(14px, 3vw, 28px) 120px;
+  padding: clamp(24px, 4vw, 64px) clamp(16px, 3.5vw, 40px) 120px;
 }
 
 .cosmos-root .hero {
   display: grid;
-  gap: 24px;
-  grid-template-columns: 1.1fr 0.9fr;
+  gap: 36px;
+  grid-template-columns: 1.15fr 0.85fr;
   align-items: center;
+  margin-bottom: 48px;
 }
 
 .cosmos-root h1 {
-  margin: 16px 0 10px;
-  font-size: clamp(2rem, 5.2vw, 3.6rem);
-  line-height: 1.08;
+  margin: 16px 0 12px;
+  font-size: clamp(2.2rem, 5.2vw, 3.8rem);
+  line-height: 1.12;
   font-weight: 800;
   animation: cosmosFl 14s ease-in-out infinite;
 }
@@ -704,12 +729,15 @@
   text-decoration: none;
   background: linear-gradient(transparent 62%, var(--banana) 62%);
   padding: 0 4px;
+  border-radius: 4px;
 }
 
 .cosmos-root .lead {
-  margin: 0 0 22px;
+  margin: 0 0 24px;
   color: var(--muted);
-  max-width: 50ch;
+  max-width: 68ch;
+  font-size: 1.05rem;
+  line-height: 1.65;
 }
 
 .cosmos-root .paste {
@@ -954,11 +982,11 @@
 }
 
 .cosmos-root .agent {
-  padding: 20px;
+  padding: 24px;
   display: grid;
-  gap: 12px;
-  font-size: 0.85rem;
-  line-height: 1.5;
+  gap: 14px;
+  font-size: 0.88rem;
+  line-height: 1.55;
   animation: cosmosFl 12s ease-in-out infinite;
 }
 
@@ -992,23 +1020,32 @@
 
 .cosmos-root .q,
 .cosmos-root .a {
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  border-radius: 18px;
 }
 
 .cosmos-root .q {
-  background: rgba(90, 186, 230, 0.14);
+  background: rgba(90, 186, 230, 0.12);
+  border: 1px solid rgba(90, 186, 230, 0.28);
+  color: var(--ink);
 }
 
 .cosmos-root .a {
   background: #fff8d6;
   border: 1px solid #f3dd8a;
+  color: #3b2a00;
 }
 
 .cosmos-root .q b,
 .cosmos-root .a b {
   display: block;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
+  margin-bottom: 4px;
+  font-weight: 800;
+}
+
+.cosmos-root .q b {
+  color: var(--blue-d);
 }
 
 .cosmos-root .a b {
@@ -1018,8 +1055,9 @@
 .cosmos-root .af {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 8px;
-  font-size: 0.74rem;
+  font-size: 0.76rem;
   color: var(--muted);
 }
 
@@ -1101,8 +1139,58 @@
 .cosmos-root .qgrid {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
-  gap: 22px;
+  gap: 28px;
   align-items: start;
+}
+
+.cosmos-root .weight-chip {
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--ink);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.cosmos-root .weight-chip:hover {
+  background: rgba(74, 174, 224, 0.1);
+  border-color: var(--blue);
+}
+
+.cosmos-root .weight-chip.is-active {
+  border: 1.5px solid var(--blue-d);
+  background: rgba(74, 174, 224, 0.18);
+  color: var(--blue-d);
+  font-weight: 800;
+  box-shadow: 0 2px 8px rgba(43, 127, 176, 0.18);
+}
+
+.cosmos-root .preview-product {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  background: var(--glass);
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.cosmos-root .tariff-box {
+  padding: 18px;
+  border-radius: 18px;
+  border: 1px solid var(--line);
+  background: var(--glass);
+  color: var(--ink);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.cosmos-root .tariff-box:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
 }
 
 .cosmos-root .form {
@@ -1379,9 +1467,9 @@
 
 .cosmos-root .hot {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 18px;
-  margin-top: 22px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 22px;
+  margin-top: 26px;
 }
 
 .cosmos-root .hc {
@@ -1532,8 +1620,8 @@
    Tracking page Cosmos styles
    ========================================================================== */
 .cosmos-root .track-wrap {
-  max-width: 1168px;
-  width: min(calc(100% - 32px), 1168px);
+  max-width: 1400px;
+  width: min(calc(100% - 32px), 1400px);
   margin: 0 auto;
   padding: 24px 0 80px;
   position: relative;
@@ -1879,6 +1967,93 @@ html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .
 
 html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .hc b {
   border-color: var(--line);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root h1 u {
+  background: linear-gradient(transparent 58%, rgba(248, 219, 85, 0.28) 58%);
+  color: #fed766;
+  border-bottom: 2px solid rgba(254, 215, 102, 0.5);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root h1 em {
+  color: #7dd3fc;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .agent {
+  background: rgba(16, 28, 48, 0.92);
+  border-color: rgba(100, 180, 240, 0.3);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .q {
+  background: rgba(20, 42, 70, 0.78);
+  border-color: rgba(90, 186, 230, 0.35);
+  color: #e2edfd;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .q b {
+  color: #7dd3fc;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .a {
+  background: rgba(45, 38, 16, 0.9);
+  border-color: rgba(254, 215, 102, 0.4);
+  color: #fff9db;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .a b {
+  color: #fed766;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .af b {
+  color: #fed766;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .ah em {
+  background: rgba(254, 240, 138, 0.16);
+  color: #fef08a;
+  border: 1px solid rgba(254, 240, 138, 0.28);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .jp {
+  background: rgba(254, 240, 138, 0.16);
+  border-color: rgba(254, 240, 138, 0.3);
+  color: #fef08a;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .trust span {
+  background: rgba(21, 36, 57, 0.85);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .weight-chip {
+  background: rgba(21, 36, 57, 0.85);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .weight-chip:hover {
+  background: rgba(43, 127, 176, 0.25);
+  border-color: #65bce8;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .weight-chip.is-active {
+  background: rgba(43, 127, 176, 0.38);
+  border-color: #65bce8;
+  color: #c6edff;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .preview-product {
+  background: rgba(21, 36, 57, 0.85);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .tariff-box {
+  background: rgba(21, 36, 57, 0.8);
+  border-color: var(--line);
+  color: var(--ink);
 }
 
 html[data-site-preferences-active="true"][data-site-effects="off"] .site-pref-panel {
