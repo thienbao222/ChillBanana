@@ -173,7 +173,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
         setSelectedOrder(null);
         fetchOrders();
       } else {
-        alert("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
+        adminToast.error("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
       adminToast.error("Lỗi kết nối máy chủ");
@@ -217,7 +217,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
         setCancelModalOrder(null);
         fetchOrders();
       } else {
-        alert("Lỗi khi hủy đơn: " + (data.error || "Vui lòng thử lại"));
+        adminToast.error("Lỗi khi hủy đơn: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
       adminToast.error("Lỗi kết nối máy chủ");
@@ -335,7 +335,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
       if (res.ok && data.success) {
         fetchOrders();
       } else {
-        alert("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
+        adminToast.error("Lỗi cập nhật: " + (data.error || "Vui lòng thử lại"));
       }
     } catch {
       adminToast.error("Lỗi kết nối máy chủ");
@@ -487,7 +487,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               📦
                             </div>
                             <div className="font-bold text-navy-900 text-sm">
-                              Chưa có đơn hàng nào trong CSDL SQLite
+                              Chưa có đơn hàng nào trong hệ thống PostgreSQL
                             </div>
                             <p className="text-xs text-slate-400">
                               Hệ thống đã dọn sạch toàn bộ dữ liệu mẫu. Khi có khách hàng thật đặt đơn trên trang chủ, thông tin đơn sẽ xuất hiện ngay tại đây!
@@ -574,7 +574,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               </span>
                             ) : (
                               <span className="inline-flex items-center text-[11px] font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl">
-                                {ord.status}
+                                {ORDER_STATUS_LABELS[ord.status as keyof typeof ORDER_STATUS_LABELS] || ord.status}
                               </span>
                             )}
                           </td>
