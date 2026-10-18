@@ -146,7 +146,7 @@ export default function CuratedProducts({
             aria-pressed={selectedCategory === "all"}
             className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
               selectedCategory === "all"
-                ? "bg-navy-900 text-white shadow-sm"
+                ? "bg-banana-400 text-navy-950 shadow-sm"
                 : "text-slate-600 hover:text-navy-900 hover:bg-slate-200/50"
             }`}
           >
@@ -215,7 +215,7 @@ export default function CuratedProducts({
         <div className="rounded-3xl border border-slate-200 bg-white px-6 py-12 text-center">
           <p className="font-bold text-navy-900">Chưa có sản phẩm trong danh mục này.</p>
           <p className="mt-1 text-sm text-slate-500">Bạn có thể dùng công cụ báo giá để gửi link sản phẩm cần mua hộ.</p>
-          <a href={quoteHref} className="mt-4 inline-flex rounded-xl bg-navy-900 px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-slate-800">
+          <a href={quoteHref} className="mt-4 inline-flex rounded-xl bg-banana-500 hover:bg-banana-400 px-4 py-2 text-sm font-bold text-navy-950 transition-colors shadow-sm">
             Gửi link sản phẩm cần mua
           </a>
         </div>
@@ -312,7 +312,7 @@ export default function CuratedProducts({
                     <button
                       onClick={() => handleOrderThis(product)}
                       disabled={!inStock}
-                      className="px-3 py-2 rounded-xl bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors flex items-center gap-1 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-navy-900"
+                      className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-banana-400 to-banana-500 hover:from-banana-300 hover:to-banana-400 text-navy-950 text-xs font-extrabold shadow-sm hover:shadow transition-all flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40"
                       title={inStock ? "Tính giá và đặt ngay" : "Sản phẩm đã hết hàng"}
                     >
                       <ShoppingBag className="w-3.5 h-3.5" />

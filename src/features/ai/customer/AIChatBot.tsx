@@ -8,9 +8,6 @@ import {
   ShieldAlert,
   ImagePlus,
   Loader2,
-  Pause,
-  Play,
-  RotateCcw
 } from "lucide-react";
 import { AIPersonality } from "@/types";
 import NeoUniverseSprite, { NeoUniverseAnimation } from "@/components/NeoUniverseSprite";
@@ -97,7 +94,7 @@ export default function AIChatBot() {
   const [typedHint, setTypedHint] = useState("");
   const [typedReply, setTypedReply] = useState<{ id: string; text: string } | null>(null);
   const [petPosition, setPetPosition] = useState<{ left: number; top: number } | null>(null);
-  const [wanderingEnabled, setWanderingEnabled] = useState(false);
+  const [wanderingEnabled] = useState(false);
   const [isPetHovered, setIsPetHovered] = useState(false);
   const [isPetDragging, setIsPetDragging] = useState(false);
   const [isPageScrolling, setIsPageScrolling] = useState(false);
@@ -1054,40 +1051,6 @@ export default function AIChatBot() {
               </div>
             </section>
           )}
-          <div className="pointer-events-auto mt-1 flex justify-center gap-1.5 rounded-full bg-white/85 p-1 shadow-md backdrop-blur-md border border-slate-200/80 dark:bg-slate-900/85 dark:border-slate-700/80">
-            <button
-              type="button"
-              onClick={() => { setWanderingEnabled((enabled) => !enabled); setAmbientAnimation("idle"); }}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-banana-100 dark:hover:bg-banana-950/60 hover:text-navy-900 dark:hover:text-banana-300 transition-colors"
-              aria-label={wanderingEnabled ? "Tạm dừng Neo đi dạo" : "Cho Neo đi dạo"}
-              title={wanderingEnabled ? "Tạm dừng đi dạo" : "Tiếp tục đi dạo"}
-            >
-              {wanderingEnabled ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setPetPosition(null);
-                setAmbientAnimation("move");
-                try { window.localStorage.removeItem("neo-universe-pet-position"); } catch { /* Storage is optional. */ }
-                window.setTimeout(() => setAmbientAnimation("idle"), 1800);
-              }}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-banana-100 dark:hover:bg-banana-950/60 hover:text-navy-900 dark:hover:text-banana-300 transition-colors"
-              aria-label="Đưa Neo về góc mặc định"
-              title="Về góc mặc định"
-            >
-              <RotateCcw className="h-3 w-3" />
-            </button>
-            <button
-              type="button"
-              onClick={() => { setPetVisible(false); setAmbientHint(""); }}
-              className="flex h-6 w-6 items-center justify-center rounded-full text-slate-600 dark:text-slate-300 hover:bg-rose-100 dark:hover:bg-rose-950/60 hover:text-rose-700 dark:hover:text-rose-400 transition-colors"
-              aria-label="Ẩn Neo Universe"
-              title="Ẩn Neo"
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </div>
         </div>
       ) : (
         <button type="button" onClick={() => setPetVisible(true)} className="fixed bottom-5 right-5 z-40 rounded-full border border-banana-200 bg-white px-3 py-2 text-xs font-bold text-navy-900 shadow-lg hover:bg-banana-50" aria-label="Hiện lại Neo Universe">✦ Hiện Neo</button>

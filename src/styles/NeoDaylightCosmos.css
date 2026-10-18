@@ -1132,8 +1132,9 @@
 
 .cosmos-root .tabs [aria-selected="true"],
 .cosmos-root .chips [aria-pressed="true"] {
-  background: var(--ink);
-  color: #fff;
+  background: linear-gradient(135deg, var(--banana-d), var(--banana));
+  color: #16284a;
+  box-shadow: 0 4px 14px rgba(227, 169, 18, 0.32);
 }
 
 .cosmos-root .qgrid {
