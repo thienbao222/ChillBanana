@@ -151,25 +151,29 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
   for (const source of sources) {
     const rawRate = await source.fetch();
     if (rawRate !== null) {
-      const rounded = Math.round(rawRate);
+      const spreadPct = typeof pricing.fxSpreadPercent === "number" && pricing.fxSpreadPercent > 0
+        ? pricing.fxSpreadPercent
+        : 0;
+      const effectiveRate = rawRate * (1 + spreadPct / 100);
+      const rounded = Math.round(effectiveRate);
       // A hard-coded fallback is not a historical market quote. On a cold
       // start, report no change until a real previous API quote exists.
       const hasPreviousLiveRate = !cachedRate.isFallback && cachedRate.rate > 0;
       const change = hasPreviousLiveRate
-        ? Number((((rawRate - cachedRate.rate) / cachedRate.rate) * 100).toFixed(2))
+        ? Number((((effectiveRate - cachedRate.rate) / cachedRate.rate) * 100).toFixed(2))
         : 0;
 
       const isVolatile = hasPreviousLiveRate
-        ? checkVolatilityAlert(rawRate, cachedRate.rate)
+        ? checkVolatilityAlert(effectiveRate, cachedRate.rate)
         : false;
 
       cachedRate = {
-        rate: Number(rawRate.toFixed(2)),
+        rate: Number(effectiveRate.toFixed(2)),
         roundedRate: rounded,
-        previousRate: hasPreviousLiveRate ? cachedRate.rate : rawRate,
+        previousRate: hasPreviousLiveRate ? cachedRate.rate : effectiveRate,
         changePercent: change,
         updatedAt: new Date().toISOString(),
-        source: source.name,
+        source: spreadPct > 0 ? `${source.name} (+${spreadPct}% FX spread)` : source.name,
         isFallback: false,
         isStale: false,
         isVolatile,

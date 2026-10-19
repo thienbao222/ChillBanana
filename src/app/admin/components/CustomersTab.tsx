@@ -77,7 +77,7 @@ export default function CustomersTab({ onViewOrders, onViewAiTrends }: Customers
                   onClick={async () => {
                     const res = await fetch("/api/admin/stitch-all", { method: "POST" });
                     const data = await res.json();
-                    alert(data.message || "Hoan thanh!");
+                    adminToast.success(data.message || "Đã đồng bộ dữ liệu khách hàng thành công!");
                     fetchCustomers();
                   }}
                   className="px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-2xl transition-all flex items-center space-x-2"

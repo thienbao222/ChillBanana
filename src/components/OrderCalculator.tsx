@@ -63,6 +63,7 @@ export default function OrderCalculator() {
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [rateLoading, setRateLoading] = useState(false);
   const [rateSource, setRateSource] = useState("Tỷ giá liên ngân hàng");
+  const [isRateStale, setIsRateStale] = useState(false);
 
   // Trạng thái modal đặt hàng nhanh
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -118,12 +119,17 @@ export default function OrderCalculator() {
     try {
       const res = await fetch("/api/exchange-rate");
       const json = await res.json();
+      const stale = Boolean(json.data?.isStale || !json.success);
+      setIsRateStale(stale);
       if (json.success && json.data?.roundedRate) {
         setExchangeRate(json.data.roundedRate);
-        if (json.data.source) setRateSource(json.data.source);
+        if (json.data.source) {
+          setRateSource(stale ? `${json.data.source} (Tạm gián đoạn)` : json.data.source);
+        }
       }
     } catch (err) {
       console.warn("Could not fetch live rate:", err);
+      setIsRateStale(true);
     } finally {
       setRateLoading(false);
     }
@@ -240,6 +246,11 @@ export default function OrderCalculator() {
   const handleCreateOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    if (isRateStale) {
+      toast.error("Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường.");
+      return;
+    }
 
     if ((!productUrl || productUrl.trim() === "") && !productId) {
       toast.warning("Vui lòng dán link sản phẩm trước.");
@@ -546,7 +557,10 @@ export default function OrderCalculator() {
                 <input
                   type="url"
                   value={productUrl}
-                  onChange={(e) => setProductUrl(e.target.value)}
+                  onChange={(e) => {
+                    setProductUrl(e.target.value);
+                    setProductId(null);
+                  }}
                   placeholder="https://www.amazon.co.jp/... hoặc https://jp.mercari.com/..."
                   className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white transition-all"
                 />
@@ -896,9 +910,16 @@ export default function OrderCalculator() {
 
           {/* CTA Buttons */}
           <div className="mt-8 space-y-2.5">
+            {isRateStale && (
+              <div className="p-3 rounded-2xl bg-amber-500/20 border border-amber-500/40 text-amber-200 text-xs flex items-start space-x-2">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <span><strong>Tạm dừng nhận đơn mới:</strong> Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường.</span>
+              </div>
+            )}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
               <button
                 type="button"
+                disabled={isRateStale}
                 onClick={() => {
                   addToCart({
                     id: "calc-" + Date.now(),
@@ -912,7 +933,11 @@ export default function OrderCalculator() {
                     category,
                   });
                 }}
-                className="py-3.5 px-4 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-xs sm:text-sm border border-white/20 transition-all flex items-center justify-center space-x-1.5 hover:border-banana-400"
+                className={`py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm border transition-all flex items-center justify-center space-x-1.5 ${
+                  isRateStale
+                    ? "bg-white/5 border-white/10 text-slate-400 cursor-not-allowed opacity-50"
+                    : "bg-white/15 hover:bg-white/25 text-white border-white/20 hover:border-banana-400"
+                }`}
               >
                 <ShoppingCart className="w-4 h-4 text-banana-400" />
                 <span>Thêm Vào Giỏ Hàng</span>
@@ -920,10 +945,21 @@ export default function OrderCalculator() {
 
               <button
                 type="button"
-                onClick={() => setShowOrderModal(true)}
-                className="py-3.5 px-4 rounded-2xl bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-1.5 group"
+                disabled={isRateStale}
+                onClick={() => {
+                  if (isRateStale) {
+                    toast.warning("Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường.");
+                    return;
+                  }
+                  setShowOrderModal(true);
+                }}
+                className={`py-3.5 px-4 rounded-2xl font-extrabold text-xs sm:text-sm shadow-lg transition-all flex items-center justify-center space-x-1.5 ${
+                  isRateStale
+                    ? "bg-slate-700/80 text-slate-400 border border-slate-600/50 cursor-not-allowed opacity-60"
+                    : "bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 hover:shadow-xl group"
+                }`}
               >
-                <span>Đặt Cọc & Mua Ngay</span>
+                <span>{isRateStale ? "Tạm Dừng Nhận Đơn" : "Đặt Cọc & Mua Ngay"}</span>
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </button>
             </div>

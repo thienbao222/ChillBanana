@@ -157,15 +157,46 @@ async function buildDailySnapshot() {
   };
 }
 
-async function generateDailyInsight() {
-  const apiKey = adminKeyPool.getNextKey();
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: "Gemini Admin key chưa cấu hình hoặc đang quá tải." },
-      { status: 503 }
-    );
-  }
+function generateFallbackDailyInsightMarkdown(snapshot: Awaited<ReturnType<typeof buildDailySnapshot>>): string {
+  const { orders, chat, catalog } = snapshot;
+  const num = (v: number) => v.toLocaleString("vi-VN");
 
+  const lowStockList = catalog.lowStock.length > 0
+    ? catalog.lowStock.map((p) => `- **${p.name}**: còn **${p.slots}** suất`).join("\n")
+    : "- Không có sản phẩm nào sắp hết suất.";
+
+  const stuckList = orders.stuckSamples.length > 0
+    ? orders.stuckSamples.map((s) => `- Đơn #${s.code} (${s.status}): không có cập nhật trong ${s.daysSinceTrackingUpdate} ngày`).join("\n")
+    : "- Không có đơn nào bị kẹt vận chuyển.";
+
+  const topKwList = chat.topKeywords.length > 0
+    ? chat.topKeywords.slice(0, 5).map((k) => `\`${k.keyword}\` (${k.count} lượt)`).join(", ")
+    : "Chưa ghi nhận từ khóa nổi bật.";
+
+  return `## 📊 TÓM TẮT NGÀY QUA (${snapshot.period})
+- **Số đơn hàng mới:** **${orders.new24h}** đơn.
+- **Đơn đã xác nhận cọc/thanh toán:** **${orders.paid24h}** đơn.
+- **Tổng tiền cọc thực thu ước tính:** **${num(orders.collectedAmountEstimate24h)} đ**.
+- **Số phiên tư vấn khách hàng:** **${chat.sessions24h}** phiên (trong đó có ${chat.complaints24h} phản hồi khiếu nại).
+
+## 🔥 GỢI Ý NHẬP HÀNG & XU HƯỚNG TÌM KIẾM
+- Các từ khóa khách quan tâm nhiều trong 24h qua: ${topKwList}.
+- Đề xuất: Khảo sát thêm các mặt hàng liên quan trên Amazon JP & Mercari để bổ sung vào Catalog.
+
+## ⚠️ CẢNH BÁO CẦN XỬ LÝ
+- **Sản phẩm sắp hết suất đặt mua:**
+${lowStockList}
+- **Đơn hàng cần cập nhật trạng thái kho/vận đơn:**
+${stuckList}
+- Đơn hàng chờ thanh toán quá 48h: **${orders.pendingUnpaid}** đơn.
+
+## ✅ 3 HÀNH ĐỘNG ƯU TIÊN HÔM NAY
+1. Kiểm tra và bổ sung suất nhận mua hộ cho các sản phẩm trong danh mục sắp hết slot.
+2. Liên hệ bộ phận kho Tokyo/đơn vị bay để cập nhật lộ trình cho ${orders.stuckInTransit} đơn đang vận chuyển.
+3. Rà soát danh sách ${orders.pendingUnpaid} đơn chờ cọc để giải phóng suất kho nếu quá hạn.`;
+}
+
+async function generateDailyInsight() {
   try {
     const snapshot = await buildDailySnapshot();
 
@@ -186,39 +217,62 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
 
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.admin}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          system_instruction: { parts: [{ text: systemInstruction }] },
-          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-          generationConfig: {
-            maxOutputTokens: 2000,
-            thinkingConfig: { thinkingLevel: "low" },
-          },
-        }),
-        signal: AbortSignal.timeout(30000),
-      }
-    );
+    let insight: string | null = null;
+    const models = [GEMINI_MODELS.admin, "gemini-2.5-flash", "gemini-2.0-flash"];
 
-    if (!response.ok) {
-      adminKeyPool.markError(apiKey, response.status);
-      return NextResponse.json(
-        { error: `Gemini API lỗi: ${response.status}` },
-        { status: 502 }
-      );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const apiKey = adminKeyPool.getNextKey();
+      if (!apiKey) break;
+
+      for (const model of models) {
+        try {
+          const isLegacy = model === "gemini-2.5-flash" || model === "gemini-2.0-flash";
+          const generationConfig = isLegacy
+            ? { maxOutputTokens: 2000, temperature: 0.2 }
+            : {
+                maxOutputTokens: 2000,
+                thinkingConfig: { thinkingLevel: "low" },
+              };
+
+          const response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                generationConfig,
+              }),
+              signal: AbortSignal.timeout(30000),
+            }
+          );
+
+          if (!response.ok) {
+            adminKeyPool.markError(apiKey, response.status);
+            continue;
+          }
+
+          const data = await response.json();
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const text = parts
+            .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
+            .pop()?.text?.trim();
+
+          if (text) {
+            insight = text;
+            break;
+          }
+        } catch {
+          continue;
+        }
+      }
+
+      if (insight) break;
     }
 
-    const data = await response.json();
-    const parts = data?.candidates?.[0]?.content?.parts || [];
-    const insight = parts
-      .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
-      .pop()?.text?.trim();
-
     if (!insight) {
-      return NextResponse.json({ error: "Gemini không trả về nội dung." }, { status: 502 });
+      insight = generateFallbackDailyInsightMarkdown(snapshot);
     }
 
     const snapshotSummary = {

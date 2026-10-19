@@ -30,18 +30,26 @@ export const dynamic = "force-dynamic";
 // ─────────────────────────────────────────────────────────────────────────────
 
 function getResetSecret(): string {
-  const secret = process.env.CUSTOMER_SESSION_SECRET || "dev-only-insecure-customer-secret-do-not-use-in-prod";
+  const secret = process.env.CUSTOMER_SESSION_SECRET;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CUSTOMER_SESSION_SECRET is required in production");
+    }
+    return "reset:dev-only-insecure-customer-secret-do-not-use-in-prod";
+  }
   return `reset:${secret}`;
 }
 
 /**
  * Tạo token reset password: base64( payload::hmac )
- * payload = JSON { id, email, exp }
+ * payload = JSON { id, email, pwdDigest, exp }
  */
-function createResetToken(customerId: string, email: string): string {
+function createResetToken(customerId: string, email: string, passwordHash: string): string {
+  const pwdDigest = crypto.createHash("sha256").update(passwordHash).digest("hex").slice(0, 16);
   const payload = JSON.stringify({
     id: customerId,
     email: email.toLowerCase(),
+    pwdDigest,
     purpose: "reset-password",
     exp: Date.now() + 60 * 60 * 1000, // 1 giờ
   });
@@ -51,9 +59,9 @@ function createResetToken(customerId: string, email: string): string {
 }
 
 /**
- * Verify token reset. Trả về { id, email } nếu hợp lệ, null nếu không.
+ * Verify token reset. Trả về { id, email, pwdDigest } nếu hợp lệ, null nếu không.
  */
-function verifyResetToken(token: string): { id: string; email: string } | null {
+function verifyResetToken(token: string): { id: string; email: string; pwdDigest: string } | null {
   try {
     const decoded = Buffer.from(token, "base64url").toString("utf-8");
     const sepIndex = decoded.lastIndexOf("::");
@@ -70,8 +78,8 @@ function verifyResetToken(token: string): { id: string; email: string } | null {
     const payload = JSON.parse(payloadStr);
     if (payload.purpose !== "reset-password") return null;
     if (typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
-    if (typeof payload.id !== "string" || typeof payload.email !== "string") return null;
-    return { id: payload.id, email: payload.email };
+    if (typeof payload.id !== "string" || typeof payload.email !== "string" || typeof payload.pwdDigest !== "string") return null;
+    return { id: payload.id, email: payload.email, pwdDigest: payload.pwdDigest };
   } catch {
     return null;
   }
@@ -109,14 +117,21 @@ export async function POST(req: NextRequest) {
 
     // ANTI-ENUMERATION: Luôn trả 200, dù email có tồn tại hay không
     try {
+      try {
+        getResetSecret();
+      } catch (secErr) {
+        console.error("[reset-password] Lỗi cấu hình bí mật phiên:", secErr);
+        return NextResponse.json({ error: "Lỗi cấu hình hệ thống xác thực." }, { status: 500 });
+      }
+
       const customer = await prisma.customer.findUnique({
         where: { email },
-        select: { id: true, email: true, name: true, emailVerifiedAt: true },
+        select: { id: true, email: true, name: true, emailVerifiedAt: true, passwordHash: true },
       });
 
-      if (customer?.emailVerifiedAt) {
+      if (customer?.emailVerifiedAt && customer.passwordHash) {
         // Tạo token và gửi email (chỉ khi tài khoản tồn tại và đã verify)
-        const token = createResetToken(customer.id, customer.email);
+        const token = createResetToken(customer.id, customer.email, customer.passwordHash);
         const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
 
         // Gọi mailer — không throw nếu lỗi để giữ anti-enumeration
@@ -158,6 +173,13 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    try {
+      getResetSecret();
+    } catch (secErr) {
+      console.error("[reset-password] Lỗi cấu hình bí mật phiên:", secErr);
+      return NextResponse.json({ error: "Lỗi cấu hình hệ thống xác thực." }, { status: 500 });
+    }
+
     const parsed = verifyResetToken(token);
     if (!parsed) {
       return NextResponse.json(
@@ -170,11 +192,19 @@ export async function POST(req: NextRequest) {
       // Kiểm tra customer vẫn tồn tại và email khớp
       const customer = await prisma.customer.findUnique({
         where: { id: parsed.id },
-        select: { id: true, email: true },
+        select: { id: true, email: true, passwordHash: true },
       });
 
       if (!customer || customer.email.toLowerCase() !== parsed.email) {
         return NextResponse.json({ error: "Link đặt lại mật khẩu không hợp lệ." }, { status: 400 });
+      }
+
+      const currentDigest = crypto.createHash("sha256").update(customer.passwordHash).digest("hex").slice(0, 16);
+      if (parsed.pwdDigest !== currentDigest) {
+        return NextResponse.json(
+          { error: "Link đặt lại mật khẩu này đã được sử dụng. Vui lòng yêu cầu link mới." },
+          { status: 400 }
+        );
       }
 
       // Hash mật khẩu mới bằng scrypt (cùng hàm với register)

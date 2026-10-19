@@ -74,6 +74,7 @@ export default function NeoDaylightCosmos() {
   // Exchange rate state (live from API)
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
   const [rateLabel, setRateLabel] = useState<string>(`${DEFAULT_EXCHANGE_RATE.toLocaleString("vi-VN")} đ`);
+  const [isRateStale, setIsRateStale] = useState<boolean>(false);
 
   // Parallax pointermove & scroll listeners
   useEffect(() => {
@@ -106,13 +107,17 @@ export default function NeoDaylightCosmos() {
     fetch("/api/exchange-rate")
       .then((r) => r.json())
       .then((data) => {
+        const stale = Boolean(data?.data?.isStale || !data?.success);
+        setIsRateStale(stale);
         if (data?.data?.roundedRate) {
           const rate = Number(data.data.roundedRate);
           setExchangeRate(rate);
-          setRateLabel(`${rate.toLocaleString("vi-VN")} đ`);
+          setRateLabel(stale ? `${rate.toLocaleString("vi-VN")} đ (Tạm gián đoạn)` : `${rate.toLocaleString("vi-VN")} đ`);
         }
       })
-      .catch(() => {/* fallback */});
+      .catch(() => {
+        setIsRateStale(true);
+      });
   }, []);
 
   // Auto-fill customer info if logged in (dùng functional update để tránh thiếu deps)
@@ -195,6 +200,7 @@ export default function NeoDaylightCosmos() {
 
   // Quét link tự động (kiểm tra client-side và fallback thân thiện)
   const handleScanLink = async () => {
+    setSelectedProductId(null);
     const trimmed = inputUrl.trim();
     if (!trimmed) {
       showToast("Vui lòng dán link sản phẩm (Amazon JP, Mercari, Rakuten...)");
@@ -299,8 +305,12 @@ export default function NeoDaylightCosmos() {
       showToast("Vui lòng tích chọn đồng ý với Chính sách mua hộ & đặt cọc.");
       return;
     }
-    if (!inputUrl.trim() && !selectedProductId && !productName.trim()) {
-      showToast("Vui lòng dán link hoặc chọn sản phẩm trước khi tạo đơn đặt cọc.");
+    if (isRateStale) {
+      showToast("Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường.");
+      return;
+    }
+    if (!inputUrl.trim() && !selectedProductId) {
+      showToast("Vui lòng dán link sản phẩm từ sàn Nhật hoặc chọn một sản phẩm có sẵn bên dưới.");
       return;
     }
     if (priceJpy < 100 || !Number.isInteger(priceJpy)) {
@@ -713,6 +723,14 @@ export default function NeoDaylightCosmos() {
                       showToast("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
                       return;
                     }
+                    fetch("/api/ai/chat", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${vnJpCargoType} - Trọng lượng: ${vnJpWeightKg}kg - Thành phố nhận: ${vnJpCity}`,
+                        personality: "omotenashi",
+                      }),
+                    }).catch(() => {});
                     setVnJpSubmitted(true);
                     showToast("Đã tiếp nhận yêu cầu gửi hàng sang Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
                   }}
@@ -827,7 +845,10 @@ export default function NeoDaylightCosmos() {
                     inputMode="url"
                     placeholder={t("https://www.amazon.co.jp/... hoặc https://jp.mercari.com/...")}
                     value={inputUrl}
-                    onChange={(e) => setInputUrl(e.target.value)}
+                    onChange={(e) => {
+                      setInputUrl(e.target.value);
+                      if (e.target.value.trim()) setSelectedProductId(null);
+                    }}
                   />
                   <button
                     className="scan"
@@ -987,12 +1008,29 @@ export default function NeoDaylightCosmos() {
                 <b>{t("Chuẩn quốc tế:")}</b> {t("Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!")}
               </p>
 
+              {isRateStale && (
+                <div style={{
+                  background: "#fffbeb",
+                  border: "1px solid #fde68a",
+                  borderRadius: "12px",
+                  padding: "12px 14px",
+                  marginBottom: "14px",
+                  fontSize: "0.82rem",
+                  color: "#92400e",
+                  lineHeight: "1.45"
+                }}>
+                  <strong>⚠️ Tạm dừng nhận đơn mới:</strong> Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường.
+                </div>
+              )}
+
               {!showOrderForm && !createdOrder && (
                 <div className="bt">
                   <button
                     className="btn2"
                     type="button"
                     onClick={handleAddToCart}
+                    disabled={isRateStale}
+                    style={isRateStale ? { opacity: 0.6, cursor: "not-allowed" } : undefined}
                     title={t("Gom vào giỏ hàng để đặt nhiều món cùng lúc")}
                   >
                     <ShoppingCart className="w-4 h-4 inline mr-1" />
@@ -1001,9 +1039,15 @@ export default function NeoDaylightCosmos() {
                   <button
                     className="cta"
                     type="button"
+                    disabled={isRateStale}
+                    style={isRateStale ? { opacity: 0.5, cursor: "not-allowed", filter: "grayscale(1)" } : undefined}
                     onClick={() => {
-                      if (!inputUrl.trim() && !selectedProductId && !productName.trim()) {
-                        showToast(t("Vui lòng dán link hoặc nhập tên sản phẩm trước."));
+                      if (isRateStale) {
+                        showToast(t("Tỷ giá trực tuyến đang gián đoạn, tạm dừng nhận đơn mới để bảo vệ giá cho khách; các đơn hàng cũ vẫn xử lý bình thường."));
+                        return;
+                      }
+                      if (!inputUrl.trim() && !selectedProductId) {
+                        showToast(t("Vui lòng dán link sản phẩm từ sàn Nhật hoặc chọn một sản phẩm có sẵn bên dưới."));
                         scrollToSection("quote", "u");
                         return;
                       }
@@ -1132,9 +1176,10 @@ export default function NeoDaylightCosmos() {
                   <button
                     className="cta"
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || isRateStale}
+                    style={isRateStale ? { opacity: 0.5, cursor: "not-allowed", filter: "grayscale(1)" } : undefined}
                   >
-                    {isSubmitting ? "Đang xử lý..." : "Xác Nhận & Tạo Đơn"} <svg><use href="#i-arrow" /></svg>
+                    {isSubmitting ? "Đang xử lý..." : isRateStale ? "Tạm Dừng Nhận Đơn (Tỷ Giá Gián Đoạn)" : "Xác Nhận & Tạo Đơn"} <svg><use href="#i-arrow" /></svg>
                   </button>
                 </div>
               </form>
@@ -1244,6 +1289,7 @@ export default function NeoDaylightCosmos() {
                       setCreatedOrder(null);
                       setShowOrderForm(false);
                       setInputUrl("");
+                      setSelectedProductId(null);
                       setProductName("");
                       setProductImage("");
                     }}

@@ -12,6 +12,7 @@ type PricingValues = {
   minimumBaseOrderVnd: number;
   fallbackJpyVndRate: number;
   usdVndReferenceRate: number;
+  fxSpreadPercent: number;
 };
 
 type PricingVersion = {
@@ -53,6 +54,7 @@ const PRICE_FIELDS: Array<{ key: keyof PricingValues; label: string; suffix: str
   { key: "minimumBaseOrderVnd", label: "Giá trị hàng tối thiểu", suffix: "đ", help: "So với tiền hàng cộng phí dịch vụ, chưa gồm cước." },
   { key: "fallbackJpyVndRate", label: "Tỷ giá JPY/VND dự phòng", suffix: "đ/¥", help: "Chỉ dùng khi mọi nguồn tỷ giá trực tuyến lỗi; đơn vẫn bị chặn nếu tỷ giá stale." },
   { key: "usdVndReferenceRate", label: "USD/VND tham chiếu", suffix: "đ/$", help: "Dùng để tính cross-rate JPY/VND từ Frankfurter." },
+  { key: "fxSpreadPercent", label: "Biên độ tỷ giá an toàn (FX Spread)", suffix: "%", step: "0.1", help: "Cộng thêm vào tỷ giá Live quốc tế để bù phí chuyển đổi ngoại tệ ngân hàng và trượt giá (mô hình Buyee/ZenMarket)." },
 ];
 
 function formatDate(value: string | null) {
@@ -90,9 +92,16 @@ export default function BusinessSettingsTab() {
       if (!pricingResponse.ok) throw new Error(pricingData.error || "Không tải được cấu hình giá.");
       if (!emailResponse.ok) throw new Error(emailData.error || "Không tải được nhật ký email.");
       if (!modesResponse.ok) throw new Error(modesData.error || "Không tải được trạng thái provider.");
-      setCurrent(pricingData.current);
-      setDraft(pricingData.current.values);
-      setHistory(pricingData.history || []);
+      const currentValues = {
+        ...pricingData.current.values,
+        fxSpreadPercent: pricingData.current.values.fxSpreadPercent ?? 0,
+      };
+      setCurrent({ ...pricingData.current, values: currentValues });
+      setDraft(currentValues);
+      setHistory((pricingData.history || []).map((h: PricingVersion) => ({
+        ...h,
+        values: { ...h.values, fxSpreadPercent: h.values?.fxSpreadPercent ?? 0 },
+      })));
       setLogs(emailData.logs || []);
       setServiceModes(modesData);
     } catch (cause) {

@@ -25,4 +25,30 @@ describe("Neo model routing", () => {
     expect(urls[0]).toContain("/gemini-3.8-flash:generateContent");
     expect(urls[1]).toContain("/gemini-3.6-flash:generateContent");
   });
+
+  it("builds offline reply with voltage compatibility and general safety note", async () => {
+    const { buildOfflineEvidenceReply } = await import("@/features/ai/customer/assistant");
+    const testEvidence = [
+      {
+        toolId: "product_compatibility" as const,
+        status: "ok" as const,
+        source: { label: "test", observedAt: "2026-10-19T00:00:00Z" },
+        unknown: [],
+        links: [],
+        known: {
+          matchedProducts: [
+            { name: "Nồi cơm Zojirushi", voltageNote: "Chỉ dùng 100V, cần biến áp tối thiểu 1500W" },
+          ],
+          generalSafety: "Nếu nhãn ghi chỉ dùng 100V, không cắm trực tiếp vào nguồn 220V.",
+        },
+      },
+    ];
+
+    const reply = buildOfflineEvidenceReply("nồi cơm", testEvidence, false);
+    expect(reply).toContain("Lưu ý tương thích điện áp Nhật Bản (100V)");
+    expect(reply).toContain("Nồi cơm Zojirushi");
+    expect(reply).toContain("Chỉ dùng 100V, cần biến áp tối thiểu 1500W");
+    expect(reply).toContain("Khuyến cáo an toàn điện áp");
+    expect(reply).toContain("không cắm trực tiếp vào nguồn 220V");
+  });
 });

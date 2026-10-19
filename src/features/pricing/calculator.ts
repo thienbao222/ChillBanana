@@ -17,6 +17,7 @@ export type PricingConfigValues = {
   minimumBaseOrderVnd: number;
   fallbackJpyVndRate: number;
   usdVndReferenceRate: number;
+  fxSpreadPercent?: number;
 };
 
 export const DEFAULT_PRICING_CONFIG: PricingConfigValues = {
@@ -28,6 +29,7 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigValues = {
   minimumBaseOrderVnd: MIN_ORDER_THRESHOLD_VND,
   fallbackJpyVndRate: DEFAULT_EXCHANGE_RATE,
   usdVndReferenceRate: 25_400,
+  fxSpreadPercent: 0,
 };
 
 /** Canonical estimate used by the storefront and APIs. Actual orders are recalculated server-side. */

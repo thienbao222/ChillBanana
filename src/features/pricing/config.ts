@@ -19,6 +19,7 @@ const LIMITS: Record<keyof PricingConfigValues, { min: number; max: number; inte
   minimumBaseOrderVnd: { min: 0, max: 500_000_000, integer: true },
   fallbackJpyVndRate: { min: 100, max: 300, integer: true },
   usdVndReferenceRate: { min: 10_000, max: 100_000, integer: true },
+  fxSpreadPercent: { min: 0, max: 20 },
 };
 
 export function validatePricingConfig(input: unknown): { values: PricingConfigValues } | { error: string } {
@@ -30,6 +31,9 @@ export function validatePricingConfig(input: unknown): { values: PricingConfigVa
   for (const key of keys) {
     const value = source[key];
     const limit = LIMITS[key];
+    if (key === "fxSpreadPercent" && value === undefined) {
+      continue;
+    }
     if (typeof value !== "number" || !Number.isFinite(value) || value < limit.min || value > limit.max || (limit.integer && !Number.isSafeInteger(value))) {
       return { error: `Giá trị ${key} phải nằm trong khoảng ${limit.min}–${limit.max}${limit.integer ? " và là số nguyên" : ""}.` };
     }
@@ -44,7 +48,7 @@ export function validatePricingConfig(input: unknown): { values: PricingConfigVa
 function parseRow(row: { version: number; values: Prisma.JsonValue; changedBy: string; changeReason: string | null; createdAt: Date }): VersionedPricingConfig {
   const validated = validatePricingConfig(row.values);
   if ("error" in validated) throw new Error(`PricingConfig version ${row.version} không hợp lệ: ${validated.error}`);
-  return { ...row, values: validated.values };
+  return { ...row, values: { ...validated.values, fxSpreadPercent: validated.values.fxSpreadPercent ?? 0 } };
 }
 
 export async function getCurrentPricingConfig(): Promise<VersionedPricingConfig> {

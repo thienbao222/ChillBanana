@@ -56,6 +56,104 @@ ${evidencePayload}
 `;
 }
 
+export function buildOfflineEvidenceReply(
+  userQuery: string,
+  evidence: SupportEvidence[] = [],
+  isOmo: boolean
+): string {
+  const catalogEv = evidence.find((e) => e.toolId === "catalog_search");
+  const shippingEv = evidence.find((e) => e.toolId === "shipping_policy");
+  const compatEv = evidence.find((e) => e.toolId === "product_compatibility");
+  const quoteEv = evidence.find((e) => e.toolId === "quote_estimate");
+  const orderEv = evidence.find((e) => e.toolId === "order_status");
+
+  const lines: string[] = [];
+
+  if (isOmo) {
+    lines.push("Dạ, Neo xin phép gửi Quý khách thông tin tra cứu trực tiếp từ hệ thống ChillBanana:");
+  } else {
+    lines.push("Neo gửi bạn thông tin tra cứu trực tiếp từ hệ thống ChillBanana nhé 🍌:");
+  }
+
+  // 1. Catalog Search
+  if (catalogEv && catalogEv.status === "ok") {
+    const products = (catalogEv.known.products as any[]) || [];
+    if (products.length > 0) {
+      lines.push("\n📦 **Sản phẩm phù hợp trong danh mục:**");
+      for (const p of products.slice(0, 3)) {
+        const priceVnd = p.estimatedProductPriceVnd
+          ? `${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ`
+          : "Đang cập nhật";
+        const weight = p.estimatedWeightKg ? ` (${p.estimatedWeightKg} kg)` : "";
+        const note = p.voltageNote ? ` — ⚡ *Lưu ý:* ${p.voltageNote}` : "";
+        lines.push(`• **${p.name}** [${p.category}]: ~${Number(p.priceJpy).toLocaleString("vi-VN")} JPY (~${priceVnd})${weight}${note}`);
+      }
+    } else if (catalogEv.known.category) {
+      lines.push("\n📦 Hiện tại danh mục này chưa có sản phẩm mẫu trùng khớp từ khóa. Bạn có thể gửi link sản phẩm từ Nhật để Neo hỗ trợ báo giá nhé.");
+    }
+  }
+
+  // 2. Compatibility (Voltage 100V)
+  if (compatEv && (compatEv.status === "ok" || compatEv.status === "needs_input")) {
+    const compats = ((compatEv.known.matchedProducts || compatEv.known.products) as any[]) || [];
+    const withVoltage = compats.filter((c: any) => c.voltageNote);
+    if (withVoltage.length > 0 && (!catalogEv || !((catalogEv.known.products as any[])?.length))) {
+      lines.push("\n⚡ **Lưu ý tương thích điện áp Nhật Bản (100V):**");
+      for (const c of withVoltage.slice(0, 2)) {
+        lines.push(`• **${c.name}**: ${c.voltageNote}`);
+      }
+    }
+    if (compatEv.known.generalSafety) {
+      lines.push(`\n⚡ **Khuyến cáo an toàn điện áp:** ${compatEv.known.generalSafety}`);
+    }
+  }
+
+  // 3. Quote Estimate
+  if (quoteEv && quoteEv.status === "ok" && quoteEv.known.priceJpy) {
+    const q = quoteEv.known as any;
+    lines.push("\n💴 **Tạm tính mua hộ theo liên kết:**");
+    lines.push(`• Giá hàng: ${Number(q.priceJpy).toLocaleString("vi-VN")} JPY (Tỷ giá: ${q.exchangeRateVndPerJpy} đ/JPY)`);
+    if (q.productPriceVnd) lines.push(`• Tiền hàng quy đổi: ~${Number(q.productPriceVnd).toLocaleString("vi-VN")} đ`);
+    if (q.serviceFeeVnd) lines.push(`• Phí dịch vụ mua hộ: ~${Number(q.serviceFeeVnd).toLocaleString("vi-VN")} đ`);
+    if (q.depositEstimateVnd) lines.push(`• Tiền đặt cọc tối thiểu (50%): ~${Number(q.depositEstimateVnd).toLocaleString("vi-VN")} đ`);
+  }
+
+  // 4. Shipping Policy
+  if (shippingEv && shippingEv.status === "ok") {
+    const sp = shippingEv.known as any;
+    lines.push("\n✈️ **Chính sách cước bay & phí dịch vụ:**");
+    if (sp.airShippingRateVndPerKg) {
+      lines.push(`• Cước bay quốc tế: ${Number(sp.airShippingRateVndPerKg).toLocaleString("vi-VN")} đ/kg`);
+    }
+    if (sp.serviceFeePercent) {
+      lines.push(`• Phí dịch vụ mua hộ: ${sp.serviceFeePercent}% (tối thiểu ${Number(sp.serviceFeeMinimumVnd || 20000).toLocaleString("vi-VN")} đ)`);
+    }
+    if (sp.groupBuyDiscountPercent) {
+      lines.push(`• Ưu đãi Gộp đơn: Giảm ${sp.groupBuyDiscountPercent}% cước bay cho kiện hàng nhẹ (≤ 0.5kg)`);
+    }
+  }
+
+  // 5. Order Status
+  if (orderEv && orderEv.status === "ok") {
+    const ord = orderEv.known as any;
+    lines.push(`\n📋 **Trạng thái đơn hàng #${ord.orderCode}:** ${ord.status} (${ord.productName})`);
+  }
+
+  if (lines.length <= 1) {
+    return isOmo
+      ? "Dạ, hiện tại kết nối AI đang tạm gián đoạn. Quý khách có thể sử dụng công cụ tính giá tự động trên trang chủ hoặc gửi link sản phẩm Nhật để ChillBanana hỗ trợ ạ."
+      : "Hiện tại kết nối AI đang tạm gián đoạn. Bạn có thể sử dụng công cụ tính giá tự động trên trang chủ hoặc gửi link sản phẩm Nhật để ChillBanana hỗ trợ nhé. 🍌";
+  }
+
+  if (isOmo) {
+    lines.push("\nQuý khách cần tư vấn thêm chi tiết món nào cứ nhắn cho Neo nhé ạ!");
+  } else {
+    lines.push("\nBạn cần hỏi chi tiết thêm sản phẩm nào cứ nhắn cho Neo nha!");
+  }
+
+  return lines.join("\n");
+}
+
 export async function askGeminiAgent(
   userQuery: string,
   personality: AIPersonality,
@@ -91,11 +189,19 @@ export async function askGeminiAgent(
     if (!activeKey) break;
 
     const models = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback];
+      ? [GEMINI_MODELS.neoFallback, "gemini-2.5-flash", "gemini-2.0-flash"]
+      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, "gemini-2.5-flash", "gemini-2.0-flash"];
 
     for (const model of models) {
       try {
+        const isLegacyModel = model === "gemini-2.5-flash" || model === "gemini-2.0-flash";
+        const generationConfig = isLegacyModel
+          ? { maxOutputTokens: 2200, temperature: 0.4 }
+          : {
+              maxOutputTokens: 2200,
+              thinkingConfig: { thinkingLevel: "low" },
+            };
+
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
           {
@@ -104,10 +210,7 @@ export async function askGeminiAgent(
             body: JSON.stringify({
               system_instruction: { parts: [{ text: systemInstruction }] },
               contents,
-              generationConfig: {
-                maxOutputTokens: 2200,
-                thinkingConfig: { thinkingLevel: "low" },
-              },
+              generationConfig,
             }),
             signal: AbortSignal.timeout(12_000),
           }
@@ -118,9 +221,7 @@ export async function askGeminiAgent(
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
           if (typeof textPart?.text === "string" && textPart.text.trim()) return textPart.text.trim();
-          if (model === GEMINI_MODELS.neo) continue;
-          chatKeyPool.markError(activeKey, 502);
-          break;
+          continue;
         }
 
         if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
@@ -129,20 +230,15 @@ export async function askGeminiAgent(
           continue;
         }
 
-        chatKeyPool.markError(activeKey, response.status);
-        break;
+        continue;
       } catch {
         if (model === GEMINI_MODELS.neo) {
           neoPrimaryCooldownUntil = Date.now() + 60_000;
-          continue;
         }
-        chatKeyPool.markError(activeKey, 500);
-        break;
+        continue;
       }
     }
   }
 
-  return isOmo
-    ? "Dạ, kết nối AI đang tạm gián đoạn. Quý khách có thể thử lại sau hoặc dùng công cụ tính giá và trang theo dõi đơn trên website ạ."
-    : "Kết nối AI đang tạm gián đoạn. Bạn thử lại sau hoặc dùng công cụ tính giá và trang theo dõi đơn trên website nhé. 🍌";
+  return buildOfflineEvidenceReply(userQuery, evidence, isOmo);
 }

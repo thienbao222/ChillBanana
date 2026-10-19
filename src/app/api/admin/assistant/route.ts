@@ -50,52 +50,100 @@ Trả lời bằng tiếng Việt ngắn gọn, dễ quét. Nêu căn cứ bằn
       { role: "user", parts: [{ text: `Câu hỏi của admin: ${question}\n\nSnapshot dữ liệu được lấy mới lúc ${dataAsOf}:\n${JSON.stringify(snapshot)}` }] },
     ];
 
-    let lastStatus = 0;
+function buildOfflineAdminReply(moduleId: string, question: string, snapshot: any, dataAsOf: string): string {
+  const parts: string[] = [];
+  parts.push(`### 📊 Phân tích dữ liệu Quản trị [${moduleId.toUpperCase()}]`);
+  parts.push(`*Dữ liệu tổng hợp từ hệ thống lúc: ${new Date(dataAsOf).toLocaleString("vi-VN")}*\n`);
+
+  if (snapshot.kpis || snapshot.scope === "overview") {
+    const kpis = snapshot.kpis || snapshot;
+    if (kpis.orderCount !== undefined) {
+      parts.push(`- **Tổng số đơn hàng ghi nhận:** **${kpis.orderCount}** đơn.`);
+    }
+    if (kpis.paidOrderCount !== undefined) {
+      parts.push(`- **Đơn đã xác nhận thanh toán/cọc:** **${kpis.paidOrderCount}** đơn.`);
+    }
+    if (kpis.actualRevenueVnd !== undefined) {
+      parts.push(`- **Tổng tiền cọc thực thu:** **${Number(kpis.actualRevenueVnd).toLocaleString("vi-VN")} đ**.`);
+    }
+  }
+
+  if (snapshot.stuckOrdersCount !== undefined) {
+    parts.push(`- **Đơn hàng cần chú ý (chậm tiến độ/chưa có tracking mới):** **${snapshot.stuckOrdersCount}** đơn.`);
+  }
+
+  if (snapshot.catalog) {
+    const total = snapshot.catalog.totalProducts ?? (Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0);
+    parts.push(`- **Tổng sản phẩm mẫu Catalog:** **${total}** món.`);
+  }
+
+  if (snapshot.chatTags || snapshot.topKeywords) {
+    const kw = snapshot.topKeywords || snapshot.chatTags?.recordedKeywords || [];
+    if (kw.length > 0) {
+      const kwStr = kw.slice(0, 5).map((k: any) => Array.isArray(k) ? `${k[0]} (${k[1]})` : `${k.keyword || k} (${k.count || 1})`).join(", ");
+      parts.push(`- **Từ khóa khách quan tâm nhiều:** ${kwStr}.`);
+    }
+  }
+
+  parts.push(`\n**Gợi ý vận hành:** Để xử lý chuyên sâu cho câu hỏi "*${question.slice(0, 60)}*", bạn có thể mở trực tiếp bảng chi tiết của module \`${moduleId}\` trên thanh điều hướng Admin.`);
+
+  return parts.join("\n");
+}
+
+    const models = [GEMINI_MODELS.admin, "gemini-2.5-flash", "gemini-2.0-flash"];
+    let answer: string | null = null;
+
     for (let attempt = 0; attempt < 2; attempt++) {
       const apiKey = adminKeyPool.getNextKey();
       if (!apiKey) break;
-      try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.admin}:generateContent?key=${apiKey}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemInstruction }] },
-            contents,
-            generationConfig: {
-              maxOutputTokens: 1800,
-              thinkingConfig: { thinkingLevel: "low" },
-            },
-          }),
-          signal: AbortSignal.timeout(18000),
-        });
-        if (!response.ok) {
-          lastStatus = response.status;
-          adminKeyPool.markError(apiKey, response.status);
+
+      for (const model of models) {
+        try {
+          const isLegacy = model === "gemini-2.5-flash" || model === "gemini-2.0-flash";
+          const generationConfig = isLegacy
+            ? { maxOutputTokens: 1800, temperature: 0.2 }
+            : {
+                maxOutputTokens: 1800,
+                thinkingConfig: { thinkingLevel: "low" },
+              };
+
+          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemInstruction }] },
+              contents,
+              generationConfig,
+            }),
+            signal: AbortSignal.timeout(18000),
+          });
+
+          if (!response.ok) {
+            adminKeyPool.markError(apiKey, response.status);
+            continue;
+          }
+
+          const data = await response.json();
+          const parts = data?.candidates?.[0]?.content?.parts || [];
+          const text = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
+          if (text) {
+            answer = text;
+            break;
+          }
+        } catch (error) {
+          console.warn("[ADMIN AI] Gemini request failed:", error);
           continue;
         }
-        const data = await response.json();
-        const parts = data?.candidates?.[0]?.content?.parts || [];
-        const answer = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
-        if (!answer) throw new Error("AI không trả về nội dung phân tích.");
-        return NextResponse.json({ success: true, answer, module: moduleId, dataAsOf });
-      } catch (error) {
-        if (error instanceof Error && error.name === "TimeoutError") {
-          return NextResponse.json({ error: "AI phản hồi quá thời gian. Vui lòng thử lại." }, { status: 504 });
-        }
-        if (error instanceof Error && error.message === "AI không trả về nội dung phân tích.") throw error;
-        console.warn("[ADMIN AI] Gemini request failed:", error);
-        lastStatus = 500;
       }
+
+      if (answer) break;
     }
 
-    const apiKeyConfigured = Boolean(process.env.GEMINI_ADMIN_KEYS || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY);
-    return NextResponse.json({
-      error: !apiKeyConfigured
-        ? "Chưa cấu hình GEMINI_ADMIN_KEYS hoặc GEMINI_API_KEY trên môi trường chạy."
-        : lastStatus === 429 || lastStatus === 503
-          ? "Gemini đang giới hạn yêu cầu. Vui lòng thử lại sau."
-          : "Không kết nối được Gemini. Hãy kiểm tra cấu hình khóa AI và log deployment.",
-    }, { status: 502 });
+    if (!answer) {
+      answer = buildOfflineAdminReply(moduleId, question, snapshot, dataAsOf);
+    }
+
+    return NextResponse.json({ success: true, answer, module: moduleId, dataAsOf });
   } catch (error) {
     console.error("[ADMIN AI] Request failed:", error);
     return NextResponse.json({ error: "Không thể tạo phân tích lúc này." }, { status: 500 });

@@ -107,7 +107,7 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       }
     };
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`, {
+    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -116,13 +116,32 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
     });
 
     if (!response.ok) {
-      const errText = await response.text();
-      console.error('Gemini API error:', errText);
-      visionKeyPool.markError(apiKey, response.status);
-      const errorMessage = response.status === 429
-        ? 'AI Vision đang bận. Vui lòng chờ một chút rồi thử lại.'
-        : 'AI Vision chưa xử lý được ảnh này. Vui lòng thử ảnh khác.';
-      return NextResponse.json({ success: false, error: errorMessage }, { status: response.status >= 500 ? 502 : response.status });
+      // Tự động gọi lại ngay với model gemini-2.5-flash và generationConfig không có thinkingConfig
+      const fallbackBody = {
+        ...requestBody,
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.2,
+        },
+      };
+      const fallbackResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(fallbackBody)
+      });
+      if (fallbackResponse.ok) {
+        response = fallbackResponse;
+      } else {
+        const errText = await response.text();
+        console.error('Gemini API error:', errText);
+        visionKeyPool.markError(apiKey, response.status);
+        const errorMessage = response.status === 429
+          ? 'AI Vision đang bận. Vui lòng chờ một chút rồi thử lại.'
+          : 'AI Vision chưa xử lý được ảnh này. Vui lòng thử ảnh khác.';
+        return NextResponse.json({ success: false, error: errorMessage }, { status: response.status >= 500 ? 502 : response.status });
+      }
     }
 
     const data = await response.json();

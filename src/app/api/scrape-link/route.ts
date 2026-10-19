@@ -90,7 +90,7 @@ JSON Schema cần trả về:
 }`;
 
   try {
-    const response = await fetch(
+    let response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`,
       {
         method: "POST",
@@ -107,8 +107,29 @@ JSON Schema cần trả về:
     );
 
     if (!response.ok) {
-      scrapeKeyPool.markError(apiKey, response.status);
-      return null;
+      // Tự động gọi lại ngay với model gemini-2.5-flash và generationConfig không có thinkingConfig
+      const fallbackResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              maxOutputTokens: 1024,
+              temperature: 0.2,
+            },
+          }),
+          signal: AbortSignal.timeout(15000),
+        }
+      );
+
+      if (fallbackResponse.ok) {
+        response = fallbackResponse;
+      } else {
+        scrapeKeyPool.markError(apiKey, response.status);
+        return null;
+      }
     }
 
     const data = await response.json();
