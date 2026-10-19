@@ -84,4 +84,20 @@ describe("calculateOrderPrice", () => {
     expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, serviceFeePercent: 100 })).toBe(true);
     expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, unknown: 1 })).toBe(true);
   });
+
+  it("thẩm định trường fxSpreadPercent (0% đến 20%, số thực hợp lệ)", () => {
+    expect(validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 0 })).toMatchObject({
+      values: { fxSpreadPercent: 0 },
+    });
+    expect(validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 3.6 })).toMatchObject({
+      values: { fxSpreadPercent: 3.6 },
+    });
+    expect(validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 20 })).toMatchObject({
+      values: { fxSpreadPercent: 20 },
+    });
+    // Vượt ngưỡng hoặc sai kiểu
+    expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: -0.1 })).toBe(true);
+    expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 20.1 })).toBe(true);
+    expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: "3.6" as unknown as number })).toBe(true);
+  });
 });

@@ -98,7 +98,13 @@ function encodeToken(payload: string, signature: string): string {
 
 function decodeToken(token: string): { payloadStr: string; signature: string } | null {
   try {
-    const decoded = Buffer.from(token, "base64").toString("utf-8");
+    if (typeof token !== "string" || !token) return null;
+    const buf = Buffer.from(token, "base64");
+    // Chống can thiệp: từ chối chuỗi chứa rác hoặc không phải base64 nguyên vẹn
+    if (buf.toString("base64").replace(/=+$/, "") !== token.replace(/=+$/, "")) {
+      return null;
+    }
+    const decoded = buf.toString("utf-8");
     const sepIndex = decoded.lastIndexOf("::");
     if (sepIndex === -1) return null;
     return { payloadStr: decoded.slice(0, sepIndex), signature: decoded.slice(sepIndex + 2) };
@@ -206,7 +212,7 @@ export function verifyCustomerSessionToken(token: string): { id: string; email: 
   if (!safeEqual(expected, decoded.signature)) return null;
   try {
     const payload = JSON.parse(decoded.payloadStr);
-    if (!payload?.id || !payload?.email || typeof payload.exp !== "number" || payload.exp < Date.now()) return null;
+    if (!payload?.id || !payload?.email || typeof payload.exp !== "number" || payload.exp < Date.now() || payload.purpose) return null;
     return { id: payload.id, email: payload.email };
   } catch {
     return null;
