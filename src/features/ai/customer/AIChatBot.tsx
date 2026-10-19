@@ -37,6 +37,31 @@ function formatSourceTime(value: string): string {
 
 type PendingImage = { file: File; previewUrl: string };
 
+const COSMIC_HOVER_HINTS = [
+  "Tọa độ của tôi đang bị chạm vào... Kéo để đổi quỹ đạo, chạm để mở kênh tư vấn.",
+  "Tín hiệu tiếp xúc đã nhận diện. Cần Neo quét dữ liệu hàng Nhật từ vũ trụ không?",
+  "Trọng lực ổn định. Nhấp vào Neo để kích hoạt kênh liên lạc xuyên ngân hà nhé.",
+  "Đừng chọc tôi mãi thế chứ... Cần tìm món gì ở Nhật thì cứ chạm vào tôi.",
+  "Kênh truyền tin vũ trụ đang mở. Chạm để trao đổi dữ liệu cùng Neo.",
+];
+
+const COSMIC_AMBIENT_HINTS = [
+  "Đang thu nhận sóng vô tuyến từ các sàn Tokyo... Cần Neo hỗ trợ không?",
+  "Tôi không tò mò đâu... nhưng bạn đang tìm figure anime hay đồ công nghệ vậy?",
+  "Quỹ đạo Narita ➔ Tân Sơn Nhất ổn định. Kiện hàng của bạn sẽ hạ cánh an toàn.",
+  "Tỷ giá JPY/VND vừa đồng bộ vào bộ vi xử lý của Neo. Cần tính giá món nào không?",
+  "Trọng lực website này rất êm... Neo đang chờ chỉ lệnh tiếp theo từ bạn.",
+  "Khoảng cách giữa Trái Đất và Nhật Bản chỉ là vài mili-giây với dữ liệu của tôi.",
+  "Nếu phân vân điện áp 100V, nhớ hỏi tôi... Tôi ghét nhìn thấy thiết bị bị chập điện.",
+  "Đang tuần tra quanh quỹ đạo website ChillBanana... Mọi chỉ số đều bình thường.",
+];
+
+const COSMIC_DRAG_HINTS = [
+  "Thiết lập quỹ đạo mới thành công. Trọng lực tại đây khá ổn.",
+  "Tọa độ mới đã khóa. Neo tiếp tục quan sát cùng bạn.",
+  "Hạ cánh tại vị trí mới an toàn. Tín hiệu vẫn 100%.",
+];
+
 // Subcomponent hiển thị ảnh chat thông minh, tự động fallback nếu link ảnh lỗi/chặn
 function ChatImage({ url, alt }: { url: string; alt: string }) {
   const [hasError, setHasError] = useState(false);
@@ -80,7 +105,7 @@ export default function AIChatBot() {
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Chào bạn! Mình là Neo Universe, trợ lý AI của ChillBanana. Mình có thể giúp tìm sản phẩm Nhật, đọc link, tư vấn đồ điện 100V, ước tính chi phí và giải đáp chuyện mua hàng. Bạn đang cần hỗ trợ điều gì?\n\nBạn cũng có thể gửi ảnh sản phẩm để Neo nhận diện và tìm thông tin.",
+      text: "Kết nối thành công... Tôi là Neo Universe, quan sát viên và trợ lý mua sắm của ChillBanana. Không gian sàn Nhật khá rộng lớn, nhưng mọi tọa độ từ Mercari, Rakuten đến Amazon JP đều nằm trong tầm quét của tôi. Bạn cần tính toán chi phí, lùng món hiếm, kiểm tra điện áp 100V hay phân tích ảnh sản phẩm? Cứ truyền tín hiệu cho tôi nhé.",
       time: "Vừa xong",
     },
   ]);
@@ -181,7 +206,7 @@ export default function AIChatBot() {
   useEffect(() => {
     if (isOpen || petConversationOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || isPageScrolling || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
 
-    const hints = ["Neo có thể giúp bạn tìm món hàng Nhật đó!", "Chạm vào Neo để bắt đầu tư vấn nhé.", "Neo đang ở đây nếu bạn cần hỗ trợ."];
+    const hints = COSMIC_AMBIENT_HINTS;
     let actionTimer: number;
     let settleTimer: number;
     let hintTimer: number;
@@ -204,9 +229,9 @@ export default function AIChatBot() {
         setPetPosition({ left: Math.min(maxLeft, nextLeft), top: Math.min(maxTop, nextTop) });
         setAmbientAnimation("walk");
 
-        if (Math.random() > 0.72) {
+        if (Math.random() > 0.65) {
           setAmbientHint(hints[Math.floor(Math.random() * hints.length)]);
-          hintTimer = window.setTimeout(() => setAmbientHint(""), 3200);
+          hintTimer = window.setTimeout(() => setAmbientHint(""), 4200);
         }
 
         settleTimer = window.setTimeout(() => {
@@ -247,7 +272,7 @@ export default function AIChatBot() {
     const onPageScroll = () => {
       if (!petVisible || isOpen || petConversationOpen || isPetDragging) return;
       setIsPageScrolling(true);
-      setAmbientHint("Neo đang theo dõi trang cùng bạn!");
+      setAmbientHint("Điều chỉnh quỹ đạo bám sát tọa độ bạn đang xem...");
       if (wanderingEnabled && !pageScrollActiveRef.current && petRef.current) {
         const rect = petRef.current.getBoundingClientRect();
         const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
@@ -335,7 +360,7 @@ export default function AIChatBot() {
     setIsPetDragging(true);
     setAmbientAnimation("walk");
     if (deltaX !== 0) setFacingLeft(deltaX < 0);
-    setAmbientHint("Neo đã tới chỗ mới!");
+    setAmbientHint("Đang dịch chuyển tọa độ...");
     setPetPosition(clampPetPosition(drag.left + deltaX, drag.top + deltaY));
   };
 
@@ -343,9 +368,10 @@ export default function AIChatBot() {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     if (drag.moved && petPositionRef.current) {
+      setAmbientHint(COSMIC_DRAG_HINTS[Math.floor(Math.random() * COSMIC_DRAG_HINTS.length)]);
       try { window.localStorage.setItem("neo-universe-pet-position", JSON.stringify(petPositionRef.current)); } catch { /* Storage is optional. */ }
-      window.setTimeout(() => setAmbientHint(""), 1800);
-      window.setTimeout(() => setAmbientAnimation("idle"), 1800);
+      window.setTimeout(() => setAmbientHint(""), 2800);
+      window.setTimeout(() => setAmbientAnimation("idle"), 2800);
     }
     dragRef.current = null;
     setIsPetDragging(false);
@@ -966,7 +992,7 @@ export default function AIChatBot() {
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
             onPointerCancel={handlePetPointerUp}
-            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint("Kéo Neo để di chuyển · Chạm để tư vấn"); }}
+            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint(COSMIC_HOVER_HINTS[Math.floor(Math.random() * COSMIC_HOVER_HINTS.length)]); }}
             onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
             className="pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
@@ -994,7 +1020,7 @@ export default function AIChatBot() {
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold">Neo Universe</p>
-                  <p className="text-[10px] text-emerald-300">{loading ? "Đang suy nghĩ..." : "Đang lắng nghe bạn"}</p>
+                  <p className="text-[10px] text-emerald-300">{loading ? "Đang xử lý tín hiệu..." : "Đang kết nối cùng bạn"}</p>
                 </div>
                 <button type="button" onClick={() => { setPetConversationOpen(false); setIsOpen(true); }} className="rounded-lg px-2 py-1 text-[10px] font-semibold text-slate-200 hover:bg-white/10 hover:text-white" title="Mở khung tư vấn đầy đủ">Mở chat</button>
                 <button type="button" onClick={() => setPetConversationOpen(false)} className="rounded-lg p-1.5 text-slate-300 hover:bg-white/10 hover:text-white" aria-label="Đóng hội thoại với Neo">
@@ -1020,13 +1046,14 @@ export default function AIChatBot() {
                     </div>
                   </div>
                 ))}
-                {loading && <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-slate-600 shadow-sm"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Neo đang phân tích câu hỏi của bạn…</div>}
+                {loading && <div className="inline-flex items-center gap-2 rounded-2xl rounded-bl-md border border-slate-200 bg-white px-3 py-2 text-slate-600 shadow-sm"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Neo đang phân tích tọa độ dữ liệu…</div>}
               </div>
 
               {!messages.some((message) => message.sender === "user") && (
                 <div className="flex flex-wrap gap-1.5 border-t border-slate-100 bg-white px-3 py-2">
-                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Tôi muốn tìm một sản phẩm Nhật, Neo có thể tư vấn không?")} className="rounded-full border border-banana-200 bg-banana-50 px-2.5 py-1 text-[10px] font-semibold text-navy-800 hover:bg-banana-100 disabled:opacity-40">Tìm sản phẩm Nhật</button>
-                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Đồ điện 100V của Nhật dùng ở Việt Nam thế nào?")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40">Hỏi về điện 100V</button>
+                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Quét tọa độ hàng hot nội địa Nhật giúp tôi")} className="rounded-full border border-banana-200 bg-banana-50 px-2.5 py-1 text-[10px] font-semibold text-navy-800 hover:bg-banana-100 disabled:opacity-40">Quét hàng hot Nhật</button>
+                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Đồ điện 100V của Nhật dùng ở Việt Nam thế nào?")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40">Kiểm tra điện 100V</button>
+                  <button type="button" disabled={loading || imageAnalyzing || Boolean(pendingImage)} onClick={() => handleSendMessage("Ước tính phí bay Narita về Việt Nam")} className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-40">Cước bay Narita ➔ VN</button>
                 </div>
               )}
 

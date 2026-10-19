@@ -1,6 +1,20 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { DEFAULT_PRICING_CONFIG } from "@/features/pricing/calculator";
+
 type Responder = (url: string) => { ok: boolean; json: () => Promise<unknown> } | Error;
+
+let mockConfigValues = { ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 0 };
+
+vi.mock("@/features/pricing/config", () => ({
+  getCurrentPricingConfig: vi.fn(async () => ({
+    version: 1,
+    values: mockConfigValues,
+    changedBy: "test",
+    changeReason: null,
+    createdAt: new Date(),
+  })),
+}));
 
 function stubFetch(responder: Responder) {
   const fn = vi.fn(async (input: unknown) => {
@@ -24,6 +38,7 @@ async function load() {
 
 describe("fetchLiveExchangeRate", () => {
   beforeEach(() => {
+    mockConfigValues = { ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 0 };
     vi.spyOn(console, "warn").mockImplementation(() => {});
   });
   afterEach(() => {
@@ -100,5 +115,16 @@ describe("fetchLiveExchangeRate", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("áp dụng fxSpreadPercent vào tỷ giá tính toán khi được cấu hình", async () => {
+    mockConfigValues = { ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 3.6 };
+    stubFetch((url) => (url.includes("open.er-api.com") ? erApi(171.6) : new Error("không được gọi")));
+    const { fetchLiveExchangeRate } = await load();
+    const r = await fetchLiveExchangeRate();
+    // 171.6 * 1.036 = 177.7776 => 177.78, rounded to 178
+    expect(r.rate).toBe(177.78);
+    expect(r.roundedRate).toBe(178);
+    expect(r.source).toContain("+3.6% FX spread");
   });
 });
