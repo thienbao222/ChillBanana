@@ -103,6 +103,10 @@ if (!globalEmailStore.__chillbanana_emails) {
 }
 
 export function recordSentEmail(record: Omit<SentEmailRecord, "id" | "sentAt">): void {
+  // BẢO MẬT: Tuyệt đối không lưu email reset password và email verify chứa link/token bí mật vào demo buffer
+  if (record.type === "RESET_PASSWORD" || record.type === "VERIFY_EMAIL") {
+    return;
+  }
   const list = globalEmailStore.__chillbanana_emails!;
   const newRecord: SentEmailRecord = {
     ...record,
@@ -601,8 +605,8 @@ export async function sendPasswordResetEmail({
     html,
   };
 
-  if (!transporter) {
-    console.log(`[Mailer][DEV] sendPasswordResetEmail → ${to}: ${resetUrl}`);
+  if (!hasAuth) {
+    console.log(`[Mailer][SIMULATED] sendPasswordResetEmail → ${to}: ${resetUrl}`);
     return;
   }
 

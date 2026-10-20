@@ -11,8 +11,11 @@ import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
+import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+const ORDER_CREATE_RATE_LIMIT = { max: 15, windowMs: 2 * 60_000, blockMs: 5 * 60_000 };
 
 export async function GET(req: NextRequest) {
   try {
@@ -66,6 +69,18 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+    if (!isTest) {
+      const clientIp = getClientIp(req);
+      const retryAfter = await checkAndRecordHit(`orders-create:ip:${clientIp}`, ORDER_CREATE_RATE_LIMIT);
+      if (retryAfter > 0) {
+        return NextResponse.json(
+          { error: "Bạn tạo đơn quá nhanh. Vui lòng chờ ít phút rồi thử lại." },
+          { status: 429, headers: { "Retry-After": String(retryAfter) } }
+        );
+      }
+    }
+
     const body = await req.json();
     const depositPercent = body.depositPercent === undefined ? 50 : parseDepositPercent(body.depositPercent);
     if (depositPercent === null) {

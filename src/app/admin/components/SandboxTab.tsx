@@ -725,10 +725,12 @@ export default function SandboxTab() {
             </div>
 
             {/* Modal Body: Render HTML trong sandbox iframe */}
-            <div className="flex-1 bg-white p-4 overflow-y-auto">
-              <div
-                dangerouslySetInnerHTML={{ __html: selectedEmail.html }}
-                className="max-w-2xl mx-auto"
+            <div className="flex-1 bg-white p-4 overflow-y-auto min-h-[500px]">
+              <iframe
+                title="Demo Email Preview"
+                sandbox=""
+                srcDoc={selectedEmail.html}
+                className="w-full h-full min-h-[500px] border-0 max-w-2xl mx-auto block"
               />
             </div>
 

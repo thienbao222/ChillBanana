@@ -229,6 +229,9 @@ export async function askGeminiAgent(
           continue;
         }
 
+        // BẢO MẬT & ĐỘ TIN CẬY: Đánh dấu key lỗi vào pool để kích hoạt cơ chế cooldown
+        chatKeyPool.markError(activeKey, response.status);
+
         if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
           if (response.status === 403 || response.status === 404) neoPrimaryUnavailable = true;
           else neoPrimaryCooldownUntil = Date.now() + 60_000;

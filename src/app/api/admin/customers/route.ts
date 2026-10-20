@@ -121,22 +121,51 @@ export async function GET(req: NextRequest) {
     ).length;
 
     // ====== 6. Enrich thành viên đã đăng ký ======
-    let totalRevenueVnd = 0;
     let registeredWithOrders = 0;
+
+    // Index hóa đơn hàng để tối ưu hiệu năng O(1) thay vì lặp lồng O(N x M)
+    const ordersByCustomerId = new Map<string, typeof allOrders>();
+    const ordersByEmail = new Map<string, typeof allOrders>();
+    const ordersByPhone = new Map<string, typeof allOrders>();
+
+    for (const ord of allOrders) {
+      if (ord.customerId) {
+        const list = ordersByCustomerId.get(ord.customerId) || [];
+        list.push(ord);
+        ordersByCustomerId.set(ord.customerId, list);
+      }
+      if (ord.customerEmail) {
+        const email = ord.customerEmail.toLowerCase().trim();
+        const list = ordersByEmail.get(email) || [];
+        list.push(ord);
+        ordersByEmail.set(email, list);
+      }
+      if (ord.customerPhone) {
+        const phone = ord.customerPhone.trim();
+        const list = ordersByPhone.get(phone) || [];
+        list.push(ord);
+        ordersByPhone.set(phone, list);
+      }
+    }
 
     const enrichedRegistered = registeredCustomers.map((c) => {
       const cleanEmail = c.email.toLowerCase().trim();
       const cleanPhone = c.phone?.trim() || "";
 
-      const userOrders = allOrders.filter((o) => {
-        const oEmail = (o.customerEmail || "").toLowerCase().trim();
-        const oPhone = (o.customerPhone || "").trim();
-        return (
-          (cleanEmail && oEmail === cleanEmail) ||
-          (cleanPhone && oPhone === cleanPhone) ||
-          o.customerId === c.id
-        );
-      });
+      // Gộp đơn theo ID hoặc email/phone chính chủ, loại bỏ trùng lặp id
+      const matchedOrdersMap = new Map<string, typeof allOrders[0]>();
+      if (ordersByCustomerId.has(c.id)) {
+        for (const o of ordersByCustomerId.get(c.id)!) matchedOrdersMap.set(o.id, o);
+      }
+      if (cleanEmail && ordersByEmail.has(cleanEmail)) {
+        for (const o of ordersByEmail.get(cleanEmail)!) matchedOrdersMap.set(o.id, o);
+      }
+      if (cleanPhone && ordersByPhone.has(cleanPhone)) {
+        for (const o of ordersByPhone.get(cleanPhone)!) matchedOrdersMap.set(o.id, o);
+      }
+      const userOrders = Array.from(matchedOrdersMap.values()).sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
 
       const orderCount = userOrders.length;
       if (orderCount > 0) registeredWithOrders++;
@@ -144,7 +173,6 @@ export async function GET(req: NextRequest) {
         (sum, order) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
         0
       );
-      totalRevenueVnd += totalSpentVnd;
       const latestOrder = userOrders[0] || null;
 
       const memberSessions = chatSessions.filter(
@@ -170,6 +198,11 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    // Doanh thu thực tế chuẩn: Tính trực tiếp trên toàn bộ allOrders đã thanh toán (mỗi đơn duy nhất 1 lần, tuyệt đối không cộng trùng)
+    const totalRevenueVnd = allOrders
+      .filter((order) => isPaymentRecorded(order.paymentStatus))
+      .reduce((sum, order) => sum + (order.depositAmountVnd || 0), 0);
+
     // ====== 7. Enrich khách vãng lai đặt đơn ======
     const enrichedGuestOrders = Array.from(guestOrderMap.values()).map((g: any) => {
       const orderCount = g.orders.length;
@@ -177,7 +210,6 @@ export async function GET(req: NextRequest) {
         (sum: number, order: any) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
         0
       );
-      totalRevenueVnd += totalSpentVnd;
       const latestOrder = g.orders[0] || null;
 
       const guestSessions = chatSessions.filter(

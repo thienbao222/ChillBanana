@@ -33,13 +33,16 @@ export function registerHit(state: RateLimitState | null, now: number, config: R
 
 /** Lấy IP client từ header (Vercel đặt x-forwarded-for; phần tử đầu là client). */
 export function clientIpFromHeaders(get: (name: string) => string | null): string {
+  // Ưu tiên x-real-ip do edge proxy thiết lập từ socket kết nối
+  const real = get("x-real-ip");
+  if (real && real.trim()) return real.trim().slice(0, 64);
+
   const forwarded = get("x-forwarded-for");
   if (forwarded) {
     const first = forwarded.split(",")[0]?.trim();
     if (first) return first.slice(0, 64);
   }
-  const real = get("x-real-ip");
-  return real ? real.trim().slice(0, 64) : "unknown";
+  return "unknown";
 }
 
 // Ngưỡng dùng chung cho các luồng xác thực.

@@ -4,6 +4,12 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { createMockPaymentAttemptToken } from "@/features/payments/mock-provider";
 import { resolvePaymentMode } from "@/features/payments/provider";
+import {
+  getCustomerFromRequest,
+  hasGuestOrderAccessForEmail,
+  ORDER_ACCESS_COOKIE_NAME,
+} from "@/lib/auth-session";
+import { isVerifiedAdmin } from "@/lib/admin-guard";
 
 // ========== Helpers ==========
 function sortObject(obj: Record<string, string>) {
@@ -36,6 +42,23 @@ export async function POST(req: NextRequest) {
     if (!order) {
       return NextResponse.json({ error: 'Không tìm thấy đơn hàng.' }, { status: 404 });
     }
+
+    // BẢO MẬT: Bắt buộc xác thực quyền với đơn hàng để chống Unauthenticated Order Lockout
+    const isAdmin = await isVerifiedAdmin(req);
+    const customer = getCustomerFromRequest(req);
+    const guestAccessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value || (typeof body.accessToken === "string" ? body.accessToken : undefined);
+    const hasGuestAccess = Boolean(
+      order.customerEmail &&
+      hasGuestOrderAccessForEmail(guestAccessToken, order.orderCode, order.customerEmail)
+    );
+
+    const isAuthorized = isAdmin || (customer && order.customerId === customer.id) || hasGuestAccess;
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "Bạn không có quyền khởi tạo thanh toán cho đơn hàng này." },
+        { status: 403 }
+      );
+    }
     if (order.paymentStatus !== 'UNPAID' || order.status !== "PENDING_DEPOSIT") {
       return NextResponse.json({ error: 'Đơn hàng này không còn ở trạng thái chờ thanh toán.' }, { status: 400 });
     }
@@ -64,8 +87,21 @@ export async function POST(req: NextRequest) {
     }
 
     // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer.
+    // BẢO MẬT: Giới hạn trần tối đa 45 phút kể từ thời điểm tạo đơn để chống giam kho vô tận (Stock Squatting)
     if (order.reservationExpiresAt) {
-      const paymentWindowExpiresAt = new Date(now.getTime() + 17 * 60 * 1000);
+      const maxReservationCeiling = new Date(order.createdAt.getTime() + 45 * 60 * 1000);
+      const requestedPaymentExpiry = new Date(now.getTime() + 17 * 60 * 1000);
+      const paymentWindowExpiresAt = requestedPaymentExpiry > maxReservationCeiling
+        ? maxReservationCeiling
+        : requestedPaymentExpiry;
+
+      if (paymentWindowExpiresAt <= now) {
+        return NextResponse.json(
+          { error: "Đơn hàng đã hết thời gian gia hạn giữ hàng tối đa (45 phút). Vui lòng liên hệ hỗ trợ hoặc đặt đơn mới." },
+          { status: 409 }
+        );
+      }
+
       if (order.reservationExpiresAt < paymentWindowExpiresAt) {
         const extended = await prisma.order.updateMany({
           where: {

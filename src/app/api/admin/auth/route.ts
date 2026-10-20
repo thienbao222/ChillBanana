@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  // Lấy thông tin admin từ DB hoặc tài khoản mặc định
+  // Lấy thông tin admin từ DB
   let adminUser = null;
   try {
     adminUser = await prisma.adminUser.findUnique({
@@ -35,12 +35,33 @@ export async function GET(req: NextRequest) {
       select: { id: true, username: true, name: true, role: true },
     });
   } catch (err) {
-    // Postgres/Neon connection issue
+    console.error("[AdminAuth] Lỗi kết nối CSDL khi kiểm tra session:", err);
+    return NextResponse.json(
+      { authenticated: false, error: "Không thể xác thực lúc này." },
+      { status: 503 }
+    );
+  }
+
+  // BẢO MẬT: Bắt buộc tài khoản phải còn tồn tại trong cơ sở dữ liệu.
+  // Tuyệt đối không fallback SUPER_ADMIN khi tài khoản đã bị xóa khỏi hệ thống.
+  if (!adminUser) {
+    const response = NextResponse.json(
+      { authenticated: false, error: "Tài khoản không tồn tại hoặc phiên đã bị thu hồi." },
+      { status: 401 }
+    );
+    response.cookies.set({
+      name: ADMIN_COOKIE_NAME,
+      value: "",
+      httpOnly: true,
+      path: "/",
+      maxAge: 0,
+    });
+    return response;
   }
 
   return NextResponse.json({
     authenticated: true,
-    user: adminUser || { username, name: "Quản Trị Viên ChillBanana", role: "SUPER_ADMIN" },
+    user: adminUser,
   });
 }
 

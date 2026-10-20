@@ -21,7 +21,6 @@ const ALLOWED_DOMAINS = [
   "suruga-ya.jp",
   "biccamera.com",
   "yodobashi.com",
-  "r.jina.ai", // Jina AI reader proxy
 ];
 
 // Cấu trúc dữ liệu chuẩn Agent trích xuất (thay thế regex rời rạc cũ)
