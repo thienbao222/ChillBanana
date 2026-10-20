@@ -81,9 +81,11 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
 });
 
 test("VNPAY sandbox: ghi nhận kịch bản nhưng giữ nguyên thanh toán và trạng thái đơn", async () => {
-  const order = (await api.post("/api/orders", orderPayload([{ id: productId, quantity: 2 }], { paymentMethod: "VNPAY" }))).data.order;
+  const orderRes = await api.post("/api/orders", orderPayload([{ id: productId, quantity: 2 }], { paymentMethod: "VNPAY" }));
+  const order = orderRes.data.order;
+  const guest = orderRes.cookie;
 
-  const pay = await api.post("/api/payment/vnpay-create", { orderCode: order.orderCode });
+  const pay = await api.post("/api/payment/vnpay-create", { orderCode: order.orderCode }, { cookie: guest });
   expect(pay.status).toBe(200);
   const url = new URL(pay.data.paymentUrl);
   expect(url.searchParams.get("vnp_Amount")).toBe(String(order.depositAmountVnd * 100));

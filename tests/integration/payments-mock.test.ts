@@ -3,7 +3,8 @@ import { POST as createPayment } from "@/app/api/payment/vnpay-create/route";
 import { POST as confirmMockPayment } from "@/app/api/payment/mock-confirm/route";
 import { prisma } from "../helpers/db";
 import { json, post } from "../helpers/request";
-import { makeOrder } from "../helpers/factories";
+import { makeOrder, guestOrderCookies } from "../helpers/factories";
+import { createGuestOrderAccessToken } from "@/lib/auth-session";
 
 const savedMode = process.env.PAYMENT_MODE;
 afterEach(() => {
@@ -13,7 +14,9 @@ afterEach(() => {
 
 async function startMockPayment(orderCode: string) {
   process.env.PAYMENT_MODE = "mock";
-  const response = await createPayment(post("/api/payment/vnpay-create", { orderCode }));
+  const order = await prisma.order.findFirst({ where: { orderCode }, select: { customerEmail: true } });
+  const cookies = order?.customerEmail ? guestOrderCookies(createGuestOrderAccessToken(orderCode, order.customerEmail)) : undefined;
+  const response = await createPayment(post("/api/payment/vnpay-create", { orderCode }, { cookies }));
   const data = await json<{ paymentUrl: string; mode: string }>(response);
   return { response, data, token: new URL(data.paymentUrl).searchParams.get("token") || "" };
 }
@@ -77,9 +80,10 @@ describe("mock payment provider", () => {
   it("prevents concurrent attempts from creating multiple active payment sessions", async () => {
     const order = await makeOrder();
     process.env.PAYMENT_MODE = "mock";
+    const cookies = order.customerEmail ? guestOrderCookies(createGuestOrderAccessToken(order.orderCode, order.customerEmail)) : undefined;
     const results = await Promise.all([
-      createPayment(post("/api/payment/vnpay-create", { orderCode: order.orderCode })),
-      createPayment(post("/api/payment/vnpay-create", { orderCode: order.orderCode })),
+      createPayment(post("/api/payment/vnpay-create", { orderCode: order.orderCode }, { cookies })),
+      createPayment(post("/api/payment/vnpay-create", { orderCode: order.orderCode }, { cookies })),
     ]);
     expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
     expect(await prisma.paymentAttempt.count({ where: { orderId: order.id, status: "INITIATED" } })).toBe(1);

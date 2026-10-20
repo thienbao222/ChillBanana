@@ -33,4 +33,5 @@ NeoUniverse/
 # TypeScript incremental build cache
 *.tsbuildinfo
 coverage/
+codebase-for-ai.txt
 

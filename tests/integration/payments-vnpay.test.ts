@@ -5,8 +5,9 @@ import { verifyVnpaySignature } from "@/lib/vnpay-payment";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
 import { prisma } from "../helpers/db";
 import { get, json, post } from "../helpers/request";
-import { makeOrder } from "../helpers/factories";
+import { makeOrder, guestOrderCookies } from "../helpers/factories";
 import { ipnPath } from "../helpers/vnpay";
+import { createGuestOrderAccessToken } from "@/lib/auth-session";
 
 const callIpn = async (path: string) => json<{ RspCode: string; Message: string }>(await ipn(get(path)));
 
@@ -131,7 +132,22 @@ describe("VNPAY IPN", () => {
 });
 
 describe("POST /api/payment/vnpay-create", () => {
-  const create = (orderCode?: string) => createPayment(post("/api/payment/vnpay-create", { orderCode }));
+  const create = async (orderCode?: string) => {
+    let cookies: Record<string, string> | undefined;
+    if (orderCode && orderCode !== "CB-KHONG-CO") {
+      const order = await prisma.order.findFirst({ where: { orderCode }, select: { customerEmail: true } });
+      if (order?.customerEmail) {
+        cookies = guestOrderCookies(createGuestOrderAccessToken(orderCode, order.customerEmail));
+      }
+    }
+    return createPayment(post("/api/payment/vnpay-create", { orderCode }, { cookies }));
+  };
+
+  it("từ chối 403 khi không có quyền truy cập đơn hàng (chống Unauthenticated Order Lockout)", async () => {
+    const o = await makeOrder();
+    const res = await createPayment(post("/api/payment/vnpay-create", { orderCode: o.orderCode }));
+    expect(res.status).toBe(403);
+  });
 
   it("tạo URL có chữ ký hợp lệ với số tiền do server tính", async () => {
     const o = await makeOrder();
