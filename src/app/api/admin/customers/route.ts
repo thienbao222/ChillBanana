@@ -4,8 +4,11 @@ import { requireAdmin } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
 
-function isPaymentRecorded(paymentStatus: string) {
-  return paymentStatus === "DEPOSITED_50" || paymentStatus === "PAID_100";
+function isPaymentRecorded(order: { paymentStatus: string; status: string }) {
+  return (
+    order.status !== "CANCELLED" &&
+    (order.paymentStatus === "DEPOSITED_50" || order.paymentStatus === "PAID_100")
+  );
 }
 
 export async function GET(req: NextRequest) {
@@ -158,10 +161,14 @@ export async function GET(req: NextRequest) {
         for (const o of ordersByCustomerId.get(c.id)!) matchedOrdersMap.set(o.id, o);
       }
       if (cleanEmail && ordersByEmail.has(cleanEmail)) {
-        for (const o of ordersByEmail.get(cleanEmail)!) matchedOrdersMap.set(o.id, o);
+        for (const o of ordersByEmail.get(cleanEmail)!) {
+          if (!o.customerId || o.customerId === c.id) matchedOrdersMap.set(o.id, o);
+        }
       }
       if (cleanPhone && ordersByPhone.has(cleanPhone)) {
-        for (const o of ordersByPhone.get(cleanPhone)!) matchedOrdersMap.set(o.id, o);
+        for (const o of ordersByPhone.get(cleanPhone)!) {
+          if (!o.customerId || o.customerId === c.id) matchedOrdersMap.set(o.id, o);
+        }
       }
       const userOrders = Array.from(matchedOrdersMap.values()).sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -170,7 +177,7 @@ export async function GET(req: NextRequest) {
       const orderCount = userOrders.length;
       if (orderCount > 0) registeredWithOrders++;
       const totalSpentVnd = userOrders.reduce(
-        (sum, order) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
+        (sum, order) => sum + (isPaymentRecorded(order) ? order.depositAmountVnd || 0 : 0),
         0
       );
       const latestOrder = userOrders[0] || null;
@@ -198,16 +205,16 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    // Doanh thu thực tế chuẩn: Tính trực tiếp trên toàn bộ allOrders đã thanh toán (mỗi đơn duy nhất 1 lần, tuyệt đối không cộng trùng)
+    // Doanh thu thực tế chuẩn: Tính trực tiếp trên toàn bộ allOrders đã thanh toán và chưa bị hủy (mỗi đơn duy nhất 1 lần, tuyệt đối không cộng trùng)
     const totalRevenueVnd = allOrders
-      .filter((order) => isPaymentRecorded(order.paymentStatus))
+      .filter((order) => isPaymentRecorded(order))
       .reduce((sum, order) => sum + (order.depositAmountVnd || 0), 0);
 
     // ====== 7. Enrich khách vãng lai đặt đơn ======
     const enrichedGuestOrders = Array.from(guestOrderMap.values()).map((g: any) => {
       const orderCount = g.orders.length;
       const totalSpentVnd = g.orders.reduce(
-        (sum: number, order: any) => sum + (isPaymentRecorded(order.paymentStatus) ? order.depositAmountVnd || 0 : 0),
+        (sum: number, order: any) => sum + (isPaymentRecorded(order) ? order.depositAmountVnd || 0 : 0),
         0
       );
       const latestOrder = g.orders[0] || null;
