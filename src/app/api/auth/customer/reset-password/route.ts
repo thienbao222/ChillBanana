@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
         select: { id: true, email: true, name: true, emailVerifiedAt: true, passwordHash: true },
       });
 
-      if (customer?.emailVerifiedAt && customer.passwordHash) {
-        // Tạo token và gửi email (chỉ khi tài khoản tồn tại và đã verify)
+      if (customer?.passwordHash) {
+        // Tạo token và gửi email (cho phép đặt lại mật khẩu kể cả khi chưa kịp xác minh email)
         const token = createResetToken(customer.id, customer.email, customer.passwordHash);
         const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
 
@@ -212,7 +212,10 @@ export async function POST(req: NextRequest) {
 
       await prisma.customer.update({
         where: { id: customer.id },
-        data: { passwordHash: newPasswordHash },
+        data: {
+          passwordHash: newPasswordHash,
+          emailVerifiedAt: new Date(), // Tự động xác thực email vì người dùng đã chứng minh quyền truy cập hộp thư
+        },
       });
 
       console.log(`[reset-password] Khách hàng ${customer.email} đã đặt lại mật khẩu thành công.`);
