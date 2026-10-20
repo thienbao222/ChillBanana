@@ -20,16 +20,21 @@ delete process.env.SMTP_PASS;
 assertSafeTestDatabase();
 
 // ── 3. Mock dịch vụ ngoài (áp dụng cho mọi file test) ───────────────────────
-vi.mock("@/lib/mailer", () => ({
-  sendGuestOrderAccessEmail: vi.fn().mockResolvedValue(true),
-  sendCustomerEmailVerification: vi.fn().mockResolvedValue(true),
-  sendOrderCreatedEmail: vi.fn().mockResolvedValue(true),
-  sendPriceApprovedEmail: vi.fn().mockResolvedValue(true),
-  sendPaymentSuccessEmail: vi.fn().mockResolvedValue(true),
-  sendOrderStatusUpdateEmail: vi.fn().mockResolvedValue(true),
-  sendZaloTrackingNotification: vi.fn().mockResolvedValue(true),
-  retryEmailLog: vi.fn().mockResolvedValue(true),
-}));
+vi.mock("@/lib/mailer", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/mailer")>();
+  return {
+    ...actual,
+    sendGuestOrderAccessEmail: vi.fn().mockResolvedValue(true),
+    sendCustomerEmailVerification: vi.fn().mockResolvedValue(true),
+    sendOrderCreatedEmail: vi.fn().mockResolvedValue(true),
+    sendPriceApprovedEmail: vi.fn().mockResolvedValue(true),
+    sendPaymentSuccessEmail: vi.fn().mockResolvedValue(true),
+    sendOrderStatusUpdateEmail: vi.fn().mockResolvedValue(true),
+    sendZaloTrackingNotification: vi.fn().mockResolvedValue(true),
+    sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+    retryEmailLog: vi.fn().mockResolvedValue(true),
+  };
+});
 
 vi.mock("@/features/pricing/exchange-rate", () => ({
   fetchLiveExchangeRate: vi.fn(),

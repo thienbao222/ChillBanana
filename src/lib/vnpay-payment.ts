@@ -83,8 +83,13 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
 
     if (autoSettleOrder) {
       const recordedStatus = getRecordedPaymentStatus(order.depositPercent);
-      await tx.order.updateMany({
-        where: { id: order.id, paymentStatus: "UNPAID" },
+      const updatedOrder = await tx.order.updateMany({
+        where: {
+          id: order.id,
+          paymentStatus: "UNPAID",
+          status: "PENDING_DEPOSIT",
+          isPriceVerified: true,
+        },
         data: {
           paymentStatus: recordedStatus,
           paymentMethod: "VNPAY_SANDBOX",
@@ -92,6 +97,7 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
           reservationExpiresAt: null,
         },
       });
+      if (updatedOrder.count !== 1) return null;
       await tx.paymentTransaction.create({
         data: {
           orderId: order.id,

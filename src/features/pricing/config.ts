@@ -51,10 +51,37 @@ function parseRow(row: { version: number; values: Prisma.JsonValue; changedBy: s
   return { ...row, values: { ...validated.values, fxSpreadPercent: validated.values.fxSpreadPercent ?? 0 } };
 }
 
+let cachedPricingConfig: VersionedPricingConfig | null = null;
+let cachedPricingConfigExpiresAt = 0;
+const PRICING_CACHE_TTL_MS = 60 * 1000; // 60s
+
+export function invalidatePricingConfigCache(): void {
+  cachedPricingConfig = null;
+  cachedPricingConfigExpiresAt = 0;
+}
+
 export async function getCurrentPricingConfig(): Promise<VersionedPricingConfig> {
+  const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const now = Date.now();
+  if (!isTest && cachedPricingConfig && now < cachedPricingConfigExpiresAt) {
+    return cachedPricingConfig;
+  }
+
   const row = await prisma.pricingConfig.findFirst({ orderBy: { version: "desc" } });
-  if (!row) return { version: 0, values: DEFAULT_PRICING_CONFIG, changedBy: "defaults", changeReason: null, createdAt: new Date(0) };
-  return parseRow(row);
+  if (!row) {
+    const fallback = { version: 0, values: DEFAULT_PRICING_CONFIG, changedBy: "defaults", changeReason: null, createdAt: new Date(0) };
+    if (!isTest) {
+      cachedPricingConfig = fallback;
+      cachedPricingConfigExpiresAt = now + PRICING_CACHE_TTL_MS;
+    }
+    return fallback;
+  }
+  const parsed = parseRow(row);
+  if (!isTest) {
+    cachedPricingConfig = parsed;
+    cachedPricingConfigExpiresAt = now + PRICING_CACHE_TTL_MS;
+  }
+  return parsed;
 }
 
 export async function getPricingConfigHistory(take = 25): Promise<VersionedPricingConfig[]> {

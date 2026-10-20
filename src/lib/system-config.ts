@@ -15,6 +15,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { invalidatePricingConfigCache } from "@/features/pricing/config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Kiểu và giá trị mặc định
@@ -57,6 +58,7 @@ let cacheExpiresAt = 0;
 export function invalidateSystemConfigCache(): void {
   configCache = null;
   cacheExpiresAt = 0;
+  invalidatePricingConfigCache();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

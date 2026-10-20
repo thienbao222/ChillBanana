@@ -298,7 +298,7 @@ export async function sendPaymentSuccessEmail(order: any, logId?: string): Promi
   const orderCode = escapeHtml(String(order.orderCode || ""));
   const isFullPayment = order.paymentStatus === "PAID_100";
   const paymentTitle = isFullPayment ? "Thanh Toán 100% Thành Công!" : "Đặt Cọc 50% Thành Công!";
-  const paymentMethod = order.paymentMethod === "VNPAY" ? "Cổng thanh toán VNPAY" : "Chuyển khoản ngân hàng đã được xác nhận";
+  const paymentMethod = order.paymentMethod?.startsWith("VNPAY") ? "Cổng thanh toán VNPAY" : "Chuyển khoản ngân hàng đã được xác nhận";
   const isPurchasing = order.status === "PURCHASING_JP";
 
   const html = `

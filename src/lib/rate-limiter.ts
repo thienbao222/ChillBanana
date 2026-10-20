@@ -51,7 +51,10 @@ class RateLimiter {
 
     // Tự dọn Map mỗi 10 phút để tránh memory leak
     if (typeof setInterval !== "undefined") {
-      setInterval(() => this.cleanup(), 10 * 60 * 1000);
+      const timer = setInterval(() => this.cleanup(), 10 * 60 * 1000);
+      if (typeof timer.unref === "function") {
+        timer.unref();
+      }
     }
   }
 
@@ -104,13 +107,13 @@ class RateLimiter {
 // cùng một warm instance. Mỗi cold start sẽ reset, đây là trade-off chấp nhận được.
 
 /** Cho `/api/auth/customer` POST — Login/Register: max 10 lần / 1 phút / IP */
-const loginLimiter = new RateLimiter({ maxRequests: 10, windowMs: 60_000 });
+
 
 /** Cho `/api/orders` POST — Đặt đơn: max 5 đơn / 2 phút / IP */
-const orderCreateLimiter = new RateLimiter({ maxRequests: 5, windowMs: 2 * 60_000 });
+
 
 /** Cho `/api/auth/customer/reset-password` — Quên mật khẩu: max 3 lần / 10 phút / IP */
-const resetPasswordLimiter = new RateLimiter({ maxRequests: 3, windowMs: 10 * 60_000 });
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helper: lấy IP từ NextRequest
@@ -134,5 +137,5 @@ export function getClientIp(req: NextRequest): string {
 // Export
 // ─────────────────────────────────────────────────────────────────────────────
 
-export { loginLimiter, orderCreateLimiter, resetPasswordLimiter };
+export { RateLimiter };
 export type { RateLimiterOptions, CheckResult };

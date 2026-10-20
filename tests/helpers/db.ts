@@ -18,6 +18,7 @@ const TABLES = [
   "Customer",
   "RateLimit",
   "AuditLog",
+  "system_config",
 ];
 
 /** Xóa sạch dữ liệu giữa các test. Chỉ gọi sau khi integration-setup đã kiểm tra DATABASE_URL. */

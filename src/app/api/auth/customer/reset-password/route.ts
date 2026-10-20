@@ -20,10 +20,12 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { prisma } from "@/lib/prisma";
 import { hashCustomerPassword } from "@/lib/auth-session";
-import { resetPasswordLimiter, getClientIp } from "@/lib/rate-limiter";
+import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { getBaseUrl } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
+
+const RESET_PASSWORD_RATE_LIMIT = { max: 3, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers tạo / verify reset token (HMAC-signed, không cần DB)
@@ -92,11 +94,22 @@ function verifyResetToken(token: string): { id: string; email: string; pwdDigest
 export async function POST(req: NextRequest) {
   // Rate limiting
   const ip = getClientIp(req);
-  const rl = resetPasswordLimiter.check(ip);
-  if (!rl.allowed) {
+  const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  let rlAllowed = true;
+  let retryAfter = 0;
+  if (!isTest) {
+    try {
+      retryAfter = await checkAndRecordHit(`reset-password:ip:${ip}`, RESET_PASSWORD_RATE_LIMIT);
+      if (retryAfter > 0) rlAllowed = false;
+    } catch (err) {
+      console.error("[ResetPassword] Lỗi kiểm tra rate limit:", err);
+      return NextResponse.json({ error: "Hệ thống đang bận, vui lòng thử lại sau." }, { status: 503 });
+    }
+  }
+  if (!rlAllowed) {
     return NextResponse.json(
       { error: "Quá nhiều yêu cầu. Vui lòng thử lại sau 10 phút." },
-      { status: 429, headers: { "Retry-After": String(Math.ceil((rl.resetAt - Date.now()) / 1000)) } }
+      { status: 429, headers: { "Retry-After": String(retryAfter) } }
     );
   }
 

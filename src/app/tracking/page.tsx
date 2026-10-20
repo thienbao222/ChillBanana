@@ -1287,8 +1287,8 @@ function TrackingCosmosContent() {
       {/* Modal Hủy Đơn Hàng Phía Khách Hàng */}
       {cancelTargetOrder && (
         <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15,23,42,0.6)", backdropFilter: "blur(6px)", display: "grid", placeItems: "center", padding: "16px" }}>
-          <div className="track-card max-w-lg w-full space-y-4" style={{ background: "#fff" }}>
-            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+          <div className="track-card max-w-lg w-full space-y-4">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-200 dark:border-slate-700" style={{ borderBottom: "1px solid var(--line)" }}>
               <h3 style={{ fontSize: "1.1rem", fontWeight: 800, margin: 0 }}>
                 Xác Nhận Hủy Đơn #{cancelTargetOrder.orderCode}
               </h3>
@@ -1331,6 +1331,7 @@ function TrackingCosmosContent() {
                   placeholder="Nhập lý do cụ thể của bạn..."
                   rows={2}
                   className="w-full p-2.5 rounded-xl border border-slate-300 text-xs outline-none focus:border-banana-400"
+                  style={{ background: "var(--field-bg, transparent)", color: "var(--ink)" }}
                   required
                 />
               )}
