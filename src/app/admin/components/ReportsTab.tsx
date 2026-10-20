@@ -78,7 +78,7 @@ export default function ReportsTab({ onOpenAgent }: { onOpenAgent?: () => void }
                         csvLines.push(`${c.label},${c.count},${c.revenue}`);
                       });
                     }
-                    const blob = new Blob([csvLines.join("\\n")], { type: 'text/csv;charset=utf-8;' });
+                    const blob = new Blob(["\uFEFF" + csvLines.join("\n")], { type: 'text/csv;charset=utf-8;' });
                     const url = URL.createObjectURL(blob);
                     const link = document.createElement("a");
                     link.setAttribute("href", url);

@@ -90,7 +90,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
   return parts.join("\n");
 }
 
-    const models = [GEMINI_MODELS.admin, "gemini-2.5-flash", "gemini-2.0-flash"];
+    const models = Array.from(new Set([GEMINI_MODELS.admin, "gemini-2.0-flash", "gemini-2.5-flash-lite"]));
     let answer: string | null = null;
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -119,7 +119,9 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
           });
 
           if (!response.ok) {
-            adminKeyPool.markError(apiKey, response.status);
+            if (response.status !== 404) {
+              adminKeyPool.markError(apiKey, response.status);
+            }
             continue;
           }
 
@@ -131,6 +133,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
             break;
           }
         } catch (error) {
+          adminKeyPool.markError(apiKey, 503);
           console.warn("[ADMIN AI] Gemini request failed:", error);
           continue;
         }

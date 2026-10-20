@@ -86,16 +86,23 @@ export async function GET(req: NextRequest) {
       where: { status: "CANCELLED" },
     });
 
-    // 13. Tổng doanh thu (đơn đã cọc/thanh toán)
+    // 13. Tổng doanh thu (đơn đã cọc/thanh toán, không tính đơn đã hủy)
     const revenueResult = await prisma.order.aggregate({
-      where: { paymentStatus: { notIn: ["UNPAID", "REFUNDED"] } },
+      where: {
+        status: { not: "CANCELLED" },
+        paymentStatus: { notIn: ["UNPAID", "REFUNDED"] },
+      },
       _sum: { depositAmountVnd: true },
     });
     const totalRevenue = revenueResult._sum.depositAmountVnd || 0;
 
-    // 14. Doanh thu từ khách đăng ký
+    // 14. Doanh thu từ khách đăng ký (không tính đơn đã hủy)
     const registeredRevenueResult = await prisma.order.aggregate({
-      where: { customerType: "REGISTERED", paymentStatus: { notIn: ["UNPAID", "REFUNDED"] } },
+      where: {
+        status: { not: "CANCELLED" },
+        customerType: "REGISTERED",
+        paymentStatus: { notIn: ["UNPAID", "REFUNDED"] },
+      },
       _sum: { depositAmountVnd: true },
     });
     const registeredRevenue = registeredRevenueResult._sum.depositAmountVnd || 0;

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getClientIp } from "@/lib/rate-limit";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getCurrentPricingConfig, getPricingConfigHistory, validatePricingConfig } from "@/features/pricing/config";
+import { invalidateSystemConfigCache } from "@/lib/system-config";
 
 export const dynamic = "force-dynamic";
 
@@ -45,19 +46,40 @@ export async function POST(req: NextRequest) {
       const created = await tx.pricingConfig.create({
         data: { values: result.values as Prisma.InputJsonValue, changedBy: guard.username, changeReason: changeReason || null },
       });
+
+      // BẢO ĐẢM TÍNH NHẤT QUÁN: Đồng bộ ngay sang bảng SystemConfig để SandboxTab và BusinessSettingsTab luôn khớp giá trị
+      const systemConfigMappings: Record<string, number> = {
+        service_fee_percent: result.values.serviceFeePercent,
+        min_service_fee_vnd: result.values.serviceFeeMinimumVnd,
+        air_shipping_per_kg_vnd: result.values.airShippingPerKgVnd,
+        group_buy_discount_percent: result.values.groupBuyShippingDiscountPercent,
+        floor_exchange_rate_jpy: result.values.fallbackJpyVndRate,
+        min_order_threshold_vnd: result.values.minimumBaseOrderVnd,
+      };
+
+      for (const [k, v] of Object.entries(systemConfigMappings)) {
+        await tx.systemConfig.upsert({
+          where: { key: k },
+          update: { value: String(v), updatedBy: guard.username },
+          create: { key: k, value: String(v), updatedBy: guard.username },
+        });
+      }
+
       await tx.auditLog.create({
         data: {
           actor: guard.username,
           action: "PRICING_CONFIG_UPDATED",
           entityType: "PricingConfig",
           entityId: String(created.version),
-          summary: `Tạo phiên bản cấu hình giá v${created.version}${changeReason ? `: ${changeReason}` : ""}`.slice(0, 500),
+          summary: `Tạo phiên bản cấu hình giá v${created.version}${changeReason ? `: ${changeReason}` : ""} (đồng bộ SystemConfig)`.slice(0, 500),
           metadata: { version: created.version, previousVersion: current.version, changedFields, values: result.values } as Prisma.InputJsonValue,
           ip: getClientIp(req),
         },
       });
       return created;
     });
+
+    invalidateSystemConfigCache();
     return NextResponse.json({ success: true, current: { version: config.version, values: result.values, changedBy: guard.username, changeReason: changeReason || null, createdAt: config.createdAt } }, { status: 201 });
   } catch (error) {
     console.error("[AdminPricingConfig] Could not save version:", error);

@@ -117,7 +117,7 @@ async function buildDailySnapshot() {
   const catalogNames = catalogProducts.map((p) => p.name.toLowerCase());
   const lowStockProducts = catalogProducts.filter((p) => p.stockSlots <= 2);
 
-  const recordedPayments = newOrders24h.filter((order) => isRecordedPaymentStatus(order.paymentStatus));
+  const recordedPayments = newOrders24h.filter((order) => order.status !== "CANCELLED" && isRecordedPaymentStatus(order.paymentStatus));
 
   return {
     generatedAt: periodEnd.toISOString(),
@@ -218,7 +218,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
     let insight: string | null = null;
-    const models = [GEMINI_MODELS.admin, "gemini-2.5-flash", "gemini-2.0-flash"];
+    const models = Array.from(new Set([GEMINI_MODELS.admin, "gemini-2.0-flash", "gemini-2.5-flash-lite"]));
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const apiKey = adminKeyPool.getNextKey();
@@ -249,7 +249,9 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
           );
 
           if (!response.ok) {
-            adminKeyPool.markError(apiKey, response.status);
+            if (response.status !== 404) {
+              adminKeyPool.markError(apiKey, response.status);
+            }
             continue;
           }
 
@@ -264,6 +266,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
             break;
           }
         } catch {
+          adminKeyPool.markError(apiKey, 503);
           continue;
         }
       }

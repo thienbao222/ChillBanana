@@ -364,9 +364,9 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
 
   const totalRevenue = orders.reduce((acc, curr) => acc + curr.totalVnd, 0);
   const actualRevenue = orders
-    .filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
+    .filter((o) => o.status !== "CANCELLED" && o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED")
     .reduce((acc, curr) => acc + curr.depositAmountVnd, 0);
-  const depositedCount = orders.filter((o) => o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED").length;
+  const depositedCount = orders.filter((o) => o.status !== "CANCELLED" && o.paymentStatus !== "UNPAID" && o.paymentStatus !== "REFUNDED").length;
   const completedCount = orders.filter((o) => o.status === "COMPLETED").length;
   const approvalJpy = Number(priceApprovalJpy);
   const approvalWeight = Number(priceApprovalWeight);
