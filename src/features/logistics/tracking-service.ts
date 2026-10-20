@@ -196,6 +196,25 @@ function translateGHTKStatus(statusId: string): string {
 // ─── ViettelPost ─────────────────────────────────────────────────────────────
 // Cần: VIETTELPOST_TOKEN trong .env
 
+/**
+ * Chuyển đổi định dạng ngày "DD/MM/YYYY HH:mm:ss" hoặc "DD/MM/YYYY" của ViettelPost sang chuỗi ISO 8601 hợp lệ.
+ */
+function parseViettelPostDate(dateStr?: string | null): string {
+  if (!dateStr || typeof dateStr !== "string") return new Date().toISOString();
+  const trimmed = dateStr.trim();
+  const match = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?$/);
+  if (match) {
+    const [, day, month, year, hour = "00", min = "00", sec = "00"] = match;
+    const isoString = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hour.padStart(2, "0")}:${min.padStart(2, "0")}:${sec.padStart(2, "0")}+07:00`;
+    const d = new Date(isoString);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString();
+    }
+  }
+  const parsed = new Date(trimmed);
+  return !isNaN(parsed.getTime()) ? parsed.toISOString() : new Date().toISOString();
+}
+
 async function queryViettelPost(trackingCode: string): Promise<TrackingResult | null> {
   const token = process.env.VIETTELPOST_TOKEN;
   if (!token) {
@@ -221,7 +240,7 @@ async function queryViettelPost(trackingCode: string): Promise<TrackingResult | 
 
     const status = String(bill.STATUS || "");
     const isDelivered = bill.STATUS_NAME?.toLowerCase().includes("phát thành công");
-    const updatedAt: string = bill.ACCEPT_DATE || new Date().toISOString();
+    const updatedAt: string = parseViettelPostDate(bill.ACCEPT_DATE);
     const isStuck = !isDelivered && isOlderThan3Days(updatedAt);
 
     return {
@@ -341,7 +360,10 @@ function translateYamatoStatus(jp: string): string {
 
 function isOlderThan3Days(dateStr: string): boolean {
   try {
-    const d = new Date(dateStr).getTime();
+    let d = new Date(dateStr).getTime();
+    if (isNaN(d)) {
+      d = new Date(parseViettelPostDate(dateStr)).getTime();
+    }
     if (isNaN(d)) return false;
     return Date.now() - d > 3 * 24 * 60 * 60 * 1000;
   } catch {

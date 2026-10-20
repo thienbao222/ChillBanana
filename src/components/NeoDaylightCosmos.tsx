@@ -902,10 +902,10 @@ export default function NeoDaylightCosmos() {
                     {t("3. Danh mục hàng hóa")} <em>({currentCategory.note})</em>
                   </label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da (+3% phụ thu HQ)")}</option>
-                    <option value="health">{t("Thực Phẩm Chức Năng (+3% kiểm dịch)")}</option>
-                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini (+5% an toàn pin)")}</option>
-                    <option value="anime">{t("Anime, Figure & Sưu Tầm (0% Miễn phí HQ)")}</option>
+                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da (Đã gồm thông quan)")}</option>
+                    <option value="health">{t("Thực Phẩm Chức Năng (Đã gồm thông quan)")}</option>
+                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini (Hỗ trợ điện 100V)")}</option>
+                    <option value="anime">{t("Anime, Figure & Sưu Tầm (Đã gồm thông quan)")}</option>
                   </select>
                 </div>
               </div>

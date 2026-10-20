@@ -50,6 +50,12 @@ function TrackingCosmosContent() {
   const t = useWebsiteText();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường, đồng bộ với NeoDaylightCosmos)
+  const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
+  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "0901234567";
+  const bankOwner = process.env.NEXT_PUBLIC_BANK_OWNER || "CHILLBANANA VIETNAM";
+  const bankName = process.env.NEXT_PUBLIC_BANK_NAME || "MB Bank (Quân Đội)";
+
   const [searchCode, setSearchCode] = useState("");
   const [order, setOrder] = useState<StoredOrder | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1222,7 +1228,7 @@ function TrackingCosmosContent() {
                             </button>
                             <div className="text-center text-xs text-slate-600">
                               <p>Hoặc chuyển khoản VietQR, nội dung: <strong>{order.orderCode}</strong></p>
-                              <img src={`https://img.vietqr.io/image/970422-0901234567-compact2.png?amount=${order.depositAmountVnd}&addInfo=${encodeURIComponent(order.orderCode)}&accountName=CHILLBANANA`} alt="Mã VietQR thanh toán đơn hàng" className="mx-auto mt-2 w-48 rounded-xl border border-white bg-white p-2" />
+                              <img src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${order.depositAmountVnd}&addInfo=${encodeURIComponent(order.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`} alt="Mã VietQR thanh toán đơn hàng" className="mx-auto mt-2 w-48 rounded-xl border border-white bg-white p-2" />
                             </div>
                           </div>
                         )

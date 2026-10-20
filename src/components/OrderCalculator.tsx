@@ -640,11 +640,11 @@ export default function OrderCalculator() {
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white cursor-pointer"
               >
-                <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da (+3% phụ thu HQ)</option>
-                <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe (+3% kiểm dịch BYT)</option>
-                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (+5% an toàn pin)</option>
-                <option value="anime">🎎 Anime, Manga & Figure Chính Hãng (0% Miễn phụ phí)</option>
-                <option value="other">📦 Danh Mục Khác (0% Miễn phụ phí)</option>
+                <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da (Đã gồm thông quan)</option>
+                <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe (Đã gồm thông quan)</option>
+                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (Hỗ trợ điện 100V)</option>
+                <option value="anime">🎎 Anime, Manga & Figure Chính Hãng (Đã gồm thông quan)</option>
+                <option value="other">📦 Danh Mục Khác (Đã gồm thông quan)</option>
               </select>
             </div>
           </div>
