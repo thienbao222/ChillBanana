@@ -12,6 +12,7 @@ import { getDepositAmount, parseDepositPercent } from "@/features/payments/polic
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
+import { isPrivateHost } from "@/lib/ssrf";
 
 export const dynamic = "force-dynamic";
 
@@ -186,15 +187,8 @@ export async function POST(req: NextRequest) {
         const parsedUrl = new URL(body.originalUrl);
         const hostname = parsedUrl.hostname.toLowerCase();
 
-        // Block internal / loopback addresses (SSRF)
-        if (
-          hostname === 'localhost' ||
-          hostname === '127.0.0.1' ||
-          hostname === '0.0.0.0' ||
-          hostname.startsWith('192.168.') ||
-          hostname.startsWith('10.') ||
-          hostname.endsWith('.internal')
-        ) {
+        // Block internal / loopback / private / metadata addresses (SSRF)
+        if (isPrivateHost(hostname)) {
           return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
         }
 

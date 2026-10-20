@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { scrapeKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
+import { isPrivateHost } from "@/lib/ssrf";
 
 export const dynamic = "force-dynamic";
 
@@ -98,7 +99,7 @@ JSON Schema cần trả về:
           contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             maxOutputTokens: 1024,
-            thinkingConfig: { thinkingLevel: "minimal" },
+            temperature: 0.2,
           },
         }),
         signal: AbortSignal.timeout(15000),
@@ -126,7 +127,9 @@ JSON Schema cần trả về:
       if (fallbackResponse.ok) {
         response = fallbackResponse;
       } else {
-        scrapeKeyPool.markError(apiKey, response.status);
+        if ([401, 403, 429, 500, 503].includes(response.status)) {
+          scrapeKeyPool.markError(apiKey, response.status);
+        }
         return null;
       }
     }
@@ -288,32 +291,6 @@ export async function POST(req: NextRequest) {
 
     // SSRF protection — block internal, link-local, cloud metadata & private IPv4/IPv6 addresses
     const hostname = parsedUrl.hostname.toLowerCase();
-    const isPrivateHost = (host: string): boolean => {
-      if (
-        host === "localhost" ||
-        host === "127.0.0.1" ||
-        host === "0.0.0.0" ||
-        host === "::1" ||
-        host === "[::1]" ||
-        host.endsWith(".internal") ||
-        host.startsWith("10.") ||
-        host.startsWith("192.168.") ||
-        host.startsWith("169.254.") || // Cloud metadata AWS/GCP/Azure
-        host.startsWith("fe80:") ||    // IPv6 link-local
-        host.startsWith("fc00:") ||    // IPv6 unique local
-        host.startsWith("fd00:")
-      ) {
-        return true;
-      }
-      // Dải RFC 1918 172.16.0.0 - 172.31.255.255
-      const match172 = host.match(/^172.(d+)./);
-      if (match172) {
-        const second = parseInt(match172[1], 10);
-        if (second >= 16 && second <= 31) return true;
-      }
-      return false;
-    };
-
     if (isPrivateHost(hostname)) {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
     }

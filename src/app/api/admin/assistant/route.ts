@@ -99,8 +99,8 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
 
       for (const model of models) {
         try {
-          const isLegacy = model === "gemini-2.5-flash" || model === "gemini-2.0-flash";
-          const generationConfig = isLegacy
+          const isGemini2 = model.startsWith("gemini-2.");
+          const generationConfig = isGemini2
             ? { maxOutputTokens: 1800, temperature: 0.2 }
             : {
                 maxOutputTokens: 1800,
@@ -119,7 +119,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
           });
 
           if (!response.ok) {
-            if (response.status !== 404) {
+            if ([401, 403, 429, 500, 503].includes(response.status)) {
               adminKeyPool.markError(apiKey, response.status);
             }
             continue;

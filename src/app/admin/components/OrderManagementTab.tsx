@@ -928,16 +928,28 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         </div>
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
-                            onClick={() => quickMoveStatus(
-                              ord.orderCode,
-                              "LOCAL_DELIVERY",
-                              "Đang giao hàng chặng cuối",
-                              "Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.",
-                              "Việt Nam"
-                            )}
+                            onClick={() => {
+                              if (ord.status === "IN_TRANSIT_AIR") {
+                                quickMoveStatus(
+                                  ord.orderCode,
+                                  "WAREHOUSE_VN",
+                                  "Đã hạ cánh & Nhập kho Việt Nam",
+                                  "Kiện hàng đã thông quan và nhập kho phân phối tại Việt Nam (Hà Nội / TP.HCM).",
+                                  "Kho Việt Nam"
+                                );
+                              } else {
+                                quickMoveStatus(
+                                  ord.orderCode,
+                                  "LOCAL_DELIVERY",
+                                  "Đang giao hàng chặng cuối",
+                                  "Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.",
+                                  "Việt Nam"
+                                );
+                              }
+                            }}
                             className="w-full py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
-                            <span>Bàn Giao Shipper</span>
+                            <span>{ord.status === "IN_TRANSIT_AIR" ? "Hạ Cánh → Nhập Kho VN" : "Bàn Giao Shipper"}</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">

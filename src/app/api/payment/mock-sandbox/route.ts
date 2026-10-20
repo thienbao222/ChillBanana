@@ -59,6 +59,13 @@ export async function POST(req: NextRequest) {
         });
       }
 
+      if (order.status !== "PENDING_DEPOSIT" || !order.isPriceVerified) {
+        return NextResponse.json(
+          { error: "Đơn hàng không ở trạng thái chờ cọc hoặc chưa được duyệt giá." },
+          { status: 409 }
+        );
+      }
+
       const recordedStatus = getRecordedPaymentStatus(order.depositPercent);
       const amountVnd = order.depositAmountVnd;
       const mockTxnId = `SANDBOX_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
@@ -67,7 +74,9 @@ export async function POST(req: NextRequest) {
         const claimed = await tx.order.updateMany({
           where: {
             id: order.id,
+            status: "PENDING_DEPOSIT",
             paymentStatus: "UNPAID",
+            isPriceVerified: true,
           },
           data: {
             paymentStatus: recordedStatus,

@@ -34,4 +34,6 @@ NeoUniverse/
 *.tsbuildinfo
 coverage/
 codebase-for-ai.txt
+codebase-part-*.txt
+codebase-chunks/
 

@@ -3,36 +3,24 @@ import { askGeminiAgent } from "@/features/ai/customer/assistant";
 import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
 import { prisma } from "@/lib/prisma";
 import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
+import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { AIPersonality } from "@/types";
 import { randomUUID } from "crypto";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Simple in-memory rate limiter (resets on serverless cold start; sufficient for abuse prevention)
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
-const RATE_LIMIT_MAX = 30; // 30 requests per minute per IP
-const RATE_LIMIT_WINDOW_MS = 60 * 1000;
-function checkRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = rateLimitMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    rateLimitMap.set(ip, { count: 1, resetAt: now + RATE_LIMIT_WINDOW_MS });
-    return true; // allowed
-  }
-  if (entry.count >= RATE_LIMIT_MAX) return false; // blocked
-  entry.count++;
-  return true;
-}
+const CHAT_RATE_LIMIT = { max: 30, windowMs: 60 * 1000, blockMs: 60 * 1000 };
 
 export async function POST(req: NextRequest) {
   try {
     // Rate limiting by IP
-    const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "unknown";
-    if (!checkRateLimit(ip)) {
+    const ip = getClientIp(req);
+    const retryAfter = await checkAndRecordHit(`chat:${ip}`, CHAT_RATE_LIMIT).catch(() => 0);
+    if (retryAfter > 0) {
       return NextResponse.json(
         { error: "Bạn gửi tin nhắn quá nhanh. Vui lòng chờ 1 phút rồi thử lại." },
-        { status: 429 }
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
 

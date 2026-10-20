@@ -2,31 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { visionKeyPool } from '@/lib/api-key-manager';
 import { GEMINI_MODELS } from '@/lib/gemini-models';
 import { prisma } from '@/lib/prisma';
+import { checkAndRecordHit, getClientIp } from '@/lib/rate-limit';
 import { getImageCatalogSearchTerms, rankImageCatalogCandidates } from '@/features/ai/customer/image-catalog-matcher';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
 
-// Rate limit: 10 image analyses per minute per IP (Gemini Vision is expensive)
-const imgRateMap = new Map<string, { count: number; resetAt: number }>();
-function checkImgRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = imgRateMap.get(ip);
-  if (!entry || now > entry.resetAt) {
-    imgRateMap.set(ip, { count: 1, resetAt: now + 60_000 });
-    return true;
-  }
-  if (entry.count >= 10) return false;
-  entry.count++;
-  return true;
-}
+// Rate limit: 10 image analyses per minute per IP (chống memory leak & IP spoofing)
+const IMAGE_ANALYZE_LIMIT = { max: 10, windowMs: 60 * 1000, blockMs: 60 * 1000 };
 
 export async function POST(req: NextRequest) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
-  if (!checkImgRateLimit(ip)) {
+  const ip = getClientIp(req);
+  const retryAfter = await checkAndRecordHit(`image-analyze:${ip}`, IMAGE_ANALYZE_LIMIT).catch(() => 0);
+  if (retryAfter > 0) {
     return NextResponse.json(
       { success: false, error: 'Bạn phân tích ảnh quá nhiều lần. Vui lòng chờ 1 phút.' },
-      { status: 429 }
+      { status: 429, headers: { 'Retry-After': String(retryAfter) } }
     );
   }
 
@@ -103,7 +94,7 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       }],
       generationConfig: {
         maxOutputTokens: 2048,
-        thinkingConfig: { thinkingLevel: 'minimal' },
+        temperature: 0.2,
       }
     };
 
@@ -136,7 +127,9 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       } else {
         const errText = await response.text();
         console.error('Gemini API error:', errText);
-        visionKeyPool.markError(apiKey, response.status);
+        if ([401, 403, 429, 500, 503].includes(response.status)) {
+          visionKeyPool.markError(apiKey, response.status);
+        }
         const errorMessage = response.status === 429
           ? 'AI Vision đang bận. Vui lòng chờ một chút rồi thử lại.'
           : 'AI Vision chưa xử lý được ảnh này. Vui lòng thử ảnh khác.';
