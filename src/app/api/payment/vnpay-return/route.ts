@@ -9,7 +9,8 @@ function getAppUrl() {
 
 export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
-  const orderCode = params.get("vnp_TxnRef") || "";
+  const rawTxnRef = params.get("vnp_TxnRef") || "";
+  const orderCode = rawTxnRef.includes("_") ? rawTxnRef.split("_")[0] : rawTxnRef;
   if (resolvePaymentMode() !== "sandbox") {
     return NextResponse.redirect(`${getAppUrl()}/tracking?orderCode=${encodeURIComponent(orderCode)}&payment=disabled`);
   }

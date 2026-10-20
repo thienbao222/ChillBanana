@@ -141,7 +141,7 @@ describe("POST /api/payment/vnpay-create", () => {
     const url = new URL(body.paymentUrl);
     expect(url.origin + url.pathname).toBe(process.env.VNPAY_URL);
     expect(url.searchParams.get("vnp_Amount")).toBe("53040000");
-    expect(url.searchParams.get("vnp_TxnRef")).toBe(o.orderCode);
+    expect(url.searchParams.get("vnp_TxnRef")?.split("_")[0]).toBe(o.orderCode);
     expect(verifyVnpaySignature(url.searchParams)).toBe(true);
   });
 

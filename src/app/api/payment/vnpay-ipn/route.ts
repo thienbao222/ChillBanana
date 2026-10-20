@@ -14,7 +14,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ RspCode: "97", Message: "Invalid signature" });
   }
 
-  const orderCode = params.get("vnp_TxnRef") || "";
+  const rawTxnRef = params.get("vnp_TxnRef") || "";
+  const orderCode = rawTxnRef.includes("_") ? rawTxnRef.split("_")[0] : rawTxnRef;
   if (!orderCode) return NextResponse.json({ RspCode: "01", Message: "Order not found" });
   if (params.get("vnp_ResponseCode") !== "00" || params.get("vnp_TransactionStatus") !== "00") {
     await recordVnpayAttemptFailure(orderCode, params.get("vnp_ResponseCode"));

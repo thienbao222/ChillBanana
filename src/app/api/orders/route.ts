@@ -411,11 +411,20 @@ export async function POST(req: NextRequest) {
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
 
-      const response = NextResponse.json({ success: true, order: createdDbOrder });
-      if (!customerId && customerEmail) {
+      const guestAccessToken = (!customerId && customerEmail)
+        ? createGuestOrderAccessToken(orderCode, customerEmail)
+        : undefined;
+
+      const response = NextResponse.json({
+        success: true,
+        order: createdDbOrder,
+        accessToken: guestAccessToken,
+      });
+
+      if (guestAccessToken) {
         response.cookies.set(
           ORDER_ACCESS_COOKIE_NAME,
-          createGuestOrderAccessToken(orderCode, customerEmail),
+          guestAccessToken,
           {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",

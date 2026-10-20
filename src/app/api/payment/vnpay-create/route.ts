@@ -47,9 +47,11 @@ export async function POST(req: NextRequest) {
     const isAdmin = await isVerifiedAdmin(req);
     const customer = getCustomerFromRequest(req);
     const guestAccessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value || (typeof body.accessToken === "string" ? body.accessToken : undefined);
+    const cleanReqPhone = typeof body.phone === "string" ? body.phone.replace(/\s+/g, "") : "";
+    const cleanOrderPhone = (order.customerPhone || "").replace(/\s+/g, "");
     const hasGuestAccess = Boolean(
-      order.customerEmail &&
-      hasGuestOrderAccessForEmail(guestAccessToken, order.orderCode, order.customerEmail)
+      (order.customerEmail && hasGuestOrderAccessForEmail(guestAccessToken, order.orderCode, order.customerEmail)) ||
+      (!order.customerEmail && cleanReqPhone && cleanReqPhone === cleanOrderPhone)
     );
 
     const isAuthorized = isAdmin || (customer && order.customerId === customer.id) || hasGuestAccess;
@@ -221,7 +223,7 @@ export async function POST(req: NextRequest) {
       vnp_OrderInfo: `Thanh toan don hang ${orderCode}`,
       vnp_OrderType: "other",
       vnp_ReturnUrl: returnUrl,
-      vnp_TxnRef: orderCode,
+      vnp_TxnRef: `${orderCode}_${attempt.id.slice(-6)}`,
       vnp_ExpireDate: expireDate,
     };
 

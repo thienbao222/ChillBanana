@@ -288,8 +288,8 @@ export default function NeoDaylightCosmos() {
   // Submit đặt cọc tạo đơn thật vào database
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!custName.trim() || !custPhone.trim() || !custAddress.trim()) {
-      showToast("Vui lòng điền đầy đủ Họ tên, Số điện thoại và Địa chỉ giao hàng.");
+    if (!custName.trim() || !custPhone.trim() || !custAddress.trim() || !custEmail.trim()) {
+      showToast("Vui lòng điền đầy đủ Họ tên, Số điện thoại, Địa chỉ và Email.");
       return;
     }
     const phoneClean = custPhone.replace(/\s+/g, "");
@@ -297,7 +297,7 @@ export default function NeoDaylightCosmos() {
       showToast("Số điện thoại không hợp lệ (cần đúng 10 số, đầu số 03, 05, 07, 08, 09).");
       return;
     }
-    if (custEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(custEmail.trim())) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(custEmail.trim())) {
       showToast("Định dạng email không hợp lệ. Vui lòng kiểm tra lại.");
       return;
     }
@@ -353,7 +353,7 @@ export default function NeoDaylightCosmos() {
       });
       const data = await res.json();
       if (res.ok && data.success && data.order) {
-        setCreatedOrder(data.order);
+        setCreatedOrder({ ...data.order, accessToken: data.accessToken });
         showToast(data.order.isPriceVerified ? "Tạo đơn thành công. Bạn có thể thanh toán ngay." : "Đơn đã được tạo và đang chờ xác nhận báo giá trước khi thanh toán.");
       } else {
         showToast(data.error || "Đặt cọc thất bại. Vui lòng kiểm tra lại thông tin.");
@@ -378,6 +378,8 @@ export default function NeoDaylightCosmos() {
           orderCode: createdOrder.orderCode,
           amount: createdOrder.depositAmountVnd || depositVnd,
           orderInfo: `Thanh toan ${createdOrder.depositPercent || 50}% don hang ${createdOrder.orderCode} - ChillBanana`,
+          accessToken: createdOrder.accessToken,
+          phone: custPhone.trim(),
         }),
       });
       const data = await res.json();
@@ -1124,12 +1126,13 @@ export default function NeoDaylightCosmos() {
 
                 <div className="fg">
                   <div className="f">
-                    <label>Email (nhận xác nhận &amp; hóa đơn điện tử)</label>
+                    <label>Email (nhận xác nhận &amp; hóa đơn điện tử) <span style={{ color: "#e11d48" }}>*</span></label>
                     <input
                       type="email"
                       placeholder="email@example.com"
                       value={custEmail}
                       onChange={(e) => setCustEmail(e.target.value)}
+                      required
                     />
                   </div>
                   <div className="f">
