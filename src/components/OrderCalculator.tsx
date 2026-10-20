@@ -227,6 +227,8 @@ export default function OrderCalculator() {
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
           orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
+          accessToken: order.accessToken,
+          phone: (customerPhone || "").replace(/\s+/g, ""),
         }),
       });
       const data = await res.json();
@@ -269,7 +271,11 @@ export default function OrderCalculator() {
       toast.warning("Số điện thoại không hợp lệ (cần đúng 10 số, đầu 03, 05, 07, 08, 09).");
       return;
     }
-    if (customerEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+    if (!customerEmail || !customerEmail.trim()) {
+      toast.warning("Vui lòng nhập email để nhận vận đơn và bảo mật tra cứu.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
       toast.warning("Định dạng email không hợp lệ.");
       return;
     }
@@ -317,7 +323,7 @@ export default function OrderCalculator() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setOrderSuccessData(data.order);
+        setOrderSuccessData({ ...data.order, accessToken: data.accessToken });
       } else {
         toast.error(data.error || "Có lỗi khi tạo đơn. Vui lòng thử lại.");
       }
@@ -967,8 +973,7 @@ export default function OrderCalculator() {
             <button
               type="button"
               onClick={() => {
-                const chatToggle = document.getElementById("ai-chat-toggle-btn");
-                if (chatToggle) chatToggle.click();
+                window.dispatchEvent(new CustomEvent("open-ai-chat"));
               }}
               className="w-full py-2.5 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-semibold transition-colors flex items-center justify-center space-x-1.5"
             >
@@ -1039,10 +1044,11 @@ export default function OrderCalculator() {
                     </div>
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1">
-                        Email Nhận Thông Báo & Vận Đơn
+                        Email Nhận Thông Báo & Vận Đơn *
                       </label>
                       <input
                         type="email"
+                        required
                         value={customerEmail}
                         onChange={(e) => setCustomerEmail(e.target.value)}
                         placeholder="email@example.com"

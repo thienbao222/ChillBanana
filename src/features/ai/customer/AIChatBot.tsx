@@ -133,6 +133,7 @@ export default function AIChatBot() {
   const draggedRef = useRef(false);
   petPositionRef.current = petPosition;
 
+  const handleSendMessageRef = useRef<((text?: string) => Promise<void>) | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => () => {
@@ -171,14 +172,24 @@ export default function AIChatBot() {
   }, [petConversationOpen]);
 
   useEffect(() => {
-    const handleOpen = () => {
+    const handleOpen = (e: Event) => {
+      const customEvent = e as CustomEvent<{ initialPrompt?: string }>;
       setPetVisible(true);
       setPetConversationOpen(false);
       setAmbientHint("");
       setIsOpen(true);
+      const prompt = customEvent.detail?.initialPrompt;
+      if (prompt && prompt.trim()) {
+        const text = prompt.trim();
+        setInputMessage(text);
+        setTimeout(() => {
+          handleSendMessageRef.current?.(text);
+          setInputMessage("");
+        }, 150);
+      }
     };
-    window.addEventListener("open-ai-chat", handleOpen);
-    return () => window.removeEventListener("open-ai-chat", handleOpen);
+    window.addEventListener("open-ai-chat", handleOpen as EventListener);
+    return () => window.removeEventListener("open-ai-chat", handleOpen as EventListener);
   }, []);
 
   useEffect(() => {
@@ -582,6 +593,7 @@ export default function AIChatBot() {
       setLoading(false);
     }
   };
+  handleSendMessageRef.current = handleSendMessage;
 
   const selectImageFile = (file: File) => {
     if (loading || imageAnalyzing) return;

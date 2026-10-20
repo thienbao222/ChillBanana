@@ -136,8 +136,6 @@ function TrackingCosmosContent() {
         detail: { initialPrompt: `Neo ơi, hãy kiểm tra tiến độ và hành trình chi tiết của đơn hàng #${code} giúp mình nhé!` },
       })
     );
-    const chatToggle = document.getElementById("ai-chat-toggle-btn");
-    if (chatToggle) chatToggle.click();
   };
   const [myOrders, setMyOrders] = useState<StoredOrder[]>([]);
   const [loadingMyOrders, setLoadingMyOrders] = useState(false);

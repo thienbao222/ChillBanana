@@ -18,7 +18,11 @@ export async function retryDueEmails(options: {
   const stuckBefore = new Date(now.getTime() - (options.stuckAfterMs ?? 15 * 60_000));
 
   const requeued = await prisma.emailLog.updateMany({
-    where: { status: "PENDING", updatedAt: { lt: stuckBefore } },
+    where: {
+      status: "PENDING",
+      emailType: { notIn: ["customer-email-verification", "password-reset"] },
+      updatedAt: { lt: stuckBefore },
+    },
     data: { status: "FAILED", nextRetryAt: now, lastErrorCode: "STUCK_PENDING" },
   });
 
@@ -26,6 +30,7 @@ export async function retryDueEmails(options: {
     SELECT "id" FROM "EmailLog"
     WHERE "status" = 'FAILED'
       AND "attemptCount" < "maxAttempts"
+      AND "emailType" NOT IN ('customer-email-verification', 'password-reset')
       AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= ${now})
     ORDER BY "nextRetryAt" ASC NULLS FIRST
     LIMIT ${limit}`;

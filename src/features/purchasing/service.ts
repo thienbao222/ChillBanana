@@ -92,7 +92,7 @@ async function lookupAmazonJp(url: string): Promise<PlatformProductInfo> {
 
   try {
     const jinaRes = await fetch(
-      `https://r.jina.ai/${encodeURIComponent(cleanUrl)}`,
+      `https://r.jina.ai/${cleanUrl}`,
       {
         headers: {
           Accept: "application/json",

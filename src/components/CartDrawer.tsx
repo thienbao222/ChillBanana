@@ -71,6 +71,8 @@ export default function CartDrawer() {
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
           orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
+          accessToken: order.accessToken,
+          phone: customerPhone.trim(),
         }),
       });
       const data = await res.json();
@@ -101,7 +103,11 @@ export default function CartDrawer() {
       toast.warning("Số điện thoại không hợp lệ (cần đúng 10 số, đầu 03, 05, 07, 08, 09).");
       return;
     }
-    if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+    if (!customerEmail.trim()) {
+      toast.warning("Vui lòng nhập địa chỉ email để nhận vận đơn và bảo mật tra cứu.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
       toast.warning("Định dạng email không hợp lệ.");
       return;
     }
@@ -159,7 +165,7 @@ export default function CartDrawer() {
 
       const data = await res.json();
       if (res.ok && data.success) {
-        setOrderResult(data.order);
+        setOrderResult({ ...data.order, accessToken: data.accessToken });
         clearCart();
         setShowCheckout(false);
       } else {
@@ -347,10 +353,11 @@ export default function CartDrawer() {
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Email nhận vận đơn
+                    Email nhận vận đơn <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="email"
+                    required
                     value={customerEmail}
                     onChange={(e) => setCustomerEmail(e.target.value)}
                     placeholder="email@domain.com"

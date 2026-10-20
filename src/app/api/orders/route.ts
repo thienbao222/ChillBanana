@@ -237,6 +237,13 @@ export async function POST(req: NextRequest) {
     const customerType = customerSession ? "REGISTERED" : "GUEST";
     const customerEmail = customerSession?.email || submittedEmail;
 
+    if (!customerEmail) {
+      return NextResponse.json(
+        { error: "Vui lòng cung cấp địa chỉ email để nhận vận đơn và bảo mật tra cứu." },
+        { status: 400 }
+      );
+    }
+
     try {
       // Sử dụng Transaction: Tất cả cập nhật hoặc bị rollback hoàn toàn
       const createdDbOrder = await prisma.$transaction(async (tx) => {

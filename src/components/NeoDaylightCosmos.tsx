@@ -194,8 +194,6 @@ export default function NeoDaylightCosmos() {
 
   const handleOpenAIChat = () => {
     window.dispatchEvent(new CustomEvent("open-ai-chat"));
-    const chatToggle = document.getElementById("ai-chat-toggle-btn");
-    if (chatToggle) chatToggle.click();
   };
 
   // Quét link tự động (kiểm tra client-side và fallback thân thiện)
