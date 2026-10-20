@@ -129,7 +129,11 @@ export async function POST(req: NextRequest) {
         verifyAdminPassword(password, hashAdminPassword("dummy-password"));
       }
     } catch (dbErr) {
-      console.warn("DB check error in admin auth:", dbErr);
+      console.error("[AdminAuth] Lỗi kết nối CSDL khi đăng nhập:", dbErr);
+      return NextResponse.json(
+        { error: "Hệ thống cơ sở dữ liệu đang bận, vui lòng thử lại sau." },
+        { status: 503 }
+      );
     }
 
     if (!isAuthenticated) {
