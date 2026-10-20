@@ -286,16 +286,35 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
     }
 
-    // SSRF protection — block internal addresses
+    // SSRF protection — block internal, link-local, cloud metadata & private IPv4/IPv6 addresses
     const hostname = parsedUrl.hostname.toLowerCase();
-    if (
-      hostname === "localhost" ||
-      hostname === "127.0.0.1" ||
-      hostname.startsWith("192.168.") ||
-      hostname.startsWith("10.") ||
-      hostname.endsWith(".internal") ||
-      hostname === "0.0.0.0"
-    ) {
+    const isPrivateHost = (host: string): boolean => {
+      if (
+        host === "localhost" ||
+        host === "127.0.0.1" ||
+        host === "0.0.0.0" ||
+        host === "::1" ||
+        host === "[::1]" ||
+        host.endsWith(".internal") ||
+        host.startsWith("10.") ||
+        host.startsWith("192.168.") ||
+        host.startsWith("169.254.") || // Cloud metadata AWS/GCP/Azure
+        host.startsWith("fe80:") ||    // IPv6 link-local
+        host.startsWith("fc00:") ||    // IPv6 unique local
+        host.startsWith("fd00:")
+      ) {
+        return true;
+      }
+      // Dải RFC 1918 172.16.0.0 - 172.31.255.255
+      const match172 = host.match(/^172.(d+)./);
+      if (match172) {
+        const second = parseInt(match172[1], 10);
+        if (second >= 16 && second <= 31) return true;
+      }
+      return false;
+    };
+
+    if (isPrivateHost(hostname)) {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
     }
 
@@ -374,6 +393,7 @@ export async function POST(req: NextRequest) {
     if (needsHtmlFallback) {
       try {
         const directRes = await fetch(url, {
+          redirect: "error", // BẢO MẬT: Chặn Open Redirect theo chân về mạng nội bộ
           headers: {
             "User-Agent":
               "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",

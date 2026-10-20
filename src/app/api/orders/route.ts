@@ -17,8 +17,16 @@ export const dynamic = "force-dynamic";
 
 const ORDER_CREATE_RATE_LIMIT = { max: 15, windowMs: 2 * 60_000, blockMs: 5 * 60_000 };
 
+import { releaseExpiredOrderReservations } from "@/features/orders/reservations";
+
 export async function GET(req: NextRequest) {
   try {
+    // Hỗ trợ môi trường Vercel Hobby: Chủ động giải phóng đơn giữ kho quá hạn 30 phút khi khách truy cập đơn
+    const isTest = process.env.APP_ENV === "test" || process.env.NODE_ENV === "test";
+    if (!isTest) {
+      await releaseExpiredOrderReservations(20).catch(() => {});
+    }
+
     const { searchParams } = new URL(req.url);
     const email = searchParams.get("email");
     const phone = searchParams.get("phone");
@@ -79,6 +87,11 @@ export async function POST(req: NextRequest) {
           { status: 429, headers: { "Retry-After": String(retryAfter) } }
         );
       }
+    }
+
+    // Hỗ trợ môi trường Vercel Hobby: Chủ động giải phóng đơn giữ kho quá hạn 30 phút trước khi kiểm tra stock
+    if (!isTest) {
+      await releaseExpiredOrderReservations(20).catch(() => {});
     }
 
     const body = await req.json();

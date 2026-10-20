@@ -193,14 +193,15 @@ export async function askGeminiAgent(
     const activeKey = chatKeyPool.getNextKey();
     if (!activeKey) break;
 
-    const models = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback, "gemini-2.5-flash", "gemini-2.0-flash"]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, "gemini-2.5-flash", "gemini-2.0-flash"];
+    const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
+      ? [GEMINI_MODELS.neoFallback, "gemini-2.0-flash-lite"]
+      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, "gemini-2.0-flash-lite"];
+    const models = Array.from(new Set(candidateModels));
 
     for (const model of models) {
       try {
-        const isLegacyModel = model === "gemini-2.5-flash" || model === "gemini-2.0-flash";
-        const generationConfig = isLegacyModel
+        const isStandardFlash = model.startsWith("gemini-2.");
+        const generationConfig = isStandardFlash
           ? { maxOutputTokens: 2200, temperature: 0.4 }
           : {
               maxOutputTokens: 2200,
@@ -229,8 +230,10 @@ export async function askGeminiAgent(
           continue;
         }
 
-        // BẢO MẬT & ĐỘ TIN CẬY: Đánh dấu key lỗi vào pool để kích hoạt cơ chế cooldown
-        chatKeyPool.markError(activeKey, response.status);
+        // BẢO MẬT & ĐỘ TIN CẬY: Chỉ phạt key khi lỗi hạn ngạch/máy chủ, không phạt khi lỗi 404 model
+        if (response.status !== 404) {
+          chatKeyPool.markError(activeKey, response.status);
+        }
 
         if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
           if (response.status === 403 || response.status === 404) neoPrimaryUnavailable = true;
@@ -240,6 +243,7 @@ export async function askGeminiAgent(
 
         continue;
       } catch {
+        chatKeyPool.markError(activeKey, 503);
         if (model === GEMINI_MODELS.neo) {
           neoPrimaryCooldownUntil = Date.now() + 60_000;
         }

@@ -368,6 +368,11 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
   }
 
   const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
+  const safeOrderCode = escapeHtml(String(order.orderCode || ""));
+  const safeCustomerName = escapeHtml(String(order.customerName || "Quý khách"));
+  const safeTitle = escapeHtml(String(newStatusTitle || ""));
+  const safeDescription = escapeHtml(String(description || ""));
+  const safeWeight = order.weightKg ? escapeHtml(String(order.weightKg)) : "";
 
   const isCancelled = order.status === "CANCELLED";
   const headerBg = isCancelled
@@ -379,17 +384,17 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 20px; overflow: hidden; background-color: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
       <div style="background: ${headerBg}; color: white; padding: 28px; text-align: center;">
         <h1 style="margin: 0; font-size: 26px; color: ${accentColor}; font-family: Georgia, serif;">🍌 ChillBanana</h1>
-        <p style="margin: 8px 0 0 0; font-size: 14px; color: #E2E8F0;">Cập nhật tiến độ đơn hàng #${order.orderCode}</p>
+        <p style="margin: 8px 0 0 0; font-size: 14px; color: #E2E8F0;">Cập nhật tiến độ đơn hàng #${safeOrderCode}</p>
       </div>
       
       <div style="padding: 32px 28px; color: #1E293B; line-height: 1.6;">
-        <p style="font-size: 15px;">Kính chào <strong>${order.customerName}</strong>,</p>
-        <p style="font-size: 14px; color: #475569;">Đơn hàng <strong>#${order.orderCode}</strong> của Quý khách vừa có cập nhật trạng thái mới nhất:</p>
+        <p style="font-size: 15px;">Kính chào <strong>${safeCustomerName}</strong>,</p>
+        <p style="font-size: 14px; color: #475569;">Đơn hàng <strong>#${safeOrderCode}</strong> của Quý khách vừa có cập nhật trạng thái mới nhất:</p>
         
         <div style="background-color: ${isCancelled ? "#FFF1F2" : "#F0F9FF"}; border-left: 4px solid ${isCancelled ? "#E11D48" : "#0284C7"}; padding: 18px; margin: 20px 0; border-radius: 10px;">
-          <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${isCancelled ? "#9F1239" : "#075985"};">${newStatusTitle}</p>
-          <p style="margin: 8px 0 0 0; font-size: 13px; color: ${isCancelled ? "#BE123C" : "#0369A1"};">${description}</p>
-          ${order.weightKg ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #475569;"><strong>Trọng lượng thực tế:</strong> ${order.weightKg} kg</p>` : ""}
+          <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${isCancelled ? "#9F1239" : "#075985"};">${safeTitle}</p>
+          <p style="margin: 8px 0 0 0; font-size: 13px; color: ${isCancelled ? "#BE123C" : "#0369A1"};">${safeDescription}</p>
+          ${safeWeight ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #475569;"><strong>Trọng lượng thực tế:</strong> ${safeWeight} kg</p>` : ""}
         </div>
         
         <div style="text-align: center; margin: 30px 0;">
@@ -406,7 +411,7 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     </div>
   `;
 
-  const subject = `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`;
+  const subject = `[ChillBanana] Cập nhật đơn hàng #${safeOrderCode}: ${safeTitle}`;
 
   recordSentEmail({
     to: order.customerEmail,
@@ -422,7 +427,7 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
     payload: { title: newStatusTitle.slice(0, 100) },
     logId,
     to: order.customerEmail,
-    subject: `[ChillBanana] Cập nhật đơn hàng #${order.orderCode}: ${newStatusTitle}`,
+    subject: `[ChillBanana] Cập nhật đơn hàng #${safeOrderCode}: ${safeTitle}`,
     html,
   }, getTransporter());
 }
@@ -467,18 +472,23 @@ export async function sendZaloTrackingNotification(
 ): Promise<void> {
   const token = process.env.ZALO_OA_ACCESS_TOKEN;
 
+  const safeZaloUserId = escapeHtml(String(zaloUserId));
+  const safeOrderCode = escapeHtml(String(orderCode));
+  const safeStatusTitle = escapeHtml(String(statusTitle));
+  const safeDesc = escapeHtml(String(description));
+
   // Luôn ghi nhận vào buffer để Admin kiểm tra xem thông báo Zalo trông ra sao
   recordSentEmail({
-    to: `Zalo ID: ${zaloUserId}`,
-    subject: `[Zalo OA] Cập nhật đơn hàng #${orderCode}: ${statusTitle}`,
+    to: `Zalo ID: ${safeZaloUserId}`,
+    subject: `[Zalo OA] Cập nhật đơn hàng #${safeOrderCode}: ${safeStatusTitle}`,
     html: `
       <div style="font-family:sans-serif;padding:16px;background:#f0f7ff;border-radius:12px;border:1px solid #bae0ff">
         <h3 style="color:#0050b3;margin-top:0">🍌 Thông báo qua Zalo OA</h3>
-        <p><strong>Người nhận (Zalo User ID):</strong> ${zaloUserId}</p>
-        <p><strong>Đơn hàng:</strong> #${orderCode}</p>
-        <p><strong>Trạng thái:</strong> ${statusTitle}</p>
-        <p style="background:#fff;padding:12px;border-radius:8px;border:1px dashed #91caff">${description}</p>
-        <p style="color:#888;font-size:12px;margin-bottom:0">Đường dẫn: https://chill-banana.vercel.app/tracking?orderCode=${orderCode}</p>
+        <p><strong>Người nhận (Zalo User ID):</strong> ${safeZaloUserId}</p>
+        <p><strong>Đơn hàng:</strong> #${safeOrderCode}</p>
+        <p><strong>Trạng thái:</strong> ${safeStatusTitle}</p>
+        <p style="background:#fff;padding:12px;border-radius:8px;border:1px dashed #91caff">${safeDesc}</p>
+        <p style="color:#888;font-size:12px;margin-bottom:0">Đường dẫn: https://chill-banana.vercel.app/tracking?orderCode=${safeOrderCode}</p>
       </div>`,
     type: "ZALO_NOTIFICATION",
     isSimulated: !token,
@@ -598,24 +608,11 @@ export async function sendPasswordResetEmail({
   });
 
 
-  const mailOptions = {
-    from: `"ChillBanana 🍌" <${process.env.SMTP_USER || "noreply@chillbanana.vn"}>`,
+  await deliverLoggedEmail({
+    emailType: "password-reset",
     to,
     subject: "🔑 Đặt lại mật khẩu ChillBanana của bạn",
     html,
-  };
-
-  if (!hasAuth) {
-    console.log(`[Mailer][SIMULATED] sendPasswordResetEmail → ${to}: ${resetUrl}`);
-    return;
-  }
-
-  try {
-    await transporter.sendMail(mailOptions);
-    console.log(`[Mailer] ✅ Gửi email đặt lại mật khẩu tới ${to}`);
-  } catch (err) {
-    console.error(`[Mailer] ❌ Lỗi gửi email đặt lại mật khẩu tới ${to}:`, err);
-    throw err;
-  }
+  }, transporter);
 }
 
