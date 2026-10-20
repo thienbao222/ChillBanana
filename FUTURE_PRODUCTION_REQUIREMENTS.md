@@ -114,6 +114,17 @@
 - Nâng cấp Zalo OA lên tài khoản **Xác Thực Doanh Nghiệp** (Tích Vàng).
 - Ký hợp đồng Zalo Notification Service (ZNS) để gửi thông báo biến động đơn hàng có mẫu duyệt trước bởi Zalo (tỷ lệ mở > 95%, không phụ thuộc spam filter của email).
 
+### 5.4. Chống Spam Đăng Ký & Bảo Vệ Quota Email (Cloudflare Turnstile)
+- **Rủi ro:** Kẻ tấn công dùng botnet hoặc proxy xoay IP liên tục (mỗi IP gửi 1 request) có thể vượt qua bộ đếm tần suất IP (`REGISTER_PER_IP`), kích hoạt lệnh gửi email xác nhận hàng loạt làm cạn kiệt quota gửi thư của hệ thống.
+- **Cơ chế bảo vệ đa tầng đã tích hợp:**
+  1. *Honeypot Trap (Đã kích hoạt):* Bẫy các bot tự động điền trường ẩn (`website`, `hpField`), từ chối request ngay lập tức và không gửi email.
+  2. *Cloudflare Turnstile (Sẵn sàng kích hoạt):*
+     - Tạo widget Turnstile miễn phí trên Cloudflare Dashboard.
+     - Điền 2 biến môi trường trên Vercel:
+       - `NEXT_PUBLIC_TURNSTILE_SITE_KEY`: Hiển thị widget xác thực trên modal/form đăng ký.
+       - `TURNSTILE_SECRET_KEY`: Khóa bí mật xác thực token server-side tại `/api/auth/customer`.
+     - Backend API sẽ tự động kích hoạt kiểm tra Captcha nghiêm ngặt 100% ngay khi biến `TURNSTILE_SECRET_KEY` được khai báo, bảo đảm an toàn tuyệt đối trước botnet.
+
 ---
 
 ## 6. Tài Khoản Mua Hàng & Pháp Nhân Kho Nhật Bản
@@ -135,6 +146,7 @@
 - [ ] Webhook biến động số dư ngân hàng đã kiểm thử thông luồng thành công.
 - [ ] Tên miền chính thức `chillbanana.vn` đã trỏ về Vercel, SSL A+ trên SSL Labs.
 - [ ] Email Transactional (Resend/SendGrid) đã vượt qua kiểm tra SPF/DKIM/DMARC (10/10 trên mail-tester.com).
+- [ ] Cấu hình Cloudflare Turnstile (`TURNSTILE_SECRET_KEY` & `NEXT_PUBLIC_TURNSTILE_SITE_KEY`) để bảo vệ form đăng ký tài khoản.
 - [ ] API Token 3 đơn vị vận chuyển Việt Nam (GHN, GHTK, VTP) đã nạp vào biến môi trường.
 - [ ] Sao lưu cơ sở dữ liệu (Database Backup) định kỳ tự động đã được kích hoạt trên Neon/AWS S3.
 - [ ] Toàn bộ test suite tự động (End-to-End & Integration Tests) đạt 100% Pass.
