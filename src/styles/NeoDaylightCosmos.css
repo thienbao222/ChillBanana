@@ -87,15 +87,11 @@
 .cosmos-root .sky::before {
   z-index: 0;
   background:
-    radial-gradient(ellipse 20% 13% at 13% 28%, rgba(70, 211, 255, 0.5), transparent 76%),
-    radial-gradient(ellipse 27% 12% at 25% 34%, rgba(144, 132, 255, 0.34), transparent 78%),
-    radial-gradient(ellipse 18% 17% at 36% 39%, rgba(255, 143, 198, 0.29), transparent 78%),
-    radial-gradient(ellipse 21% 14% at 57% 23%, rgba(255, 221, 93, 0.34), transparent 78%),
-    radial-gradient(ellipse 28% 16% at 78% 42%, rgba(91, 219, 208, 0.31), transparent 78%),
-    radial-gradient(ellipse 25% 19% at 72% 77%, rgba(255, 160, 198, 0.27), transparent 80%),
-    radial-gradient(ellipse 23% 16% at 19% 78%, rgba(255, 216, 108, 0.28), transparent 80%);
-  filter: blur(22px) saturate(1.24);
-  opacity: 0.82;
+    radial-gradient(ellipse 32% 22% at 20% 30%, rgba(90, 186, 230, 0.18), transparent 75%),
+    radial-gradient(ellipse 30% 20% at 75% 35%, rgba(248, 219, 85, 0.16), transparent 75%),
+    radial-gradient(ellipse 38% 26% at 50% 80%, rgba(165, 139, 255, 0.12), transparent 80%);
+  filter: blur(44px);
+  opacity: 0.35;
   transform-origin: 50% 50%;
   animation: cosmosNebulaDrift 48s ease-in-out infinite alternate;
 }
@@ -104,11 +100,10 @@
   z-index: 1;
   inset: -24% -12%;
   background:
-    linear-gradient(119deg, transparent 18%, rgba(255, 255, 255, 0.2) 34%, rgba(248, 219, 85, 0.16) 41%, rgba(130, 215, 255, 0.16) 48%, rgba(224, 166, 255, 0.12) 54%, transparent 68%),
-    radial-gradient(ellipse 24% 9% at 40% 37%, rgba(255, 255, 255, 0.4), transparent 78%),
-    radial-gradient(ellipse 22% 10% at 68% 61%, rgba(255, 232, 158, 0.2), transparent 80%);
-  filter: blur(18px);
-  opacity: 0.76;
+    linear-gradient(119deg, transparent 24%, rgba(255, 255, 255, 0.14) 38%, rgba(248, 219, 85, 0.1) 48%, rgba(130, 215, 255, 0.1) 56%, transparent 72%),
+    radial-gradient(ellipse 28% 12% at 40% 40%, rgba(255, 255, 255, 0.22), transparent 80%);
+  filter: blur(36px);
+  opacity: 0.35;
   transform: rotate(-7deg);
   animation: cosmosAuroraFlow 62s ease-in-out infinite alternate;
 }
@@ -119,8 +114,8 @@
 }
 
 @keyframes cosmosAuroraFlow {
-  from { translate: -1.2% -0.8%; opacity: 0.54; }
-  to { translate: 1.2% 0.8%; opacity: 0.86; }
+  from { translate: -1.2% -0.8%; opacity: 0.25; }
+  to { translate: 1.2% 0.8%; opacity: 0.45; }
 }
 
 .cosmos-root .par {
@@ -136,22 +131,22 @@
   height: 42vw;
   border-radius: 50%;
   z-index: 1;
-  background: radial-gradient(circle at 43% 46%, rgba(255, 255, 239, 0.84), rgba(255, 232, 145, 0.58) 17%, rgba(248, 219, 85, 0.36) 38%, rgba(255, 178, 91, 0.15) 54%, transparent 72%);
-  filter: saturate(1.12);
+  background: radial-gradient(circle at 43% 46%, rgba(255, 255, 239, 0.65), rgba(255, 232, 145, 0.38) 20%, rgba(248, 219, 85, 0.18) 42%, transparent 72%);
+  filter: blur(16px);
+  opacity: 0.45;
 }
 
 .cosmos-root .cloud {
   position: absolute;
   z-index: 1;
-  width: var(--cloud-width, clamp(190px, 30vw, 440px));
-  height: var(--cloud-height, clamp(90px, 14vw, 210px));
+  width: var(--cloud-width, clamp(200px, 28vw, 380px));
+  height: var(--cloud-height, clamp(100px, 14vw, 190px));
   border-radius: 50%;
   background:
-    radial-gradient(ellipse at 30% 54%, rgba(var(--cloud-rgb), 0.48), rgba(var(--cloud-rgb), 0.12) 46%, transparent 76%),
-    radial-gradient(ellipse at 68% 43%, rgba(var(--cloud-accent-rgb), 0.34), transparent 74%),
-    radial-gradient(ellipse at 53% 68%, rgba(255, 255, 255, 0.22), transparent 80%);
-  filter: blur(13px) saturate(1.3);
-  opacity: 0.78;
+    radial-gradient(ellipse at 35% 50%, rgba(var(--cloud-rgb), 0.22), rgba(var(--cloud-rgb), 0.05) 50%, transparent 75%),
+    radial-gradient(ellipse at 65% 45%, rgba(var(--cloud-accent-rgb), 0.14), transparent 75%);
+  filter: blur(48px);
+  opacity: 0.22;
   animation: cosmosSlide 60s linear infinite alternate;
 }
 
@@ -161,8 +156,8 @@
 .cosmos-root .cloud--mint { --cloud-rgb: 112, 224, 194; --cloud-accent-rgb: 89, 198, 255; }
 .cosmos-root .cloud--blue { --cloud-rgb: 117, 162, 255; --cloud-accent-rgb: 164, 139, 250; }
 .cosmos-root .cloud--peach { --cloud-rgb: 255, 194, 128; --cloud-accent-rgb: 248, 219, 85; }
-.cosmos-root .cloud--banana { --cloud-rgb: 255, 221, 93; --cloud-accent-rgb: 255, 153, 176; --cloud-width: clamp(220px, 32vw, 480px); --cloud-height: clamp(100px, 13vw, 220px); }
-.cosmos-root .cloud--coral { --cloud-rgb: 255, 143, 160; --cloud-accent-rgb: 154, 190, 255; --cloud-width: clamp(180px, 25vw, 380px); --cloud-height: clamp(90px, 12vw, 190px); }
+.cosmos-root .cloud--banana { --cloud-rgb: 255, 221, 93; --cloud-accent-rgb: 255, 153, 176; --cloud-width: clamp(220px, 32vw, 420px); --cloud-height: clamp(100px, 13vw, 200px); }
+.cosmos-root .cloud--coral { --cloud-rgb: 255, 143, 160; --cloud-accent-rgb: 154, 190, 255; --cloud-width: clamp(180px, 25vw, 360px); --cloud-height: clamp(90px, 12vw, 180px); }
 
 .cosmos-root #sparks {
   position: absolute;
@@ -188,26 +183,93 @@
   filter: drop-shadow(0 0 7px rgba(255, 217, 99, 0.88));
 }
 
+/* ==========================================================================
+   Cosmic Meteor Shower (Sao Băng Rơi) — Neo Universe & Banana Starlight
+   ========================================================================== */
+.cosmos-root .meteor {
+  position: absolute;
+  z-index: 2;
+  height: 2px;
+  width: clamp(140px, 18vw, 240px);
+  border-radius: 999px;
+  /* Đuôi sao băng mờ dần về sau (bên phải), đầu phát sáng rực rỡ ở phía trước (bên trái) */
+  background: linear-gradient(
+    270deg,
+    transparent 0%,
+    rgba(var(--meteor-rgb, 255, 220, 100), 0.12) 25%,
+    rgba(var(--meteor-rgb, 255, 220, 100), 0.85) 85%,
+    #ffffff 100%
+  );
+  filter: drop-shadow(0 0 6px rgba(var(--meteor-rgb, 255, 220, 100), 0.9))
+          drop-shadow(0 0 16px rgba(var(--meteor-rgb, 255, 220, 100), 0.5));
+  opacity: 0;
+  pointer-events: none;
+  transform-origin: left center;
+  transform: rotate(-35deg);
+  animation: cosmosMeteorFall var(--dur, 5.5s) cubic-bezier(0.2, 0.8, 0.25, 1) infinite;
+  animation-delay: var(--delay, 0s);
+}
+
+.cosmos-root .meteor::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 4.5px;
+  height: 4.5px;
+  border-radius: 50%;
+  background: #ffffff;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px 2px #ffffff, 0 0 16px 4px rgba(var(--meteor-rgb, 255, 220, 100), 0.95);
+}
+
+@keyframes cosmosMeteorFall {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 0, 0) rotate(-35deg) scaleX(0.2);
+  }
+  10% {
+    opacity: 0.95;
+    transform: translate3d(-140px, 98px, 0) rotate(-35deg) scaleX(1);
+  }
+  24% {
+    opacity: 0;
+    transform: translate3d(-460px, 322px, 0) rotate(-35deg) scaleX(1.35);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(-460px, 322px, 0) rotate(-35deg) scaleX(0);
+  }
+}
+
+.cosmos-root .meteor--banana { --meteor-rgb: 250, 215, 60; }
+.cosmos-root .meteor--cyan   { --meteor-rgb: 90, 210, 255; }
+.cosmos-root .meteor--gold   { --meteor-rgb: 255, 185, 45; }
+.cosmos-root .meteor--violet { --meteor-rgb: 195, 160, 255; }
+
+/* Các quỹ đạo sao băng phân bổ tự nhiên góc nhìn vũ trụ */
+.cosmos-root .meteor.m1 { top: 6vh;  right: 14vw; --dur: 5.8s; --delay: 0s; }
+.cosmos-root .meteor.m2 { top: 18vh; right: 35vw; --dur: 6.2s; --delay: 1.6s; }
+.cosmos-root .meteor.m3 { top: 4vh;  right: 58vw; --dur: 5.2s; --delay: 3.1s; }
+.cosmos-root .meteor.m4 { top: 32vh; right: 10vw; --dur: 6.6s; --delay: 4.7s; }
+.cosmos-root .meteor.m5 { top: 12vh; right: 78vw; --dur: 5.5s; --delay: 6.2s; }
+.cosmos-root .meteor.m6 { top: 44vh; right: 48vw; --dur: 6.4s; --delay: 7.8s; }
+.cosmos-root .meteor.m7 { top: 25vh; right: 68vw; --dur: 6.9s; --delay: 9.3s; }
+
+/* Hỗ trợ tương thích ngược với các class comet cũ nếu còn */
 .cosmos-root .comet {
   position: absolute;
   z-index: 2;
-  width: clamp(38px, 5vw, 72px);
   height: 2px;
+  width: clamp(130px, 16vw, 200px);
   border-radius: 999px;
-  background: linear-gradient(90deg, transparent, rgba(var(--comet-rgb), 0.25), rgba(var(--comet-rgb), 0.9), #fff);
-  filter: drop-shadow(0 0 5px rgba(var(--comet-rgb), 0.6));
+  background: linear-gradient(90deg, transparent, rgba(var(--comet-rgb, 255, 210, 76), 0.25), rgba(var(--comet-rgb, 255, 210, 76), 0.9), #fff);
+  filter: drop-shadow(0 0 6px rgba(var(--comet-rgb, 255, 210, 76), 0.7));
   opacity: 0;
-  animation: cosmosComet 13s ease-in infinite;
+  animation: cosmosMeteorFall 6s cubic-bezier(0.2, 0.8, 0.25, 1) infinite;
 }
-
-.cosmos-root .comet--banana { --comet-rgb: 255, 210, 76; left: 16%; top: 25%; animation-delay: -5s; }
-.cosmos-root .comet--cyan { --comet-rgb: 91, 213, 255; left: 72%; top: 58%; animation-delay: -11s; }
-
-@keyframes cosmosComet {
-  0%, 61%, 100% { opacity: 0; transform: translate3d(-18px, 18px, 0) rotate(-28deg) scaleX(0.55); }
-  64% { opacity: 0.88; transform: translate3d(0, 0, 0) rotate(-28deg) scaleX(1); }
-  72% { opacity: 0; transform: translate3d(40px, -38px, 0) rotate(-28deg) scaleX(1.22); }
-}
+.cosmos-root .comet--banana { --comet-rgb: 255, 210, 76; top: 10vh; right: 20vw; animation-delay: 2s; }
+.cosmos-root .comet--cyan { --comet-rgb: 91, 213, 255; top: 28vh; right: 50vw; animation-delay: 5s; }
 
 @keyframes cosmosTw {
   0%, 100% { opacity: 0.25; transform: scale(0.6) rotate(0); }
@@ -228,7 +290,382 @@
   50% { translate: 0 -5px; }
 }
 
-/* Header */
+/* ==========================================================================
+   Cosmic Floating Island Header (Thanh Đảo Vũ Trụ Liền Mạch)
+   ========================================================================== */
+.cosmos-root .cosmos-island-header {
+  --P: clamp(12px, 2.5vw, 32px);
+  position: relative;
+  z-index: 30;
+  padding: 12px var(--P) 0;
+  max-width: 1380px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.cosmos-root .cosmos-island-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 10px 30px rgba(60, 120, 170, 0.14);
+  transition: all 0.3s var(--ease);
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.cosmos-root .island-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.cosmos-root .logo-planet-link {
+  text-decoration: none;
+  display: block;
+}
+
+.cosmos-root .logo-planet {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background:
+    radial-gradient(1px 1px at 28% 24%, #ffffff 100%, transparent),
+    radial-gradient(1px 1px at 70% 32%, #ffffff 100%, transparent),
+    radial-gradient(1.5px 1.5px at 38% 68%, #fff9df 100%, transparent),
+    radial-gradient(1.5px 1.5px at 62% 74%, #ffe58a 100%, transparent),
+    radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 24%, #f59e0b 58%, #7c2d12 82%, #1e1b4b 100%);
+  box-shadow:
+    inset -5px -6px 12px rgba(15, 23, 42, 0.7),
+    inset 2px 2px 6px rgba(255, 255, 255, 0.85),
+    0 0 0 2px rgba(248, 219, 85, 0.4),
+    0 0 16px rgba(245, 158, 11, 0.5),
+    0 4px 18px rgba(14, 165, 233, 0.22);
+  transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+}
+
+.cosmos-root .logo-planet:hover {
+  transform: scale(1.08);
+  box-shadow:
+    inset -5px -6px 12px rgba(15, 23, 42, 0.7),
+    inset 2px 2px 7px rgba(255, 255, 255, 0.95),
+    0 0 0 3px rgba(248, 219, 85, 0.6),
+    0 0 22px rgba(245, 158, 11, 0.7),
+    0 6px 24px rgba(14, 165, 233, 0.35);
+}
+
+.cosmos-root .logo-planet .planet-ring {
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  border-top-color: rgba(253, 224, 71, 0.95);
+  border-bottom-color: rgba(56, 189, 248, 0.4);
+  transform: rotate(-22deg) scaleY(0.4);
+  pointer-events: none;
+  filter: drop-shadow(0 0 4px rgba(253, 224, 71, 0.6));
+}
+
+.cosmos-root .logo-planet .logo-banana-img {
+  width: 27px;
+  height: 27px;
+  object-fit: contain;
+  z-index: 1;
+  filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.4));
+  transition: transform 0.3s var(--ease);
+}
+
+.cosmos-root .logo-planet:hover .logo-banana-img {
+  transform: scale(1.08) rotate(-4deg);
+}
+
+.cosmos-root .brand-text {
+  line-height: 1.15;
+}
+
+.cosmos-root .brand-title {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.cosmos-root .brand-title b {
+  font: 800 1.18rem "Baloo 2", "Nunito", sans-serif;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.cosmos-root .brand-title b i {
+  font-style: normal;
+  background: linear-gradient(180deg, #f6c915, var(--banana-d));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.cosmos-root .brand-sub {
+  display: none;
+  font-size: 0.7rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+@media (min-width: 1536px) {
+  .cosmos-root .brand-sub {
+    display: block;
+  }
+}
+
+/* 5 Viên ngọc điều hướng (Cosmic Navigation Pills) */
+.cosmos-root .island-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.cosmos-root .pill-gem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px 5px 6px;
+  border-radius: 999px;
+  font-size: 0.77rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--ink);
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(var(--pill-rgb), 0.28);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.22s var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cosmos-root .pill-gem:hover {
+  background: #ffffff;
+  transform: translateY(-1.5px);
+  border-color: rgba(var(--pill-rgb), 0.85);
+  box-shadow: 0 5px 16px rgba(var(--pill-rgb), 0.28);
+  color: #0f172a;
+}
+
+.cosmos-root .pill-gem .gem-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff, rgba(var(--pill-rgb), 0.85));
+  box-shadow: inset -1.5px -2px 5px rgba(0, 0, 0, 0.15), 0 0 8px rgba(var(--pill-rgb), 0.4);
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  transition: transform 0.22s var(--ease);
+}
+
+.cosmos-root .pill-gem:hover .gem-icon {
+  transform: scale(1.12) rotate(6deg);
+}
+
+.cosmos-root .pill-gem .gem-icon svg {
+  width: 12px;
+  height: 12px;
+  stroke: #ffffff;
+  stroke-width: 2.3;
+  fill: none;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.cosmos-root .pill-gem--ai {
+  border-color: rgba(255, 143, 184, 0.45);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85), rgba(255, 220, 235, 0.55));
+}
+
+.cosmos-root .pill-gem--ai:hover {
+  border-color: #ff659c;
+  box-shadow: 0 5px 18px rgba(255, 101, 156, 0.35);
+}
+
+.cosmos-root .pill-gem--muaho {
+  background: linear-gradient(135deg, rgba(254, 243, 199, 0.95), rgba(253, 230, 138, 0.8));
+  border-color: rgba(245, 158, 11, 0.6);
+  box-shadow: 0 2px 10px rgba(245, 158, 11, 0.18);
+  color: #78350f;
+  font-weight: 800;
+}
+
+.cosmos-root .pill-gem--muaho:hover {
+  background: linear-gradient(135deg, #fef08a, #fde047);
+  border-color: #f59e0b;
+  box-shadow: 0 4px 18px rgba(245, 158, 11, 0.42);
+  color: #78350f;
+  transform: translateY(-1.5px) scale(1.02);
+}
+
+.cosmos-root .pill-gem--muaho .pill-gem-sparkle {
+  color: #b45309;
+  font-size: 0.82rem;
+  margin-left: 1px;
+}
+
+/* Actions Cụm Phải */
+.cosmos-root .island-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.cosmos-root .island-actions .chip {
+  padding: 6px 10px;
+  font-size: 0.76rem;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s var(--ease);
+  color: var(--ink);
+  font-weight: 700;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.cosmos-root .island-actions .chip:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+.cosmos-root .island-actions .chip-user .user-name {
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: inline-block;
+  vertical-align: middle;
+}
+
+/* Nút Cài Đặt Giao Diện (Preferences) Dạng Nút Tròn Nhỏ Tinh Tế */
+.cosmos-root .island-actions .island-pref-btn,
+.cosmos-root .island-actions .site-preferences-trigger {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  color: var(--ink);
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  flex-shrink: 0;
+}
+
+.cosmos-root .island-actions .island-pref-btn span,
+.cosmos-root .island-actions .site-preferences-trigger span {
+  display: none !important;
+}
+
+.cosmos-root .island-actions .island-pref-btn svg,
+.cosmos-root .island-actions .site-preferences-trigger svg {
+  width: 16px;
+  height: 16px;
+  color: var(--ink);
+}
+
+.cosmos-root .island-actions .island-pref-btn:hover,
+.cosmos-root .island-actions .site-preferences-trigger:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+}
+
+/* Nút CTA Chính: Tuyệt đối không bao giờ bị trôi/mất */
+.cosmos-root .island-cta {
+  padding: 7px 15px;
+  font-size: 0.8rem;
+  font-weight: 800;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--banana-d), var(--banana));
+  color: #16284a;
+  border: none;
+  box-shadow: 0 3px 14px rgba(227, 169, 18, 0.4);
+  transition: all 0.22s var(--ease);
+  white-space: nowrap;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cosmos-root .island-cta:hover {
+  transform: translateY(-1.5px) scale(1.02);
+  box-shadow: 0 5px 20px rgba(227, 169, 18, 0.58);
+}
+
+.cosmos-root .island-cta .cta-sparkle {
+  color: #92400e;
+  font-weight: 900;
+}
+
+/* Dải Telemetry phụ phía dưới */
+.cosmos-root .cosmos-telemetry-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 10px;
+  padding: 4px 16px;
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.cosmos-root .telemetry-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cosmos-root .telemetry-pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 8px #10b981;
+  animation: cosmosPulseDot 2s infinite;
+}
+
+@keyframes cosmosPulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+.cosmos-root .telemetry-sep {
+  color: rgba(227, 169, 18, 0.5);
+  font-size: 0.65rem;
+}
+
+/* Header cũ dự phòng & container chung */
 .cosmos-root header {
   --P: clamp(16px, 3.5vw, 40px);
   position: relative;
@@ -254,10 +691,10 @@
 }
 
 .cosmos-root .cluster {
-  --cx: 44px;
-  --cy: 44px;
+  --cx: 90px;
+  --cy: 90px;
   position: relative;
-  min-height: 320px;
+  min-height: 330px;
   overflow: hidden;
 }
 
@@ -267,15 +704,29 @@
   top: calc(var(--cy) - var(--lr));
   width: calc(var(--lr) * 2);
   height: calc(var(--lr) * 2);
-  --lr: 74px;
+  --lr: 56px;
   border-radius: 50%;
   z-index: 2;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 60% 60%, #fffbe0, var(--banana) 44%, var(--banana-d));
-  box-shadow: inset -12px -14px 24px rgba(190, 120, 0, 0.28), 0 0 0 8px rgba(248, 219, 85, 0.3), 0 10px 34px rgba(227, 169, 18, 0.5);
-  transition: scale 0.4s var(--ease);
-  animation: cosmosGlow 4.5s ease-in-out infinite;
+  /* Celestial Planet with sparkling stardust spots (đốm sao) */
+  background:
+    radial-gradient(1.5px 1.5px at 28% 24%, #ffffff 100%, transparent),
+    radial-gradient(1.2px 1.2px at 70% 32%, #ffffff 100%, transparent),
+    radial-gradient(1.5px 1.5px at 38% 68%, #fff9df 100%, transparent),
+    radial-gradient(2px 2px at 62% 74%, #ffe58a 100%, transparent),
+    radial-gradient(1px 1px at 80% 55%, #90e0ef 100%, transparent),
+    radial-gradient(1.2px 1.2px at 22% 52%, #ffffff 100%, transparent),
+    radial-gradient(1.8px 1.8px at 52% 18%, #ffffff 100%, transparent),
+    radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 24%, #f59e0b 58%, #7c2d12 82%, #1e1b4b 100%);
+  box-shadow:
+    inset -10px -12px 20px rgba(15, 23, 42, 0.72),
+    inset 3px 3px 10px rgba(255, 255, 255, 0.75),
+    0 0 0 4px rgba(248, 219, 85, 0.4),
+    0 0 22px rgba(245, 158, 11, 0.55),
+    0 8px 32px rgba(14, 165, 233, 0.3);
+  transition: transform 0.4s var(--ease), box-shadow 0.4s var(--ease);
+  animation: cosmosPlanetPulse 4s ease-in-out infinite;
 }
 
 .cosmos-root .logo::after {
@@ -283,40 +734,65 @@
   position: absolute;
   inset: 0;
   border-radius: 50%;
-  background: repeating-linear-gradient(100deg, transparent 0 9px, rgba(176, 110, 0, 0.14) 9px 10px);
+  background: radial-gradient(circle at 32% 28%, rgba(255, 255, 255, 0.4) 0%, transparent 60%);
   pointer-events: none;
 }
 
 .cosmos-root .logo::before {
   content: "";
   position: absolute;
-  inset: -14px;
+  inset: -13px;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.9);
-  transform: rotate(-20deg) scaleY(0.42);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  border-top-color: rgba(253, 224, 71, 0.95);
+  border-bottom-color: rgba(56, 189, 248, 0.45);
+  transform: rotate(-22deg) scaleY(0.4);
   pointer-events: none;
+  filter: drop-shadow(0 0 6px rgba(253, 224, 71, 0.65));
 }
 
 .cosmos-root .logo svg,
 .cosmos-root .logo .logo-banana-img {
-  width: calc(var(--lr) * 1.3);
-  height: calc(var(--lr) * 1.3);
+  width: calc(var(--lr) * 1.25);
+  height: calc(var(--lr) * 1.25);
   object-fit: contain;
   z-index: 1;
-  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.22));
+  background: transparent;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.45));
   transition: transform 0.3s var(--ease);
 }
 
 .cosmos-root .logo:hover {
-  scale: 1.05;
+  transform: scale(1.06);
+  box-shadow:
+    inset -10px -12px 20px rgba(15, 23, 42, 0.72),
+    inset 3px 3px 12px rgba(255, 255, 255, 0.9),
+    0 0 0 5px rgba(248, 219, 85, 0.6),
+    0 0 28px rgba(245, 158, 11, 0.8),
+    0 10px 40px rgba(14, 165, 233, 0.45);
 }
 
 .cosmos-root .logo:hover .logo-banana-img {
   transform: scale(1.08) rotate(-4deg);
 }
 
-@keyframes cosmosGlow {
-  50% { box-shadow: inset -12px -14px 24px rgba(190, 120, 0, 0.28), 0 0 0 14px rgba(248, 219, 85, 0.22), 0 10px 40px rgba(227, 169, 18, 0.65); }
+@keyframes cosmosPlanetPulse {
+  0%, 100% {
+    box-shadow:
+      inset -10px -12px 20px rgba(15, 23, 42, 0.72),
+      inset 3px 3px 10px rgba(255, 255, 255, 0.75),
+      0 0 0 4px rgba(248, 219, 85, 0.38),
+      0 0 20px rgba(245, 158, 11, 0.5),
+      0 8px 32px rgba(14, 165, 233, 0.28);
+  }
+  50% {
+    box-shadow:
+      inset -10px -12px 20px rgba(15, 23, 42, 0.72),
+      inset 3px 3px 12px rgba(255, 255, 255, 0.9),
+      0 0 0 7px rgba(248, 219, 85, 0.5),
+      0 0 28px rgba(245, 158, 11, 0.72),
+      0 10px 42px rgba(14, 165, 233, 0.42);
+  }
 }
 
 .cosmos-root .brand {
@@ -629,16 +1105,35 @@
 }
 
 .cosmos-root .mlogo {
-  width: 38px;
-  height: 38px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
-  background: radial-gradient(circle at 34% 28%, #fffbe0, var(--banana) 44%, var(--banana-d));
-  box-shadow: 0 4px 12px rgba(227, 169, 18, 0.5);
+  background:
+    radial-gradient(1px 1px at 30% 25%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 70% 35%, #fff 100%, transparent),
+    radial-gradient(1px 1px at 45% 75%, #ffe58a 100%, transparent),
+    radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 30%, #f59e0b 65%, #1e1b4b 100%);
+  box-shadow:
+    inset -4px -5px 10px rgba(15, 23, 42, 0.65),
+    inset 1.5px 1.5px 5px rgba(255, 255, 255, 0.75),
+    0 0 0 2.5px rgba(248, 219, 85, 0.45),
+    0 0 16px rgba(227, 169, 18, 0.6);
   display: grid;
   place-items: center;
   overflow: hidden;
-  padding: 4px;
+  padding: 5px;
   flex: none;
+  position: relative;
+  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+}
+
+.cosmos-root .mlogo:hover {
+  transform: scale(1.08);
+  box-shadow:
+    inset -4px -5px 10px rgba(15, 23, 42, 0.65),
+    inset 1.5px 1.5px 5px rgba(255, 255, 255, 0.9),
+    0 0 0 3px rgba(248, 219, 85, 0.6),
+    0 0 20px rgba(227, 169, 18, 0.8);
 }
 
 .cosmos-root .mlogo img,
@@ -727,9 +1222,11 @@
 
 .cosmos-root h1 u {
   text-decoration: none;
-  background: linear-gradient(transparent 62%, var(--banana) 62%);
-  padding: 0 4px;
-  border-radius: 4px;
+  background: linear-gradient(120deg, rgba(254, 240, 138, 0.4) 0%, rgba(248, 219, 85, 0.7) 100%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 .cosmos-root .lead {
@@ -1468,9 +1965,21 @@
 
 .cosmos-root .hot {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 22px;
   margin-top: 26px;
+}
+
+@media (max-width: 1080px) {
+  .cosmos-root .hot {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 600px) {
+  .cosmos-root .hot {
+    grid-template-columns: 1fr;
+  }
 }
 
 .cosmos-root .hc {
@@ -1588,7 +2097,105 @@
   animation: none;
 }
 
-/* Responsive */
+/* Responsive cho Cosmic Floating Island */
+@media (max-width: 1120px) {
+  .cosmos-root .cosmos-island-nav {
+    flex-wrap: wrap;
+    border-radius: 26px;
+    padding: 10px 16px;
+    gap: 8px 12px;
+  }
+  .cosmos-root .island-brand {
+    order: 1;
+  }
+  .cosmos-root .island-actions {
+    order: 2;
+    margin-left: auto;
+  }
+  .cosmos-root .island-pills {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+    overflow-x: auto;
+    padding-top: 8px;
+    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    scrollbar-width: none;
+  }
+  .cosmos-root .island-pills::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .cosmos-root .cosmos-island-header {
+    --P: 12px;
+    padding: 8px var(--P) 0;
+  }
+  .cosmos-root .cosmos-island-nav {
+    border-radius: 20px;
+    padding: 8px 12px;
+  }
+  .cosmos-root .island-brand .jp {
+    display: none;
+  }
+  .cosmos-root .island-actions .chip-cart .cart-label {
+    display: none;
+  }
+  .cosmos-root .island-actions .chip-user .user-text {
+    display: none;
+  }
+  .cosmos-root .island-actions .chip-user .user-name {
+    display: none;
+  }
+  .cosmos-root .island-actions .island-cta {
+    padding: 6px 12px;
+    font-size: 0.74rem;
+  }
+  .cosmos-root .island-pills {
+    justify-content: flex-start;
+    padding-bottom: 2px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cosmos-root .cosmos-telemetry-strip {
+    font-size: 0.72rem;
+    gap: 10px;
+  }
+  .cosmos-root .telemetry-sep {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .cosmos-root .brand-title b {
+    font-size: 1.05rem;
+  }
+  .cosmos-root .logo-planet {
+    width: 36px;
+    height: 36px;
+  }
+  .cosmos-root .logo-planet .logo-banana-img {
+    width: 22px;
+    height: 22px;
+  }
+  .cosmos-root .island-actions {
+    gap: 4px;
+  }
+  .cosmos-root .island-actions .chip {
+    padding: 5px 7px;
+  }
+  .cosmos-root .island-actions .island-pref-btn,
+  .cosmos-root .island-actions .site-preferences-trigger {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+  .cosmos-root .island-actions .island-cta {
+    padding: 5px 10px;
+    font-size: 0.72rem;
+  }
+}
+
 @media (max-width: 980px) {
   .cosmos-root .top { grid-template-columns: 1fr; }
   .cosmos-root .side { min-height: 0; height: auto; }
@@ -1597,8 +2204,8 @@
 }
 
 @media (max-width: 700px) {
-  .cosmos-root .cluster { --cx: 36px; --cy: 36px; }
-  .cosmos-root .logo { --lr: 55px; }
+  .cosmos-root .cluster { --cx: 58px; --cy: 58px; min-height: 290px; }
+  .cosmos-root .logo { --lr: 44px; }
   .cosmos-root .r1 { --r: 120px; --af: 6.7deg; }
   .cosmos-root .r2 { --r: 145px; --af: 27.97deg; }
   .cosmos-root .r3 { --r: 170px; --af: 45.83deg; }
@@ -1808,11 +2415,11 @@
   display: block;
   width: 100%;
   min-width: 0;
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.92);
   backdrop-filter: blur(10px);
   border: 2px solid rgba(255, 255, 255, 0.95);
   border-radius: 22px;
-  padding: 14px 18px 14px 46px;
+  padding: 14px 110px 14px 46px;
   font-size: 0.95rem;
   font-weight: 700;
   color: var(--ink);
@@ -1821,7 +2428,57 @@
   box-shadow: 0 4px 18px rgba(60, 120, 170, 0.08);
 }
 
-.cosmos-root .track-search button {
+.cosmos-root .track-search-actions {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cosmos-root .track-paste-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #b45309;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cosmos-root .track-paste-btn:hover {
+  background: rgba(245, 158, 11, 0.25);
+  border-color: #f59e0b;
+  transform: scale(1.02);
+}
+
+.cosmos-root .track-clear-btn {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #e2e8f0;
+  border: none;
+  color: #64748b;
+  font-size: 0.7rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cosmos-root .track-clear-btn:hover {
+  background: #cbd5e1;
+  color: #1e293b;
+}
+
+.cosmos-root .track-search button.cta {
   min-height: 52px;
   white-space: nowrap;
 }
@@ -1830,6 +2487,201 @@
   max-width: 760px;
   margin-left: auto !important;
   margin-right: auto !important;
+}
+
+.cosmos-root .track-chips-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.cosmos-root .track-chip-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(60, 120, 170, 0.2);
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.2s var(--ease);
+}
+
+.cosmos-root .track-chip-item:hover {
+  background: #ffffff;
+  border-color: var(--blue);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(60, 120, 170, 0.12);
+}
+
+.cosmos-root .track-chip-item .chip-code {
+  font-family: monospace;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  font-weight: 800;
+}
+
+.cosmos-root .track-chip-item .chip-remove {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
+  font-size: 0.7rem;
+  padding: 0 2px;
+}
+
+.cosmos-root .track-chip-item .chip-remove:hover {
+  color: #ef4444;
+}
+
+.cosmos-root .track-demo-chip {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #92400e;
+  cursor: pointer;
+}
+
+.cosmos-root .track-demo-chip:hover {
+  background: rgba(245, 158, 11, 0.22);
+  border-color: #f59e0b;
+}
+
+/* 7-Chặng Vận Tải Infographic Cards */
+.cosmos-root .track-journey-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin: 20px 0 16px;
+}
+
+.cosmos-root .journey-step-card {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  border-radius: 18px;
+  padding: 14px 10px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(60, 120, 170, 0.05);
+  transition: all 0.22s var(--ease);
+}
+
+.cosmos-root .journey-step-card:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(60, 120, 170, 0.12);
+  border-color: rgba(74, 174, 224, 0.6);
+}
+
+.cosmos-root .journey-step-card .step-num {
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: var(--banana-d);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+
+.cosmos-root .journey-step-card .step-icon {
+  font-size: 1.5rem;
+  margin-bottom: 6px;
+}
+
+.cosmos-root .journey-step-card .step-title {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+  margin-bottom: 2px;
+}
+
+.cosmos-root .journey-step-card .step-desc {
+  font-size: 0.66rem;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+/* 3 Cam kết cốt lõi */
+.cosmos-root .track-guarantees {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.cosmos-root .guarantee-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.85);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.cosmos-root .guarantee-pill .g-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+/* Thanh Thao Tác Nhanh Khi Tìm Thấy Đơn Hàng */
+.cosmos-root .track-quick-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.cosmos-root .track-action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s var(--ease);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--line);
+  color: var(--ink);
+  text-decoration: none;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+}
+
+.cosmos-root .track-action-btn:hover {
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(60, 120, 170, 0.12);
+}
+
+.cosmos-root .track-action-btn--ai {
+  background: linear-gradient(135deg, rgba(255, 240, 246, 0.9), rgba(255, 225, 237, 0.7));
+  border-color: rgba(236, 72, 153, 0.4);
+  color: #9d174d;
+}
+
+.cosmos-root .track-action-btn--ai:hover {
+  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  border-color: #ec4899;
+  box-shadow: 0 4px 14px rgba(236, 72, 153, 0.25);
+}
+
+.cosmos-root .pill-gem--active {
+  background: rgba(var(--pill-rgb), 0.18) !important;
+  border-color: rgba(var(--pill-rgb), 0.85) !important;
+  box-shadow: 0 0 14px rgba(var(--pill-rgb), 0.35) !important;
+  color: #0f172a !important;
 }
 
 .cosmos-root .track-search input:focus {
@@ -1912,7 +2764,59 @@ html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root {
   --glass: rgba(19, 32, 51, 0.86);
   --line: rgba(151, 180, 211, 0.26);
   --shadow: 0 12px 38px rgba(0, 0, 0, 0.3);
-  background: linear-gradient(180deg, #0b1423 0%, #102038 45%, #142437 74%, #25263a 100%) fixed;
+  background:
+    radial-gradient(ellipse 40% 25% at 20% 20%, rgba(30, 58, 138, 0.2), transparent 75%),
+    radial-gradient(ellipse 35% 25% at 80% 30%, rgba(120, 53, 15, 0.15), transparent 75%),
+    linear-gradient(180deg, #090d16 0%, #0d1627 45%, #101c30 74%, #18192b 100%) fixed;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .cloud {
+  opacity: 0.1;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .sky::before {
+  opacity: 0.15;
+}
+
+/* Dark Mode styles cho Island Header */
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .cosmos-island-nav {
+  background: rgba(18, 30, 48, 0.88);
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.45);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .brand-title b {
+  color: #e2edfd;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .brand-sub {
+  color: #94a3b8;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .pill-gem {
+  background: rgba(25, 42, 66, 0.7);
+  color: #e2edfd;
+  border-color: rgba(var(--pill-rgb), 0.35);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .pill-gem:hover {
+  background: rgba(30, 50, 78, 0.95);
+  box-shadow: 0 6px 22px rgba(var(--pill-rgb), 0.4);
+  color: #ffffff;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .island-actions .chip {
+  background: rgba(25, 42, 66, 0.7);
+  border-color: rgba(148, 163, 184, 0.2);
+  color: #e2edfd;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .island-actions .chip:hover {
+  background: rgba(35, 58, 90, 0.95);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .cosmos-telemetry-strip {
+  color: #94a3b8;
 }
 
 html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .pl,

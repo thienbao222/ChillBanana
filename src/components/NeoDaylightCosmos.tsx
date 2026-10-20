@@ -399,14 +399,9 @@ export default function NeoDaylightCosmos() {
       {/* Nền trời vũ trụ ban ngày */}
       <div className="sky" aria-hidden="true">
         <div className="sun par" style={{ "--k": 6 } as any} />
-        <div className="cloud cloud--cyan par" style={{ "--k": 12, left: "-5vw", top: "12vh" } as any} />
-        <div className="cloud cloud--violet par" style={{ "--k": 18, left: "28vw", top: "35vh", animationDuration: "74s" } as any} />
-        <div className="cloud cloud--rose par" style={{ "--k": 10, left: "69vw", top: "18vh", animationDuration: "68s" } as any} />
-        <div className="cloud cloud--mint par" style={{ "--k": 16, left: "58vw", top: "61vh", animationDuration: "82s" } as any} />
-        <div className="cloud cloud--blue par" style={{ "--k": 14, left: "4vw", top: "72vh", animationDuration: "76s" } as any} />
-        <div className="cloud cloud--peach par" style={{ "--k": 20, left: "37vw", top: "83vh", animationDuration: "88s" } as any} />
-        <div className="cloud cloud--banana par" style={{ "--k": 9, left: "23vw", top: "54vh", animationDuration: "96s" } as any} />
-        <div className="cloud cloud--coral par" style={{ "--k": 17, left: "81vw", top: "82vh", animationDuration: "84s" } as any} />
+        {/* Giảm bớt các vòng tròn màu, chỉ giữ lại ánh sáng mây tinh vân êm dịu */}
+        <div className="cloud cloud--cyan par" style={{ "--k": 10, left: "-4vw", top: "18vh", animationDuration: "72s" } as any} />
+        <div className="cloud cloud--banana par" style={{ "--k": 8, left: "52vw", top: "45vh", animationDuration: "92s" } as any} />
         <div id="sparks">
           {Array.from({ length: 72 }).map((_, i) => (
             <div
@@ -424,8 +419,14 @@ export default function NeoDaylightCosmos() {
             />
           ))}
         </div>
-        <div className="comet comet--banana" />
-        <div className="comet comet--cyan" />
+        {/* Hệ thống sao băng rơi vũ trụ phong cách Neo Universe & ChillBanana */}
+        <div className="meteor meteor--banana m1" />
+        <div className="meteor meteor--cyan m2" />
+        <div className="meteor meteor--gold m3" />
+        <div className="meteor meteor--violet m4" />
+        <div className="meteor meteor--cyan m5" />
+        <div className="meteor meteor--banana m6" />
+        <div className="meteor meteor--gold m7" />
       </div>
 
       {/* SVG Icon Definitions */}
@@ -441,117 +442,126 @@ export default function NeoDaylightCosmos() {
         </defs>
       </svg>
 
-      {/* HEADER: Logo cụm hành tinh & quỹ đạo */}
-      <header id="hd">
-        <div className="top">
-          {/* Cụm Quỹ Đạo Hành Tinh (Cluster Nav) */}
-          <nav className="card cluster" aria-label={t("Danh mục chính")}>
-            <Link className="logo" href="/" aria-label="ChillBanana - trang chủ">
-              <img src="/logo.png" alt="ChillBanana" className="logo-banana-img" />
+      {/* HEADER: Thanh Đảo Vũ Trụ Liền Mạch (Cosmic Floating Island Dock) */}
+      <header id="hd" className="cosmos-island-header">
+        <div className="card cosmos-island-nav">
+          {/* Cụm 1: Logo Hành Tinh Vàng & Thương Hiệu */}
+          <div className="island-brand">
+            <Link className="logo-planet-link" href="/" aria-label="ChillBanana - trang chủ">
+              <div className="logo-planet">
+                <div className="planet-ring" />
+                <img src="/logo.png" alt="ChillBanana" className="logo-banana-img" />
+              </div>
             </Link>
-
-            {/* Quỹ đạo 1: Dán link */}
-            <div className="ring r1" style={{ "--c": "#f2c21b", "--n": 0 } as any}>
-              <div className="spin">
-                <a className="pl" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
-                  <i><svg><use href="#i-link" /></svg></i>{t("Dán Link Tính Giá")}
-                </a>
-              </div>
-            </div>
-
-            {/* Quỹ đạo 2: Sản phẩm có sẵn */}
-            <div className="ring r2" style={{ "--c": "#4aaee0", "--n": 1 } as any}>
-              <div className="spin">
-                <a className="pl" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }}>
-                  <i><svg><use href="#i-bag" /></svg></i>{t("Sản Phẩm Có Sẵn")}
-                </a>
-              </div>
-            </div>
-
-            {/* Quỹ đạo 3: Tra cứu */}
-            <div className="ring r3" style={{ "--c": "#a58bff", "--n": 2 } as any}>
-              <div className="spin">
-                <Link className="pl" href="/tracking">
-                  <i><svg><use href="#i-box" /></svg></i>{t("Tra Cứu Đơn Hàng")}
-                </Link>
-              </div>
-            </div>
-
-            {/* Quỹ đạo 4: Cẩm nang */}
-            <div className="ring r4" style={{ "--c": "#4fcf9b", "--n": 3 } as any}>
-              <div className="spin">
-                <a className="pl" href="#news" onClick={(e) => { e.preventDefault(); scrollToSection("news"); }}>
-                  <i><svg><use href="#i-book" /></svg></i>{t("Cẩm Nang Hàng Nhật")}
-                </a>
-              </div>
-            </div>
-
-            {/* Quỹ đạo 5: AI Agent */}
-            <div className="ring r5" style={{ "--c": "#ff8fb8", "--n": 4 } as any}>
-              <div className="spin">
-                <a className="pl" href="#" onClick={(e) => { e.preventDefault(); handleOpenAIChat(); }}>
-                  <i><svg><use href="#i-ai" /></svg></i>ChillBanana AI
-                </a>
-              </div>
-            </div>
-          </nav>
-
-          {/* Cụm thông tin tài khoản & thống kê */}
-          <div className="card side">
-            <div className="sidehead">
-              <div className="brand">
+            <div className="brand-text">
+              <div className="brand-title">
                 <b>Chill<i>Banana</i></b>
                 <span className="jp">JP ⇄ VN</span>
-                <small>Mua hàng Nhật chuẩn – Thư thái &amp; Thảnh thơi</small>
               </div>
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <Link className="admin" href="/admin/login">
-                  {t("Admin Portal")}
-                </Link>
-                <Link
-                  href="/classic"
-                  className="inline-flex items-center gap-1.5 rounded-full border border-slate-200/80 bg-white/75 px-3 py-1.5 text-xs font-bold text-slate-600 shadow-sm transition hover:bg-white hover:text-slate-900"
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                  <span>{t("Về giao diện cũ")}</span>
-                </Link>
-              </div>
+              <small className="brand-sub hidden 2xl:block">Mua hàng Nhật chuẩn – Thư thái &amp; Thảnh thơi</small>
             </div>
+          </div>
 
-            <div className="acct">
-              <button className="chip" onClick={openCart}>
-                {t("Giỏ hàng")}
-                <span className="badge">{totalItems}</span>
-              </button>
-              {customer ? (
-                <Link href="/profile" className="chip" title={customer.email}>
-                  👤 {customer.name || t("Tài khoản")}
-                </Link>
-              ) : (
-                <button className="chip" onClick={() => openAuthModal("login")}>
-                {t("Đăng nhập ▾")}
-                </button>
-              )}
-              <WebsitePreferencesTrigger />
-              <button type="button" className="cta" onClick={() => { setActiveTab("JP_VN"); scrollToSection("quote", "u"); }}>
-                {t("Đặt Mua Hộ Ngay")}
-              </button>
-            </div>
+          {/* Cụm 2: 5 Viên Ngọc Điều Hướng Vũ Trụ (Cosmic Navigation Pills) */}
+          <nav className="island-pills" aria-label={t("Danh mục chính")}>
+            <a
+              className="pill-gem pill-gem--muaho"
+              href="#quote"
+              style={{ "--pill-rgb": "245, 158, 11" } as any}
+              onClick={(e) => { e.preventDefault(); setActiveTab("JP_VN"); scrollToSection("quote", "u"); }}
+              title={t("Đặt Mua Hộ Hàng Nhật")}
+            >
+              <i className="gem-icon"><svg><use href="#i-arrow" /></svg></i>
+              <span>{t("Đặt Mua Hộ")} <b className="pill-gem-sparkle">✦</b></span>
+            </a>
 
-            <div className="stats">
-              <div className="stat">
-                <b>{rateLabel}</b>
-                {t("1 JPY · Tỷ giá live")}
-              </div>
-              <div className="stat">
-                <b>100%</b>
-                Bảo hiểm hàng hóa
-              </div>
-              <div className="stat">
-                <b>1900 6868</b>
-                Hotline 8h–22h
-              </div>
-            </div>
+            <a
+              className="pill-gem"
+              href="#stock"
+              style={{ "--pill-rgb": "74, 174, 224" } as any}
+              onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }}
+            >
+              <i className="gem-icon"><svg><use href="#i-bag" /></svg></i>
+              <span>{t("Sẵn Hàng")}</span>
+            </a>
+
+            <Link
+              className="pill-gem"
+              href="/tracking"
+              style={{ "--pill-rgb": "165, 139, 255" } as any}
+            >
+              <i className="gem-icon"><svg><use href="#i-box" /></svg></i>
+              <span>{t("Tra Cứu")}</span>
+            </Link>
+
+            <a
+              className="pill-gem"
+              href="#news"
+              style={{ "--pill-rgb": "79, 207, 155" } as any}
+              onClick={(e) => { e.preventDefault(); scrollToSection("news"); }}
+            >
+              <i className="gem-icon"><svg><use href="#i-book" /></svg></i>
+              <span>{t("Cẩm Nang")}</span>
+            </a>
+
+            <a
+              className="pill-gem pill-gem--ai"
+              href="#"
+              style={{ "--pill-rgb": "255, 143, 184" } as any}
+              onClick={(e) => { e.preventDefault(); handleOpenAIChat(); }}
+            >
+              <i className="gem-icon"><svg><use href="#i-ai" /></svg></i>
+              <span>Neo AI</span>
+            </a>
+          </nav>
+
+          {/* Cụm 3: Tiện ích tài khoản & Giỏ hàng */}
+          <div className="island-actions">
+            <button className="chip chip-cart" onClick={openCart} title="Xem giỏ hàng">
+              <span className="cart-icon">🛒</span>
+              <span className="cart-label">{t("Giỏ hàng")}</span>
+              <span className="badge">{totalItems}</span>
+            </button>
+
+            {customer ? (
+              <Link href="/profile" className="chip chip-user" title={customer.email}>
+                <span className="user-icon">👤</span>
+                <span className="user-name">{customer.name || t("Tài khoản")}</span>
+              </Link>
+            ) : (
+              <button className="chip chip-user" onClick={() => openAuthModal("login")}>
+                <span className="user-icon">👤</span>
+                <span className="user-text">{t("Đăng nhập ▾")}</span>
+              </button>
+            )}
+
+            <WebsitePreferencesTrigger className="island-pref-btn" />
+          </div>
+        </div>
+
+        {/* Dải Telemetry Vũ Trụ: Tỷ giá Live, Bảo hiểm, Hotline & Liên kết quản trị */}
+        <div className="cosmos-telemetry-strip">
+          <div className="telemetry-item">
+            <span className="telemetry-pulse" />
+            <span>1 JPY = <b className="text-amber-500 font-extrabold">{rateLabel}</b> ({t("Tỷ giá live")})</span>
+          </div>
+          <div className="telemetry-sep">✦</div>
+          <div className="telemetry-item">
+            <span>🛡️ <b>100%</b> {t("Bảo hiểm hàng hóa nội địa Nhật")}</span>
+          </div>
+          <div className="telemetry-sep">✦</div>
+          <div className="telemetry-item">
+            <span>📞 Hotline 8h–22h: <a href="tel:19006868" className="hover:underline font-bold text-slate-800 dark:text-slate-200">1900 6868</a></span>
+          </div>
+          <div className="telemetry-sep">✦</div>
+          <div className="telemetry-item flex items-center gap-2">
+            <Link className="hover:text-amber-500 transition font-bold text-slate-700 dark:text-slate-300" href="/admin/login">
+              ⚙️ {t("Admin Portal")}
+            </Link>
+            <span>·</span>
+            <Link href="/classic" className="hover:text-slate-900 transition text-slate-500 dark:text-slate-400">
+              {t("Về giao diện cũ")}
+            </Link>
           </div>
         </div>
       </header>
@@ -561,9 +571,9 @@ export default function NeoDaylightCosmos() {
         <Link className="mlogo" href="/" aria-label="ChillBanana">
           <img src="/logo.png" alt="ChillBanana" className="mlogo-img" />
         </Link>
-        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote", "u"); }} title={t("Dán Link Tính Giá")} style={{ "--c": "#f2c21b" } as any}>
-          <i><svg><use href="#i-link" /></svg></i>
-          <span>{t("Tính Giá")}</span>
+        <a className="mp" href="#quote" onClick={(e) => { e.preventDefault(); setActiveTab("JP_VN"); scrollToSection("quote", "u"); }} title={t("Đặt Mua Hộ")} style={{ "--c": "#f59e0b" } as any}>
+          <i><svg><use href="#i-arrow" /></svg></i>
+          <span>{t("Đặt Mua Hộ")}</span>
         </a>
         <a className="mp" href="#stock" onClick={(e) => { e.preventDefault(); scrollToSection("stock"); }} title={t("Sản Phẩm Có Sẵn")} style={{ "--c": "#4aaee0" } as any}>
           <i><svg><use href="#i-bag" /></svg></i>
@@ -577,9 +587,6 @@ export default function NeoDaylightCosmos() {
           <i><svg><use href="#i-book" /></svg></i>
           <span>{t("Cẩm Nang")}</span>
         </a>
-        <button type="button" className="cta" onClick={() => { setActiveTab("JP_VN"); scrollToSection("quote", "u"); }}>
-          {t("Đặt Mua Hộ Ngay")}
-        </button>
       </nav>
 
       {/* NỘI DUNG CHÍNH (MAIN) */}

@@ -190,65 +190,64 @@ export default function AIChatBot() {
           const width = petRef.current?.offsetWidth ?? 120;
           const height = petRef.current?.offsetHeight ?? 170;
           setPetPosition({
-            left: Math.max(8, Math.min(window.innerWidth - width - 8, position.left)),
-            top: Math.max(8, Math.min(window.innerHeight - height - 8, position.top)),
+            left: Math.max(8, Math.min(window.innerWidth - width - 16, position.left)),
+            top: Math.max(8, Math.min(window.innerHeight - height - 16, position.top)),
           });
         }
-      } else if (petRef.current) {
-        const rect = petRef.current.getBoundingClientRect();
-        setPetPosition({ left: rect.left, top: rect.top });
+      } else {
+        const width = petRef.current?.offsetWidth ?? 120;
+        const height = petRef.current?.offsetHeight ?? 170;
+        setPetPosition({
+          left: Math.max(8, window.innerWidth - width - 24),
+          top: Math.max(8, window.innerHeight - height - 24),
+        });
       }
     } catch { /* Storage is optional. */ }
   }, []);
 
-  // Neo strolls to new places in the viewport, pauses on hover or while dragged,
-  // and honors the browser's reduced-motion preference.
+  // Neo tự động cất lời trò chuyện định kỳ (Ambient Speech Bubble) mà không cần người dùng phải rê chuột vào
   useEffect(() => {
-    if (isOpen || petConversationOpen || !petVisible || !wanderingEnabled || isPetHovered || isPetDragging || isPageScrolling || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (isOpen || petConversationOpen || !petVisible) return;
 
-    const hints = COSMIC_AMBIENT_HINTS;
-    let actionTimer: number;
-    let settleTimer: number;
-    let hintTimer: number;
-    let stopped = false;
+    let speechTimer: number;
+    let clearTimer: number;
+    let animResetTimer: number;
+    let isStopped = false;
 
-    const scheduleStroll = (delay: number) => {
-      actionTimer = window.setTimeout(() => {
-        if (stopped || !petRef.current) return;
-        const rect = petRef.current.getBoundingClientRect();
-        const maxLeft = Math.max(8, window.innerWidth - rect.width - 8);
-        const maxTop = Math.max(80, window.innerHeight - rect.height - 12);
-        const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
-        let nextLeft = 8 + Math.random() * maxLeft;
-        let nextTop = 80 + Math.random() * Math.max(0, maxTop - 80);
-        if (Math.abs(nextLeft - current.left) < 100 && Math.abs(nextTop - current.top) < 80) {
-          nextLeft = (nextLeft + maxLeft / 2) % maxLeft;
-          nextTop = nextTop < window.innerHeight / 2 ? maxTop : 80;
+    const triggerAutonomousSpeech = () => {
+      if (isStopped || isOpen || petConversationOpen || !petVisible || isPetDragging) return;
+
+      const randomHint = COSMIC_AMBIENT_HINTS[Math.floor(Math.random() * COSMIC_AMBIENT_HINTS.length)];
+      setAmbientHint(randomHint);
+      setAmbientAnimation("ask-alt");
+
+      // Trở lại dáng đứng bình thường sau 2.4s
+      animResetTimer = window.setTimeout(() => {
+        setAmbientAnimation((curr) => (curr === "ask-alt" ? "idle" : curr));
+      }, 2400);
+
+      // Bong bóng thoại hiển thị trong 6 giây để người dùng thoải mái đọc
+      clearTimer = window.setTimeout(() => {
+        if (!isPetHovered) {
+          setAmbientHint("");
         }
-        setFacingLeft(nextLeft < current.left);
-        setPetPosition({ left: Math.min(maxLeft, nextLeft), top: Math.min(maxTop, nextTop) });
-        setAmbientAnimation("walk");
+      }, 6000);
 
-        if (Math.random() > 0.65) {
-          setAmbientHint(hints[Math.floor(Math.random() * hints.length)]);
-          hintTimer = window.setTimeout(() => setAmbientHint(""), 4200);
-        }
-
-        settleTimer = window.setTimeout(() => {
-          setAmbientAnimation("idle");
-          scheduleStroll(11000 + Math.random() * 14000);
-        }, 2100);
-      }, delay);
+      // Lên lịch cho câu thoại kế tiếp sau 16 - 24 giây
+      const nextDelay = 16000 + Math.random() * 8000;
+      speechTimer = window.setTimeout(triggerAutonomousSpeech, nextDelay);
     };
 
-    scheduleStroll(10000 + Math.random() * 8000);
+    // Lời thoại đầu tiên xuất hiện tự động sau 3 giây khi vào trang
+    speechTimer = window.setTimeout(triggerAutonomousSpeech, 3000);
+
     return () => {
-      stopped = true;
-      window.clearTimeout(actionTimer);
-      window.clearTimeout(settleTimer);
-      window.clearTimeout(hintTimer);
+      isStopped = true;
+      window.clearTimeout(speechTimer);
+      window.clearTimeout(clearTimer);
+      window.clearTimeout(animResetTimer);
     };
-  }, [isOpen, petConversationOpen, petVisible, wanderingEnabled, isPetHovered, isPetDragging, isPageScrolling]);
+  }, [isOpen, petConversationOpen, petVisible, isPetDragging, isPetHovered]);
 
   const clampPetPosition = (left: number, top: number) => {
     const width = petRef.current?.offsetWidth ?? 120;
@@ -979,10 +978,16 @@ export default function AIChatBot() {
           {ambientHint && !petConversationOpen && (
             <div
               role="status"
-              className="pointer-events-none absolute bottom-full right-2 mb-2 w-max max-w-[min(260px,calc(100vw-32px))] whitespace-normal break-words rounded-2xl border border-banana-300 bg-white/95 px-3.5 py-2 text-xs font-semibold leading-snug text-slate-800 shadow-xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-200 dark:border-banana-400/50 dark:bg-slate-900/95 dark:text-slate-100"
+              className="pointer-events-none absolute bottom-full right-2 mb-2 w-max max-w-[min(280px,calc(100vw-32px))] whitespace-normal break-words rounded-2xl border border-banana-400/80 bg-white/95 p-3 text-xs font-semibold leading-snug text-slate-800 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-bottom-2 duration-300 dark:border-banana-400/50 dark:bg-slate-900/95 dark:text-slate-100"
             >
-              {typedHint}
-              {typedHint.length < ambientHint.length && <span className="animate-pulse text-banana-600 dark:text-banana-400">▍</span>}
+              <div className="flex items-center gap-1.5 mb-1 text-[10px] font-extrabold text-banana-600 dark:text-banana-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                <span>✦ Neo Universe</span>
+              </div>
+              <p className="m-0 text-slate-800 dark:text-slate-100 font-medium">
+                {typedHint}
+                {typedHint.length < ambientHint.length && <span className="animate-pulse text-banana-600 dark:text-banana-400">▍</span>}
+              </p>
             </div>
           )}
           <button
@@ -992,8 +997,18 @@ export default function AIChatBot() {
             onPointerMove={handlePetPointerMove}
             onPointerUp={handlePetPointerUp}
             onPointerCancel={handlePetPointerUp}
-            onPointerEnter={() => { setIsPetHovered(true); setAmbientAnimation("ask-alt"); setAmbientHint(COSMIC_HOVER_HINTS[Math.floor(Math.random() * COSMIC_HOVER_HINTS.length)]); }}
-            onPointerLeave={() => { setIsPetHovered(false); setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current); setAmbientHint(""); }}
+            onPointerEnter={() => {
+              setIsPetHovered(true);
+              setAmbientAnimation("ask-alt");
+              setAmbientHint(COSMIC_HOVER_HINTS[Math.floor(Math.random() * COSMIC_HOVER_HINTS.length)]);
+            }}
+            onPointerLeave={() => {
+              setIsPetHovered(false);
+              setAmbientAnimation((current) => current === "ask-alt" ? "idle" : current);
+              window.setTimeout(() => {
+                setAmbientHint((curr) => COSMIC_HOVER_HINTS.includes(curr) ? "" : curr);
+              }, 4000);
+            }}
             className="pointer-events-auto flex touch-none select-none flex-col items-center justify-end rounded-2xl p-0.5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-banana-500"
             style={{ touchAction: "none" }}
             aria-label="Mở tư vấn AI cùng Neo Universe"

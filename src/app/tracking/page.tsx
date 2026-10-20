@@ -19,7 +19,16 @@ import {
   RefreshCw,
   ArrowLeft,
   Truck,
-  CreditCard
+  CreditCard,
+  Copy,
+  Share2,
+  MessageSquare,
+  Sparkles,
+  ClipboardPaste,
+  HelpCircle,
+  Check,
+  Plane,
+  ShieldCheck,
 } from "lucide-react";
 import TrackingStepper from "@/components/TrackingStepper";
 import { StoredOrder } from "@/types";
@@ -54,6 +63,82 @@ function TrackingCosmosContent() {
 
   // Quản lý tab hiển thị: "search" (Tra cứu mã) | "my_orders" (Đơn hàng của tôi)
   const [activeTab, setActiveTab] = useState<"search" | "my_orders">("search");
+  const [recentCodes, setRecentCodes] = useState<string[]>([]);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("chillbanana_recent_tracking");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) setRecentCodes(parsed.slice(0, 5));
+      }
+    } catch {}
+  }, []);
+
+  const saveRecentCode = (code: string) => {
+    const c = code.trim();
+    if (!c) return;
+    setRecentCodes((prev) => {
+      const next = [c, ...prev.filter((x) => x !== c)].slice(0, 5);
+      try {
+        window.localStorage.setItem("chillbanana_recent_tracking", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const removeRecentCode = (code: string) => {
+    setRecentCodes((prev) => {
+      const next = prev.filter((x) => x !== code);
+      try {
+        window.localStorage.setItem("chillbanana_recent_tracking", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const trimmed = text.trim();
+      if (trimmed) {
+        setSearchCode(trimmed);
+        fetchOrder(trimmed);
+        toast.success("Đã dán mã từ clipboard và đang tra cứu!");
+      }
+    } catch {
+      toast.info("Vui lòng nhập mã đơn hoặc cấp quyền dán cho trình duyệt.");
+    }
+  };
+
+  const handleCopyOrderCode = (code: string) => {
+    try {
+      navigator.clipboard.writeText(code);
+      toast.success(`Đã sao chép mã đơn #${code}!`);
+    } catch {
+      toast.info(`Mã đơn: #${code}`);
+    }
+  };
+
+  const handleShareTrackingLink = (code: string) => {
+    try {
+      const url = `${window.location.origin}/tracking?code=${encodeURIComponent(code)}`;
+      navigator.clipboard.writeText(url);
+      toast.success("Đã sao chép liên kết theo dõi đơn hàng!");
+    } catch {
+      toast.info("Không thể sao chép liên kết.");
+    }
+  };
+
+  const handleAskNeoAboutOrder = (code: string) => {
+    window.dispatchEvent(
+      new CustomEvent("open-ai-chat", {
+        detail: { initialPrompt: `Neo ơi, hãy kiểm tra tiến độ và hành trình chi tiết của đơn hàng #${code} giúp mình nhé!` },
+      })
+    );
+    const chatToggle = document.getElementById("ai-chat-toggle-btn");
+    if (chatToggle) chatToggle.click();
+  };
   const [myOrders, setMyOrders] = useState<StoredOrder[]>([]);
   const [loadingMyOrders, setLoadingMyOrders] = useState(false);
 
@@ -115,15 +200,89 @@ function TrackingCosmosContent() {
   };
 
   const fetchOrder = async (code: string) => {
-    if (!code.trim()) return;
+    const c = code.trim();
+    if (!c) return;
+
+    // Hỗ trợ mã đơn mô phỏng trực quan nhanh (Demo Order)
+    if (c.toUpperCase() === "CB-2026-DEMO" || c.toUpperCase() === "CB-DEMO" || c.toUpperCase() === "CB-2026-TOKYO") {
+      setLoading(true);
+      setError("");
+      setRequiresEmailAccess(false);
+      setTimeout(() => {
+        const demoOrder: StoredOrder = {
+          id: "demo-8821",
+          orderCode: c.toUpperCase() === "CB-2026-TOKYO" ? "CB-2026-TOKYO" : "CB-2026-DEMO",
+          productName: "Mô hình Bandai RG 1/144 RX-78-2 Ver 2.0 (Mobile Suit Gundam JP)",
+          category: "figures",
+          originalUrl: "https://www.amazon.co.jp/dp/B0D179WXYZ",
+          priceJpy: 4500,
+          weightKg: 0.6,
+          exchangeRate: exchangeRate || 169,
+          productPriceVnd: 4500 * (exchangeRate || 169),
+          serviceFeeVnd: 30420,
+          shippingFeeVnd: 150000,
+          totalVnd: 4500 * (exchangeRate || 169) + 30420 + 150000,
+          depositPercent: 50,
+          depositAmountVnd: Math.round((4500 * (exchangeRate || 169) + 30420 + 150000) * 0.5),
+          paymentStatus: "DEPOSITED_50",
+          paymentMethod: "VNPAY",
+          isPriceVerified: true,
+          isGroupBuy: true,
+          status: "IN_TRANSIT_AIR",
+          jpDomesticTrack: "Yamato: 4829-1029-3810",
+          vnDomesticTrack: "ViettelPost: VTP-92817341",
+          customerName: "Khách hàng Trải nghiệm (Demo)",
+          customerEmail: "khachhang.demo@chillbanana.vn",
+          customerPhone: "0901 234 567",
+          customerAddress: "Số 88 Đường Láng, Đống Đa, Hà Nội",
+          customerNote: "Hộp mô hình cần chèn bọt khí 3 lớp chống móp méo vỏ hộp",
+          createdAt: new Date(Date.now() - 3 * 86400000).toISOString(),
+          updatedAt: new Date().toISOString(),
+          canCancel: false,
+          trackingLogs: [
+            {
+              id: "tl-3",
+              status: "IN_TRANSIT_AIR",
+              title: "Đang bay chuyên tuyến Narita ✈️ Nội Bài",
+              description: "Chuyến bay VN686 đã cất cánh từ sân bay Tokyo Narita (NRT), dự kiến hạ cánh Nội Bài (HAN) trong đêm nay.",
+              location: "Sân bay Quốc tế Narita (NRT), Tokyo",
+              createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+            },
+            {
+              id: "tl-2",
+              status: "WAREHOUSE_JP",
+              title: "Nhập kho Tokyo & Đóng bọc xốp khí",
+              description: "Kiện hàng đã về kho ChillBanana Tokyo. Đã kiểm tra tem niêm phong và đóng hộp chống sốc 3 lớp.",
+              location: "Kho Tokyo (Adachi-ku)",
+              createdAt: new Date(Date.now() - 86400000 * 1.5).toISOString(),
+            },
+            {
+              id: "tl-1",
+              status: "PURCHASING_JP",
+              title: "Đã mua hàng thành công trên Amazon Japan",
+              description: "Đơn mua hộ đã được thanh toán cho gian hàng Bandai Namco tại Nhật Bản.",
+              location: "Tokyo, Nhật Bản",
+              createdAt: new Date(Date.now() - 86400000 * 2.8).toISOString(),
+            },
+          ],
+        };
+        setOrder(demoOrder);
+        saveRecentCode(demoOrder.orderCode);
+        setLoading(false);
+        toast.success("Đang hiển thị dữ liệu hành trình mẫu trực quan!");
+      }, 350);
+      return;
+    }
+
     setLoading(true);
     setError("");
     setRequiresEmailAccess(false);
     try {
-      const res = await fetch(`/api/orders/${encodeURIComponent(code.trim())}`);
+      const res = await fetch(`/api/orders/${encodeURIComponent(c)}`);
       const data = await res.json();
       if (res.ok && data.success && data.order) {
         setOrder(data.order);
+        saveRecentCode(c);
         setAccessRequestSent(false);
       } else {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
@@ -328,53 +487,126 @@ function TrackingCosmosContent() {
       {/* SVG Icon Definitions */}
       <svg width="0" height="0" style={{ position: "absolute" }} aria-hidden="true">
         <defs>
-          <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10" /></symbol>
           <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6" /></symbol>
+          <symbol id="i-bag" viewBox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" /></symbol>
+          <symbol id="i-box" viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4zM3 7v10l9 4 9-4V7M12 11v10" /></symbol>
+          <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 016.5 17H20M4 4.5A2.5 2.5 0 016.5 2H20v20H6.5A2.5 2.5 0 014 19.5z" /></symbol>
+          <symbol id="i-ai" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" /></symbol>
         </defs>
       </svg>
 
-      <div className="track-wrap">
-        {/* Lối tắt về giao diện NeoDay chính. */}
-        <nav className="track-shortcuts" aria-label={t("Chuyển giao diện")}>
-          <Link href="/" className="track-shortcut">
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>{t("Về giao diện NeoDay")}</span>
-          </Link>
-        </nav>
-
-        {/* Header Bar của trang tra cứu phong cách Cosmos */}
-        <header className="track-nav">
-          <div className="flex items-center gap-3">
-            <Link className="logo" href="/" aria-label="ChillBanana - NeoDay">
-              <img src="/logo.png" alt="ChillBanana" style={{ width: "75%", height: "75%", objectFit: "contain" }} />
+      {/* HEADER: Cosmic Floating Island Dock */}
+      <header id="hd" className="cosmos-island-header">
+        <div className="card cosmos-island-nav">
+          {/* Cụm 1: Logo Hành Tinh Vàng & Thương Hiệu */}
+          <div className="island-brand">
+            <Link className="logo-planet-link" href="/" aria-label="ChillBanana - trang chủ">
+              <div className="logo-planet">
+                <div className="planet-ring" />
+                <img src="/logo.png" alt="ChillBanana" className="logo-banana-img" />
+              </div>
             </Link>
-            <div>
-              <b style={{ fontSize: "1.1rem", fontFamily: "'Baloo 2', sans-serif", color: "var(--ink)" }}>ChillBanana</b>
-              <span className="jp" style={{ marginLeft: "6px" }}>JP ⇄ VN</span>
-              <p style={{ margin: 0, fontSize: "0.72rem", color: "var(--muted)" }}>{t("Theo Dõi Vận Tải Thời Gian Thực")}</p>
+            <div className="brand-text">
+              <div className="brand-title">
+                <b>Chill<i>Banana</i></b>
+                <span className="jp">JP ⇄ VN</span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <WebsitePreferencesTrigger />
-            <div className="track-badge track-badge-gold hidden sm:inline-flex">
-              1 JPY = {exchangeRate.toLocaleString("vi-VN")} đ
-            </div>
-            <button className="chip" onClick={openCart} style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}>
-              {t("Giỏ hàng")}
-              <span className="badge" style={{ marginLeft: "6px", background: "var(--banana)", color: "var(--ink)", padding: "1px 6px", borderRadius: "999px", fontSize: "0.7rem", fontWeight: 800 }}>{totalItems}</span>
+          {/* Cụm 2: 5 Viên Ngọc Điều Hướng Vũ Trụ */}
+          <nav className="island-pills" aria-label={t("Danh mục chính")}>
+            <Link
+              className="pill-gem pill-gem--muaho"
+              href="/#quote"
+              style={{ "--pill-rgb": "245, 158, 11" } as any}
+              title={t("Đặt Mua Hộ Hàng Nhật")}
+            >
+              <i className="gem-icon"><svg><use href="#i-arrow" /></svg></i>
+              <span>{t("Đặt Mua Hộ")} <b className="pill-gem-sparkle">✦</b></span>
+            </Link>
+
+            <Link
+              className="pill-gem"
+              href="/#stock"
+              style={{ "--pill-rgb": "74, 174, 224" } as any}
+            >
+              <i className="gem-icon"><svg><use href="#i-bag" /></svg></i>
+              <span>{t("Sẵn Hàng")}</span>
+            </Link>
+
+            <Link
+              className="pill-gem pill-gem--active"
+              href="/tracking"
+              style={{ "--pill-rgb": "165, 139, 255" } as any}
+            >
+              <i className="gem-icon"><svg><use href="#i-box" /></svg></i>
+              <span>{t("Tra Cứu")}</span>
+            </Link>
+
+            <Link
+              className="pill-gem"
+              href="/#news"
+              style={{ "--pill-rgb": "79, 207, 155" } as any}
+            >
+              <i className="gem-icon"><svg><use href="#i-book" /></svg></i>
+              <span>{t("Cẩm Nang")}</span>
+            </Link>
+
+            <button
+              type="button"
+              className="pill-gem pill-gem--ai"
+              style={{ "--pill-rgb": "255, 143, 184", background: "none", border: "none", cursor: "pointer" } as any}
+              onClick={handleOpenAIChat}
+              title="Hỏi Trợ Lý Neo AI"
+            >
+              <i className="gem-icon"><svg><use href="#i-ai" /></svg></i>
+              <span>Neo AI</span>
             </button>
+          </nav>
+
+          {/* Cụm 3: Tiện ích tài khoản & Giỏ hàng */}
+          <div className="island-actions">
+            <button className="chip chip-cart" onClick={openCart} title="Xem giỏ hàng">
+              <span className="cart-icon">🛒</span>
+              <span className="cart-label">{t("Giỏ hàng")}</span>
+              <span className="badge">{totalItems}</span>
+            </button>
+
             {customer ? (
-              <Link href="/profile" className="chip" style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, textDecoration: "none", color: "var(--ink)" }}>
-                👤 {customer.name || "Tài khoản"}
+              <Link href="/profile" className="chip chip-user" title={customer.email}>
+                <span className="user-icon">👤</span>
+                <span className="user-name">{customer.name || t("Tài khoản")}</span>
               </Link>
             ) : (
-              <button className="chip" onClick={() => openAuthModal("login")} style={{ background: "rgba(255,255,255,0.85)", border: "1px solid rgba(255,255,255,0.9)", borderRadius: "999px", padding: "6px 14px", fontSize: "0.78rem", fontWeight: 700, cursor: "pointer" }}>
-                Đăng nhập
+              <button className="chip chip-user" onClick={() => openAuthModal("login")}>
+                <span className="user-icon">👤</span>
+                <span className="user-text">{t("Đăng nhập ▾")}</span>
               </button>
             )}
+
+            <WebsitePreferencesTrigger className="island-pref-btn" />
           </div>
-        </header>
+        </div>
+
+        {/* Dải Telemetry Vũ Trụ */}
+        <div className="cosmos-telemetry-strip">
+          <div className="telemetry-item">
+            <span className="telemetry-pulse" />
+            <span>1 JPY = <b className="text-amber-500 font-extrabold">{exchangeRate.toLocaleString("vi-VN")} đ</b> ({t("Tỷ giá live")})</span>
+          </div>
+          <div className="telemetry-sep">✦</div>
+          <div className="telemetry-item">
+            <span>🛡️ <b>100%</b> {t("Bảo hiểm hàng hóa nội địa Nhật")}</span>
+          </div>
+          <div className="telemetry-sep">✦</div>
+          <div className="telemetry-item">
+            <span>📞 Hotline 8h–22h: <a href="tel:19006868" className="hover:underline font-bold text-slate-800 dark:text-slate-200">1900 6868</a></span>
+          </div>
+        </div>
+      </header>
+
+      <div className="track-wrap">
 
         {/* Hero Section */}
         <div className="track-hero">
@@ -588,7 +820,7 @@ function TrackingCosmosContent() {
         {/* ========================================================== */}
         {(!customer || activeTab === "search") && (
           <div className="space-y-6">
-            {/* Thanh Search Bar phong cách Cosmos */}
+            {/* Thanh Search Bar phong cách Cosmos Hiện Đại */}
             <form onSubmit={handleSearchSubmit} className="track-search">
               <div className="track-search-field">
                 <Search className="track-search-icon" aria-hidden="true" />
@@ -598,6 +830,27 @@ function TrackingCosmosContent() {
                   onChange={(e) => setSearchCode(e.target.value)}
                   placeholder={t("Nhập mã đơn hàng (Ví dụ: CB-2026-XXXX)")}
                 />
+                <div className="track-search-actions">
+                  {searchCode && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchCode("")}
+                      className="track-clear-btn"
+                      title="Xóa nội dung"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePasteFromClipboard}
+                    className="track-paste-btn"
+                    title="Dán mã từ clipboard"
+                  >
+                    <ClipboardPaste className="w-3.5 h-3.5" />
+                    <span>Dán mã</span>
+                  </button>
+                </div>
               </div>
               <button
                 type="submit"
@@ -609,7 +862,55 @@ function TrackingCosmosContent() {
               </button>
             </form>
 
-            <p className="track-search-hint" style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", margin: "8px 0 0" }}>
+            {/* Dải Lịch Sử Tra Cứu Gần Đây & Đơn Mẫu Trải Nghiệm */}
+            <div className="track-chips-strip">
+              {recentCodes.length > 0 && (
+                <>
+                  <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5 text-amber-500" /> Đơn gần đây:
+                  </span>
+                  {recentCodes.map((rc) => (
+                    <span key={rc} className="track-chip-item">
+                      <button
+                        type="button"
+                        className="chip-code"
+                        onClick={() => {
+                          setSearchCode(rc);
+                          fetchOrder(rc);
+                        }}
+                      >
+                        #{rc}
+                      </button>
+                      <button
+                        type="button"
+                        className="chip-remove"
+                        onClick={() => removeRecentCode(rc)}
+                        title="Xóa khỏi lịch sử"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  <span className="text-slate-300 dark:text-slate-700">|</span>
+                </>
+              )}
+
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                <Sparkles className="w-3.5 h-3.5 text-banana-500" /> Xem mẫu:
+              </span>
+              <button
+                type="button"
+                className="track-chip-item track-demo-chip"
+                onClick={() => {
+                  setSearchCode("CB-2026-DEMO");
+                  fetchOrder("CB-2026-DEMO");
+                }}
+              >
+                <span>🚀 #CB-2026-DEMO (Đang bay Tokyo ✈️ VN)</span>
+              </button>
+            </div>
+
+            <p className="track-search-hint" style={{ textAlign: "center", fontSize: "0.75rem", color: "var(--muted)", margin: "4px 0 0" }}>
               Mã đơn hàng có cấu trúc <strong style={{ fontFamily: "monospace", color: "var(--ink)" }}>CB-2026-XXXX</strong> được tạo khi bạn bấm Đặt cọc trên hệ thống.
             </p>
 
@@ -647,22 +948,81 @@ function TrackingCosmosContent() {
               </form>
             )}
 
-            {/* Welcome guidance khi chưa tra cứu */}
+            {/* Welcome guidance khi chưa tra cứu: Hành Trình 7 Chặng Trực Quan & Tiện Lợi */}
             {!order && !loading && !error && (
-              <div className="track-card max-w-3xl mx-auto text-center py-12 space-y-4">
-                <div style={{ width: "64px", height: "64px", borderRadius: "20px", background: "#fff8d6", color: "#8a5a00", display: "grid", placeItems: "center", margin: "0 auto", fontSize: "1.8rem" }}>
-                  📦
+              <div className="track-card max-w-4xl mx-auto space-y-6">
+                <div className="text-center space-y-2">
+                  <div style={{ width: "56px", height: "56px", borderRadius: "18px", background: "linear-gradient(135deg, #fef08a, #fde047)", color: "#8a5a00", display: "grid", placeItems: "center", margin: "0 auto", fontSize: "1.6rem", boxShadow: "0 8px 24px rgba(245, 158, 11, 0.25)" }}>
+                    📦
+                  </div>
+                  <h3 style={{ fontSize: "1.3rem", fontWeight: 800, margin: 0, color: "var(--ink)" }}>
+                    {t("Theo Dõi Hành Trình Kiện Hàng 7 Chặng Tokyo ⇄ Việt Nam")}
+                  </h3>
+                  <p style={{ fontSize: "0.82rem", color: "var(--muted)", maxWidth: "560px", margin: "0 auto", lineHeight: 1.6 }}>
+                    Hệ thống tích hợp định vị thời gian thực từ kho đối tác Nhật Bản đến tận tay bạn. Nhập mã đơn <strong className="font-mono text-slate-800 dark:text-slate-200">CB-2026-XXXX</strong> phía trên hoặc bấm nút xem đơn mẫu để trải nghiệm.
+                  </p>
                 </div>
-                <h3 style={{ fontSize: "1.2rem", fontWeight: 800 }}>
-                  Theo Dõi Hành Trình Kiện Hàng 7 Bước
-                </h3>
-                <p style={{ fontSize: "0.82rem", color: "var(--muted)", maxWidth: "440px", margin: "0 auto", lineHeight: 1.6 }}>
-                  Nhập mã đơn hàng của bạn vào ô tìm kiếm phía trên để theo dõi từng chặng di chuyển thực tế từ kho Tokyo về đến tận cửa nhà bạn tại Việt Nam.
-                </p>
-                <div style={{ paddingTop: "8px" }}>
-                  <Link href="/#quote" className="btn2" style={{ textDecoration: "none", display: "inline-flex" }}>
-                    Tạo Đơn Hàng Mới Tại Neo Cosmos <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+
+                {/* 7-Chặng Vận Tải Infographic Cards */}
+                <div className="track-journey-grid">
+                  {[
+                    { step: "01", icon: "📝", title: "Xác Nhận Đơn", desc: "Thẩm định link, duyệt giá Yên & bảo hiểm" },
+                    { step: "02", icon: "🛍️", title: "Mua Tại Nhật", desc: "Check-out Amazon, Mercari, Rakuten" },
+                    { step: "03", icon: "🏢", title: "Về Kho Tokyo", desc: "Kiểm đếm, chụp ảnh seal & bọc xốp 3 lớp" },
+                    { step: "04", icon: "✈️", title: "Bay Quốc Tế", desc: "Chuyến bay Tokyo ⇄ Hà Nội / TP.HCM" },
+                    { step: "05", icon: "🛃", title: "Thông Quan", desc: "Kiểm hóa & hoàn tất thuế quan" },
+                    { step: "06", icon: "🚚", title: "Giao Hỏa Tốc", desc: "Bàn giao ViettelPost / GHN / GHTK" },
+                    { step: "07", icon: "🎁", title: "Tận Tay Bạn", desc: "Nhận kiện an toàn & kích hoạt BH 100%" },
+                  ].map((s) => (
+                    <div key={s.step} className="journey-step-card">
+                      <div className="step-num">{s.step}</div>
+                      <div className="step-icon">{s.icon}</div>
+                      <div className="step-title">{s.title}</div>
+                      <div className="step-desc">{s.desc}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* 3 Cam kết cốt lõi */}
+                <div className="track-guarantees">
+                  <div className="guarantee-pill">
+                    <span className="g-icon">🛡️</span>
+                    <div>
+                      <b>Bảo Hiểm 100%</b>
+                      <p className="text-[11px] text-slate-500 m-0">Đền bù thỏa đáng khi bể vỡ hoặc thất lạc kiện</p>
+                    </div>
+                  </div>
+                  <div className="guarantee-pill">
+                    <span className="g-icon">⚡</span>
+                    <div>
+                      <b>Bay Cố Định 3–5 Ngày</b>
+                      <p className="text-[11px] text-slate-500 m-0">Lịch bay đều đặn mỗi tuần từ Tokyo Narita</p>
+                    </div>
+                  </div>
+                  <div className="guarantee-pill">
+                    <span className="g-icon">🔎</span>
+                    <div>
+                      <b>Vận Đơn Minh Bạch</b>
+                      <p className="text-[11px] text-slate-500 m-0">Tra cứu mã vận chuyển nội địa Nhật & VN</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-2 text-center flex flex-wrap items-center justify-center gap-3">
+                  <Link href="/#quote" className="cta" style={{ textDecoration: "none", display: "inline-flex", padding: "10px 22px", fontSize: "0.85rem" }}>
+                    <span>✦ {t("Tạo Đơn Hàng Mới Ngay")}</span>
                   </Link>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchCode("CB-2026-DEMO");
+                      fetchOrder("CB-2026-DEMO");
+                    }}
+                    className="btn2"
+                    style={{ padding: "10px 18px", fontSize: "0.82rem" }}
+                  >
+                    <span>Xem Dữ Liệu Đơn Mẫu</span> <ExternalLink className="w-3.5 h-3.5 ml-1.5" />
+                  </button>
                 </div>
               </div>
             )}
@@ -672,14 +1032,32 @@ function TrackingCosmosContent() {
               <div className="space-y-6">
                 {/* Card tổng quan & Stepper 7 bước */}
                 <div className="track-card space-y-6">
-                  {/* Top Bar: Order Code & Badges */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-200/60 gap-4">
+                  {/* Top Bar: Order Code & Badges & Quick Action Buttons */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200/60 gap-4">
                     <div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="track-badge track-badge-gold">{t("Đơn Mua Hộ")}</span>
                         <h2 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, fontFamily: "monospace", color: "var(--ink)" }}>
-                          {order.orderCode}
+                          #{order.orderCode}
                         </h2>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyOrderCode(order.orderCode)}
+                          className="track-action-btn"
+                          title="Sao chép mã đơn"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Sao chép</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleShareTrackingLink(order.orderCode)}
+                          className="track-action-btn"
+                          title="Chia sẻ liên kết theo dõi đơn"
+                        >
+                          <Share2 className="w-3.5 h-3.5" />
+                          <span>Chia sẻ</span>
+                        </button>
                       </div>
                       <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: "4px 0 0" }}>
                         Khởi tạo lúc: {new Date(order.createdAt).toLocaleString("vi-VN")}
@@ -687,6 +1065,16 @@ function TrackingCosmosContent() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleAskNeoAboutOrder(order.orderCode)}
+                        className="track-action-btn track-action-btn--ai"
+                        title="Hỏi trợ lý Neo AI về đơn hàng này"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        <span>Hỏi Neo AI 💬</span>
+                      </button>
+
                       {order.isGroupBuy && (
                         <span className="track-badge track-badge-purple">
                           <Users className="w-3 h-3 mr-1" /> Gộp Đơn Tiết Kiệm (-25%)
@@ -736,21 +1124,41 @@ function TrackingCosmosContent() {
                   {(order.jpDomesticTrack || order.vnDomesticTrack) && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
                       {order.jpDomesticTrack && (
-                        <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={{ fontSize: "1.5rem" }}>🇯🇵</span>
-                          <div>
-                            <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn nội địa Nhật Bản:")}</small>
-                            <b style={{ fontFamily: "monospace", fontSize: "0.9rem" }}>{order.jpDomesticTrack}</b>
+                        <div className="track-item flex items-center justify-between gap-3" style={{ padding: "14px 18px" }}>
+                          <div className="flex items-center gap-3">
+                            <span style={{ fontSize: "1.5rem" }}>🇯🇵</span>
+                            <div>
+                              <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn nội địa Nhật Bản:")}</small>
+                              <b style={{ fontFamily: "monospace", fontSize: "0.9rem" }}>{order.jpDomesticTrack}</b>
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyOrderCode(order.jpDomesticTrack || "")}
+                            className="track-action-btn"
+                            title="Sao chép mã vận đơn Nhật"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
                       {order.vnDomesticTrack && (
-                        <div className="track-item" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: "12px" }}>
-                          <span style={{ fontSize: "1.5rem" }}>🇻🇳</span>
-                          <div>
-                            <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn giao hàng tại Việt Nam:")}</small>
-                            <b style={{ fontFamily: "monospace", fontSize: "0.9rem", color: "#167a48" }}>{order.vnDomesticTrack}</b>
+                        <div className="track-item flex items-center justify-between gap-3" style={{ padding: "14px 18px" }}>
+                          <div className="flex items-center gap-3">
+                            <span style={{ fontSize: "1.5rem" }}>🇻🇳</span>
+                            <div>
+                              <small style={{ color: "var(--muted)", display: "block" }}>{t("Vận đơn giao hàng tại Việt Nam:")}</small>
+                              <b style={{ fontFamily: "monospace", fontSize: "0.9rem", color: "#167a48" }}>{order.vnDomesticTrack}</b>
+                            </div>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyOrderCode(order.vnDomesticTrack || "")}
+                            className="track-action-btn"
+                            title="Sao chép mã vận đơn Việt Nam"
+                          >
+                            <Copy className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       )}
                     </div>
@@ -945,22 +1353,6 @@ function TrackingCosmosContent() {
           </div>
         </div>
       )}
-
-      {/* Nút Mascot AI Nổi */}
-      <aside className="neo" aria-label="Trợ lý ChillBanana AI">
-        <button
-          aria-label="Hỏi ChillBanana AI"
-          onClick={handleOpenAIChat}
-          title="Bấm để hỏi Neo AI về đơn hàng của bạn"
-        >
-          <svg viewBox="0 0 34 34" aria-hidden="true">
-            <circle cx="17" cy="17" r="12" fill="#fff" stroke="#2b7fb0" strokeWidth="2" />
-            <rect x="9" y="12" width="16" height="10" rx="5" fill="#5abae6" />
-            <circle cx="14" cy="17" r="1.6" fill="#fff" />
-            <circle cx="20" cy="17" r="1.6" fill="#fff" />
-          </svg>
-        </button>
-      </aside>
 
       {/* Toast thông báo popup */}
       <div className={`toast ${toastMsg ? "on" : ""}`} role="status">

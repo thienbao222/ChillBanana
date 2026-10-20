@@ -50,7 +50,15 @@ export default function AdminLoginPage() {
           
           {/* Logo & Header */}
           <div className="text-center mb-8">
-            <div className="inline-flex w-16 h-16 rounded-2xl bg-gradient-to-br from-banana-400 to-amber-500 items-center justify-center p-2 shadow-lg mb-4">
+            <div
+              className="inline-flex relative w-16 h-16 rounded-full items-center justify-center p-2.5 shadow-xl mb-4 overflow-hidden"
+              style={{
+                background:
+                  "radial-gradient(1.5px 1.5px at 28% 24%, #fff 100%, transparent), radial-gradient(1.2px 1.2px at 70% 32%, #fff 100%, transparent), radial-gradient(1.5px 1.5px at 38% 68%, #fff9df 100%, transparent), radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 24%, #f59e0b 58%, #7c2d12 82%, #1e1b4b 100%)",
+                boxShadow:
+                  "inset -6px -8px 16px rgba(15,23,42,0.7), inset 2.5px 2.5px 8px rgba(255,255,255,0.8), 0 0 0 3px rgba(248,219,85,0.4), 0 0 22px rgba(245,158,11,0.55)",
+              }}
+            >
               <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
             </div>
             <h1 className="text-2xl font-bold text-navy-900 font-serif">

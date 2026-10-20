@@ -10,7 +10,15 @@ export default function Footer() {
           {/* Col 1: Brand & Intro */}
           <div className="space-y-4">
             <div className="flex items-center space-x-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-banana-500 flex items-center justify-center p-1 shadow">
+              <div
+                className="relative w-10 h-10 rounded-full flex items-center justify-center p-1.5 shadow overflow-hidden"
+                style={{
+                  background:
+                    "radial-gradient(1px 1px at 28% 24%, #fff 100%, transparent), radial-gradient(1px 1px at 70% 30%, #fff 100%, transparent), radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 28%, #f59e0b 60%, #1e1b4b 100%)",
+                  boxShadow:
+                    "inset -3px -4px 8px rgba(15,23,42,0.7), inset 1.5px 1.5px 5px rgba(255,255,255,0.8), 0 0 0 2px rgba(248,219,85,0.4), 0 0 14px rgba(245,158,11,0.5)",
+                }}
+              >
                 <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
               </div>
               <span className="text-xl font-bold font-serif text-white">

@@ -76,7 +76,15 @@ export default function Navbar() {
         <div className="flex items-center justify-between h-20">
           {/* Logo Brand: ChillBanana */}
           <Link href="/" className="flex items-center space-x-3 group">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-banana-400 to-banana-600 flex items-center justify-center text-white shadow-md group-hover:scale-105 transition-transform p-1.5">
+            <div
+              className="relative w-12 h-12 rounded-full flex items-center justify-center p-2 shadow-lg group-hover:scale-105 transition-all overflow-hidden"
+              style={{
+                background:
+                  "radial-gradient(1px 1px at 28% 24%, #fff 100%, transparent), radial-gradient(1.2px 1.2px at 70% 30%, #fff 100%, transparent), radial-gradient(1px 1px at 45% 75%, #ffe58a 100%, transparent), radial-gradient(circle at 35% 30%, #fffbe0 0%, #fee440 26%, #f59e0b 60%, #1e1b4b 100%)",
+                boxShadow:
+                  "inset -4px -5px 12px rgba(15,23,42,0.7), inset 2px 2px 6px rgba(255,255,255,0.85), 0 0 0 2.5px rgba(248,219,85,0.45), 0 0 16px rgba(245,158,11,0.55)",
+              }}
+            >
               <img src="/logo.png" alt="ChillBanana" className="w-full h-full object-contain" />
             </div>
             <div>
