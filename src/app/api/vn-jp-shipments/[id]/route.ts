@@ -78,16 +78,58 @@ export async function PATCH(
       updateData.japanTrackingCode = japanTrackingCode.trim();
     }
 
-    // Khi kho VN cân đo kích thước theo chuẩn IATA:
-    const actW = actualWeightKg !== undefined ? Number(actualWeightKg) : existing.actualWeightKg;
-    const l = dimensionLengthCm !== undefined ? Number(dimensionLengthCm) : existing.dimensionLengthCm;
-    const w = dimensionWidthCm !== undefined ? Number(dimensionWidthCm) : existing.dimensionWidthCm;
-    const h = dimensionHeightCm !== undefined ? Number(dimensionHeightCm) : existing.dimensionHeightCm;
+    // Khi kho VN cân đo kích thước theo chuẩn IATA (Bảo mật #17: Chặn số âm & NaN):
+    let actW = existing.actualWeightKg;
+    if (actualWeightKg !== undefined) {
+      const numW = Number(actualWeightKg);
+      if (!Number.isFinite(numW) || numW <= 0 || numW > 500) {
+        return NextResponse.json(
+          { success: false, error: "Cân nặng thực tế phải là số hợp lệ từ 0.1 kg đến 500 kg." },
+          { status: 400 }
+        );
+      }
+      actW = numW;
+      updateData.actualWeightKg = numW;
+    }
 
-    if (actualWeightKg !== undefined) updateData.actualWeightKg = actW;
-    if (dimensionLengthCm !== undefined) updateData.dimensionLengthCm = l;
-    if (dimensionWidthCm !== undefined) updateData.dimensionWidthCm = w;
-    if (dimensionHeightCm !== undefined) updateData.dimensionHeightCm = h;
+    let l = existing.dimensionLengthCm;
+    if (dimensionLengthCm !== undefined) {
+      const numL = Number(dimensionLengthCm);
+      if (!Number.isFinite(numL) || numL <= 0 || numL > 300) {
+        return NextResponse.json(
+          { success: false, error: "Chiều dài kiện hàng phải từ 1 cm đến 300 cm." },
+          { status: 400 }
+        );
+      }
+      l = numL;
+      updateData.dimensionLengthCm = numL;
+    }
+
+    let w = existing.dimensionWidthCm;
+    if (dimensionWidthCm !== undefined) {
+      const numW = Number(dimensionWidthCm);
+      if (!Number.isFinite(numW) || numW <= 0 || numW > 300) {
+        return NextResponse.json(
+          { success: false, error: "Chiều rộng kiện hàng phải từ 1 cm đến 300 cm." },
+          { status: 400 }
+        );
+      }
+      w = numW;
+      updateData.dimensionWidthCm = numW;
+    }
+
+    let h = existing.dimensionHeightCm;
+    if (dimensionHeightCm !== undefined) {
+      const numH = Number(dimensionHeightCm);
+      if (!Number.isFinite(numH) || numH <= 0 || numH > 300) {
+        return NextResponse.json(
+          { success: false, error: "Chiều cao kiện hàng phải từ 1 cm đến 300 cm." },
+          { status: 400 }
+        );
+      }
+      h = numH;
+      updateData.dimensionHeightCm = numH;
+    }
 
     // Tính cước theo chuẩn thể tích IATA:
     if (l && w && h) {

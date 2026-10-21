@@ -174,8 +174,10 @@ export async function POST(req: NextRequest) {
     }
     const isOnlyCatalogItems = items.length > 0 && items.every((it: any) => it.id && !it.id.startsWith("calc-"));
 
-    if (!isOnlyCatalogItems) {
-      if (typeof body.originalUrl !== "string" || body.originalUrl.trim() === "" || (body.originalUrl === "https://amazon.co.jp" && body.productName === "Đơn mua hộ từ Nhật Bản")) {
+    let validatedOriginalUrl = "";
+    if (typeof body.originalUrl === "string" && body.originalUrl.trim() !== "") {
+      const trimmedUrl = body.originalUrl.trim();
+      if (!isOnlyCatalogItems && (trimmedUrl === "https://amazon.co.jp" && body.productName === "Đơn mua hộ từ Nhật Bản")) {
         return NextResponse.json(
           { error: "Vui lòng cung cấp đường dẫn (link) sản phẩm." },
           { status: 400 }
@@ -184,7 +186,10 @@ export async function POST(req: NextRequest) {
 
       // SSRF & Phishing Protection: Validate URL domain (strict hostname match)
       try {
-        const parsedUrl = new URL(body.originalUrl);
+        const parsedUrl = new URL(trimmedUrl);
+        if (parsedUrl.protocol !== "https:") {
+          return NextResponse.json({ error: "Chỉ chấp nhận đường dẫn bảo mật bắt đầu bằng https://" }, { status: 400 });
+        }
         const hostname = parsedUrl.hostname.toLowerCase();
 
         // Block internal / loopback / private / metadata addresses (SSRF)
@@ -208,9 +213,15 @@ export async function POST(req: NextRequest) {
             { status: 400 }
           );
         }
-      } catch (err) {
+        validatedOriginalUrl = trimmedUrl;
+      } catch (_err) {
         return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
       }
+    } else if (!isOnlyCatalogItems) {
+      return NextResponse.json(
+        { error: "Vui lòng cung cấp đường dẫn (link) sản phẩm." },
+        { status: 400 }
+      );
     }
 
     // BẢO MẬT: tỷ giá PHẢI do server tự lấy (live, có cache), không bao giờ tin
@@ -368,7 +379,7 @@ export async function POST(req: NextRequest) {
             customerEmail,
             customerPhone: body.customerPhone.trim(),
             customerAddress: body.customerAddress.trim(),
-            originalUrl: typeof body.originalUrl === "string" ? body.originalUrl.trim() : "",
+            originalUrl: validatedOriginalUrl,
             productName: verifiedProductName,
             category: ["cosmetics", "health", "gadgets", "anime", "other"].includes(body.category) ? body.category : "other",
             priceJpy: verifiedPriceJpy,
@@ -387,7 +398,7 @@ export async function POST(req: NextRequest) {
             groupBuyCode: body.groupBuyCode || null,
             status: "PENDING_DEPOSIT",
             customerNote: typeof body.customerNote === "string" ? body.customerNote.trim() || null : null,
-            adminNote: body.adminNote || null,
+            adminNote: null, // Bảo mật #10: Không cho phép client tự chèn adminNote
             isPriceVerified: isOnlyCatalogItems,
             priceVerifiedAt: isOnlyCatalogItems ? new Date() : null,
             reservationExpiresAt,

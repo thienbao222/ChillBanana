@@ -31,19 +31,19 @@ const SUPPLEMENTARY_GROUPS = [
   },
   {
     fileName: "supplement-3-neo-universe-ui.txt",
-    title: "Supplementary 3: Neo Universe Mascot & Chatbot UI",
+    title: "Supplementary 3: Neo Universe Mascot, Chatbot UI & Cart Drawer",
     files: [
       "src/features/ai/customer/AIChatBot.tsx",
       "src/components/NeoUniverseSprite.tsx",
       "src/components/ToastContainer.tsx",
+      "src/components/CartDrawer.tsx",
     ],
   },
   {
     fileName: "supplement-4-cosmos-theme-interface.txt",
-    title: "Supplementary 4: Cosmos Daylight Theme & Cart Drawer",
+    title: "Supplementary 4: Cosmos Daylight Theme Interface",
     files: [
       "src/components/NeoDaylightCosmos.tsx",
-      "src/components/CartDrawer.tsx",
     ],
   },
   {
@@ -69,10 +69,24 @@ const SUPPLEMENTARY_GROUPS = [
       "tests/integration/scrape-link-rate-limit.test.ts",
     ],
   },
+  {
+    fileName: "supplement-6-vn-jp-dispatch-kanban.txt",
+    title: "Supplementary 6: VN-to-JP Express Forwarding Admin Kanban",
+    files: [
+      "src/app/admin/components/VnJpDispatchTab.tsx",
+    ],
+  },
 ];
 
 function generateSupplementary() {
-  if (!fs.existsSync(OUTPUT_DIR)) {
+  if (fs.existsSync(OUTPUT_DIR)) {
+    const oldFiles = fs.readdirSync(OUTPUT_DIR);
+    for (const file of oldFiles) {
+      if (file.startsWith("supplement-")) {
+        fs.unlinkSync(path.join(OUTPUT_DIR, file));
+      }
+    }
+  } else {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
   }
 
@@ -110,13 +124,13 @@ function generateSupplementary() {
     fs.writeFileSync(outPath, content, "utf8");
     const sizeKb = (Buffer.byteLength(content, "utf8") / 1024).toFixed(1);
     totalBytesAll += Buffer.byteLength(content, "utf8");
-    console.log(`   -> [${index + 1}/5] ${group.fileName} : ${sizeKb} KB (${group.files.length} tệp)`);
+    console.log(`   -> [${index + 1}/${SUPPLEMENTARY_GROUPS.length}] ${group.fileName} : ${sizeKb} KB (${group.files.length} tệp)`);
   });
 
   const totalMb = (totalBytesAll / (1024 * 1024)).toFixed(2);
-  console.log(`\n✅ Hoàn tất! Đã tạo 5 tệp bổ sung tại:`);
+  console.log(`\n✅ Hoàn tất! Đã tạo ${SUPPLEMENTARY_GROUPS.length} tệp bổ sung tại:`);
   console.log(`   📂 ${OUTPUT_DIR}\\`);
-  console.log(`   📊 Tổng dung lượng: ~${totalMb} MB (Tất cả 5 tệp đều < 95 KB, không bị cắt chữ)`);
+  console.log(`   📊 Tổng dung lượng: ~${totalMb} MB (Tất cả ${SUPPLEMENTARY_GROUPS.length} tệp đều < 95 KB, không bị cắt chữ)`);
 }
 
 generateSupplementary();

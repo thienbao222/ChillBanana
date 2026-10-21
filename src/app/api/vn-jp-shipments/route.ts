@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
+import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,20 @@ function getRatePerKg(cargoType: string): number {
 // --------------------------------------------------------------------------
 export async function POST(req: NextRequest) {
   try {
+    // Bảo mật #15: Rate limit theo IP chống spam tạo đơn
+    const clientIp = getClientIp(req);
+    const retryAfter = await checkAndRecordHit(`vn_jp_create:${clientIp}`, {
+      max: 15,
+      windowMs: 300_000,
+      blockMs: 600_000,
+    });
+    if (retryAfter > 0) {
+      return NextResponse.json(
+        { success: false, error: `Bạn đã gửi yêu cầu quá nhanh. Vui lòng thử lại sau ${retryAfter} giây.` },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
+
     const body = await req.json();
     const {
       senderName,
@@ -39,22 +54,31 @@ export async function POST(req: NextRequest) {
       maffAgreement,
     } = body;
 
-    // Validation
-    if (!senderName?.trim() || !senderPhone?.trim() || !senderAddress?.trim()) {
+    // Bảo mật #19: Kiểm tra kiểu dữ liệu string nghiêm ngặt trước khi gọi .trim()
+    if (
+      typeof senderName !== "string" || !senderName.trim() ||
+      typeof senderPhone !== "string" || !senderPhone.trim() ||
+      typeof senderAddress !== "string" || !senderAddress.trim()
+    ) {
       return NextResponse.json(
         { success: false, error: "Vui lòng điền đầy đủ họ tên, số điện thoại và địa chỉ người gửi tại Việt Nam." },
         { status: 400 }
       );
     }
 
-    if (!receiverName?.trim() || !receiverPhone?.trim() || !receiverPostalCode?.trim() || !receiverAddress?.trim()) {
+    if (
+      typeof receiverName !== "string" || !receiverName.trim() ||
+      typeof receiverPhone !== "string" || !receiverPhone.trim() ||
+      typeof receiverPostalCode !== "string" || !receiverPostalCode.trim() ||
+      typeof receiverAddress !== "string" || !receiverAddress.trim()
+    ) {
       return NextResponse.json(
         { success: false, error: "Vui lòng điền đầy đủ họ tên, SĐT, mã bưu điện 〒 7 số và địa chỉ người nhận tại Nhật Bản." },
         { status: 400 }
       );
     }
 
-    if (!cargoDetails?.trim()) {
+    if (typeof cargoDetails !== "string" || !cargoDetails.trim()) {
       return NextResponse.json(
         { success: false, error: "Vui lòng mô tả danh mục hàng hóa chi tiết (không ghi chung chung quà tặng)." },
         { status: 400 }
@@ -68,49 +92,66 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const weight = Math.max(0.5, Number(estimatedWeightKg) || 0.5);
-    const selectedType = String(cargoType || "gift");
+    // Bảo mật #18: Kiểm tra giới hạn cân nặng hợp lý (0.1kg - 500kg)
+    const rawWeight = Number(estimatedWeightKg);
+    if (!Number.isFinite(rawWeight) || rawWeight <= 0 || rawWeight > 500) {
+      return NextResponse.json(
+        { success: false, error: "Cân nặng ước tính phải là số hợp lệ từ 0.1 kg đến 500 kg." },
+        { status: 400 }
+      );
+    }
+    const weight = Math.max(0.5, rawWeight);
+    const selectedType = typeof cargoType === "string" ? cargoType : "gift";
     const unitPrice = getRatePerKg(selectedType);
     const totalEstFee = Math.round(unitPrice * weight);
 
-    // Sinh mã vận đơn duy nhất VNJP-2026-XXXX
-    let trackingCode = "";
-    let isUnique = false;
-    let attempts = 0;
+    // Bảo mật #15: Sinh mã vận đơn entropy cao và bọc try-catch retry chống P2002 collision
+    const generateTrackingCode = () => {
+      const year = new Date().getFullYear();
+      const randDigits = Math.floor(1000 + Math.random() * 9000);
+      const timePart = Date.now().toString(36).toUpperCase().slice(-3);
+      return `VNJP-${year}-${timePart}${randDigits}`;
+    };
 
-    while (!isUnique && attempts < 10) {
-      attempts++;
-      const randomDigits = Math.floor(1000 + Math.random() * 9000);
-      trackingCode = `VNJP-${new Date().getFullYear()}-${randomDigits}`;
-      const existing = await prisma.vnJpShipment.findUnique({
-        where: { trackingCode },
-        select: { id: true },
-      });
-      if (!existing) isUnique = true;
+    let shipment = null;
+    let createAttempts = 0;
+    while (!shipment && createAttempts < 5) {
+      createAttempts++;
+      const trackingCode = generateTrackingCode();
+      try {
+        shipment = await prisma.vnJpShipment.create({
+          data: {
+            trackingCode,
+            senderName: senderName.trim(),
+            senderPhone: senderPhone.trim(),
+            senderAddress: senderAddress.trim(),
+            senderCity: typeof senderCity === "string" && senderCity.trim() ? senderCity.trim() : "Hà Nội",
+            pickupDate: typeof pickupDate === "string" && pickupDate.trim() ? pickupDate.trim() : null,
+            receiverName: receiverName.trim().toUpperCase(),
+            receiverPhone: receiverPhone.trim(),
+            receiverPostalCode: receiverPostalCode.trim(),
+            receiverPrefecture: typeof receiverPrefecture === "string" && receiverPrefecture.trim() ? receiverPrefecture.trim() : "Tokyo",
+            receiverAddress: receiverAddress.trim(),
+            cargoType: selectedType,
+            cargoDetails: cargoDetails.trim(),
+            estimatedWeightKg: weight,
+            unitPricePerKg: unitPrice,
+            totalShippingFeeVnd: totalEstFee,
+            maffAgreement: Boolean(maffAgreement),
+            status: "PENDING_CONFIRMATION",
+          },
+        });
+      } catch (err: any) {
+        if (err?.code === "P2002" && createAttempts < 5) {
+          continue; // Mã bị trùng, thử lại với mã mới
+        }
+        throw err;
+      }
     }
 
-    const shipment = await prisma.vnJpShipment.create({
-      data: {
-        trackingCode,
-        senderName: senderName.trim(),
-        senderPhone: senderPhone.trim(),
-        senderAddress: senderAddress.trim(),
-        senderCity: senderCity?.trim() || "Hà Nội",
-        pickupDate: pickupDate?.trim() || null,
-        receiverName: receiverName.trim().toUpperCase(),
-        receiverPhone: receiverPhone.trim(),
-        receiverPostalCode: receiverPostalCode.trim(),
-        receiverPrefecture: receiverPrefecture?.trim() || "Tokyo",
-        receiverAddress: receiverAddress.trim(),
-        cargoType: selectedType,
-        cargoDetails: cargoDetails.trim(),
-        estimatedWeightKg: weight,
-        unitPricePerKg: unitPrice,
-        totalShippingFeeVnd: totalEstFee,
-        maffAgreement: Boolean(maffAgreement),
-        status: "PENDING_CONFIRMATION",
-      },
-    });
+    if (!shipment) {
+      throw new Error("Không thể khởi tạo mã vận đơn sau nhiều lần thử.");
+    }
 
     return NextResponse.json({
       success: true,

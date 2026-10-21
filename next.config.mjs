@@ -2,14 +2,14 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
-    domains: [
-      "images.unsplash.com",
-      "m.media-amazon.com",
-      "static.mercdn.net",
-      "thumbnail.image.rakuten.co.jp",
-      "lh3.googleusercontent.com",
-      "drive.google.com",
-      "dropbox.com",
+    remotePatterns: [
+      { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "m.media-amazon.com" },
+      { protocol: "https", hostname: "static.mercdn.net" },
+      { protocol: "https", hostname: "thumbnail.image.rakuten.co.jp" },
+      { protocol: "https", hostname: "lh3.googleusercontent.com" },
+      { protocol: "https", hostname: "drive.google.com" },
+      { protocol: "https", hostname: "dropbox.com" },
     ],
   },
   async redirects() {

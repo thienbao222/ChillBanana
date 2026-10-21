@@ -30,6 +30,7 @@ const BUNDLE_GROUPS = [
       "src/lib/rate-limit.ts",
       "src/lib/rate-limiter.ts",
       "src/lib/audit.ts",
+      "tests/unit/auth-session.test.ts",
     ],
   },
   {
@@ -43,6 +44,8 @@ const BUNDLE_GROUPS = [
       "src/app/api/exchange-rate/route.ts",
       "src/lib/system-config.ts",
       "src/lib/vietnam-time.ts",
+      "tests/unit/pricing.test.ts",
+      "tests/unit/exchange-rate.test.ts",
     ],
   },
   {
@@ -59,6 +62,8 @@ const BUNDLE_GROUPS = [
       "src/app/api/payment/vnpay-return/route.ts",
       "src/app/api/payment/mock-confirm/route.ts",
       "src/app/api/payment/mock-sandbox/route.ts",
+      "tests/unit/payment-provider.test.ts",
+      "tests/unit/vnpay-signature.test.ts",
     ],
   },
   {
@@ -71,6 +76,7 @@ const BUNDLE_GROUPS = [
       "src/app/api/orders/[id]/route.ts",
       "src/app/api/orders/[id]/access/route.ts",
       "src/app/api/orders/[id]/lookup-request/route.ts",
+      "tests/unit/policies.test.ts",
     ],
   },
   {
@@ -115,6 +121,8 @@ const BUNDLE_GROUPS = [
       "src/features/notifications/retry.ts",
       "src/app/api/scrape-link/route.ts",
       "src/app/api/products/route.ts",
+      "src/app/api/vn-jp-shipments/route.ts",
+      "src/app/api/vn-jp-shipments/[id]/route.ts",
     ],
   },
   {
@@ -133,17 +141,11 @@ const BUNDLE_GROUPS = [
   },
   {
     fileName: "part-10-key-frontend-logic-tests.txt",
-    title: "Part 10: Client Calculators, Contexts & Core Security Tests",
+    title: "Part 10: Client Calculators & Contexts",
     files: [
       "src/components/OrderCalculator.tsx",
       "src/context/AuthContext.tsx",
       "src/context/CartContext.tsx",
-      "tests/unit/policies.test.ts",
-      "tests/unit/pricing.test.ts",
-      "tests/unit/exchange-rate.test.ts",
-      "tests/unit/auth-session.test.ts",
-      "tests/unit/payment-provider.test.ts",
-      "tests/unit/vnpay-signature.test.ts",
     ],
   },
 ];
@@ -152,7 +154,9 @@ function generate10Parts() {
   if (fs.existsSync(OUTPUT_DIR)) {
     const oldFiles = fs.readdirSync(OUTPUT_DIR);
     for (const file of oldFiles) {
-      fs.unlinkSync(path.join(OUTPUT_DIR, file));
+      if (file.startsWith("part-")) {
+        fs.unlinkSync(path.join(OUTPUT_DIR, file));
+      }
     }
   } else {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });

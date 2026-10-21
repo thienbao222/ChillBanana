@@ -24,7 +24,8 @@
     "test:e2e": "playwright test",
     "test:all": "npm test && npm run test:integration && npm run test:e2e",
     "bundle:ai": "node scripts/export-codebase.mjs",
-    "bundle:extra": "node scripts/export-supplementary.mjs"
+    "bundle:extra": "node scripts/export-supplementary.mjs",
+    "bundle:all": "node scripts/export-codebase.mjs && node scripts/export-supplementary.mjs"
   },
   "prisma": {
     "seed": "node prisma/seed.js"

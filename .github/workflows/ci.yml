@@ -41,6 +41,7 @@ jobs:
     env:
       # Giá trị giả chỉ dành cho CI (database là container tạm trong job). KHÔNG phải secret thật.
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
+      DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
       SHADOW_DATABASE_URL: postgresql://ci:ci@localhost:5432/shadow
       ADMIN_SESSION_SECRET: ci-only-admin-secret-0000000000000000
       CUSTOMER_SESSION_SECRET: ci-only-customer-secret-00000000000000
