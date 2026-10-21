@@ -1,18 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCustomerFromRequest } from "@/lib/auth-session";
+import { requireCustomer } from "@/lib/customer-guard";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   try {
-    const sessionData = getCustomerFromRequest(req);
-    if (!sessionData) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const guard = await requireCustomer(req);
+    if (!guard.ok) {
+      return guard.response;
     }
 
     const customer = await prisma.customer.findUnique({
-      where: { id: sessionData.id },
+      where: { id: guard.customer.id },
       include: {
         orders: {
           orderBy: { createdAt: "desc" },

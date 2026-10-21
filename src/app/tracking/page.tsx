@@ -291,7 +291,7 @@ function TrackingCosmosContent() {
       } else {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
         // BẢO MẬT & UX (P2-11): Chỉ hiện khung xác minh email khi chưa đăng nhập và nhận mã 401 Unauthorized
-        setRequiresEmailAccess(!customer && res.status === 401);
+        setRequiresEmailAccess(!customer && (res.status === 401 || res.status === 404));
         setOrder(null);
       }
     } catch {

@@ -4,6 +4,7 @@ import {
   ADMIN_COOKIE_NAME,
   computePasswordDigest,
   verifyAdminSessionTokenFull,
+  verifySameOrigin,
 } from "@/lib/auth-session";
 
 // Kiểm tra quyền admin ở backend: ngoài việc cookie hợp lệ, còn đối chiếu với bảng AdminUser
@@ -16,6 +17,18 @@ export type AdminGuardResult =
   | { ok: false; response: NextResponse };
 
 export async function requireAdmin(req: NextRequest, options: { roles?: AdminRole[] } = {}): Promise<AdminGuardResult> {
+  if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    if (!verifySameOrigin(req)) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "Yêu cầu vi phạm kiểm soát nguồn gốc (CSRF protection)." },
+          { status: 403 }
+        ),
+      };
+    }
+  }
+
   const cookie = req.cookies.get(ADMIN_COOKIE_NAME)?.value;
   if (!cookie) {
     return { ok: false, response: NextResponse.json({ error: "Không có quyền truy cập quản trị." }, { status: 401 }) };

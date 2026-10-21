@@ -56,7 +56,7 @@ describe("cookie admin của tài khoản đã bị xóa mất hiệu lực trê
   });
 
   it("xóa admin giữa chừng: cùng một cookie đang dùng được thì ngay sau đó bị từ chối", async () => {
-    const a = await makeAdmin("tam-thoi", "OPERATOR");
+    const a = await makeAdmin("tam-thoi", "SUPER_ADMIN");
     const cookies = adminCookies("tam-thoi");
     expect((await customers.GET(get("/api/admin/customers", { cookies }))).status).toBe(200);
     expect((await funnel.GET(get("/api/admin/funnel", { cookies }))).status).toBe(200);

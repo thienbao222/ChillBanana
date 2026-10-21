@@ -7,6 +7,7 @@ import {
   verifyAdminPassword,
   createAdminSessionTokenWithRole,
   verifyAdminSessionToken,
+  verifyAdminSessionTokenFull,
   getAdminUsernameFromRequest,
 } from "@/lib/auth-session";
 import { writeAuditLog } from "@/lib/audit";
@@ -27,17 +28,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
 
-  const { valid, username } = verifyAdminSessionToken(cookie.value);
-  if (!valid || !username) {
+  const fullSession = verifyAdminSessionTokenFull(cookie.value);
+  if (!fullSession.valid || !fullSession.username) {
     return NextResponse.json({ authenticated: false }, { status: 401 });
   }
+
+  const username = fullSession.username;
 
   // Lấy thông tin admin từ DB
   let adminUser = null;
   try {
     adminUser = await prisma.adminUser.findUnique({
       where: { username },
-      select: { id: true, username: true, name: true, role: true },
+      select: { id: true, username: true, name: true, role: true, passwordHash: true },
     });
   } catch (err) {
     console.error("[AdminAuth] Lỗi kết nối CSDL khi kiểm tra session:", err);
@@ -45,6 +48,17 @@ export async function GET(req: NextRequest) {
       { authenticated: false, error: "Không thể xác thực lúc này." },
       { status: 503 }
     );
+  }
+
+  // BẢO MẬT (P1-03): Đối chiếu pwdDigest nếu có trong session
+  if (adminUser && fullSession.pwdDigest) {
+    const expectedDigest = computePasswordDigest(adminUser.passwordHash);
+    if (fullSession.pwdDigest !== expectedDigest) {
+      return NextResponse.json(
+        { authenticated: false, error: "Phiên đăng nhập đã hết hạn do mật khẩu đã thay đổi." },
+        { status: 401 }
+      );
+    }
   }
 
   // BẢO MẬT: Bắt buộc tài khoản phải còn tồn tại trong cơ sở dữ liệu.

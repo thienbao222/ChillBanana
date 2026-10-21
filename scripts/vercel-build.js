@@ -1,4 +1,8 @@
 const { spawnSync } = require("node:child_process");
+
+if (!process.env.DIRECT_URL && process.env.DATABASE_URL) {
+  process.env.DIRECT_URL = process.env.DATABASE_URL;
+}
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -51,7 +55,7 @@ if (isProductionDeployment) {
     );
     process.exit(1);
   }
-  const migrationEnv = databaseUrl ? { DATABASE_URL: databaseUrl } : {};
+  const migrationEnv = databaseUrl ? { DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl } : {};
 
   // Dọn dẹp advisory lock treo (nếu có từ phiên trước) để tránh lỗi P1002 timeout
   const clearLockScript = path.join(__dirname, "clear-advisory-lock.js");

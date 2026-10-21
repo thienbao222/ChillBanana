@@ -4,9 +4,10 @@ import { sendOrderCreatedEmail } from "@/lib/mailer";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import {
   createGuestOrderAccessToken,
-  getCustomerFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
+  verifySameOrigin,
 } from "@/lib/auth-session";
+import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
@@ -17,6 +18,12 @@ import { isPrivateHost } from "@/lib/ssrf";
 export const dynamic = "force-dynamic";
 
 const ORDER_CREATE_RATE_LIMIT = { max: 15, windowMs: 2 * 60_000, blockMs: 5 * 60_000 };
+
+const ALLOWED_DOMAINS = [
+  'amazon.co.jp', 'amazon.com', 'mercari.com', 'jp.mercari.com',
+  'rakuten.co.jp', 'yahoo.co.jp', 'auctions.yahoo.co.jp',
+  'uniqlo.com', 'suruga-ya.jp', 'biccamera.com', 'yodobashi.com'
+];
 
 import { releaseExpiredOrderReservations } from "@/features/orders/reservations";
 
@@ -33,7 +40,7 @@ export async function GET(req: NextRequest) {
     const phone = searchParams.get("phone");
 
     const isAdmin = await isVerifiedAdmin(req);
-    const customerSession = getCustomerFromRequest(req);
+    const customerSession = await getVerifiedCustomerFromRequest(req);
 
     if (!isAdmin && !customerSession) {
       return NextResponse.json(
@@ -56,6 +63,7 @@ export async function GET(req: NextRequest) {
 
     const orders = await prisma.order.findMany({
       where: Object.keys(whereClause).length > 0 ? whereClause : undefined,
+      take: 200,
       include: {
         trackingLogs: {
           orderBy: { createdAt: "desc" },
@@ -171,6 +179,18 @@ export async function POST(req: NextRequest) {
         if (!Number.isSafeInteger(itemPrice) || itemPrice < 100 || itemPrice > 10_000_000 || !Number.isFinite(itemWeight) || itemWeight < 0 || itemWeight > 1000) {
           return NextResponse.json({ error: "Giá sản phẩm (tối đa 10M ¥) hoặc cân nặng (tối đa 1000kg) không hợp lệ." }, { status: 400 });
         }
+        if (typeof item.originalUrl === "string" && item.originalUrl.trim() !== "") {
+          const itemUrl = item.originalUrl.trim();
+          let parsed;
+          try {
+            parsed = new URL(itemUrl);
+          } catch {
+            return NextResponse.json({ error: "Link sản phẩm không đúng định dạng URL." }, { status: 400 });
+          }
+          if (parsed.protocol !== "https:" || isPrivateHost(parsed.hostname) || !ALLOWED_DOMAINS.some((d: string) => parsed.hostname === d || parsed.hostname.endsWith("." + d))) {
+            return NextResponse.json({ error: "Link sản phẩm không thuộc website được hỗ trợ hoặc vi phạm bảo mật." }, { status: 400 });
+          }
+        }
       }
     }
     const isOnlyCatalogItems = items.length > 0 && items.every((it: any) => it.id && !it.id.startsWith("calc-"));
@@ -198,11 +218,7 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
         }
 
-        const ALLOWED_DOMAINS = [
-          'amazon.co.jp', 'amazon.com', 'mercari.com', 'jp.mercari.com',
-          'rakuten.co.jp', 'yahoo.co.jp', 'auctions.yahoo.co.jp',
-          'uniqlo.com', 'suruga-ya.jp', 'biccamera.com', 'yodobashi.com'
-        ];
+
         // Use exact match OR subdomain match with dot prefix to prevent:
         //   notrakuten.co.jp matching rakuten.co.jp (via naive endsWith)
         const isAllowed = ALLOWED_DOMAINS.some(
@@ -244,7 +260,7 @@ export async function POST(req: NextRequest) {
     const orderCode = `CB-${new Date().getFullYear()}-${timestamp}-${randomSuffix}`;
 
     // Chỉ gắn đơn vào tài khoản lấy từ cookie đã xác thực; email/ID gửi từ client không chứng minh quyền sở hữu.
-    const customerSession = getCustomerFromRequest(req);
+    const customerSession = await getVerifiedCustomerFromRequest(req);
     const customerId = customerSession?.id || null;
     const customerType = customerSession ? "REGISTERED" : "GUEST";
     const customerEmail = customerSession?.email || submittedEmail;
@@ -353,10 +369,15 @@ export async function POST(req: NextRequest) {
             verifiedWeightKg += itemWeight * qty;
             verifiedProductName += `${item.name || body.productName || "Sản phẩm Nhật Bản"} (x${qty}), `;
 
+            const itemOriginalUrl = typeof item.originalUrl === "string" && item.originalUrl.trim() ? item.originalUrl.trim() : null;
+            const itemDisplayName = itemOriginalUrl
+              ? `${(item.name || body.productName || "Sản phẩm Nhật Bản").slice(0, 150)} [${itemOriginalUrl.slice(0, 300)}]`
+              : (item.name || body.productName || "Sản phẩm Nhật Bản");
+
             orderItemsData.push({
               productId: null,
               itemType: "EXTERNAL",
-              productName: item.name || body.productName || "Sản phẩm Nhật Bản",
+              productName: itemDisplayName,
               quantity: qty,
               priceJpy: itemPrice,
               weightKg: itemWeight,

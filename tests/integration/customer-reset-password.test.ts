@@ -22,8 +22,8 @@ describe("Luồng Quên & Đặt lại mật khẩu khách hàng (Integration Te
     const customer = await makeCustomer();
     const mailer = await import("@/lib/mailer");
     let capturedResetUrl = "";
-    vi.spyOn(mailer, "sendPasswordResetEmail").mockImplementation(async (email, name, url) => {
-      capturedResetUrl = url;
+    vi.spyOn(mailer, "sendPasswordResetEmail").mockImplementation(async (arg: any) => {
+      capturedResetUrl = typeof arg === "object" && arg?.resetUrl ? arg.resetUrl : (typeof arg === "string" ? String(arg) : "");
     });
 
     // 1. Request reset link

@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
 import {
-  getCustomerFromRequest,
   hasGuestOrderAccessForEmail,
   getAdminUsernameFromRequest,
   ORDER_ACCESS_COOKIE_NAME,
   verifyGuestOrderAccessToken,
+  verifySameOrigin,
 } from "@/lib/auth-session";
+import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { isVerifiedAdmin } from "@/lib/admin-guard";
 import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
@@ -23,7 +24,7 @@ export async function GET(
 ) {
   try {
     const { id: orderCode } = await params;
-    const customerSession = getCustomerFromRequest(req);
+    const customerSession = await getVerifiedCustomerFromRequest(req);
     const adminSession = await isVerifiedAdmin(req);
     const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
     const guestAccess = verifyGuestOrderAccessToken(accessToken || "");
@@ -139,6 +140,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    if (!verifySameOrigin(req)) {
+      return NextResponse.json({ error: "Yêu cầu vi phạm kiểm soát nguồn gốc (CSRF protection)." }, { status: 403 });
+    }
     const { id: orderCode } = await params;
     const body = await req.json();
 
@@ -162,6 +166,26 @@ export async function PATCH(
       totalVnd,
       depositAmountVnd,
     } = body;
+
+    // BẢO MẬT (P1-19): Kiểm tra chặt chẽ kiểu string và độ dài tối đa chống Prisma crash
+    if (title !== undefined && (typeof title !== "string" || title.length > 200)) {
+      return NextResponse.json({ error: "Tiêu đề không hợp lệ." }, { status: 400 });
+    }
+    if (description !== undefined && (typeof description !== "string" || description.length > 2000)) {
+      return NextResponse.json({ error: "Mô tả không hợp lệ." }, { status: 400 });
+    }
+    if (location !== undefined && (typeof location !== "string" || location.length > 200)) {
+      return NextResponse.json({ error: "Vị trí không hợp lệ." }, { status: 400 });
+    }
+    if (reason !== undefined && (typeof reason !== "string" || reason.length > 500)) {
+      return NextResponse.json({ error: "Lý do không hợp lệ." }, { status: 400 });
+    }
+    if (jpTrack !== undefined && (typeof jpTrack !== "string" || jpTrack.length > 100)) {
+      return NextResponse.json({ error: "Mã vận đơn JP không hợp lệ." }, { status: 400 });
+    }
+    if (vnTrack !== undefined && (typeof vnTrack !== "string" || vnTrack.length > 100)) {
+      return NextResponse.json({ error: "Mã vận đơn VN không hợp lệ." }, { status: 400 });
+    }
 
     const allowedStatuses = new Set(["PENDING_DEPOSIT", "PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR", "WAREHOUSE_VN", "LOCAL_DELIVERY", "COMPLETED", "CANCELLED"]);
     if (status !== undefined && !allowedStatuses.has(status)) {
@@ -190,7 +214,7 @@ export async function PATCH(
     }
 
     const isAdminUser = await isVerifiedAdmin(req);
-    const customerInfo = getCustomerFromRequest(req);
+    const customerInfo = await getVerifiedCustomerFromRequest(req);
     const priceWasJustApproved = isAdminUser && isPriceVerified === true && !existingOrder.isPriceVerified;
 
     if (!isAdminUser) {

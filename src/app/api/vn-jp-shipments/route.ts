@@ -66,6 +66,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const senderDigits = senderPhone.replace(/\D/g, "");
+    if (senderDigits.length < 8 || senderDigits.length > 15) {
+      return NextResponse.json(
+        { success: false, error: "Số điện thoại người gửi không hợp lệ (cần từ 8 đến 15 số)." },
+        { status: 400 }
+      );
+    }
+
     if (
       typeof receiverName !== "string" || !receiverName.trim() ||
       typeof receiverPhone !== "string" || !receiverPhone.trim() ||
@@ -74,6 +82,14 @@ export async function POST(req: NextRequest) {
     ) {
       return NextResponse.json(
         { success: false, error: "Vui lòng điền đầy đủ họ tên, SĐT, mã bưu điện 〒 7 số và địa chỉ người nhận tại Nhật Bản." },
+        { status: 400 }
+      );
+    }
+
+    const receiverDigits = receiverPhone.replace(/\D/g, "");
+    if (receiverDigits.length < 8 || receiverDigits.length > 15) {
+      return NextResponse.json(
+        { success: false, error: "Số điện thoại người nhận không hợp lệ (cần từ 8 đến 15 số)." },
         { status: 400 }
       );
     }
@@ -92,11 +108,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Bảo mật #18: Kiểm tra giới hạn cân nặng hợp lý (0.1kg - 500kg)
+    // Bảo mật #18: Kiểm tra giới hạn cân nặng hợp lý (0.5kg - 500kg)
     const rawWeight = Number(estimatedWeightKg);
-    if (!Number.isFinite(rawWeight) || rawWeight <= 0 || rawWeight > 500) {
+    if (!Number.isFinite(rawWeight) || rawWeight < 0.5 || rawWeight > 500) {
       return NextResponse.json(
-        { success: false, error: "Cân nặng ước tính phải là số hợp lệ từ 0.1 kg đến 500 kg." },
+        { success: false, error: "Cân nặng ước tính phải từ 0.5 đến 500 kg." },
         { status: 400 }
       );
     }
@@ -110,7 +126,7 @@ export async function POST(req: NextRequest) {
       const year = new Date().getFullYear();
       const randDigits = Math.floor(1000 + Math.random() * 9000);
       const timePart = Date.now().toString(36).toUpperCase().slice(-3);
-      return `VNJP-${year}-${timePart}${randDigits}`;
+      return `VNJP-${year}-${timePart}-${randDigits}`;
     };
 
     let shipment = null;

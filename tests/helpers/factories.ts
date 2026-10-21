@@ -5,9 +5,11 @@ import {
   CUSTOMER_COOKIE_NAME,
   ORDER_ACCESS_COOKIE_NAME,
   createAdminSessionToken,
+  createAdminSessionTokenWithRole,
   createCustomerSessionToken,
   hashAdminPassword,
   hashCustomerPassword,
+  computePasswordDigest,
 } from "@/lib/auth-session";
 
 export const PASSWORD = "Correct-Horse-9!";
@@ -37,7 +39,10 @@ export async function makeAdmin(username = "admin", role = "SUPER_ADMIN", passwo
   });
 }
 
-export const adminCookies = (username = "admin") => ({ [ADMIN_COOKIE_NAME]: createAdminSessionToken(username) });
+export const adminCookies = (username = "admin", role = "SUPER_ADMIN") => {
+  const pwdDigest = computePasswordDigest(hashAdminPassword(PASSWORD));
+  return { [ADMIN_COOKIE_NAME]: createAdminSessionTokenWithRole(username, role, pwdDigest) };
+};
 
 export async function makeCustomer(email = `khach-${randomUUID().slice(0, 8)}@example.test`, over: Record<string, unknown> = {}) {
   return prisma.customer.create({
@@ -51,9 +56,12 @@ export async function makeCustomer(email = `khach-${randomUUID().slice(0, 8)}@ex
   });
 }
 
-export const customerCookies = (customer: { id: string; email: string }) => ({
-  [CUSTOMER_COOKIE_NAME]: createCustomerSessionToken({ id: customer.id, email: customer.email }),
-});
+export const customerCookies = (customer: { id: string; email: string; passwordHash?: string }) => {
+  const pwdDigest = customer.passwordHash ? computePasswordDigest(customer.passwordHash) : computePasswordDigest(hashCustomerPassword(PASSWORD));
+  return {
+    [CUSTOMER_COOKIE_NAME]: createCustomerSessionToken({ id: customer.id, email: customer.email, pwdDigest }),
+  };
+};
 
 export const guestOrderCookies = (token: string) => ({ [ORDER_ACCESS_COOKIE_NAME]: token });
 

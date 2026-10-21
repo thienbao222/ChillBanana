@@ -58,6 +58,14 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
 
   const order = await prisma.order.findUnique({ where: { orderCode } });
   if (!order) return { result: "not_found" as const };
+
+  // BẢO MẬT & IDEMPOTENCY: Kiểm tra attempt đã hoàn tất trước để đảm bảo phản hồi 02 nếu IPN gọi lại
+  const completedAttempt = await prisma.paymentAttempt.findFirst({
+    where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: "CONFIRMED" },
+    orderBy: { completedAt: "desc" },
+  });
+  if (completedAttempt) return { result: "already_paid" as const };
+
   if (order.paymentStatus !== "UNPAID") return { result: "not_payable" as const };
   if (order.status !== "PENDING_DEPOSIT" || !order.isPriceVerified || order.depositAmountVnd <= 0 || amount !== order.depositAmountVnd * 100) {
     return { result: "invalid_amount" as const };
@@ -65,17 +73,19 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
 
   const amountVnd = order.depositAmountVnd;
   const transactionId = providerTransactionId?.trim().slice(0, 120) || null;
-  const completedAttempt = await prisma.paymentAttempt.findFirst({
-    where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: "CONFIRMED" },
-    orderBy: { completedAt: "desc" },
-  });
-  if (completedAttempt) return { result: "already_paid" as const };
-  // BẢO MẬT (P1-14): Tìm theo providerReference (vnp_TxnRef) để xác định đúng phiên thanh toán
-  let attempt = rawTxnRef
+
+  // BẢO MẬT (P1-14): Tìm theo suffix của rawTxnRef hoặc providerReference hoặc attempt mới nhất
+  const attemptSuffix = rawTxnRef && rawTxnRef.includes("_") ? rawTxnRef.split("_").pop() : null;
+  let attempt = attemptSuffix
     ? await prisma.paymentAttempt.findFirst({
-        where: { orderId: order.id, providerReference: rawTxnRef, status: { in: ["INITIATED", "PENDING"] } },
+        where: { orderId: order.id, id: { endsWith: attemptSuffix }, status: { in: ["INITIATED", "PENDING"] } },
       })
     : null;
+  if (!attempt && rawTxnRef) {
+    attempt = await prisma.paymentAttempt.findFirst({
+      where: { orderId: order.id, providerReference: rawTxnRef, status: { in: ["INITIATED", "PENDING"] } },
+    });
+  }
   if (!attempt) {
     attempt = await prisma.paymentAttempt.findFirst({
       where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: { in: ["INITIATED", "PENDING"] } },

@@ -540,7 +540,7 @@ export default function AIChatBot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: enrichedQuery,
+          message: query,
           personality,
           history: conversationHistory,
           scrapedProduct: scrapedProductForQuote,

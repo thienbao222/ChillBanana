@@ -1,7 +1,14 @@
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
 
-export async function releaseExpiredOrderReservations(limit = 100) {
+let lastReservationSweepAt = 0;
+
+export async function releaseExpiredOrderReservations(limit = 100, force = false) {
+  const nowMs = Date.now();
+  if (!force && nowMs - lastReservationSweepAt < 60_000) {
+    return { scanned: 0, released: 0, conflicts: 0, errors: 0 };
+  }
+  lastReservationSweepAt = nowMs;
   const now = new Date();
   const expiredOrders = await prisma.order.findMany({
     where: {
