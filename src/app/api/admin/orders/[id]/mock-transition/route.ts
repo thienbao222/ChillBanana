@@ -211,10 +211,10 @@ export async function POST(
       ? `GHN-VN-${Math.floor(100000000 + Math.random() * 900000000)}`
       : undefined;
 
-    // Cập nhật đơn hàng và tạo TrackingLog trong transaction
+    // Cập nhật đơn hàng và tạo TrackingLog trong transaction (P1-12)
     const updatedOrder = await prisma.$transaction(async (tx) => {
-      const updated = await tx.order.update({
-        where: { id: order.id },
+      const claimed = await tx.order.updateMany({
+        where: { id: order.id, status: order.status },
         data: {
           status: targetStatus,
           paymentStatus: targetStatus === "COMPLETED" ? "PAID_100" : undefined,
@@ -224,6 +224,8 @@ export async function POST(
           adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} chuyển trạng thái sang ${targetStatus}.`,
         },
       });
+      if (claimed.count !== 1) throw new Error("ORDER_UPDATE_CONFLICT");
+      const updated = await tx.order.findUniqueOrThrow({ where: { id: order.id } });
 
       if (targetStatus === "COMPLETED" && remainingBalanceVnd > 0) {
         await tx.paymentTransaction.create({
@@ -278,8 +280,14 @@ export async function POST(
       order: updatedOrder.updated,
       trackingLog: updatedOrder.log,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[MOCK TRANSITION ERROR]", error);
+    if (error?.message === "ORDER_UPDATE_CONFLICT") {
+      return NextResponse.json(
+        { error: "Đơn hàng đã được cập nhật bởi một thao tác khác. Vui lòng tải lại trang." },
+        { status: 409 }
+      );
+    }
     return NextResponse.json(
       { error: "Lỗi xử lý chuyển trạng thái vận đơn." },
       { status: 500 }

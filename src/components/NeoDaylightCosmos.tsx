@@ -324,6 +324,7 @@ export default function NeoDaylightCosmos() {
   // Submit đặt cọc tạo đơn thật vào database
   const handleSubmitOrder = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return; // BẢO MẬT (P2-07): Chống double-submit khi nhấn phím Enter
     if (!custName.trim() || !custPhone.trim() || !custAddress.trim() || !custEmail.trim()) {
       showToast("Vui lòng điền đầy đủ Họ tên, Số điện thoại, Địa chỉ và Email.");
       return;
@@ -760,6 +761,7 @@ export default function NeoDaylightCosmos() {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
+                    if (vnJpLoading) return; // BẢO MẬT (P2-07): Chống double-submit form VN -> JP khi bấm Enter
                     if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim() || !vnJpSenderAddress.trim()) {
                       showToast("Vui lòng điền đầy đủ họ tên, SĐT và địa chỉ lấy hàng tại Việt Nam.");
                       return;
@@ -1201,7 +1203,7 @@ export default function NeoDaylightCosmos() {
                     step={1}
                     value={priceJpy}
                     onChange={(e) => {
-                      const v = parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
+                      const v = Math.max(0, Math.round(Number(e.target.value) || 0));
                       setPriceJpy(Math.max(0, v));
                     }}
                   />

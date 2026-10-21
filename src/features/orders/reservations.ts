@@ -34,13 +34,15 @@ export async function releaseExpiredOrderReservations(limit = 100) {
         });
         if (claimed.count !== 1) return null;
 
-        for (const item of order.orderItems) {
-          if (item.itemType === "CATALOG" && item.productId) {
-            await tx.product.updateMany({
-              where: { id: item.productId },
-              data: { stockSlots: { increment: item.quantity } },
-            });
-          }
+        // BẢO MẬT (P1-11): Sắp xếp productId tăng dần chống Deadlock
+        const catalogItems = order.orderItems
+          .filter((item) => item.itemType === "CATALOG" && item.productId)
+          .sort((a, b) => (a.productId || "").localeCompare(b.productId || ""));
+        for (const item of catalogItems) {
+          await tx.product.updateMany({
+            where: { id: item.productId! },
+            data: { stockSlots: { increment: item.quantity } },
+          });
         }
         await tx.trackingLog.create({
           data: {

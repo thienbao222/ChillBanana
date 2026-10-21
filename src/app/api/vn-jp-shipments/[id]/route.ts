@@ -44,20 +44,36 @@ export async function PATCH(
 
     const updateData: any = {};
 
-    if (status) {
-      const validStatuses = [
-        "PENDING_CONFIRMATION",
-        "CONFIRMED_PICKUP",
-        "WAREHOUSE_VN_INSPECTED",
-        "IN_FLIGHT_TO_JP",
-        "DELIVERED_JP",
-        "CANCELLED",
-      ];
-      if (!validStatuses.includes(status)) {
+    if (status && status !== existing.status) {
+      // BẢO MẬT & NGHIỆP VỤ (P2-03): State Machine kiểm soát luồng chuyển trạng thái vận đơn VN -> JP
+      const VALID_TRANSITIONS: Record<string, string[]> = {
+        PENDING_CONFIRMATION: ["CONFIRMED_PICKUP", "CANCELLED"],
+        CONFIRMED_PICKUP: ["WAREHOUSE_VN_INSPECTED", "CANCELLED"],
+        WAREHOUSE_VN_INSPECTED: ["IN_FLIGHT_TO_JP", "CANCELLED"],
+        IN_FLIGHT_TO_JP: ["DELIVERED_JP", "CANCELLED"],
+        DELIVERED_JP: [], // Terminal
+        CANCELLED: [],    // Terminal
+      };
+
+      const allowedNext = VALID_TRANSITIONS[existing.status] || [];
+      if (!allowedNext.includes(status)) {
         return NextResponse.json(
-          { success: false, error: "Trạng thái không hợp lệ." },
-          { status: 400 }
+          {
+            success: false,
+            error: `Không thể chuyển trạng thái vận đơn từ ${existing.status} sang ${status}. Các trạng thái hợp lệ: ${allowedNext.join(", ") || "không có (trạng thái cuối)"}.`,
+          },
+          { status: 409 }
         );
+      }
+
+      if (status === "IN_FLIGHT_TO_JP") {
+        const checkWeight = actualWeightKg !== undefined ? Number(actualWeightKg) : existing.actualWeightKg;
+        if (!checkWeight || checkWeight <= 0) {
+          return NextResponse.json(
+            { success: false, error: "Kiện hàng phải được cân đo IATA (actualWeightKg > 0) trước khi xuất kho bay." },
+            { status: 400 }
+          );
+        }
       }
       updateData.status = status;
     }

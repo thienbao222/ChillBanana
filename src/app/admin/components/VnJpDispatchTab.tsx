@@ -92,19 +92,23 @@ export default function VnJpDispatchTab() {
   const [editLength, setEditLength] = useState<number>(0);
   const [editWidth, setEditWidth] = useState<number>(0);
   const [editHeight, setEditHeight] = useState<number>(0);
-  const [editFlight, setEditFlight] = useState("VN310 (HAN ➔ NRT)");
-  const [editCourier, setEditCourier] = useState("Yamato Transport");
+  const [editFlight, setEditFlight] = useState("VN310 (HAN ➔ NRT - Vietnam Airlines)");
+  const [editCourier, setEditCourier] = useState("Yamato Transport (Kuroneko Takkyubin)");
+  const [editJpTracking, setEditJpTracking] = useState("");
+  const [totalCount, setTotalCount] = useState<number>(0);
 
   const fetchShipments = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
+      if (selectedPrefecture && selectedPrefecture !== "ALL") params.append("prefecture", selectedPrefecture);
       const res = await fetch(`/api/vn-jp-shipments?${params.toString()}`);
       const data = await res.json();
       if (res.ok && data.success) {
         setShipments(data.shipments || []);
         if (data.counts) setCounts(data.counts);
+        setTotalCount(typeof data.totalCount === "number" ? data.totalCount : (data.shipments || []).length);
       } else {
         adminToast.error("Lỗi tải danh sách vận đơn VN ➔ JP");
       }
@@ -188,7 +192,7 @@ export default function VnJpDispatchTab() {
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
           <div className="text-[11px] font-bold text-slate-500 uppercase">Tổng Vận Đơn</div>
-          <div className="text-xl font-black text-navy-950 font-mono mt-1">{shipments.length}</div>
+          <div className="text-xl font-black text-navy-950 font-mono mt-1">{totalCount}</div>
           <div className="text-[10px] text-slate-400 mt-0.5">Tất cả các chặng</div>
         </div>
         <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 shadow-sm">
@@ -477,10 +481,14 @@ export default function VnJpDispatchTab() {
                   <button
                     onClick={() => {
                       setSelectedShipment(s);
+                      setEditFlight("VN310 (HAN ➔ NRT - Vietnam Airlines)");
+                      setEditCourier(s.japanCourier || "Yamato Transport (Kuroneko Takkyubin)");
+                      setEditJpTracking(s.japanTrackingCode || "");
                       setShowFlightModal(true);
                     }}
-                    className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-lg transition"
-                    title="Xuất kho ra sân bay"
+                    disabled={savingAction || !s.actualWeightKg || s.actualWeightKg <= 0}
+                    className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-[11px] rounded-lg transition"
+                    title={!s.actualWeightKg || s.actualWeightKg <= 0 ? "Cần cân đo IATA trước khi xuất bay" : "Xuất kho ra sân bay"}
                   >
                     Bay ➔
                   </button>
@@ -684,26 +692,30 @@ export default function VnJpDispatchTab() {
                 />
               </div>
 
-              {/* CHUYỂN TRẠNG THÁI NHANH */}
+              {/* CHUYỂN TRẠNG THÁI NHANH (P2-03: Chỉ cho phép chốt/hủy khi đang chờ xác nhận) */}
               <div className="pt-2 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => updateShipmentStatus(selectedShipment.id, { dispatcherNote: editNote, status: "CANCELLED" })}
-                  disabled={savingAction}
-                  className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200"
-                >
-                  Hủy Vận Đơn
-                </button>
-
-                <div className="flex items-center gap-2">
+                {selectedShipment.status === "PENDING_CONFIRMATION" && (
                   <button
                     type="button"
-                    onClick={() => updateShipmentStatus(selectedShipment.id, { dispatcherNote: editNote, status: "CONFIRMED_PICKUP" })}
+                    onClick={() => updateShipmentStatus(selectedShipment.id, { dispatcherNote: editNote, status: "CANCELLED" })}
                     disabled={savingAction}
-                    className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-navy-950 font-bold rounded-xl shadow-sm"
+                    className="px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded-xl border border-rose-200"
                   >
-                    Chốt & Lên Lịch Lấy Hàng
+                    Hủy Vận Đơn
                   </button>
+                )}
+
+                <div className="flex items-center gap-2 ml-auto">
+                  {selectedShipment.status === "PENDING_CONFIRMATION" && (
+                    <button
+                      type="button"
+                      onClick={() => updateShipmentStatus(selectedShipment.id, { dispatcherNote: editNote, status: "CONFIRMED_PICKUP" })}
+                      disabled={savingAction}
+                      className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-navy-950 font-bold rounded-xl shadow-sm"
+                    >
+                      Chốt & Lên Lịch Lấy Hàng
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => updateShipmentStatus(selectedShipment.id, { dispatcherNote: editNote })}
@@ -882,6 +894,17 @@ export default function VnJpDispatchTab() {
                 </select>
               </div>
 
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">Mã vận đơn bưu tá tại Nhật (Japan Tracking Code)</label>
+                <input
+                  type="text"
+                  placeholder="VD: 4829-1029-3810"
+                  value={editJpTracking}
+                  onChange={(e) => setEditJpTracking(e.target.value)}
+                  className="w-full p-2.5 border rounded-xl text-xs font-mono font-bold focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+
               <div className="bg-rose-50 border border-rose-200 p-3 rounded-2xl text-[11px] text-rose-900 leading-relaxed">
                 ✈️ Kiện hàng sẽ được niêm phong túi khí hàng không, dán tem AWB và thông quan hải quan tại Sân bay Narita/Haneda trong vòng 4 - 6 giờ sau khi hạ cánh.
               </div>
@@ -900,6 +923,7 @@ export default function VnJpDispatchTab() {
                     updateShipmentStatus(selectedShipment.id, {
                       flightNumber: editFlight,
                       japanCourier: editCourier,
+                      japanTrackingCode: editJpTracking.trim() || undefined,
                       status: "IN_FLIGHT_TO_JP",
                     })
                   }

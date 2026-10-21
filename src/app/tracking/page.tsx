@@ -290,7 +290,8 @@ function TrackingCosmosContent() {
         setAccessRequestSent(false);
       } else {
         setError(data.error || "Không tìm thấy đơn hàng. Vui lòng kiểm tra lại mã đơn.");
-        setRequiresEmailAccess(res.status === 401 || res.status === 404);
+        // BẢO MẬT & UX (P2-11): Chỉ hiện khung xác minh email khi chưa đăng nhập và nhận mã 401 Unauthorized
+        setRequiresEmailAccess(!customer && res.status === 401);
         setOrder(null);
       }
     } catch {
@@ -332,7 +333,11 @@ function TrackingCosmosContent() {
       const res = await fetch("/api/payment/vnpay-create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orderCode: order.orderCode, orderInfo: `Thanh toan don hang ${order.orderCode} - ChillBanana` }),
+        body: JSON.stringify({
+          orderCode: order.orderCode,
+          phone: order.customerPhone,
+          orderInfo: `Thanh toan don hang ${order.orderCode} - ChillBanana`,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success && data.paymentUrl) {

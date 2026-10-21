@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
   const orderCode = rawTxnRef.includes("_") ? rawTxnRef.split("_")[0] : rawTxnRef;
   if (!orderCode) return NextResponse.json({ RspCode: "01", Message: "Order not found" });
   if (params.get("vnp_ResponseCode") !== "00" || params.get("vnp_TransactionStatus") !== "00") {
-    await recordVnpayAttemptFailure(orderCode, params.get("vnp_ResponseCode"));
+    await recordVnpayAttemptFailure(orderCode, params.get("vnp_ResponseCode"), rawTxnRef);
     return NextResponse.json({ RspCode: "00", Message: "Confirm Success" });
   }
 
@@ -26,7 +26,8 @@ export async function GET(req: NextRequest) {
     const result = await confirmVnpayPayment(
       orderCode,
       params.get("vnp_Amount") || "",
-      params.get("vnp_TransactionNo")
+      params.get("vnp_TransactionNo"),
+      rawTxnRef
     );
     switch (result.result) {
       case "confirmed":

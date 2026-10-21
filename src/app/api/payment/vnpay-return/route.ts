@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (params.get("vnp_ResponseCode") !== "00" || params.get("vnp_TransactionStatus") !== "00") {
-    await recordVnpayAttemptFailure(orderCode, params.get("vnp_ResponseCode"));
+    await recordVnpayAttemptFailure(orderCode, params.get("vnp_ResponseCode"), rawTxnRef);
     return NextResponse.redirect(`${getAppUrl()}/tracking?orderCode=${encodeURIComponent(orderCode)}&payment=failed`);
   }
 
@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
     const result = await confirmVnpayPayment(
       orderCode,
       params.get("vnp_Amount") || "",
-      params.get("vnp_TransactionNo")
+      params.get("vnp_TransactionNo"),
+      rawTxnRef
     );
     const payment = result.result === "confirmed" || result.result === "already_paid" ? "simulated" : "invalid";
     return NextResponse.redirect(`${getAppUrl()}/tracking?orderCode=${encodeURIComponent(orderCode)}&payment=${payment}`);

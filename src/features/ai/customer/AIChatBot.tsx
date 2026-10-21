@@ -466,11 +466,30 @@ export default function AIChatBot() {
       let enrichedQuery = query;
       let scrapedProductForQuote: { title: string; priceJpy: number; url: string } | null = null;
 
-      // Detect links for automatic scraping
+      // BẢO MẬT & TỐI ƯU (P2-10): Chỉ tự động scrape nếu link thuộc các sàn TMĐT Nhật Bản được hỗ trợ
+      const JP_DOMAINS = [
+        "amazon.co.jp",
+        "amazon.com",
+        "mercari.com",
+        "rakuten.co.jp",
+        "yahoo.co.jp",
+        "uniqlo.com",
+        "suruga-ya.jp",
+        "biccamera.com",
+        "yodobashi.com",
+      ];
       const urlRegex = /(https?:\/\/[^\s]+)/g;
-      const urls = query.match(urlRegex);
-      if (urls && urls.length > 0) {
-        const targetUrl = urls[0];
+      const matchedUrls = query.match(urlRegex) || [];
+      const targetUrl = matchedUrls.find((u) => {
+        try {
+          const parsed = new URL(u);
+          return JP_DOMAINS.some((d) => parsed.hostname === d || parsed.hostname.endsWith("." + d));
+        } catch {
+          return false;
+        }
+      });
+
+      if (targetUrl) {
         setMessages((prev) => [...prev, {
           id: "system-scrape-" + Date.now(),
           sender: "bot",
@@ -489,25 +508,10 @@ export default function AIChatBot() {
           if (scrapeRes.ok && scrapeData.success) {
             const sd = scrapeData.data;
 
-            // Xây dựng context phong phú hơn với dữ liệu Agent mới trích xuất
-            const variantInfo = sd.variants && sd.variants.length > 0
-              ? `Biến thể có sẵn: ${sd.variants.map((v: { label: string; priceJpy: number | null }) => `${v.label}${v.priceJpy ? ` (¥${v.priceJpy.toLocaleString()})` : ""}`).join(", ")}.`
-              : "";
-            const riskInfo = sd.riskFlags && sd.riskFlags.length > 0
-              ? `Cảnh báo: ${[
-                  sd.riskFlags.includes("voltage_100v") ? "⚡ Điện áp 100V - cần biến áp tại VN" : null,
-                  sd.riskFlags.includes("new_seller") || sd.riskFlags.includes("low_seller_rating") ? "⚠️ Shop ít đánh giá - khuyên kiểm tra kỹ" : null,
-                  sd.riskFlags.includes("limited_stock") ? "🔥 Hàng giới hạn - nên đặt sớm" : null,
-                ].filter(Boolean).join(", ")}.`
-              : "";
-            const sellerInfo = typeof sd.sellerRating === "number"
-              ? `Đánh giá shop: ${sd.sellerRating}/5.`
-              : "";
-            const stockInfo = sd.stockStatus && sd.stockStatus !== "unknown"
-              ? `Tình trạng kho: ${sd.stockStatus === "available" ? "Còn hàng" : sd.stockStatus === "sold_out" ? "Hết hàng" : "Hàng giới hạn"}.`
-              : "";
+            // BẢO MẬT (P2-10): Không nối chuỗi quá dài gây lỗi vượt 2000 ký tự trong /api/ai/chat
+            const shortSummary = `\n\n[Dữ liệu bóc tách: ${String(sd.title || "").slice(0, 80)} | Giá: ¥${sd.priceJpy || 0}]`;
+            enrichedQuery = `${query.slice(0, 1800)}${shortSummary}`.slice(0, 1950);
 
-            enrichedQuery += `\n\nThông tin trích xuất từ link: ${sd.title}${sd.titleJp ? ` (${sd.titleJp})` : ""}. ${variantInfo} ${stockInfo} ${sellerInfo} ${riskInfo}`;
             if (Number.isSafeInteger(sd.priceJpy) && sd.priceJpy > 0) {
               scrapedProductForQuote = {
                 title: String(sd.title || "Sản phẩm từ link").slice(0, 200),
@@ -519,7 +523,6 @@ export default function AIChatBot() {
             // Remove the temporary "Đang kéo..." message
             setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
           } else {
-             // Let Gemini handle the error or raw link
              setMessages((prev) => prev.filter(m => !m.id.startsWith("system-scrape-")));
           }
         } catch {

@@ -145,9 +145,10 @@ export async function POST(req: NextRequest) {
     const items = Array.isArray(body.items) ? body.items : [];
     if (items.length > 50) return NextResponse.json({ error: "Mỗi đơn tối đa 50 dòng sản phẩm." }, { status: 400 });
     if (items.length === 0) {
+      const fallbackPrice = Number(body.priceJpy);
       const fallbackWeight = Number(body.weightKg);
-      if (!Number.isFinite(fallbackWeight) || fallbackWeight < 0 || fallbackWeight > 100) {
-        return NextResponse.json({ error: "Cân nặng sản phẩm không hợp lệ." }, { status: 400 });
+      if (!Number.isSafeInteger(fallbackPrice) || fallbackPrice < 1 || fallbackPrice > 10_000_000 || !Number.isFinite(fallbackWeight) || fallbackWeight < 0 || fallbackWeight > 1000) {
+        return NextResponse.json({ error: "Giá sản phẩm (tối đa 10M ¥) hoặc cân nặng (tối đa 1000kg) không hợp lệ." }, { status: 400 });
       }
     }
     for (const item of items) {
@@ -167,8 +168,8 @@ export async function POST(req: NextRequest) {
         }
         const itemPrice = Number(item.priceJpy);
         const itemWeight = Number(item.weightKg);
-        if (!Number.isSafeInteger(itemPrice) || itemPrice < 100 || !Number.isFinite(itemWeight) || itemWeight < 0 || itemWeight > 100) {
-          return NextResponse.json({ error: "Giá sản phẩm phải là số nguyên tối thiểu từ 100 ¥; cân nặng từ 0 đến 100 kg." }, { status: 400 });
+        if (!Number.isSafeInteger(itemPrice) || itemPrice < 100 || itemPrice > 10_000_000 || !Number.isFinite(itemWeight) || itemWeight < 0 || itemWeight > 1000) {
+          return NextResponse.json({ error: "Giá sản phẩm (tối đa 10M ¥) hoặc cân nặng (tối đa 1000kg) không hợp lệ." }, { status: 400 });
         }
       }
     }
@@ -286,32 +287,51 @@ export async function POST(req: NextRequest) {
           });
         }
 
-        // Xử lý tồn kho và xác minh giá
+        // BẢO MẬT (P1-11): Gộp trùng và sắp xếp productId tăng dần để chống Deadlock trên PostgreSQL
+        const catalogItemsMap = new Map<string, { id: string; quantity: number }>();
+        for (const item of items) {
+          if (item.id && !item.id.startsWith("calc-")) {
+            const current = catalogItemsMap.get(item.id);
+            const qty = Number(item.quantity) || 1;
+            if (current) {
+              current.quantity += qty;
+            } else {
+              catalogItemsMap.set(item.id, { id: item.id, quantity: qty });
+            }
+          }
+        }
+        const sortedCatalogItems = Array.from(catalogItemsMap.values()).sort((a, b) => a.id.localeCompare(b.id));
+
+        const catalogProductsMap = new Map<string, any>();
+        for (const catItem of sortedCatalogItems) {
+          const product = await tx.product.findUnique({ where: { id: catItem.id } });
+          if (!product) throw new Error(`PRODUCT_NOT_FOUND:${catItem.id}`);
+          catalogProductsMap.set(catItem.id, product);
+
+          const updated = await tx.product.updateMany({
+            where: {
+              id: catItem.id,
+              stockSlots: { gte: catItem.quantity },
+            },
+            data: {
+              stockSlots: { decrement: catItem.quantity },
+            },
+          });
+
+          if (updated.count === 0) {
+            throw new Error(`INSUFFICIENT_STOCK:${catItem.id}:${product.name}`);
+          }
+        }
+
+        // Xử lý thông tin và xác minh giá
         let verifiedProductName = "";
 
         for (const item of items) {
           const qty = Number(item.quantity);
 
           if (item.id && !item.id.startsWith("calc-")) {
-            // Hàng từ catalog: Khóa cập nhật và lấy giá thật
-            const product = await tx.product.findUnique({ where: { id: item.id } });
+            const product = catalogProductsMap.get(item.id);
             if (!product) throw new Error(`PRODUCT_NOT_FOUND:${item.id}`);
-
-            // Cập nhật nguyên tử có điều kiện: stockSlots phải đủ lớn
-            const updated = await tx.product.updateMany({
-              where: {
-                id: item.id,
-                stockSlots: { gte: qty },
-              },
-              data: {
-                stockSlots: { decrement: qty },
-              },
-            });
-
-            // Nếu update trả về count = 0, tức là tồn kho âm (hoặc ai đó vừa mua xong)
-            if (updated.count === 0) {
-              throw new Error(`INSUFFICIENT_STOCK:${item.id}:${product.name}`);
-            }
 
             verifiedPriceJpy += product.priceJpy * qty;
             verifiedWeightKg += product.weightKg * qty;
@@ -449,6 +469,9 @@ export async function POST(req: NextRequest) {
       return response;
     } catch (dbErr: any) {
       console.error("Lưu đơn hàng vào Prisma thất bại:", dbErr);
+      if (dbErr?.message?.startsWith("PRODUCT_NOT_FOUND:")) {
+        return NextResponse.json({ error: "Sản phẩm không còn tồn tại trong kho." }, { status: 404 });
+      }
       if (dbErr.message === "ORDER_PRICE_TOO_LOW") {
         return NextResponse.json({ error: "Tổng giá sản phẩm phải từ 100 ¥ trở lên." }, { status: 400 });
       }

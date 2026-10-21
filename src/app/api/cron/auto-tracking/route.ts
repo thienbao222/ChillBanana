@@ -73,6 +73,10 @@ export async function GET(req: NextRequest) {
         customerId: true,
         jpDomesticTrack: true,
         vnDomesticTrack: true,
+        totalVnd: true,
+        depositAmountVnd: true,
+        depositPercent: true,
+        weightKg: true,
         customer: { select: { zaloUserId: true } },
       },
       orderBy: { updatedAt: "asc" }, // Ưu tiên đơn lâu chưa được cập nhật nhất để tránh bỏ sót đơn thứ 51+
@@ -125,11 +129,30 @@ export async function GET(req: NextRequest) {
 
           await prisma.$transaction(async (tx) => {
             if (shouldComplete) {
+              // BẢO MẬT (P1-13): Tự động cập nhật thanh toán 100% và tạo giao dịch COD_SETTLEMENT khi cron chốt COMPLETED
+              const remainingBalanceVnd = Math.max(0, order.totalVnd - order.depositAmountVnd);
               const completion = await tx.order.updateMany({
                 where: { id: order.id, status: "LOCAL_DELIVERY" },
-                data: { status: "COMPLETED" },
+                data: {
+                  status: "COMPLETED",
+                  paymentStatus: "PAID_100",
+                  depositAmountVnd: order.totalVnd,
+                },
               });
               orderWasCompleted = completion.count === 1;
+
+              if (orderWasCompleted && remainingBalanceVnd > 0) {
+                await tx.paymentTransaction.create({
+                  data: {
+                    orderId: order.id,
+                    provider: "COD_SETTLEMENT",
+                    amountVnd: remainingBalanceVnd,
+                    status: "CONFIRMED",
+                    reference: `Tự động tất toán COD qua cron khi giao thành công (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
+                    confirmedByAdmin: "SYSTEM_CRON_AUTO_TRACKING",
+                  },
+                });
+              }
             } else if (shouldArriveJpWarehouse) {
               const arrival = await tx.order.updateMany({
                 where: { id: order.id, status: "PURCHASING_JP" },

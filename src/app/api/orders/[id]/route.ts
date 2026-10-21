@@ -251,9 +251,24 @@ export async function PATCH(
             },
           });
         }
-        return tx.order.update({
+        const scalarData = { ...rollbackUpdateData };
+        delete scalarData.trackingLogs;
+        const claimed = await tx.order.updateMany({
+          where: { id: existingOrder.id, status: existingOrder.status },
+          data: scalarData,
+        });
+        if (claimed.count !== 1) throw new Error("ORDER_ROLLBACK_CONFLICT");
+
+        if (rollbackUpdateData.trackingLogs?.create) {
+          await tx.trackingLog.create({
+            data: {
+              orderId: existingOrder.id,
+              ...rollbackUpdateData.trackingLogs.create,
+            },
+          });
+        }
+        return tx.order.findUnique({
           where: { id: existingOrder.id },
-          data: rollbackUpdateData,
           include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
         });
       });
@@ -428,8 +443,8 @@ export async function PATCH(
       if (isPriceVerified === true && !existingOrder.isPriceVerified) {
         const finalPriceJpy = Number(priceJpy);
         const finalWeightKg = Number(weightKg);
-        if (!Number.isSafeInteger(finalPriceJpy) || finalPriceJpy < 100 || !Number.isFinite(finalWeightKg) || finalWeightKg < 0 || finalWeightKg > 100) {
-          return NextResponse.json({ error: "Để duyệt giá, vui lòng nhập giá JPY hợp lệ và cân nặng từ 0 đến 100 kg." }, { status: 400 });
+        if (!Number.isSafeInteger(finalPriceJpy) || finalPriceJpy < 100 || finalPriceJpy > 10_000_000 || !Number.isFinite(finalWeightKg) || finalWeightKg < 0 || finalWeightKg > 1000) {
+          return NextResponse.json({ error: "Để duyệt giá, vui lòng nhập giá JPY hợp lệ (tối đa 10,000,000 ¥) và cân nặng từ 0 đến 1000 kg." }, { status: 400 });
         }
         const pricingConfig = await getCurrentPricingConfig();
         const finalPrice = calculateOrderPrice(finalPriceJpy, finalWeightKg, existingOrder.exchangeRate, existingOrder.isGroupBuy, pricingConfig.values);
@@ -494,13 +509,15 @@ export async function PATCH(
           if (claimed.count !== 1) throw new Error("ORDER_CANCEL_CONFLICT");
 
           if (existingOrder.status === "PENDING_DEPOSIT") {
-            for (const item of existingOrder.orderItems) {
-              if (item.itemType === "CATALOG" && item.productId) {
-                await tx.product.updateMany({
-                  where: { id: item.productId },
-                  data: { stockSlots: { increment: item.quantity } },
-                });
-              }
+            // BẢO MẬT (P1-11): Sắp xếp productId tăng dần chống Deadlock khi hoàn kho
+            const catalogItems = existingOrder.orderItems
+              .filter((item) => item.itemType === "CATALOG" && item.productId)
+              .sort((a, b) => (a.productId || "").localeCompare(b.productId || ""));
+            for (const item of catalogItems) {
+              await tx.product.updateMany({
+                where: { id: item.productId! },
+                data: { stockSlots: { increment: item.quantity } },
+              });
             }
             if (existingOrder.orderItems.some((item) => item.itemType === "CATALOG" && item.productId)) {
               await tx.order.update({
@@ -517,10 +534,42 @@ export async function PATCH(
             include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
           });
         })
-      : await prisma.order.update({
-          where: { id: existingOrder.id },
-          data: updateData,
-          include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
+      : await prisma.$transaction(async (tx) => {
+          // BẢO MẬT (P1-12): Cập nhật có điều kiện trạng thái hiện tại chống race condition (Double-Click)
+          const scalarData = { ...updateData };
+          delete scalarData.trackingLogs;
+          delete scalarData.paymentTransactions;
+
+          const claimed = await tx.order.updateMany({
+            where: {
+              id: existingOrder.id,
+              status: existingOrder.status,
+              paymentStatus: existingOrder.paymentStatus,
+            },
+            data: scalarData,
+          });
+          if (claimed.count !== 1) throw new Error("ORDER_UPDATE_CONFLICT");
+
+          if (updateData.trackingLogs?.create) {
+            await tx.trackingLog.create({
+              data: {
+                orderId: existingOrder.id,
+                ...updateData.trackingLogs.create,
+              },
+            });
+          }
+          if (updateData.paymentTransactions?.create) {
+            await tx.paymentTransaction.create({
+              data: {
+                orderId: existingOrder.id,
+                ...updateData.paymentTransactions.create,
+              },
+            });
+          }
+          return tx.order.findUnique({
+            where: { id: existingOrder.id },
+            include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
+          });
         });
 
     if (isAdminUser) {
@@ -552,8 +601,8 @@ export async function PATCH(
     );
 
     return NextResponse.json({ success: true, order: updated });
-  } catch (error) {
-    if (error instanceof Error && error.message === "ORDER_CANCEL_CONFLICT") {
+  } catch (error: any) {
+    if (error instanceof Error && (error.message === "ORDER_CANCEL_CONFLICT" || error.message === "ORDER_UPDATE_CONFLICT" || error.message === "ORDER_ROLLBACK_CONFLICT")) {
       return NextResponse.json({ error: "Đơn vừa được xử lý ở yêu cầu khác. Hãy tải lại danh sách." }, { status: 409 });
     }
     console.error("Lỗi cập nhật trạng thái đơn hàng:", error);

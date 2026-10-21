@@ -28,13 +28,21 @@ export function verifyVnpaySignature(searchParams: URLSearchParams): boolean {
   return suppliedBuffer.length === signedBuffer.length && crypto.timingSafeEqual(suppliedBuffer, signedBuffer);
 }
 
-export async function recordVnpayAttemptFailure(orderCode: string, responseCode: string | null) {
+export async function recordVnpayAttemptFailure(orderCode: string, responseCode: string | null, rawTxnRef?: string) {
   const order = await prisma.order.findUnique({ where: { orderCode }, select: { id: true } });
   if (!order) return;
-  const attempt = await prisma.paymentAttempt.findFirst({
-    where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: { in: ["INITIATED", "PENDING"] } },
-    orderBy: { createdAt: "desc" },
-  });
+  // BẢO MẬT (P1-14): Tìm theo providerReference (vnp_TxnRef) để tránh đánh dấu sai attempt khi có nhiều phiên
+  let attempt = rawTxnRef
+    ? await prisma.paymentAttempt.findFirst({
+        where: { orderId: order.id, providerReference: rawTxnRef, status: { in: ["INITIATED", "PENDING"] } },
+      })
+    : null;
+  if (!attempt) {
+    attempt = await prisma.paymentAttempt.findFirst({
+      where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: { in: ["INITIATED", "PENDING"] } },
+      orderBy: { createdAt: "desc" },
+    });
+  }
   if (!attempt) return;
   await prisma.paymentAttempt.updateMany({
     where: { id: attempt.id, status: { in: ["INITIATED", "PENDING"] } },
@@ -42,7 +50,7 @@ export async function recordVnpayAttemptFailure(orderCode: string, responseCode:
   });
 }
 
-export async function confirmVnpayPayment(orderCode: string, amountMinor: string, providerTransactionId?: string | null) {
+export async function confirmVnpayPayment(orderCode: string, amountMinor: string, providerTransactionId?: string | null, rawTxnRef?: string) {
   if (resolvePaymentMode() !== "sandbox") return { result: "not_payable" as const };
   if (!/^\d+$/.test(amountMinor)) return { result: "invalid_amount" as const };
   const amount = Number(amountMinor);
@@ -62,10 +70,18 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
     orderBy: { completedAt: "desc" },
   });
   if (completedAttempt) return { result: "already_paid" as const };
-  const attempt = await prisma.paymentAttempt.findFirst({
-    where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: { in: ["INITIATED", "PENDING"] } },
-    orderBy: { createdAt: "desc" },
-  });
+  // BẢO MẬT (P1-14): Tìm theo providerReference (vnp_TxnRef) để xác định đúng phiên thanh toán
+  let attempt = rawTxnRef
+    ? await prisma.paymentAttempt.findFirst({
+        where: { orderId: order.id, providerReference: rawTxnRef, status: { in: ["INITIATED", "PENDING"] } },
+      })
+    : null;
+  if (!attempt) {
+    attempt = await prisma.paymentAttempt.findFirst({
+      where: { orderId: order.id, provider: "VNPAY_SANDBOX", status: { in: ["INITIATED", "PENDING"] } },
+      orderBy: { createdAt: "desc" },
+    });
+  }
   if (!attempt) return { result: "not_payable" as const };
   if (attempt.expiresAt <= new Date() || attempt.amountVnd !== amountVnd) {
     await prisma.paymentAttempt.updateMany({ where: { id: attempt.id, status: { in: ["INITIATED", "PENDING"] } }, data: { status: "EXPIRED", failureCode: "ATTEMPT_EXPIRED_OR_AMOUNT_MISMATCH", completedAt: new Date() } });
@@ -98,12 +114,17 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
         },
       });
       if (updatedOrder.count !== 1) return null;
+      // BẢO MẬT (P1-14): Chống trùng lặp Unique Constraint @@unique([provider, providerTransactionId])
+      const safeProviderTxId = (!transactionId || transactionId === "0")
+        ? `VNPAY_${order.orderCode}_${Date.now()}`
+        : `${order.orderCode}_${transactionId}`;
+
       await tx.paymentTransaction.create({
         data: {
           orderId: order.id,
           provider: "VNPAY_SANDBOX",
           amountVnd,
-          providerTransactionId: transactionId || `VNPAY_${Date.now()}`,
+          providerTransactionId: safeProviderTxId,
           reference: `VNPAY IPN Auto-Confirm (${order.depositPercent}%)`,
           status: "CONFIRMED",
           confirmedByAdmin: "VNPAY_IPN",

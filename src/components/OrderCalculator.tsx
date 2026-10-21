@@ -455,6 +455,7 @@ export default function OrderCalculator() {
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
+                if (vnJpLoading) return; // BẢO MẬT (P2-07): Chống double-submit form VN -> JP
                 if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim() || !vnJpSenderAddress.trim()) {
                   toast.error("Vui lòng điền đầy đủ họ tên, SĐT và địa chỉ lấy hàng tại Việt Nam.");
                   return;
@@ -963,7 +964,7 @@ export default function OrderCalculator() {
                   value={priceJpy}
                   readOnly={isPriceLocked}
                   onChange={(e) => {
-                    const v = parseInt(e.target.value.replace(/\D/g, ""), 10) || 0;
+                    const v = Math.max(0, Math.round(Number(e.target.value) || 0));
                     setPriceJpy(Math.max(0, v));
                   }}
                   className={`w-full pl-8 pr-9 py-2.5 rounded-xl text-sm font-bold focus:outline-none transition-all ${

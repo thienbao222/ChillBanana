@@ -180,10 +180,14 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const search = searchParams.get("search")?.trim() || "";
     const status = searchParams.get("status")?.trim() || "";
+    const prefecture = searchParams.get("prefecture")?.trim() || "";
 
     const whereClause: any = {};
     if (status && status !== "ALL") {
       whereClause.status = status;
+    }
+    if (prefecture && prefecture !== "ALL") {
+      whereClause.receiverPrefecture = { contains: prefecture, mode: "insensitive" };
     }
 
     if (search) {

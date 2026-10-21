@@ -155,6 +155,8 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       });
       if (activeAttempt) return { error: "Đơn hàng đã có một phiên thanh toán đang chờ. Hãy hoàn tất hoặc chờ phiên đó hết hạn." } as const;
+      const attemptSuffix = randomUUID().replace(/-/g, "").slice(0, 6);
+      const vnpTxnRef = `${order.orderCode}_${attemptSuffix}`;
       const attempt = await tx.paymentAttempt.create({
         data: {
           orderId: order.id,
@@ -162,10 +164,11 @@ export async function POST(req: NextRequest) {
           mode,
           amountVnd: order.depositAmountVnd,
           idempotencyKey: `${mode}:${order.id}:${randomUUID()}`,
+          providerReference: mode === "mock" ? null : vnpTxnRef,
           expiresAt: attemptExpiresAt,
         },
       });
-      return { attempt } as const;
+      return { attempt, vnpTxnRef } as const;
     });
     if ("error" in createdAttempt) return NextResponse.json({ error: createdAttempt.error }, { status: 409 });
     const attempt = createdAttempt.attempt;
@@ -223,7 +226,7 @@ export async function POST(req: NextRequest) {
       vnp_OrderInfo: `Thanh toan don hang ${orderCode}`,
       vnp_OrderType: "other",
       vnp_ReturnUrl: returnUrl,
-      vnp_TxnRef: `${orderCode}_${attempt.id.slice(-6)}`,
+      vnp_TxnRef: createdAttempt.vnpTxnRef || `${orderCode}_${attempt.id.slice(-6)}`,
       vnp_ExpireDate: expireDate,
     };
 

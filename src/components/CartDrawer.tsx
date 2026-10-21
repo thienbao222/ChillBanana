@@ -23,6 +23,7 @@ export default function CartDrawer() {
     updateQuantity, 
     clearCart,
     exchangeRate,
+    isRateStale,
     totalItems,
     totalPriceJpy,
     totalProductPriceVnd,
@@ -159,7 +160,14 @@ export default function CartDrawer() {
           depositPercent: 50,
           paymentMethod: "VNPAY",
           isGroupBuy: false,
-          items: items.map(it => ({ id: it.id, name: it.name, quantity: it.quantity, priceJpy: it.priceJpy, weightKg: it.weightKg })),
+          items: items.map(it => ({
+            id: it.id,
+            name: it.name,
+            quantity: it.quantity,
+            priceJpy: it.priceJpy,
+            weightKg: it.weightKg,
+            originalUrl: it.originalUrl || "",
+          })),
         }),
       });
 

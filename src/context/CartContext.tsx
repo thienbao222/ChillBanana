@@ -29,6 +29,7 @@ interface CartContextType {
   updateQuantity: (id: string, quantity: number) => void;
   clearCart: () => void;
   exchangeRate: number;
+  isRateStale: boolean;
   pricingConfig: PricingConfigValues;
   pricingConfigVersion: number;
   totalItems: number;
@@ -50,6 +51,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
+  const [isRateStale, setIsRateStale] = useState<boolean>(false);
   const [pricingConfig, setPricingConfig] = useState<PricingConfigValues>(DEFAULT_PRICING_CONFIG);
   const [pricingConfigVersion, setPricingConfigVersion] = useState(0);
 
@@ -60,6 +62,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .then((data) => {
         if (data.success && data.data?.roundedRate) {
           setExchangeRate(data.data.roundedRate);
+          setIsRateStale(Boolean(data.data.isStale));
         }
       })
       .catch((err) => {
@@ -242,6 +245,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         updateQuantity,
         clearCart,
         exchangeRate,
+        isRateStale,
         pricingConfig,
         pricingConfigVersion,
         totalItems,
