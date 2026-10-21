@@ -75,6 +75,14 @@ export async function PATCH(
     );
   }
 
+  // BẢO MẬT (P1-04 & P2-12): Chỉ SUPER_ADMIN mới có quyền duyệt hoặc hủy Purchase Task
+  if ((action === "approve" || action === "cancel") && guard.role !== "SUPER_ADMIN") {
+    return NextResponse.json(
+      { error: "Chỉ Super Admin mới có quyền duyệt hoặc hủy tác vụ mua hộ." },
+      { status: 403 }
+    );
+  }
+
   const task = await prisma.purchaseTask.findUnique({
     where: { id: taskId },
     include: { order: { select: { orderCode: true, productName: true } } },

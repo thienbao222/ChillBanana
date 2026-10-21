@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   CUSTOMER_COOKIE_NAME,
+  computePasswordDigest,
   createCustomerSessionToken,
   verifyCustomerEmailVerificationToken,
 } from "@/lib/auth-session";
@@ -37,7 +38,7 @@ export async function POST(req: NextRequest) {
   try {
     const customer = await prisma.customer.findFirst({
       where: { id: identity.id, email: identity.email },
-      select: { id: true, email: true, emailVerifiedAt: true },
+      select: { id: true, email: true, passwordHash: true, emailVerifiedAt: true },
     });
     if (!customer) return NextResponse.json({ error: "Không tìm thấy tài khoản." }, { status: 404 });
     if (customer.emailVerifiedAt) return NextResponse.json({ error: "Tài khoản đã được xác minh. Hãy đăng nhập." }, { status: 409 });
@@ -63,7 +64,14 @@ export async function POST(req: NextRequest) {
     if (!result) return NextResponse.json({ error: "Liên kết đã được sử dụng. Hãy đăng nhập." }, { status: 409 });
 
     const response = NextResponse.json({ success: true, message: "Email đã xác minh, tài khoản đã được kích hoạt." });
-    response.cookies.set(CUSTOMER_COOKIE_NAME, createCustomerSessionToken(identity), {
+    response.cookies.set(
+      CUSTOMER_COOKIE_NAME,
+      createCustomerSessionToken({
+        id: identity.id,
+        email: identity.email,
+        pwdDigest: computePasswordDigest(customer.passwordHash),
+      }),
+      {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",

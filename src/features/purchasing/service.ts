@@ -106,7 +106,21 @@ async function lookupAmazonJp(url: string): Promise<PlatformProductInfo> {
     );
 
     if (jinaRes.ok) {
-      const jinaText = await jinaRes.text();
+      let jinaText = "";
+      if (jinaRes.body) {
+        const reader = jinaRes.body.getReader();
+        const decoder = new TextDecoder();
+        let bytes = 0;
+        while (bytes < 1024 * 1024) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          bytes += value.length;
+          jinaText += decoder.decode(value, { stream: true });
+        }
+        await reader.cancel().catch(() => {});
+      } else {
+        jinaText = await jinaRes.text();
+      }
 
       // Trích xuất giá ¥ từ văn bản — tìm pattern "¥X,XXX" hoặc "JPY X,XXX"
       const priceMatch = jinaText.match(/[¥￥]\s*([\d,]+)/);
@@ -353,20 +367,28 @@ export async function createPurchaseTask(
       ((info.scrapedPriceJpy - order.priceJpy) / order.priceJpy) * 100;
   }
 
-  // Tạo task trong DB
-  const task = await prisma.purchaseTask.create({
-    data: {
-      orderId: order.id,
-      platform: info.platform,
-      status: "QUEUED",
-      externalProductId: info.externalProductId,
-      platformUrl: info.platformUrl,
-      scrapedPriceJpy: info.scrapedPriceJpy,
-      priceDiffPercent,
-      createdByAdmin: adminUsername,
-      adminNote: info.notes.length > 0 ? info.notes.join("\n") : null,
-    },
-  });
+  // Tạo task trong DB (bắt lỗi P2002 chống double-click concurrent create - P1-16)
+  let task: Awaited<ReturnType<typeof prisma.purchaseTask.create>>;
+  try {
+    task = await prisma.purchaseTask.create({
+      data: {
+        orderId: order.id,
+        platform: info.platform,
+        status: "QUEUED",
+        externalProductId: info.externalProductId,
+        platformUrl: info.platformUrl,
+        scrapedPriceJpy: info.scrapedPriceJpy,
+        priceDiffPercent,
+        createdByAdmin: adminUsername,
+        adminNote: info.notes.length > 0 ? info.notes.join("\n") : null,
+      },
+    });
+  } catch (dbErr: any) {
+    if (dbErr?.code === "P2002") {
+      return { task: null, info: null, error: "Đơn hàng này đã có tác vụ mua hộ đang được tạo đồng thời." };
+    }
+    throw dbErr;
+  }
 
   console.log(
     `[PurchaseAgent] ✅ Tạo task ${task.id} cho đơn ${order.orderCode} | platform: ${info.platform} | status: QUEUED`

@@ -37,6 +37,11 @@ export class ApiKeyPool {
   }
 
   public getNextKey(): string | null {
+    if (this.keys.length === 0) {
+      this.loadKeys();
+      if (this.keys.length === 0) return null;
+    }
+
     const now = Date.now();
     let checkedCount = 0;
 
@@ -44,8 +49,8 @@ export class ApiKeyPool {
       const key = this.keys[this.currentIdx];
       const stats = this.keyStats.get(key)!;
 
-      // Reset RATE_LIMITED if cooldown is over
-      if (stats.status === "RATE_LIMITED" && now > stats.cooldownUntil) {
+      // Reset RATE_LIMITED hoặc DEAD if cooldown is over (P2-02)
+      if ((stats.status === "RATE_LIMITED" || stats.status === "DEAD") && now > stats.cooldownUntil) {
         stats.status = "ACTIVE";
       }
 
@@ -71,6 +76,11 @@ export class ApiKeyPool {
       stats.status = "RATE_LIMITED";
       stats.cooldownUntil = Date.now() + 60_000; // 60s cooldown
       console.warn(`[ApiKeyPool:${this.envVarName}] Provider temporarily limited request (HTTP ${statusCode}). Cooldown 60s.`);
+    } else if (statusCode === 401 || statusCode === 403) {
+      // BẢO MẬT (P2-02): Khóa key chết / bị thu hồi với status = 'DEAD' và cooldown 15 phút
+      stats.status = "DEAD";
+      stats.cooldownUntil = Date.now() + 15 * 60_000;
+      console.warn(`[ApiKeyPool:${this.envVarName}] API key revoked or unauthorized (HTTP ${statusCode}). Marked DEAD with 15m cooldown.`);
     } else {
       console.warn(`[ApiKeyPool:${this.envVarName}] Key error (HTTP ${statusCode}).`);
     }
@@ -81,7 +91,7 @@ export class ApiKeyPool {
     return this.keys.map(key => {
       const stats = this.keyStats.get(key)!;
       // Recheck status
-      if (stats.status === "RATE_LIMITED" && now > stats.cooldownUntil) {
+      if ((stats.status === "RATE_LIMITED" || stats.status === "DEAD") && now > stats.cooldownUntil) {
         stats.status = "ACTIVE";
       }
       return {

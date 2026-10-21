@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   CUSTOMER_COOKIE_NAME,
+  computePasswordDigest,
+  verifySameOrigin,
   hashCustomerPassword as hashPassword,
   verifyCustomerPassword,
   createCustomerSessionToken as signSession,
@@ -53,6 +55,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!verifySameOrigin(req)) {
+    return NextResponse.json({ error: "Yêu cầu không hợp lệ (CSRF)." }, { status: 403 });
+  }
   try {
     const body = await req.json();
     const { action, email, password, name, phone, address } = body;
@@ -89,6 +94,7 @@ export async function POST(req: NextRequest) {
           }
         } catch (captchaErr) {
           console.error("[Turnstile] Lỗi kết nối dịch vụ xác thực:", captchaErr);
+          return NextResponse.json({ error: "Không thể xác minh Captcha lúc này. Vui lòng thử lại." }, { status: 503 });
         }
       }
       if (typeof email !== "string" || typeof password !== "string" || typeof name !== "string" || !email.trim() || password.length < 8 || password.length > 256 || !name.trim() || name.length > 120 || (phone !== undefined && typeof phone !== "string") || (address !== undefined && typeof address !== "string")) {
@@ -251,7 +257,11 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const sessionToken = signSession({ id: customer.id, email: customer.email });
+      const sessionToken = signSession({
+        id: customer.id,
+        email: customer.email,
+        pwdDigest: computePasswordDigest(passwordCheck.needsRehash ? hashPassword(password) : customer.passwordHash),
+      });
 
       // ============================================================
       // SPRINT 4 — IDENTITY STITCHING ON LOGIN

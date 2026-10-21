@@ -93,9 +93,10 @@ export async function POST(req: NextRequest) {
   const { task, info, error } = await createPurchaseTask(orderId, adminUsername);
 
   if (error || !task) {
+    const isConflict = typeof error === "string" && (error.includes("đã có") || error.includes("đồng thời"));
     return NextResponse.json(
       { error: error ?? "Không thể tạo purchase task." },
-      { status: 400 }
+      { status: isConflict ? 409 : 400 }
     );
   }
 

@@ -117,6 +117,12 @@ function decodeToken(token: string): { payloadStr: string; signature: string } |
 // ADMIN
 // ---------------------------------------------------------------------------
 
+/** Tính digest 16 ký tự của passwordHash để nhúng vào token phiên (chống Session Hijacking / thu hồi phiên sau khi đổi mật khẩu). */
+export function computePasswordDigest(passwordHash: string): string {
+  if (typeof passwordHash !== "string" || !passwordHash) return "";
+  return crypto.createHash("sha256").update(passwordHash).digest("hex").slice(0, 16);
+}
+
 /** Hash mật khẩu admin mới: scrypt có salt riêng (không còn phụ thuộc ADMIN_SESSION_SECRET). */
 export function hashAdminPassword(password: string): string {
   return hashPassword(password);
@@ -180,7 +186,7 @@ export function verifyCustomerPassword(password: string, storedHash: string): Pa
   return { valid, needsRehash: valid };
 }
 
-export function createCustomerSessionToken(data: { id: string; email: string }): string {
+export function createCustomerSessionToken(data: { id: string; email: string; pwdDigest?: string }): string {
   const payload = JSON.stringify({ ...data, exp: Date.now() + 1000 * 60 * 60 * 24 * 30 });
   return encodeToken(payload, sign(getCustomerSecret(), payload));
 }
@@ -205,7 +211,7 @@ export function verifyCustomerEmailVerificationToken(token: string): { id: strin
   }
 }
 
-export function verifyCustomerSessionToken(token: string): { id: string; email: string } | null {
+export function verifyCustomerSessionToken(token: string): { id: string; email: string; pwdDigest?: string } | null {
   const decoded = decodeToken(token);
   if (!decoded) return null;
   const expected = sign(getCustomerSecret(), decoded.payloadStr);
@@ -213,7 +219,7 @@ export function verifyCustomerSessionToken(token: string): { id: string; email: 
   try {
     const payload = JSON.parse(decoded.payloadStr);
     if (!payload?.id || !payload?.email || typeof payload.exp !== "number" || payload.exp < Date.now() || payload.purpose) return null;
-    return { id: payload.id, email: payload.email };
+    return { id: payload.id, email: payload.email, pwdDigest: typeof payload.pwdDigest === "string" ? payload.pwdDigest : undefined };
   } catch {
     return null;
   }
@@ -234,10 +240,11 @@ export function getCustomerFromRequest(req: NextRequest): { id: string; email: s
  * Tạo session token cho Admin, nhúng thêm role để kiểm tra phân quyền.
  * Gọi thay createAdminSessionToken() khi Admin login.
  */
-export function createAdminSessionTokenWithRole(username: string, role: string): string {
+export function createAdminSessionTokenWithRole(username: string, role: string, pwdDigest?: string): string {
   const payload = JSON.stringify({
     username,
     role: role === "OPERATOR" ? "OPERATOR" : "SUPER_ADMIN",
+    ...(pwdDigest ? { pwdDigest } : {}),
     exp: Date.now() + 1000 * 60 * 60 * 24 * 7,
   });
   return encodeToken(payload, sign(getAdminSecret(), payload));
@@ -249,7 +256,7 @@ export function createAdminSessionTokenWithRole(username: string, role: string):
  */
 export function verifyAdminSessionTokenFull(
   token: string
-): { valid: boolean; username?: string; role?: string } {
+): { valid: boolean; username?: string; role?: string; pwdDigest?: string } {
   const decoded = decodeToken(token);
   if (!decoded) return { valid: false };
   const expected = sign(getAdminSecret(), decoded.payloadStr);
@@ -262,6 +269,7 @@ export function verifyAdminSessionTokenFull(
       username: payload.username,
       // Token cũ không có role → fallback SUPER_ADMIN (backward compat)
       role: payload.role ?? "SUPER_ADMIN",
+      pwdDigest: typeof payload.pwdDigest === "string" ? payload.pwdDigest : undefined,
     };
   } catch {
     return { valid: false };
@@ -353,3 +361,44 @@ export function hasGuestOrderAccessForEmail(token: string | null | undefined, or
   );
 }
 
+
+// ---------------------------------------------------------------------------
+// CSRF PROTECTION — Kiểm tra Origin / Referer (P1-06)
+// ---------------------------------------------------------------------------
+
+export function verifySameOrigin(req: NextRequest): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) {
+    const referer = req.headers.get("referer");
+    if (referer) {
+      try {
+        const refOrigin = new URL(referer).origin;
+        return (
+          refOrigin === req.nextUrl.origin ||
+          refOrigin.includes("chill-banana") ||
+          refOrigin.includes("localhost")
+        );
+      } catch {
+        return false;
+      }
+    }
+    // Cho phép nếu không có cả origin và referer (non-browser client / test helper)
+    return true;
+  }
+  try {
+    const allowed = [
+      req.nextUrl.origin,
+      "http://localhost:3000",
+      "https://chill-banana.vercel.app",
+    ];
+    if (process.env.APP_URL) {
+      try { allowed.push(new URL(process.env.APP_URL).origin); } catch {}
+    }
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      try { allowed.push(new URL(process.env.NEXT_PUBLIC_APP_URL).origin); } catch {}
+    }
+    return allowed.includes(origin);
+  } catch {
+    return false;
+  }
+}

@@ -10,6 +10,8 @@ import { normalizeProductImageUrl } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
+let lastReservationCheckAt = 0;
+
 // GET: Lấy danh sách sản phẩm (hỗ trợ lọc theo category, tự động seed từ curated-products.json nếu DB trống)
 export async function GET(req: NextRequest) {
   try {
@@ -27,8 +29,9 @@ export async function GET(req: NextRequest) {
 
     const isTestEnv = process.env.APP_ENV === "test" || process.env.NODE_ENV === "test";
 
-    // Giải phóng tồn kho các đơn giữ hàng quá hạn 30 phút ngay khi khách truy cập danh mục (hỗ trợ Vercel Hobby Cron)
-    if (!isTestEnv) {
+    // Giải phóng tồn kho các đơn giữ hàng quá hạn 30 phút (tối đa 1 lần mỗi 60 giây - P1-20)
+    if (!isTestEnv && Date.now() - lastReservationCheckAt > 60_000) {
+      lastReservationCheckAt = Date.now();
       await releaseExpiredOrderReservations(20).catch((err) =>
         console.warn("[Products API] Không thể giải phóng đơn giữ hàng quá hạn:", err)
       );
@@ -100,11 +103,18 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
+    if (typeof body.name !== "string" || !body.name.trim()) {
+      return NextResponse.json({ success: false, error: "Tên sản phẩm không hợp lệ." }, { status: 400 });
+    }
     const priceJpy = body.priceJpy === undefined ? 3000 : Number(body.priceJpy);
     const weightKg = body.weightKg === undefined ? 0.4 : Number(body.weightKg);
     const stockSlots = body.stockSlots === undefined ? 10 : Number(body.stockSlots);
-    if (!Number.isSafeInteger(priceJpy) || priceJpy < 1 || !Number.isFinite(weightKg) || weightKg <= 0 || weightKg > 100 || !Number.isSafeInteger(stockSlots) || stockSlots < 0) {
-      return NextResponse.json({ success: false, error: "Giá, cân nặng hoặc tồn kho không hợp lệ." }, { status: 400 });
+    if (
+      !Number.isSafeInteger(priceJpy) || priceJpy < 1 || priceJpy > 10_000_000 ||
+      !Number.isFinite(weightKg) || weightKg <= 0 || weightKg > 1000 ||
+      !Number.isSafeInteger(stockSlots) || stockSlots < 0 || stockSlots > 10_000
+    ) {
+      return NextResponse.json({ success: false, error: "Giá (tối đa 10M Yên), cân nặng (tối đa 1000kg) hoặc tồn kho (tối đa 10,000) không hợp lệ." }, { status: 400 });
     }
     const rateData = await fetchLiveExchangeRate();
     const liveRate = rateData.roundedRate || 172;
@@ -240,8 +250,11 @@ export async function PUT(req: NextRequest) {
       message: "Cập nhật thành công!",
       product: updated,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Lỗi cập nhật sản phẩm:", error);
+    if (error?.code === "P2025") {
+      return NextResponse.json({ success: false, error: "Sản phẩm không tồn tại." }, { status: 404 });
+    }
     return NextResponse.json(
       { success: false, error: "Lỗi khi cập nhật sản phẩm." },
       { status: 500 }
@@ -249,9 +262,9 @@ export async function PUT(req: NextRequest) {
   }
 }
 
-// DELETE: Xóa sản phẩm
+// DELETE: Xóa sản phẩm (Chỉ SUPER_ADMIN mới có quyền xóa - P1-04)
 export async function DELETE(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
   try {
     const { searchParams } = new URL(req.url);
@@ -280,8 +293,11 @@ export async function DELETE(req: NextRequest) {
       success: true,
       message: "Đã xóa sản phẩm.",
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Lỗi xóa sản phẩm:", error);
+    if (error?.code === "P2025") {
+      return NextResponse.json({ success: false, error: "Sản phẩm không tồn tại." }, { status: 404 });
+    }
     return NextResponse.json(
       { success: false, error: "Lỗi khi xóa sản phẩm." },
       { status: 500 }

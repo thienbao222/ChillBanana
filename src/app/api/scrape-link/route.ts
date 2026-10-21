@@ -209,8 +209,15 @@ JSON Schema cần trả về:
             .slice(0, 5)
         : [],
       imageUrl:
-        typeof parsed.imageUrl === "string" && parsed.imageUrl.startsWith("http")
-          ? parsed.imageUrl
+        typeof parsed.imageUrl === "string" && parsed.imageUrl.startsWith("https://")
+          ? (() => {
+              try {
+                const u = new URL(parsed.imageUrl);
+                return u.protocol === "https:" && !isPrivateHost(u.hostname) ? parsed.imageUrl : "";
+              } catch {
+                return "";
+              }
+            })()
           : "",
     };
   } catch (err) {
@@ -275,9 +282,9 @@ export async function POST(req: NextRequest) {
     }
     const { url } = await req.json();
 
-    if (!url || typeof url !== "string" || !url.startsWith("http")) {
+    if (!url || typeof url !== "string" || !url.startsWith("https://")) {
       return NextResponse.json(
-        { error: "Vui lòng cung cấp đường dẫn URL hợp lệ." },
+        { error: "Vui lòng cung cấp đường dẫn URL bảo mật hợp lệ (HTTPS)." },
         { status: 400 }
       );
     }
@@ -287,6 +294,11 @@ export async function POST(req: NextRequest) {
       parsedUrl = new URL(url);
     } catch {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
+    }
+
+    // BẢO MẬT (P1-07): Bắt buộc protocol === 'https:' và port === '' (chặn port nội bộ / bypass proxy)
+    if (parsedUrl.protocol !== "https:" || parsedUrl.port !== "") {
+      return NextResponse.json({ error: "Chỉ chấp nhận URL HTTPS tiêu chuẩn không có cổng tùy chỉnh." }, { status: 400 });
     }
 
     // SSRF protection — block internal, link-local, cloud metadata & private IPv4/IPv6 addresses
@@ -337,7 +349,20 @@ export async function POST(req: NextRequest) {
       });
 
       if (jinaResponse.ok) {
-        jinaText = await jinaResponse.text();
+        if (jinaResponse.body) {
+          const reader = jinaResponse.body.getReader();
+          const decoder = new TextDecoder();
+          let bytes = 0;
+          while (bytes < 1024 * 1024) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            bytes += value.length;
+            jinaText += decoder.decode(value, { stream: true });
+          }
+          await reader.cancel().catch(() => {});
+        } else {
+          jinaText = await jinaResponse.text();
+        }
 
         // Trích xuất ảnh từ Jina output (giữ lại làm fallback)
         const imageMatch =
@@ -382,7 +407,21 @@ export async function POST(req: NextRequest) {
         });
 
         if (directRes.ok) {
-          const html = await directRes.text();
+          let html = "";
+          if (directRes.body) {
+            const reader = directRes.body.getReader();
+            const decoder = new TextDecoder();
+            let bytes = 0;
+            while (bytes < 1024 * 1024) {
+              const { done, value } = await reader.read();
+              if (done) break;
+              bytes += value.length;
+              html += decoder.decode(value, { stream: true });
+            }
+            await reader.cancel().catch(() => {});
+          } else {
+            html = await directRes.text();
+          }
 
           // Title
           const ogTitle = html.match(

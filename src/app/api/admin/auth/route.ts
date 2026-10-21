@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_COOKIE_NAME,
+  computePasswordDigest,
   hashAdminPassword,
   verifyAdminPassword,
   createAdminSessionTokenWithRole,
@@ -14,6 +15,10 @@ import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_FAILURES_PER_IP } from "@/lib/rate-li
 
 
 export const dynamic = "force-dynamic";
+
+// BẢO MẬT (P1-08): Khởi tạo trước hash scrypt giả định tại module level
+// để chống timing attack mà KHÔNG chặn Event Loop bằng 2 lần scryptSync khi user không tồn tại.
+const DUMMY_SCRYPT_HASH = hashAdminPassword("dummy-admin-timing-mitigation");
 
 // GET: Kiểm tra trạng thái phiên đăng nhập của Admin
 export async function GET(req: NextRequest) {
@@ -102,6 +107,7 @@ export async function POST(req: NextRequest) {
     let isAuthenticated = false;
     let adminName = "Quản Trị Viên ChillBanana";
     let adminRole = "SUPER_ADMIN";
+    let adminPwdHash = "";
 
     // 1. Kiểm tra trong CSDL Prisma
     try {
@@ -115,6 +121,7 @@ export async function POST(req: NextRequest) {
           isAuthenticated = true;
           adminName = dbAdmin.name;
           adminRole = dbAdmin.role;
+          adminPwdHash = dbAdmin.passwordHash;
           if (check.needsRehash) {
             // Hash HMAC cũ: nâng cấp sang scrypt có salt ngay sau khi đăng nhập đúng.
             await prisma.adminUser.update({
@@ -125,8 +132,8 @@ export async function POST(req: NextRequest) {
           }
         }
       } else {
-        // Tài khoản không tồn tại: vẫn tốn thời gian băm tương đương để khó dò tên đăng nhập qua độ trễ.
-        verifyAdminPassword(password, hashAdminPassword("dummy-password"));
+        // Tài khoản không tồn tại: dùng hash khởi tạo sẵn ở module-level để tránh double scryptSync (P1-08)
+        verifyAdminPassword(password, DUMMY_SCRYPT_HASH);
       }
     } catch (dbErr) {
       console.error("[AdminAuth] Lỗi kết nối CSDL khi đăng nhập:", dbErr);
@@ -149,8 +156,9 @@ export async function POST(req: NextRequest) {
     await resetKey(userKey);
     await writeAuditLog({ actor: trimmedUser, action: "ADMIN_LOGIN", summary: "Đăng nhập quản trị thành công.", req });
 
-    // Thiết lập Cookie phiên đăng nhập bảo mật — nhúng role vào token để RBAC
-    const token = createAdminSessionTokenWithRole(trimmedUser, adminRole);
+    // Thiết lập Cookie phiên đăng nhập bảo mật — nhúng role và pwdDigest vào token để RBAC & thu hồi phiên (P1-03)
+    const adminPwdDigest = adminPwdHash ? computePasswordDigest(adminPwdHash) : undefined;
+    const token = createAdminSessionTokenWithRole(trimmedUser, adminRole, adminPwdDigest);
     const response = NextResponse.json({
       success: true,
       message: "Đăng nhập thành công!",
@@ -166,7 +174,7 @@ export async function POST(req: NextRequest) {
       value: token,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      sameSite: "strict",
       path: "/",
       maxAge: 60 * 60 * 24 * 7, // 7 days
     });
