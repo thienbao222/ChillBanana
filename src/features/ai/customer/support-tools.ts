@@ -257,8 +257,8 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
     ]);
     const cfg = pricingConfig?.values;
     const rateText = rate && !rate.isStale && rate.roundedRate > 0 ? `1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} đ` : "theo tỷ giá thực tế";
-    const feePct = cfg ? `${cfg.serviceFeePercent}% (tối thiểu ${cfg.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ)` : "5%";
-    const shipRate = cfg ? `${cfg.airShippingPerKgVnd.toLocaleString("vi-VN")} đ/kg` : "220.000 đ/kg";
+    const feePct = cfg ? `${cfg.serviceFeePercent}% (tối thiểu ${cfg.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ)` : "4% (tối thiểu 20.000 đ)";
+    const shipRate = cfg ? `${cfg.airShippingPerKgVnd.toLocaleString("vi-VN")} đ/kg` : "185.000 đ/kg";
     const discountPct = cfg ? `${cfg.groupBuyShippingDiscountPercent}% (cho kiện ≤ ${cfg.groupBuyMaxWeightKg}kg)` : "25%";
     return {
       evidence: createEvidence(

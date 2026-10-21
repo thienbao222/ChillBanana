@@ -1,6 +1,7 @@
 const { PrismaClient } = require("@prisma/client");
 const { hashPassword } = require("./hash-password");
 const curatedProducts = require("../src/lib/curated-products.json");
+const kizunaNews = require("../src/lib/kizuna-news.json");
 
 const prisma = new PrismaClient();
 
@@ -90,6 +91,63 @@ async function main() {
     });
   }
   console.log(`✅ Đã khởi tạo ${systemConfigSeed.length} cấu hình SystemConfig.`);
+
+  // 4. Khởi tạo cấu hình bảng giá PricingConfig v1 nếu bảng trống
+  const pricingConfigCount = await prisma.pricingConfig.count();
+  if (pricingConfigCount === 0) {
+    const defaultPricingConfig = {
+      serviceFeePercent: 4,
+      serviceFeeMinimumVnd: 20000,
+      airShippingPerKgVnd: 185000,
+      groupBuyShippingDiscountPercent: 25,
+      groupBuyMaxWeightKg: 0.5,
+      minimumBaseOrderVnd: 300000,
+      fallbackJpyVndRate: 175,
+      usdVndReferenceRate: 25400,
+      fxSpreadPercent: 0,
+    };
+    await prisma.pricingConfig.create({
+      data: {
+        version: 1,
+        values: defaultPricingConfig,
+        changedBy: "system:seed",
+        changeReason: "Khởi tạo bảng giá chuẩn mặc định v1",
+      },
+    });
+    console.log("✅ Đã khởi tạo cấu hình bảng giá PricingConfig v1.");
+  }
+
+  // 5. Đồng bộ cẩm nang & bản tin Kizuna News
+  if (Array.isArray(kizunaNews)) {
+    for (const item of kizunaNews) {
+      await prisma.news.upsert({
+        where: { slug: item.slug },
+        update: {
+          title: item.title,
+          category: item.category,
+          categoryName: item.categoryName,
+          excerpt: item.excerpt,
+          content: item.content,
+          coverImage: item.coverImage,
+          readTime: item.readTime,
+          publishedAt: new Date(item.publishedAt),
+        },
+        create: {
+          id: item.id,
+          title: item.title,
+          slug: item.slug,
+          category: item.category,
+          categoryName: item.categoryName,
+          excerpt: item.excerpt,
+          content: item.content,
+          coverImage: item.coverImage,
+          readTime: item.readTime,
+          publishedAt: new Date(item.publishedAt),
+        },
+      });
+    }
+    console.log(`✅ Đã đồng bộ ${kizunaNews.length} bài viết cẩm nang Kizuna News.`);
+  }
 
   console.log("🎉 Seed hoàn tất!");
 }

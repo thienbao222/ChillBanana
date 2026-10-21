@@ -8,7 +8,7 @@ import { prisma } from "../helpers/db";
 describe("versioned pricing configuration", () => {
   it("restricts read and write routes to super admins", async () => {
     expect((await GET(get("/api/admin/pricing-config"))).status).toBe(401);
-    await makeAdmin("operator", "ADMIN");
+    await makeAdmin("operator", "OPERATOR");
     const response = await POST(post("/api/admin/pricing-config", { values: DEFAULT_PRICING_CONFIG, changeReason: "test" }, { cookies: adminCookies("operator") }));
     expect(response.status).toBe(403);
   });

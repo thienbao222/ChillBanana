@@ -426,6 +426,14 @@ export default function OrderCalculator() {
                   toast.warning("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
                   return;
                 }
+                fetch("/api/ai/chat", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${vnJpCargoType} - Trọng lượng: ${vnJpWeightKg}kg - Thành phố nhận: ${vnJpCity}`,
+                    personality: "omotenashi",
+                  }),
+                }).catch(() => {});
                 setVnJpSubmitted(true);
                 toast.success("Đã ghi nhận yêu cầu gửi hàng đi Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
               }}
