@@ -115,13 +115,33 @@ export async function POST(req: NextRequest) {
       });
 
       if (existing) {
-        if (!existing.emailVerifiedAt && verifyCustomerPassword(password, existing.passwordHash).valid) {
+        if (!existing.emailVerifiedAt) {
+          // BẢO MẬT (P1-02): Chống Pre-Account Takeover.
+          // Tài khoản chưa xác minh email: Cho phép cập nhật mật khẩu và thông tin mới,
+          // rồi gửi lại email xác minh tới hộp thư để chủ sở hữu thực sự kích hoạt.
+          const updatedCustomer = await prisma.customer.update({
+            where: { id: existing.id },
+            data: {
+              passwordHash: hashPassword(password),
+              name: name.trim(),
+              phone: phone ? phone.trim() : null,
+              address: address ? address.trim() : null,
+            },
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              phone: true,
+              address: true,
+              createdAt: true,
+            },
+          });
           try {
-            await sendCustomerEmailVerification(existing);
+            await sendCustomerEmailVerification(updatedCustomer);
             return NextResponse.json({
               success: true,
               requiresEmailVerification: true,
-              message: "Tài khoản đang chờ xác minh. Chúng tôi đã gửi lại liên kết xác minh tới email của bạn.",
+              message: "Tài khoản đang chờ xác minh. Chúng tôi đã cập nhật thông tin và gửi lại liên kết xác minh tới email của bạn.",
             });
           } catch (error) {
             console.error("[CustomerRegistration] Không thể gửi lại email xác minh:", error);

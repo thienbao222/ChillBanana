@@ -107,9 +107,15 @@ export function recordSentEmail(record: Omit<SentEmailRecord, "id" | "sentAt">):
   if (record.type === "RESET_PASSWORD" || record.type === "VERIFY_EMAIL") {
     return;
   }
+  // BẢO MẬT (P1-05): Tẩy sạch bearer access token khỏi HTML trước khi lưu vào demo memory
+  const sanitizedHtml = typeof record.html === "string"
+    ? record.html.replace(/(&|\?)access=[^"'&\s]+/g, "$1access=[REDACTED]")
+    : record.html;
+
   const list = globalEmailStore.__chillbanana_emails!;
   const newRecord: SentEmailRecord = {
     ...record,
+    html: sanitizedHtml,
     id: `email_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
     sentAt: new Date().toISOString(),
   };

@@ -32,6 +32,19 @@ describe("SSRF Protection - isPrivateHost", () => {
     expect(isPrivateHost("fe80::1")).toBe(true);
     expect(isPrivateHost("fc00::1")).toBe(true);
     expect(isPrivateHost("fd00::1")).toBe(true);
+    // IPv6 trong ngoặc vuông và IPv4-mapped IPv6 (P2-01)
+    expect(isPrivateHost("[fe80::1]")).toBe(true);
+    expect(isPrivateHost("[fc00::1]")).toBe(true);
+    expect(isPrivateHost("[fd00::1]")).toBe(true);
+    expect(isPrivateHost("[::ffff:127.0.0.1]")).toBe(true);
+    expect(isPrivateHost("[::ffff:169.254.169.254]")).toBe(true);
+    // Dải 127.0.0.0/8
+    expect(isPrivateHost("127.0.0.2")).toBe(true);
+    expect(isPrivateHost("127.1.2.3")).toBe(true);
+    // CGNAT 100.64.0.0/10
+    expect(isPrivateHost("100.64.0.1")).toBe(true);
+    expect(isPrivateHost("100.100.1.1")).toBe(true);
+    expect(isPrivateHost("100.128.0.1")).toBe(false);
   });
 
   it("cho phép các domain thương mại điện tử công cộng", () => {
