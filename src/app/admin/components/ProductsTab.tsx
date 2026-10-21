@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   RefreshCw,
   ShoppingBag,
@@ -8,10 +8,19 @@ import {
   Edit3,
   Trash2,
   Search,
-  X
+  X,
+  Upload,
+  Image as ImageIcon,
+  AlertTriangle,
+  CheckCircle2,
+  Zap,
+  Package,
+  ShieldCheck,
+  Info,
 } from "lucide-react";
 import { CuratedProduct } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
+import { normalizeProductImageUrl, isGoogleDriveLink } from "@/lib/image-url";
 
 export default function ProductsTab() {
   const { adminToast } = useAdminToast();
@@ -36,6 +45,76 @@ export default function ProductsTab() {
     voltageNote: "",
   });
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [imageLoadError, setImageLoadError] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isConvertedDriveLink, setIsConvertedDriveLink] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImageUrlChange = (inputVal: string) => {
+    const isDrive = isGoogleDriveLink(inputVal);
+    const normalized = normalizeProductImageUrl(inputVal);
+    setIsConvertedDriveLink(isDrive && normalized !== inputVal);
+    setImageLoadError(false);
+    setProductForm((prev) => ({ ...prev, imageUrl: normalized }));
+  };
+
+  const handleImageFileUpload = (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      adminToast.error("Vui lòng chọn tệp hình ảnh (PNG, JPG, WebP)!");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      adminToast.error("Kích thước ảnh tối đa là 15MB!");
+      return;
+    }
+    setIsUploadingImage(true);
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) {
+        setIsUploadingImage(false);
+        return;
+      }
+      const img = new Image();
+      img.onload = () => {
+        const MAX_DIM = 960;
+        let w = img.width;
+        let h = img.height;
+        if (w > h && w > MAX_DIM) {
+          h = Math.round((h * MAX_DIM) / w);
+          w = MAX_DIM;
+        } else if (h > MAX_DIM) {
+          w = Math.round((w * MAX_DIM) / h);
+          h = MAX_DIM;
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          setIsUploadingImage(false);
+          return;
+        }
+        ctx.drawImage(img, 0, 0, w, h);
+        const compressed = canvas.toDataURL("image/webp", 0.82) || canvas.toDataURL("image/jpeg", 0.82);
+        setProductForm((prev) => ({ ...prev, imageUrl: compressed }));
+        setImageLoadError(false);
+        setIsConvertedDriveLink(false);
+        setIsUploadingImage(false);
+        adminToast.success("Đã tải và tối ưu ảnh sản phẩm thành công!");
+      };
+      img.onerror = () => {
+        setIsUploadingImage(false);
+        adminToast.error("Không thể xử lý hình ảnh này.");
+      };
+      img.src = dataUrl;
+    };
+    reader.onerror = () => {
+      setIsUploadingImage(false);
+      adminToast.error("Lỗi khi đọc file ảnh từ máy.");
+    };
+    reader.readAsDataURL(file);
+  };
 
   const fetchProducts = async () => {
     setLoadingProducts(true);
@@ -63,6 +142,8 @@ export default function ProductsTab() {
       originalStore: "Amazon JP", stockSlots: 10, isHot: true,
       featuredNote: "Mặt hàng săn sale số lượng có hạn", voltageNote: "",
     });
+    setImageLoadError(false);
+    setIsConvertedDriveLink(false);
     setIsProductModalOpen(true);
   };
 
@@ -75,6 +156,8 @@ export default function ProductsTab() {
       stockSlots: prod.stockSlots ?? 10, isHot: Boolean(prod.isHot),
       featuredNote: prod.featuredNote || "", voltageNote: prod.voltageNote || "",
     });
+    setImageLoadError(false);
+    setIsConvertedDriveLink(false);
     setIsProductModalOpen(true);
   };
 
@@ -134,173 +217,189 @@ export default function ProductsTab() {
   };
 
   return (
-          <div className="space-y-6">
-            
-            {/* Header Banner */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div>
-                <div className="inline-flex items-center space-x-1.5 bg-banana-100 text-banana-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
-                  <ShoppingBag className="w-3.5 h-3.5 text-banana-600" />
-                  <span>Kho Sản Phẩm & Gom Order</span>
-                </div>
-                <h2 className="text-2xl font-serif font-bold text-navy-900">
-                  Quản Lý Sản Phẩm Nội Địa Nhật
-                </h2>
-                <p className="text-xs text-slate-500 mt-1 max-w-xl">
-                  Thêm mới hoặc điều chỉnh danh sách sản phẩm hot hiển thị trên trang chủ để khách hàng chọn nhanh và tính bill tự động.
-                </p>
-              </div>
+    <div className="space-y-6">
+      {/* Header Banner */}
+      <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div className="inline-flex items-center space-x-1.5 bg-banana-100 text-banana-800 text-xs font-bold px-3 py-1 rounded-full mb-2">
+            <ShoppingBag className="w-3.5 h-3.5 text-banana-600" />
+            <span>Kho Sản Phẩm &amp; Gom Order</span>
+          </div>
+          <h2 className="text-2xl font-serif font-bold text-navy-900">
+            Quản Lý Sản Phẩm Nội Địa Nhật
+          </h2>
+          <p className="text-xs text-slate-500 mt-1 max-w-xl">
+            Thêm mới hoặc điều chỉnh danh sách sản phẩm hot hiển thị trên trang chủ để khách hàng chọn nhanh và tính bill tự động.
+          </p>
+        </div>
 
-              <div className="flex items-center space-x-3 shrink-0">
-                <button
-                  onClick={fetchProducts}
-                  className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl transition-all"
-                  title="Tải lại danh sách"
-                >
-                  <RefreshCw className={`w-4 h-4 ${loadingProducts ? "animate-spin" : ""}`} />
-                </button>
-                <button
-                  onClick={openCreateProductModal}
-                  className="px-4 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-2xl shadow-md transition-all flex items-center space-x-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Thêm Sản Phẩm Mới</span>
-                </button>
-              </div>
-            </div>
+        <div className="flex items-center space-x-3 shrink-0">
+          <button
+            onClick={fetchProducts}
+            className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-2xl transition-all"
+            title="Tải lại danh sách"
+          >
+            <RefreshCw className={`w-4 h-4 ${loadingProducts ? "animate-spin" : ""}`} />
+          </button>
+          <button
+            onClick={openCreateProductModal}
+            className="px-4 py-2.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold text-xs rounded-2xl shadow-md transition-all flex items-center space-x-2"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Thêm Sản Phẩm Mới</span>
+          </button>
+        </div>
+      </div>
 
-            {/* Quick Filter & Search Bar */}
-            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
-              <div className="relative w-full sm:w-80">
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="Tìm sản phẩm theo tên..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
-                />
-              </div>
+      {/* Quick Filter & Search Bar */}
+      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col sm:flex-row gap-3 items-center justify-between">
+        <div className="relative w-full sm:w-80">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Tìm sản phẩm theo tên..."
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+            className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+          />
+        </div>
 
-              <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto text-xs">
-                {["all", "cosmetics", "health", "gadgets", "anime"].map((cat) => (
-                  <button
-                    key={cat}
-                    onClick={() => setProductCategoryFilter(cat)}
-                    className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
-                      productCategoryFilter === cat
-                        ? "bg-navy-900 text-white shadow-sm"
-                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-                    }`}
-                  >
-                    {cat === "all" && `Tất Cả (${products.length})`}
-                    {cat === "cosmetics" && "Mỹ Phẩm"}
-                    {cat === "health" && "Sức Khỏe"}
-                    {cat === "gadgets" && "Gia Dụng 100V"}
-                    {cat === "anime" && "Anime Figure"}
-                  </button>
-                ))}
-              </div>
-            </div>
+        <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto text-xs">
+          {["all", "cosmetics", "health", "gadgets", "anime"].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setProductCategoryFilter(cat)}
+              className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
+                productCategoryFilter === cat
+                  ? "bg-navy-900 text-white shadow-sm"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              {cat === "all" && `Tất Cả (${products.length})`}
+              {cat === "cosmetics" && "Mỹ Phẩm"}
+              {cat === "health" && "Sức Khỏe"}
+              {cat === "gadgets" && "Gia Dụng 100V"}
+              {cat === "anime" && "Anime Figure"}
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {/* Products Table */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
-                    <tr>
-                      <th className="px-6 py-4">Sản Phẩm</th>
-                      <th className="px-6 py-4">Danh Mục</th>
-                      <th className="px-6 py-4">Nguồn Bán</th>
-                      <th className="px-6 py-4">Giá Yên &amp; VNĐ</th>
-                      <th className="px-6 py-4">Trọng Lượng</th>
-                      <th className="px-6 py-4">Slot Còn</th>
-                      <th className="px-6 py-4">Hot Deal</th>
-                      <th className="px-6 py-4 text-right">Thao Tác</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {products
-                      .filter((p) => {
-                        const matchCat = productCategoryFilter === "all" || p.category === productCategoryFilter;
-                        const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase());
-                        return matchCat && matchSearch;
-                      })
-                      .map((prod) => (
-                        <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center space-x-3">
-                              <img
-                                src={prod.imageUrl}
-                                alt={prod.name}
-                                className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0"
-                              />
-                              <div>
-                                <div className="font-bold text-navy-900 line-clamp-1 max-w-xs">{prod.name}</div>
-                                {prod.voltageNote && (
-                                  <span className="text-[10px] text-amber-700 font-medium">⚡ {prod.voltageNote}</span>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg">
-                              {prod.categoryName || prod.category}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 font-medium text-slate-600">
-                            {prod.originalStore}
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="font-bold text-navy-900 font-mono">{prod.priceJpy?.toLocaleString()} ¥</div>
-                            <div className="text-[11px] text-banana-700 font-semibold">{prod.priceVnd?.toLocaleString("vi-VN")} đ</div>
-                          </td>
-                          <td className="px-6 py-4 font-medium text-slate-600 font-mono">
-                            {prod.weightKg} kg
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className="bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-md border border-emerald-200">
-                              {prod.stockSlots} slots
-                            </span>
-                          </td>
-                          <td className="px-6 py-4">
-                            {prod.isHot ? (
-                              <span className="text-[10px] bg-banana-100 text-banana-900 font-extrabold px-2 py-0.5 rounded border border-banana-300">
-                                🔥 HOT
+      {/* Products Table */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 text-slate-500 uppercase font-semibold border-b border-slate-200">
+              <tr>
+                <th className="px-6 py-4">Sản Phẩm</th>
+                <th className="px-6 py-4">Danh Mục</th>
+                <th className="px-6 py-4">Nguồn Bán</th>
+                <th className="px-6 py-4">Giá Yên &amp; VNĐ</th>
+                <th className="px-6 py-4">Trọng Lượng</th>
+                <th className="px-6 py-4">Slot Còn</th>
+                <th className="px-6 py-4">Hot Deal</th>
+                <th className="px-6 py-4 text-right">Thao Tác</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {products
+                .filter((p) => {
+                  const matchCat = productCategoryFilter === "all" || p.category === productCategoryFilter;
+                  const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase());
+                  return matchCat && matchSearch;
+                })
+                .map((prod) => (
+                  <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center space-x-3">
+                        <img
+                          src={prod.imageUrl}
+                          alt={prod.name}
+                          onError={(e) => {
+                            e.currentTarget.src =
+                              "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
+                          }}
+                          className="w-12 h-12 rounded-xl object-cover border border-slate-200 shrink-0 bg-slate-100"
+                        />
+                        <div>
+                          <div className="font-bold text-navy-900 line-clamp-1 max-w-xs">{prod.name}</div>
+                          {prod.voltageNote && (() => {
+                            const n = prod.voltageNote.toLowerCase();
+                            const icon =
+                              n.includes("100v") || n.includes("điện") || n.includes("volt")
+                                ? "⚡"
+                                : n.includes("seal") || n.includes("hãng") || n.includes("bandai")
+                                ? "🛡️"
+                                : n.includes("vỡ") || n.includes("xốp")
+                                ? "📦"
+                                : "📌";
+                            return (
+                              <span className="text-[10px] text-slate-600 font-medium line-clamp-1 mt-0.5">
+                                {icon} {prod.voltageNote}
                               </span>
-                            ) : (
-                              <span className="text-[10px] text-slate-400">Thường</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <div className="flex items-center justify-end space-x-1.5">
-                              <button
-                                onClick={() => openEditProductModal(prod)}
-                                className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all"
-                                title="Chỉnh sửa sản phẩm"
-                              >
-                                <Edit3 className="w-3.5 h-3.5" />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteProduct(prod.id, prod.name)}
-                                className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all"
-                                title="Xóa sản phẩm"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-2.5 py-1 rounded-lg">
+                        {prod.categoryName || prod.category}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-600">
+                      {prod.originalStore}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="font-bold text-navy-900 font-mono">{prod.priceJpy?.toLocaleString()} ¥</div>
+                      <div className="text-[11px] text-banana-700 font-semibold">{prod.priceVnd?.toLocaleString("vi-VN")} đ</div>
+                    </td>
+                    <td className="px-6 py-4 font-medium text-slate-600 font-mono">
+                      {prod.weightKg} kg
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="bg-emerald-50 text-emerald-700 text-[11px] font-bold px-2 py-0.5 rounded-md border border-emerald-200">
+                        {prod.stockSlots} slots
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {prod.isHot ? (
+                        <span className="text-[10px] bg-banana-100 text-banana-900 font-extrabold px-2 py-0.5 rounded border border-banana-300">
+                          🔥 HOT
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">Thường</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <button
+                          onClick={() => openEditProductModal(prod)}
+                          className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl transition-all"
+                          title="Chỉnh sửa sản phẩm"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteProduct(prod.id, prod.name)}
+                          className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl transition-all"
+                          title="Xóa sản phẩm"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-      {/* MODAL 3: THÊM / SỬA SẢN PHẨM TRANG CHỦ */}
+      {/* MODAL: THÊM / SỬA SẢN PHẨM TRANG CHỦ */}
       {isProductModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative my-8">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative my-8 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsProductModalOpen(false)}
               className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
@@ -321,7 +420,6 @@ export default function ProductsTab() {
             </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-4 text-xs">
-              
               {/* Tên sản phẩm */}
               <div>
                 <label className="block font-bold text-slate-700 mb-1">
@@ -330,7 +428,7 @@ export default function ProductsTab() {
                 <input
                   type="text"
                   required
-                  placeholder="Ví dụ: Nồi Cơm Điện Cao Tần Zojirushi IH 1L"
+                  placeholder="Ví dụ: Mô Hình Gunpla RG 1/144 RX-78-2 Gundam Ver. 2.0 Bandai Spirits"
                   value={productForm.name}
                   onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
                   className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
@@ -346,17 +444,20 @@ export default function ProductsTab() {
                     onChange={(e) => {
                       const cat = e.target.value;
                       let voltageNote = productForm.voltageNote;
-                      if (cat === "gadgets" && !voltageNote) {
-                        voltageNote = "Điện áp 100V - Cần dùng biến áp đổi nguồn";
+                      if (!voltageNote) {
+                        if (cat === "gadgets") voltageNote = "Điện áp 100V - Cần dùng biến áp đổi nguồn";
+                        else if (cat === "anime") voltageNote = "Hàng chính hãng Bandai Nhật, nguyên seal hộp";
+                        else if (cat === "cosmetics") voltageNote = "Cam kết chính hãng mua trực tiếp Store Cosme Nhật Bản";
+                        else if (cat === "health") voltageNote = "Hàng nội địa Nhật, đầy đủ tem mác & date mới nhất";
                       }
                       setProductForm({ ...productForm, category: cat, voltageNote });
                     }}
                     className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 bg-white"
                   >
-                    <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da</option>
+                    <option value="cosmetics">🌸 Mỹ Phẩm &amp; Chăm Sóc Da</option>
                     <option value="health">🌿 Thực Phẩm Chức Năng</option>
-                    <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (100V)</option>
-                    <option value="anime">🎎 Anime, Manga & Sưu Tầm</option>
+                    <option value="gadgets">⚡ Gia Dụng &amp; Điện Tử Mini (100V)</option>
+                    <option value="anime">🎎 Anime, Manga &amp; Sưu Tầm</option>
                   </select>
                 </div>
 
@@ -364,7 +465,7 @@ export default function ProductsTab() {
                   <label className="block font-bold text-slate-700 mb-1">Nguồn website mua hộ</label>
                   <input
                     type="text"
-                    placeholder="Amazon JP, Rakuten, Mercari..."
+                    placeholder="Amazon JP, Bandai Hobby JP, Rakuten, Mercari..."
                     value={productForm.originalStore}
                     onChange={(e) => setProductForm({ ...productForm, originalStore: e.target.value })}
                     className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
@@ -415,40 +516,181 @@ export default function ProductsTab() {
                 </div>
               </div>
 
-              {/* URL Hình ảnh */}
+              {/* Hình ảnh sản phẩm (Hỗ trợ URL, Google Drive CDN, Tải file máy tính) */}
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Đường dẫn hình ảnh (URL)</label>
-                <div className="flex gap-3 items-center">
-                  <input
-                    type="url"
-                    placeholder="https://images.unsplash.com/..."
-                    value={productForm.imageUrl}
-                    onChange={(e) => setProductForm({ ...productForm, imageUrl: e.target.value })}
-                    className="flex-1 p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
-                  />
-                  {productForm.imageUrl && (
-                    <img
-                      src={productForm.imageUrl}
-                      alt="Preview"
-                      className="w-11 h-11 object-cover rounded-xl border shrink-0"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-bold text-slate-700">
+                    Hình ảnh sản phẩm <span className="text-rose-500">*</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Tự chuyển link Google Drive hoặc tải file ảnh từ máy
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <ImageIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3.5 pointer-events-none" />
+                      <input
+                        type="text"
+                        placeholder="Dán link ảnh (hỗ trợ cả link chia sẻ Google Drive)..."
+                        value={productForm.imageUrl}
+                        onChange={(e) => handleImageUrlChange(e.target.value)}
+                        className="w-full pl-9 pr-3 py-2.5 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 text-xs"
+                      />
+                    </div>
+
+                    {/* Nút tải ảnh trực tiếp từ máy tính */}
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageFileUpload(file);
+                        e.target.value = "";
+                      }}
+                      className="hidden"
                     />
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploadingImage}
+                      className="px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-navy-950 font-bold rounded-xl transition-all flex items-center space-x-1.5 shrink-0 text-xs border border-slate-200 disabled:opacity-50"
+                    >
+                      <Upload className="w-3.5 h-3.5 text-banana-600" />
+                      <span>{isUploadingImage ? "Đang xử lý..." : "Tải Ảnh Từ Máy"}</span>
+                    </button>
+                  </div>
+
+                  {/* Thông báo chuyển đổi Google Drive */}
+                  {isConvertedDriveLink && (
+                    <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-[11px] text-emerald-800 flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Đã tự động chuyển đổi link Google Drive sang định dạng ảnh CDN hiển thị trực tiếp.</span>
+                    </div>
                   )}
+
+                  {/* Thẻ Preview Ảnh */}
+                  {productForm.imageUrl && (
+                    <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex items-start space-x-3">
+                      <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-white shrink-0">
+                        <img
+                          src={productForm.imageUrl}
+                          alt="Preview sản phẩm"
+                          className="w-full h-full object-cover"
+                          onError={() => setImageLoadError(true)}
+                          onLoad={() => setImageLoadError(false)}
+                        />
+                      </div>
+                      <div className="flex-1 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-slate-700">Xem trước hình ảnh:</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductForm((prev) => ({ ...prev, imageUrl: "" }));
+                              setIsConvertedDriveLink(false);
+                              setImageLoadError(false);
+                            }}
+                            className="text-[10px] text-rose-500 hover:text-rose-700 underline"
+                          >
+                            Xóa ảnh
+                          </button>
+                        </div>
+                        {imageLoadError ? (
+                          <div className="mt-1 p-2 bg-rose-50 rounded-lg border border-rose-200 text-rose-800 text-[11px] leading-relaxed">
+                            <div className="flex items-center space-x-1 font-bold text-rose-700 mb-0.5">
+                              <AlertTriangle className="w-3 h-3 text-rose-600 shrink-0" />
+                              <span>Ảnh chưa tải được</span>
+                            </div>
+                            Nếu dùng Google Drive, hãy đảm bảo link ở chế độ <strong>&quot;Bất kỳ ai có đường liên kết đều xem được&quot;</strong> (Public). Hoặc bấm nút <strong>&quot;Tải Ảnh Từ Máy&quot;</strong> để chọn file ảnh trực tiếp không lo lỗi mạng.
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-emerald-700 mt-1 flex items-center space-x-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Hình ảnh hiển thị tốt và sẵn sàng xuất hiện trên trang chủ!</span>
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Gợi ý ảnh mẫu */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[10px] text-slate-400 font-semibold">Ảnh mẫu theo danh mục:</span>
+                    {[
+                      { label: "Gundam RX-78", url: "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?auto=format&fit=crop&w=600&q=80" },
+                      { label: "Figure Anime", url: "https://images.unsplash.com/photo-1563089145-599997674d42?auto=format&fit=crop&w=600&q=80" },
+                      { label: "Mỹ Phẩm Cosme", url: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?auto=format&fit=crop&w=600&q=80" },
+                      { label: "Tảo Xoắn / TP CN", url: "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=600&q=80" },
+                      { label: "Gia Dụng Zojirushi", url: "https://images.unsplash.com/photo-1585659722983-3a675dabf23d?auto=format&fit=crop&w=600&q=80" },
+                    ].map((preset) => (
+                      <button
+                        key={preset.label}
+                        type="button"
+                        onClick={() => {
+                          setProductForm((prev) => ({ ...prev, imageUrl: preset.url }));
+                          setImageLoadError(false);
+                          setIsConvertedDriveLink(false);
+                        }}
+                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-0.5 rounded-lg border border-slate-200 transition-all"
+                      >
+                        + {preset.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
-              {/* Ghi chú điện áp & Nổi bật */}
+              {/* Lưu ý & Cảnh báo sản phẩm & Ghi chú nổi bật */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block font-bold text-slate-700 mb-1">
-                    Cảnh báo điện áp (nếu có)
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block font-bold text-slate-700">
+                      Lưu ý &amp; Cảnh báo sản phẩm (nếu có)
+                    </label>
+                  </div>
                   <input
                     type="text"
-                    placeholder="Điện áp 100V - Cần dùng biến áp đổi nguồn"
+                    placeholder="Điện áp 100V / Hàng chính hãng Bandai nguyên seal / Hàng dễ vỡ..."
                     value={productForm.voltageNote}
                     onChange={(e) => setProductForm({ ...productForm, voltageNote: e.target.value })}
-                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 text-xs"
                   />
+                  {/* Preset chips chọn nhanh */}
+                  <div className="flex flex-wrap gap-1.5 pt-1.5">
+                    {[
+                      { label: "⚡ Điện 100V", val: "Điện áp 100V - Cần dùng biến áp đổi nguồn" },
+                      { label: "🔌 Auto-volt 100V-240V", val: "Hỗ trợ điện áp toàn cầu 100V-240V (Cắm trực tiếp tại VN)" },
+                      { label: "🎎 Nguyên seal Bandai", val: "Hàng chính hãng Bandai Nhật, nguyên seal hộp" },
+                      { label: "📦 Hàng dễ vỡ", val: "Hàng dễ vỡ, ChillBanana gia cố bọc xốp nổ & chống sốc" },
+                      { label: "🌸 Hàng Cosme JP", val: "Cam kết chính hãng mua trực tiếp Store Cosme Nhật Bản" },
+                      { label: "🌿 Date mới nhất", val: "Hàng nội địa Nhật, đầy đủ tem mác & date mới nhất" },
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, voltageNote: chip.val })}
+                        className={`text-[10px] px-2 py-0.5 rounded-lg border transition-all ${
+                          productForm.voltageNote === chip.val
+                            ? "bg-banana-100 text-banana-900 border-banana-300 font-bold"
+                            : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                    {productForm.voltageNote && (
+                      <button
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, voltageNote: "" })}
+                        className="text-[10px] text-rose-500 hover:text-rose-700 underline px-1"
+                      >
+                        Xóa lưu ý
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -458,8 +700,11 @@ export default function ProductsTab() {
                     placeholder="Top 1 Cosme Nhật Bản, Săn sale 30%..."
                     value={productForm.featuredNote}
                     onChange={(e) => setProductForm({ ...productForm, featuredNote: e.target.value })}
-                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
+                    className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 text-xs"
                   />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Ghi chú ngắn xuất hiện kèm icon ngôi sao (✨) trên card sản phẩm ngoài trang chủ.
+                  </p>
                 </div>
               </div>
 
@@ -510,12 +755,10 @@ export default function ProductsTab() {
                   )}
                 </button>
               </div>
-
             </form>
           </div>
         </div>
       )}
-
-          </div>
+    </div>
   );
 }

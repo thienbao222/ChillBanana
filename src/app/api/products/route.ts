@@ -6,6 +6,7 @@ import { getAdminUsernameFromRequest } from "@/lib/auth-session";
 import { requireAdmin } from "@/lib/admin-guard";
 import { writeAuditLog } from "@/lib/audit";
 import curatedSeedProducts from "@/lib/curated-products.json";
+import { normalizeProductImageUrl } from "@/lib/image-url";
 
 export const dynamic = "force-dynamic";
 
@@ -134,7 +135,7 @@ export async function POST(req: NextRequest) {
         priceJpy,
         priceVnd,
         weightKg,
-        imageUrl: body.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+        imageUrl: normalizeProductImageUrl(body.imageUrl) || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
         description: body.description || "Sản phẩm nội địa Nhật Bản chính hãng.",
         originalStore: body.originalStore || "Amazon JP",
         stockSlots,
@@ -212,7 +213,7 @@ export async function PUT(req: NextRequest) {
     if (priceJpy !== undefined) updateData.priceJpy = priceJpy;
     if (priceVnd !== undefined) updateData.priceVnd = priceVnd;
     if (weightKg !== undefined) updateData.weightKg = weightKg;
-    if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
+    if (data.imageUrl !== undefined) updateData.imageUrl = normalizeProductImageUrl(data.imageUrl);
     if (data.description !== undefined) updateData.description = data.description;
     if (data.originalStore !== undefined) updateData.originalStore = data.originalStore;
     if (stockSlots !== undefined) updateData.stockSlots = stockSlots;

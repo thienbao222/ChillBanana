@@ -5,7 +5,10 @@ import {
   Sparkles,
   Zap,
   ShoppingBag,
-  ShoppingCart
+  ShoppingCart,
+  ShieldCheck,
+  Package,
+  Info,
 } from "lucide-react";
 import { CuratedProduct } from "@/types";
 import { useCart } from "@/context/CartContext";
@@ -242,6 +245,10 @@ export default function CuratedProducts({
                 <img
                   src={product.imageUrl}
                   alt={product.name}
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
+                  }}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
                 
@@ -273,13 +280,37 @@ export default function CuratedProducts({
                     {product.name}
                   </h3>
                   
-                  {/* Ghi chú điện áp */}
-                  {product.voltageNote && (
-                    <div className="mt-2 text-[11px] text-banana-900 bg-banana-50 p-2 rounded-xl border border-banana-200 flex items-center">
-                      <Zap className="w-3 h-3 text-banana-600 mr-1 shrink-0" />
-                      <span className="line-clamp-1">{product.voltageNote}</span>
-                    </div>
-                  )}
+                  {/* Lưu ý & Cảnh báo sản phẩm */}
+                  {product.voltageNote && (() => {
+                    const n = product.voltageNote.toLowerCase();
+                    const isElectric =
+                      n.includes("100v") ||
+                      n.includes("240v") ||
+                      n.includes("điện") ||
+                      n.includes("biến áp") ||
+                      n.includes("volt");
+                    const isFragile = n.includes("vỡ") || n.includes("xốp") || n.includes("chống sốc");
+                    const isAuthentic =
+                      n.includes("seal") ||
+                      n.includes("chính hãng") ||
+                      n.includes("bandai") ||
+                      n.includes("store");
+
+                    return (
+                      <div className="mt-2 text-[11px] text-banana-950 bg-banana-50/80 p-2 rounded-xl border border-banana-200/80 flex items-center">
+                        {isElectric ? (
+                          <Zap className="w-3 h-3 text-amber-600 mr-1 shrink-0" />
+                        ) : isFragile ? (
+                          <Package className="w-3 h-3 text-blue-600 mr-1 shrink-0" />
+                        ) : isAuthentic ? (
+                          <ShieldCheck className="w-3 h-3 text-emerald-600 mr-1 shrink-0" />
+                        ) : (
+                          <Info className="w-3 h-3 text-banana-600 mr-1 shrink-0" />
+                        )}
+                        <span className="line-clamp-1 font-medium">{product.voltageNote}</span>
+                      </div>
+                    );
+                  })()}
                   
                   {product.featuredNote && !product.voltageNote && (
                     <div className="mt-2 text-[11px] text-slate-600 bg-slate-50 p-2 rounded-xl border line-clamp-1">
