@@ -85,6 +85,35 @@ export default function OrderCalculator() {
   const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
   const [vnJpCity, setVnJpCity] = useState("Tokyo");
   const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
+  const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
+
+  const getVnJpRatePerKg = (type: string) => {
+    switch (type) {
+      case "doc":
+        return 210000;
+      case "food":
+        return 220000;
+      case "other":
+        return 200000;
+      case "gift":
+      default:
+        return 180000;
+    }
+  };
+
+  const getVnJpCargoLabel = (type: string) => {
+    switch (type) {
+      case "doc":
+        return "Tài liệu / Hồ sơ du học (EMS)";
+      case "food":
+        return "Thực phẩm khô / Bánh kẹo / Trà";
+      case "other":
+        return "Hàng mẫu kinh doanh / Khác";
+      case "gift":
+      default:
+        return "Kiện quà / Đồ khô / Quần áo";
+    }
+  };
 
   // Lắng nghe URL param để tự động dán và cào dữ liệu khi từ chat qua
   useEffect(() => {
@@ -382,8 +411,8 @@ export default function OrderCalculator() {
       {direction === "VN_TO_JP" ? (
         <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-sm max-w-4xl mx-auto space-y-6">
           <div className="flex items-center space-x-3 pb-4 border-b">
-            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xl font-bold">
-              🇻🇳➔🇯🇵
+            <div className="w-12 h-12 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center text-xs font-extrabold whitespace-nowrap">
+              VN➔JP
             </div>
             <div>
               <h3 className="text-xl font-serif font-bold text-navy-900">
@@ -426,16 +455,21 @@ export default function OrderCalculator() {
                   toast.warning("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
                   return;
                 }
+
+                const code = `VNJP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+                const totalEst = Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg);
+                setVnJpDispatchCode(code);
+
                 fetch("/api/ai/chat", {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
-                    message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${vnJpCargoType} - Trọng lượng: ${vnJpWeightKg}kg - Thành phố nhận: ${vnJpCity}`,
+                    message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Mã phiếu: ${code} - Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${getVnJpCargoLabel(vnJpCargoType)} - Trọng lượng: ${vnJpWeightKg}kg - Tỉnh/Thành nhận: ${vnJpCity} - Tổng cước tạm tính: ${totalEst.toLocaleString("vi-VN")} đ`,
                     personality: "omotenashi",
                   }),
                 }).catch(() => {});
                 setVnJpSubmitted(true);
-                toast.success("Đã ghi nhận yêu cầu gửi hàng đi Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
+                toast.success(`Đã ghi nhận phiếu điều phối #${code}! Điều phối viên sẽ gọi bạn trong 15 phút.`);
               }}
               className="space-y-4 pt-4 border-t border-slate-200"
             >
@@ -511,6 +545,30 @@ export default function OrderCalculator() {
                 </div>
               </div>
 
+              {/* Hộp tự động tính Tạm tính cước vận chuyển VN ➔ JP */}
+              {(() => {
+                const rate = getVnJpRatePerKg(vnJpCargoType);
+                const totalEst = Math.round(rate * vnJpWeightKg);
+                return (
+                  <div className="p-3.5 bg-gradient-to-r from-amber-50 to-emerald-50 border border-amber-200 rounded-2xl flex flex-wrap justify-between items-center gap-2">
+                    <div>
+                      <span className="text-xs font-bold text-slate-700 block">
+                        Tạm tính cước vận chuyển VN ➔ JP ({vnJpWeightKg} kg):
+                      </span>
+                      <span className="text-xs text-slate-600">
+                        Đơn giá: <b>{rate.toLocaleString("vi-VN")} đ/kg</b> × {vnJpWeightKg} kg —{" "}
+                        <span className="text-emerald-700 font-bold">Đã gồm đóng thùng carton đạt chuẩn bay</span>
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-lg font-black text-navy-950 font-mono">
+                        {totalEst.toLocaleString("vi-VN")} đ
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   type="submit"
@@ -528,11 +586,37 @@ export default function OrderCalculator() {
               </div>
             </form>
           ) : (
-            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-2xl text-center space-y-2">
-              <span className="text-3xl">✅</span>
+            <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-3xl text-center space-y-3">
+              <span className="text-3xl block">✅</span>
               <h4 className="font-bold text-base text-emerald-900">
-                Đã Ghi Nhận Yêu Cầu Tuyến VN ➔ JP Thành Công!
+                Đã Ghi Nhận Phiếu Điều Phối Tuyến VN ➔ JP Thành Công!
               </h4>
+              {vnJpDispatchCode && (
+                <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-mono font-bold text-xs border border-emerald-300">
+                  Mã phiếu: {vnJpDispatchCode}
+                </div>
+              )}
+              <div className="bg-white p-4 rounded-2xl border border-emerald-100 text-xs text-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
+                <div>
+                  <span className="text-slate-400 block font-semibold">Người gửi tại VN:</span>
+                  <b>{vnJpSenderName}</b> ({vnJpSenderPhone})
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-semibold">Tuyến gửi đến Nhật Bản:</span>
+                  <b>Việt Nam ➔ {vnJpCity} (Nhật Bản)</b>
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-semibold">Kiện hàng & Trọng lượng:</span>
+                  <b>{vnJpWeightKg} kg</b> ({getVnJpCargoLabel(vnJpCargoType)})
+                </div>
+                <div>
+                  <span className="text-slate-400 block font-semibold">Tổng cước tạm tính:</span>
+                  <b className="text-emerald-700 text-sm">
+                    {Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg).toLocaleString("vi-VN")} đ
+                  </b>{" "}
+                  <small className="text-emerald-600">(Đã gồm thùng carton chuẩn bay)</small>
+                </div>
+              </div>
               <p className="text-xs text-emerald-700">
                 Nhân viên điều phối ChillBanana sẽ liên hệ tới số <strong>{vnJpSenderPhone}</strong> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng thùng carton chuẩn bay.
               </p>
@@ -542,8 +626,9 @@ export default function OrderCalculator() {
                   setVnJpSubmitted(false);
                   setVnJpSenderName("");
                   setVnJpSenderPhone("");
+                  setVnJpDispatchCode("");
                 }}
-                className="mt-3 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl"
+                className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"
               >
                 Gửi yêu cầu kiện hàng khác
               </button>

@@ -75,25 +75,46 @@ export async function POST(req: NextRequest) {
         })
       : [];
 
-    const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object" && !Array.isArray(body.scrapedProduct)
-      ? body.scrapedProduct as { title?: unknown; priceJpy?: unknown; url?: unknown }
-      : null;
-    const supportRun = await runCustomerSupportTools({
-      message,
-      customerId: customerSession?.id ?? null,
-      guestOrderAccessToken: req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null,
-      scrapedProduct,
-    });
+    const isVnJpRegistration = message.startsWith("[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT]");
 
-    // Order privacy and missing quote inputs use deterministic replies; never ask the model
-    // to infer private order state or invent the missing price/rate.
-    const generatedReply = supportRun.guardedReply ?? await askGeminiAgent(
-      message,
-      selectedPersonality,
-      validHistory,
-      supportRun.evidence
-    );
-    const reply = generatedReply + (supportRun.quoteFooter ?? "");
+    let reply = "";
+    let supportSources: unknown[] = [];
+    let isGuardrailTriggered = false;
+
+    if (isVnJpRegistration) {
+      const codeMatch = message.match(/Mã\s*phiếu:\s*([^-\n]+)/i);
+      const dispatchCode = codeMatch ? codeMatch[1].trim() : "";
+
+      const nameMatch = message.match(/Họ\s*tên:\s*([^-\n]+)/i);
+      const parsedName = nameMatch ? nameMatch[1].trim() : "";
+
+      const phoneMatch = message.match(/SĐT:\s*([^-\n]+)/i) || message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
+      const parsedPhone = phoneMatch ? (phoneMatch[1] || phoneMatch[0]).trim() : "";
+
+      reply = `ChillBanana đã tiếp nhận yêu cầu gửi hàng từ Việt Nam sang Nhật Bản${dispatchCode ? ` (Mã phiếu điều phối: ${dispatchCode})` : ""}${parsedName ? ` của Quý khách ${parsedName}` : ""}. Đơn vị điều phối sẽ liên hệ số điện thoại ${parsedPhone || "của Quý khách"} trong ít phút để hướng dẫn đóng gói và lấy hàng tận nơi!`;
+    } else {
+      const scrapedProduct = body.scrapedProduct && typeof body.scrapedProduct === "object" && !Array.isArray(body.scrapedProduct)
+        ? body.scrapedProduct as { title?: unknown; priceJpy?: unknown; url?: unknown }
+        : null;
+      const supportRun = await runCustomerSupportTools({
+        message,
+        customerId: customerSession?.id ?? null,
+        guestOrderAccessToken: req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null,
+        scrapedProduct,
+      });
+
+      // Order privacy and missing quote inputs use deterministic replies; never ask the model
+      // to infer private order state or invent the missing price/rate.
+      const generatedReply = supportRun.guardedReply ?? await askGeminiAgent(
+        message,
+        selectedPersonality,
+        validHistory,
+        supportRun.evidence
+      );
+      reply = generatedReply + (supportRun.quoteFooter ?? "");
+      supportSources = supportRun.sources;
+      isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");
+    }
 
     // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
     const msgLower = message.toLowerCase();
@@ -108,21 +129,40 @@ export async function POST(req: NextRequest) {
     };
     const detectedKeywords: string[] = [];
     let topic = "Khác";
-    for (const [kw, cat] of Object.entries(keywordMap)) {
-      if (msgLower.includes(kw)) {
-        detectedKeywords.push(kw);
-        if (topic === "Khác") topic = cat;
+    if (isVnJpRegistration) {
+      topic = "Gửi hàng VN -> Nhật";
+      detectedKeywords.push("gửi hàng vn -> nhật", "tuyến vn-jp");
+    } else {
+      for (const [kw, cat] of Object.entries(keywordMap)) {
+        if (msgLower.includes(kw)) {
+          detectedKeywords.push(kw);
+          if (topic === "Khác") topic = cat;
+        }
       }
     }
-    const sentiment = msgLower.includes("không") || msgLower.includes("lỗi") || msgLower.includes("sai") ? "complaint"
+    const sentiment = isVnJpRegistration
+      ? "inquiry"
+      : (msgLower.includes("không") || msgLower.includes("lỗi") || msgLower.includes("sai") ? "complaint"
       : msgLower.includes("?") || msgLower.includes("hỏi") || msgLower.includes("tư vấn") ? "inquiry"
-      : "positive";
+      : "positive");
 
     let customerId = customerSession?.id || null;
-    let customerType = customerId ? "REGISTERED" : "ANONYMOUS_GUEST";
+    let customerType = customerId ? "REGISTERED" : (isVnJpRegistration ? "CHAT_LEAD" : "ANONYMOUS_GUEST");
     let customerName: string | null = null;
     let customerEmail: string | null = customerSession?.email || null;
     let customerPhone: string | null = null;
+
+    if (isVnJpRegistration) {
+      const nameMatch = message.match(/Họ\s*tên:\s*([^-\n]+)/i);
+      if (nameMatch && nameMatch[1].trim()) {
+        customerName = nameMatch[1].trim();
+      }
+      const phoneMatch = message.match(/SĐT:\s*([^-\n]+)/i) || message.match(/(?:0|\+84)[3|5|7|8|9]\d{8}\b/);
+      if (phoneMatch) {
+        customerPhone = (phoneMatch[1] || phoneMatch[0]).trim();
+      }
+      if (!customerId) customerType = "CHAT_LEAD";
+    }
 
     if (customerId) {
       const customerProfile = await prisma.customer.findUnique({
@@ -130,13 +170,13 @@ export async function POST(req: NextRequest) {
         select: { name: true, email: true, phone: true },
       });
       if (customerProfile) {
-        customerName = customerProfile.name;
+        if (!customerName) customerName = customerProfile.name;
         customerEmail = customerProfile.email;
-        customerPhone = customerProfile.phone;
+        if (!customerPhone) customerPhone = customerProfile.phone;
       } else {
         customerId = null;
         customerEmail = null;
-        customerType = "ANONYMOUS_GUEST";
+        customerType = isVnJpRegistration ? "CHAT_LEAD" : "ANONYMOUS_GUEST";
       }
     }
 
@@ -204,8 +244,8 @@ export async function POST(req: NextRequest) {
       reply,
       personality: selectedPersonality,
       sessionId: resolvedSessionId,
-      sources: supportRun.sources,
-      isGuardrailTriggered: supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted"),
+      sources: supportSources,
+      isGuardrailTriggered,
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {
       httpOnly: true,

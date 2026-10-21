@@ -57,6 +57,35 @@ export default function NeoDaylightCosmos() {
   const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
   const [vnJpCity, setVnJpCity] = useState("Tokyo");
   const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
+  const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
+
+  const getVnJpRatePerKg = (type: string) => {
+    switch (type) {
+      case "doc":
+        return 210000;
+      case "food":
+        return 220000;
+      case "other":
+        return 200000;
+      case "gift":
+      default:
+        return 180000;
+    }
+  };
+
+  const getVnJpCargoLabel = (type: string) => {
+    switch (type) {
+      case "doc":
+        return "Tài liệu / Hồ sơ du học (EMS)";
+      case "food":
+        return "Thực phẩm khô / Bánh kẹo / Trà";
+      case "other":
+        return "Hàng mẫu kinh doanh / Khác";
+      case "gift":
+      default:
+        return "Kiện quà / Đồ khô / Quần áo";
+    }
+  };
 
   // Order form state
   const [showOrderForm, setShowOrderForm] = useState(false);
@@ -679,8 +708,8 @@ export default function NeoDaylightCosmos() {
             <div className="card" style={{ maxWidth: "1080px", margin: "0 auto", padding: "32px" }}>
               {/* Header tuyến VN -> JP */}
               <div style={{ display: "flex", alignItems: "center", gap: "14px", marginBottom: "1.5rem" }}>
-                <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(248, 219, 85, 0.22)", border: "1px solid rgba(248, 219, 85, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "1.4rem" }}>
-                  🇻🇳➔🇯🇵
+                <div style={{ width: "48px", height: "48px", borderRadius: "14px", background: "rgba(248, 219, 85, 0.22)", border: "1px solid rgba(248, 219, 85, 0.4)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem", fontWeight: 800, whiteSpace: "nowrap" }}>
+                  VN➔JP
                 </div>
                 <div>
                   <h3 style={{ fontSize: "1.25rem", fontWeight: 800, margin: 0 }}>
@@ -730,16 +759,21 @@ export default function NeoDaylightCosmos() {
                       showToast("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
                       return;
                     }
+
+                    const code = `VNJP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+                    const totalEst = Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg);
+                    setVnJpDispatchCode(code);
+
                     fetch("/api/ai/chat", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({
-                        message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${vnJpCargoType} - Trọng lượng: ${vnJpWeightKg}kg - Thành phố nhận: ${vnJpCity}`,
+                        message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Mã phiếu: ${code} - Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${getVnJpCargoLabel(vnJpCargoType)} - Trọng lượng: ${vnJpWeightKg}kg - Tỉnh/Thành nhận: ${vnJpCity} - Tổng cước tạm tính: ${totalEst.toLocaleString("vi-VN")} đ`,
                         personality: "omotenashi",
                       }),
                     }).catch(() => {});
                     setVnJpSubmitted(true);
-                    showToast("Đã tiếp nhận yêu cầu gửi hàng sang Nhật! Điều phối viên ChillBanana sẽ gọi bạn trong 15 phút.");
+                    showToast(`Đã ghi nhận phiếu điều phối #${code}!`);
                   }}
                   style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "1.5rem" }}
                 >
@@ -802,6 +836,44 @@ export default function NeoDaylightCosmos() {
                     </div>
                   </div>
 
+                  {/* Thanh tự động tính Tổng cước dự kiến */}
+                  {(() => {
+                    const rate = getVnJpRatePerKg(vnJpCargoType);
+                    const totalEst = Math.round(rate * vnJpWeightKg);
+                    return (
+                      <div
+                        style={{
+                          background: "linear-gradient(135deg, rgba(248, 219, 85, 0.18), rgba(16, 185, 129, 0.08))",
+                          border: "1px solid rgba(248, 219, 85, 0.5)",
+                          borderRadius: "14px",
+                          padding: "12px 16px",
+                          marginTop: "0.5rem",
+                          marginBottom: "1.2rem",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          flexWrap: "wrap",
+                          gap: "10px",
+                        }}
+                      >
+                        <div>
+                          <span style={{ fontSize: "0.82rem", color: "#475569", fontWeight: 700, display: "block" }}>
+                            Tạm tính cước vận chuyển VN ➔ JP ({vnJpWeightKg} kg):
+                          </span>
+                          <span style={{ fontSize: "0.85rem", color: "#1e293b" }}>
+                            Đơn giá: <b>{rate.toLocaleString("vi-VN")} đ/kg</b> × {vnJpWeightKg} kg —{" "}
+                            <span style={{ color: "#16a34a", fontWeight: 700 }}>Đã gồm đóng thùng carton đạt chuẩn bay</span>
+                          </span>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0f172a" }}>
+                            {totalEst.toLocaleString("vi-VN")} đ
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   <div style={{ display: "flex", gap: "12px", alignItems: "center", marginTop: "1.2rem", flexWrap: "wrap" }}>
                     <button className="cta" type="submit">
                       Gửi Yêu Cầu Báo Giá & Đón Hàng <svg><use href="#i-arrow" /></svg>
@@ -809,32 +881,74 @@ export default function NeoDaylightCosmos() {
                     <a
                       href="tel:19006868"
                       className="btn2"
-                      style={{ textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "6px" }}
+                      style={{
+                        textDecoration: "none",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        color: "#0f172a",
+                        background: "#f1f5f9",
+                        border: "1px solid #cbd5e1",
+                        fontWeight: 700,
+                      }}
                     >
                       📞 Hotline 1900 6868 (Miễn cước)
                     </a>
                   </div>
                 </form>
               ) : (
-                <div style={{ padding: "20px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "16px", textAlign: "center", marginTop: "1.5rem" }}>
-                  <div style={{ fontSize: "1.8rem", marginBottom: "8px" }}>✅</div>
-                  <h4 style={{ fontWeight: 800, color: "#166534", margin: "0 0 6px" }}>
-                    Đã Ghi Nhận Yêu Cầu Gửi Hàng Tuyến VN ➔ JP!
-                  </h4>
-                  <p style={{ color: "#15803d", fontSize: "0.85rem", margin: "0 0 12px" }}>
-                    Nhân viên điều phối ChillBanana sẽ gọi điện tới số <b>{vnJpSenderPhone}</b> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng gói cho bạn.
+                <div style={{ padding: "24px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "18px", marginTop: "1.5rem" }}>
+                  <div style={{ textAlign: "center", marginBottom: "14px" }}>
+                    <div style={{ fontSize: "2rem", marginBottom: "4px" }}>✅</div>
+                    <h4 style={{ fontWeight: 800, color: "#166534", margin: "0 0 6px", fontSize: "1.15rem" }}>
+                      Đã Ghi Nhận Phiếu Điều Phối Tuyến VN ➔ JP Thành Công!
+                    </h4>
+                    {vnJpDispatchCode && (
+                      <div style={{ display: "inline-block", background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0", padding: "4px 14px", borderRadius: "999px", fontWeight: 800, fontSize: "0.95rem", fontFamily: "monospace" }}>
+                        Mã phiếu: {vnJpDispatchCode}
+                      </div>
+                    )}
+                  </div>
+
+                  <div style={{ background: "#ffffff", borderRadius: "14px", padding: "14px 18px", border: "1px solid #bbf7d0", margin: "14px 0", fontSize: "0.85rem", color: "#1e293b", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Người gửi tại VN:</span>
+                      <b>{vnJpSenderName}</b> ({vnJpSenderPhone})
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Tuyến gửi đến Nhật Bản:</span>
+                      <b>Việt Nam ➔ {vnJpCity} (Nhật Bản)</b>
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Kiện hàng & Trọng lượng:</span>
+                      <b>{vnJpWeightKg} kg</b> ({getVnJpCargoLabel(vnJpCargoType)})
+                    </div>
+                    <div>
+                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Tổng cước tạm tính:</span>
+                      <b style={{ color: "#15803d", fontSize: "1rem" }}>
+                        {Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg).toLocaleString("vi-VN")} đ
+                      </b> <small style={{ color: "#16a34a" }}>(Đã gồm thùng carton chuẩn bay)</small>
+                    </div>
+                  </div>
+
+                  <p style={{ color: "#15803d", fontSize: "0.85rem", textAlign: "center", margin: "0 0 16px" }}>
+                    Nhân viên điều phối ChillBanana sẽ liên hệ tới số <b>{vnJpSenderPhone}</b> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng gói cho bạn.
                   </p>
-                  <button
-                    type="button"
-                    className="btn2"
-                    onClick={() => {
-                      setVnJpSubmitted(false);
-                      setVnJpSenderName("");
-                      setVnJpSenderPhone("");
-                    }}
-                  >
-                    Gửi yêu cầu kiện khác
-                  </button>
+                  <div style={{ textAlign: "center" }}>
+                    <button
+                      type="button"
+                      className="btn2"
+                      onClick={() => {
+                        setVnJpSubmitted(false);
+                        setVnJpSenderName("");
+                        setVnJpSenderPhone("");
+                        setVnJpDispatchCode("");
+                      }}
+                      style={{ fontWeight: 700 }}
+                    >
+                      Gửi yêu cầu kiện khác
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
