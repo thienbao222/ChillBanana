@@ -1210,6 +1210,27 @@ function TrackingCosmosContent() {
                         <span style={{ fontWeight: 800, color: "#8a5a00" }}>{order.isPriceVerified ? `${t("Số tiền cần thanh toán")} (${order.depositPercent || 50}%):` : t("Mức thanh toán tạm tính:")}</span>
                         <b style={{ fontSize: "1.15rem", color: "#8a5a00" }}>{order.depositAmountVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
+                      {/* Trạng thái tất toán / COD */}
+                      {order.paymentStatus === "DEPOSITED_50" && order.status !== "COMPLETED" && (
+                        <div className="flex justify-between py-2 mt-1" style={{ background: "rgba(234,88,12,0.1)", padding: "10px 14px", borderRadius: "14px", border: "1px dashed rgba(234,88,12,0.4)" }}>
+                          <span style={{ fontWeight: 700, color: "#c2410c", fontSize: "0.82rem" }}>
+                            {t("Cần tất toán khi nhận hàng (50% còn lại + Cước bay):")}
+                          </span>
+                          <b style={{ fontSize: "1.05rem", color: "#c2410c" }}>
+                            {Math.max(0, (order.totalVnd || 0) - (order.depositAmountVnd || 0)).toLocaleString("vi-VN")} đ
+                          </b>
+                        </div>
+                      )}
+                      {order.paymentStatus === "PAID_100" && (
+                        <div className="flex justify-between py-2 mt-1" style={{ background: "rgba(22,163,74,0.1)", padding: "10px 14px", borderRadius: "14px", border: "1px solid rgba(22,163,74,0.3)" }}>
+                          <span style={{ fontWeight: 700, color: "#15803d", fontSize: "0.82rem" }}>
+                            ✓ {t("Đã tất toán đủ 100% (Gồm tiền hàng, phí & cước bay):")}
+                          </span>
+                          <b style={{ fontSize: "1.05rem", color: "#15803d" }}>
+                            {(order.totalVnd || order.depositAmountVnd || 0).toLocaleString("vi-VN")} đ
+                          </b>
+                        </div>
+                      )}
                     </div>
 
                     {order.status === "PENDING_DEPOSIT" && order.paymentStatus === "UNPAID" && (

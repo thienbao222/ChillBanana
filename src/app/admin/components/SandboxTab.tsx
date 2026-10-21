@@ -17,6 +17,7 @@ import {
   CreditCard,
   ShieldCheck,
   ChevronRight,
+  RotateCcw,
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
 
@@ -165,6 +166,29 @@ export default function SandboxTab() {
   };
 
   const selectedOrder = orders.find((o) => o.orderCode === selectedOrderCode);
+
+  const handleRollback = async () => {
+    if (!selectedOrderCode) return;
+    setTransitioning(true);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(selectedOrderCode)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rollback" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        adminToast.success(data.message || "Đã hoàn tác trạng thái về bước trước");
+        await loadOrders();
+      } else {
+        adminToast.error(data.error || "Không thể hoàn tác");
+      }
+    } catch {
+      adminToast.error("Lỗi kết nối API");
+    } finally {
+      setTransitioning(false);
+    }
+  };
 
   const handleOpenMockPayment = async () => {
     if (!selectedOrder) return;
@@ -339,6 +363,17 @@ export default function SandboxTab() {
                     </span>
                   </div>
 
+                  {selectedOrder.status !== "PENDING_DEPOSIT" && selectedOrder.status !== "CANCELLED" && (
+                    <button
+                      type="button"
+                      disabled={transitioning}
+                      onClick={handleRollback}
+                      className="w-full bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 py-1.5 px-2 rounded-lg text-center font-medium flex items-center justify-center gap-1.5 text-xs transition"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Hoàn tác lùi 1 bước (Rollback)</span>
+                    </button>
+                  )}
                   <div className="pt-2 border-t border-slate-800 flex gap-2">
                     <a
                       href={`/tracking?orderCode=${encodeURIComponent(selectedOrder.orderCode)}`}

@@ -9,7 +9,7 @@ import {
   verifyGuestOrderAccessToken,
 } from "@/lib/auth-session";
 import { isVerifiedAdmin } from "@/lib/admin-guard";
-import { isNextOrderStatus } from "@/features/orders/policy";
+import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
@@ -202,6 +202,78 @@ export async function PATCH(
       }
     }
 
+    // Hỗ trợ hành động HOÀN TÁC / LÙI 1 BƯỚC (chỉ dành cho Quản trị viên)
+    if (action === "rollback") {
+      if (!isAdminUser) {
+        return NextResponse.json({ error: "Chỉ quản trị viên mới có quyền hoàn tác trạng thái đơn hàng." }, { status: 401 });
+      }
+      if (existingOrder.status === "PENDING_DEPOSIT" || existingOrder.status === "CANCELLED") {
+        return NextResponse.json({ error: `Đơn hàng ở trạng thái "${existingOrder.status}" không thể hoàn tác lùi bước.` }, { status: 400 });
+      }
+      const prevStatus = getPreviousOrderStatus(existingOrder.status);
+      if (!prevStatus) {
+        return NextResponse.json({ error: "Không tìm thấy trạng thái trước đó để hoàn tác." }, { status: 400 });
+      }
+
+      const rollbackTitle = "Hoàn tác trạng thái đơn hàng";
+      const rollbackDesc = `Quản trị viên hoàn tác trạng thái từ "${existingOrder.status}" về "${prevStatus}" (Thao tác điều chỉnh vận hành).`;
+      const rollbackLocation = "Hệ thống Quản trị ChillBanana";
+
+      const rollbackUpdateData: any = {
+        status: prevStatus,
+        trackingLogs: {
+          create: {
+            status: prevStatus,
+            title: rollbackTitle,
+            description: rollbackDesc,
+            location: rollbackLocation,
+          },
+        },
+      };
+
+      // Nếu lùi từ COMPLETED về LOCAL_DELIVERY
+      if (existingOrder.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
+        if (existingOrder.depositPercent === 50) {
+          rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+          rollbackUpdateData.depositAmountVnd = getDepositAmount(
+            existingOrder.productPriceVnd + existingOrder.serviceFeeVnd,
+            50
+          );
+        }
+      }
+
+      const rolledBackOrder = await prisma.$transaction(async (tx) => {
+        if (existingOrder.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
+          await tx.paymentTransaction.deleteMany({
+            where: {
+              orderId: existingOrder.id,
+              provider: "COD_SETTLEMENT",
+            },
+          });
+        }
+        return tx.order.update({
+          where: { id: existingOrder.id },
+          data: rollbackUpdateData,
+          include: { trackingLogs: { orderBy: { createdAt: "desc" } } },
+        });
+      });
+
+      await writeAuditLog({
+        actor: getAdminUsernameFromRequest(req) ?? "admin",
+        action: "ORDER_STATUS_ROLLBACK",
+        entityType: "Order",
+        entityId: existingOrder.orderCode,
+        summary: `Hoàn tác trạng thái đơn ${existingOrder.orderCode} từ ${existingOrder.status} về ${prevStatus}.`,
+        metadata: {
+          fromStatus: existingOrder.status,
+          toStatus: prevStatus,
+        },
+        req,
+      });
+
+      return NextResponse.json({ success: true, order: rolledBackOrder });
+    }
+
     // Không cho phép thay đổi nếu đơn hàng đã hoàn tất hoặc đã hủy
     if (existingOrder.status === "COMPLETED" || existingOrder.status === "CANCELLED") {
       return NextResponse.json(
@@ -293,6 +365,51 @@ export async function PATCH(
         },
       },
     };
+
+    if (logStatus === "LOCAL_DELIVERY") {
+      const remainingBalanceVnd = Math.max(0, existingOrder.totalVnd - existingOrder.depositAmountVnd);
+      if (!description && remainingBalanceVnd > 0) {
+        updateData.trackingLogs.create.description =
+          `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${existingOrder.depositPercent === 50 ? "50% giá trị đơn còn lại và " : ""}cước bay quốc tế ${existingOrder.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`;
+      }
+    }
+
+    if (logStatus === "COMPLETED") {
+      const remainingBalanceVnd = Math.max(0, existingOrder.totalVnd - existingOrder.depositAmountVnd);
+      const remainingBaseVnd = Math.max(
+        0,
+        existingOrder.productPriceVnd + existingOrder.serviceFeeVnd - existingOrder.depositAmountVnd
+      );
+      const shippingVnd = existingOrder.shippingFeeVnd || 0;
+
+      updateData.paymentStatus = "PAID_100";
+      updateData.depositAmountVnd = existingOrder.totalVnd;
+
+      if (!description && remainingBalanceVnd > 0) {
+        const breakdownParts: string[] = [];
+        if (remainingBaseVnd > 0) {
+          breakdownParts.push(`50% tiền hàng & phí còn lại (${remainingBaseVnd.toLocaleString("vi-VN")} đ)`);
+        }
+        if (shippingVnd > 0) {
+          breakdownParts.push(`cước bay quốc tế ${existingOrder.weightKg}kg (${shippingVnd.toLocaleString("vi-VN")} đ)`);
+        }
+        const detailText = breakdownParts.length > 0 ? ` gồm ${breakdownParts.join(" + ")}` : "";
+        updateData.trackingLogs.create.description =
+          `Kiện hàng đã giao thành công và thu đủ khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ${detailText}. Tổng thanh toán hoàn tất 100% (${existingOrder.totalVnd.toLocaleString("vi-VN")} đ).`;
+      }
+
+      if (remainingBalanceVnd > 0) {
+        updateData.paymentTransactions = {
+          create: {
+            provider: "COD_SETTLEMENT",
+            amountVnd: remainingBalanceVnd,
+            status: "CONFIRMED",
+            reference: `Tất toán khi nhận hàng (${existingOrder.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${existingOrder.weightKg}kg)`,
+            confirmedByAdmin: getAdminUsernameFromRequest(req) ?? "admin",
+          },
+        };
+      }
+    }
 
     if (isAdminUser) {
       if (paymentStatus !== undefined) {

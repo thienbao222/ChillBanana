@@ -16,3 +16,8 @@ export function isNextOrderStatus(current: string, next: string): boolean {
   const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
   return currentIndex >= 0 && ORDER_STATUS_FLOW[currentIndex + 1] === next;
 }
+
+export function getPreviousOrderStatus(current: string): ActiveOrderStatus | null {
+  const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
+  return currentIndex > 0 ? ORDER_STATUS_FLOW[currentIndex - 1] : null;
+}

@@ -67,10 +67,6 @@ export async function POST(
     );
   }
 
-  const meta = STATUS_METADATA[targetStatus];
-  const finalDesc = description?.trim() || meta.defaultDesc;
-  const finalLocation = location?.trim() || meta.location;
-
   try {
     // Tìm order theo ID hoặc orderCode
     const order = await prisma.order.findFirst({
@@ -92,6 +88,17 @@ export async function POST(
         { status: 400 }
       );
     }
+
+    const meta = STATUS_METADATA[targetStatus];
+    const remainingBalanceVnd = Math.max(0, order.totalVnd - order.depositAmountVnd);
+    const finalDesc = description?.trim() || (
+      targetStatus === "LOCAL_DELIVERY" && remainingBalanceVnd > 0
+        ? `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${order.depositPercent === 50 ? "50% giá trị đơn còn lại và " : ""}cước bay quốc tế ${order.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`
+        : targetStatus === "COMPLETED" && remainingBalanceVnd > 0
+        ? `Kiện hàng đã giao thành công và thu đủ khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ. Tổng thanh toán hoàn tất 100% (${order.totalVnd.toLocaleString("vi-VN")} đ).`
+        : meta.defaultDesc
+    );
+    const finalLocation = location?.trim() || meta.location;
 
     // RÀNG BUỘC STATE MACHINE: Chỉ cho phép sang đúng bước kế tiếp, không nhảy cóc
     if (!isNextOrderStatus(order.status, targetStatus)) {
@@ -141,12 +148,26 @@ export async function POST(
         where: { id: order.id },
         data: {
           status: targetStatus,
-          paymentStatus: targetStatus === "COMPLETED" && order.paymentStatus === "DEPOSITED_50" ? "PAID_100" : undefined,
+          paymentStatus: targetStatus === "COMPLETED" ? "PAID_100" : undefined,
+          depositAmountVnd: targetStatus === "COMPLETED" ? order.totalVnd : undefined,
           jpDomesticTrack: mockJpTrack || undefined,
           vnDomesticTrack: mockVnTrack || undefined,
           adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} chuyển trạng thái sang ${targetStatus}.`,
         },
       });
+
+      if (targetStatus === "COMPLETED" && remainingBalanceVnd > 0) {
+        await tx.paymentTransaction.create({
+          data: {
+            orderId: order.id,
+            provider: "COD_SETTLEMENT",
+            amountVnd: remainingBalanceVnd,
+            status: "CONFIRMED",
+            reference: `Tất toán khi nhận hàng (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
+            confirmedByAdmin: adminUsername,
+          },
+        });
+      }
 
       const log = await tx.trackingLog.create({
         data: {

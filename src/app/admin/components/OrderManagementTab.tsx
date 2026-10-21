@@ -342,6 +342,26 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     }
   };
 
+  const handleRollbackStatus = async (order: StoredOrder) => {
+    if (!confirm(`Bạn có chắc chắn muốn hoàn tác lùi 1 bước trạng thái của đơn #${order.orderCode}?`)) return;
+    try {
+      const res = await fetch(`/api/orders/${order.orderCode}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "rollback" }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        adminToast.success(`Đã hoàn tác lùi 1 bước đơn #${order.orderCode}!`);
+        fetchOrders();
+      } else {
+        adminToast.error("Lỗi hoàn tác: " + (data.error || "Không thể thực hiện"));
+      }
+    } catch {
+      adminToast.error("Lỗi kết nối máy chủ");
+    }
+  };
+
   const filteredOrders = orders.filter((ord) => {
     const matchesStatus = filterStatus === "ALL" || ord.status === filterStatus;
     const term = searchTerm.toLowerCase();
@@ -692,6 +712,23 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Thu COD lúc giao:</span>
+                            <span className="font-mono font-bold text-red-600">
+                              {((ord.totalVnd || 0) - (ord.depositAmountVnd || 0) > 0
+                                ? (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)
+                                : Math.round((ord.totalVnd || 0) * 0.5)
+                              ).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "COMPLETED" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">100% Đã tất toán</span>
+                          </div>
+                        )}
                         <div className="text-right font-mono font-bold text-banana-700">
                           {ord.totalVnd?.toLocaleString()} đ
                         </div>
@@ -783,6 +820,23 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Thu COD lúc giao:</span>
+                            <span className="font-mono font-bold text-red-600">
+                              {((ord.totalVnd || 0) - (ord.depositAmountVnd || 0) > 0
+                                ? (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)
+                                : Math.round((ord.totalVnd || 0) * 0.5)
+                              ).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "COMPLETED" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">100% Đã tất toán</span>
+                          </div>
+                        )}
                         <div className="text-right font-mono font-bold text-banana-700">
                           {ord.priceJpy?.toLocaleString()} ¥
                         </div>
@@ -814,6 +868,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               Chi Tiết
                             </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRollbackStatus(ord)}
+                            title="Hoàn tác về bước liền trước nếu lỡ bấm nhầm"
+                            className="w-full py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>⏪ Lùi 1 bước (Hoàn tác)</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -853,6 +915,23 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Thu COD lúc giao:</span>
+                            <span className="font-mono font-bold text-red-600">
+                              {((ord.totalVnd || 0) - (ord.depositAmountVnd || 0) > 0
+                                ? (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)
+                                : Math.round((ord.totalVnd || 0) * 0.5)
+                              ).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "COMPLETED" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">100% Đã tất toán</span>
+                          </div>
+                        )}
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
                             onClick={() => {
@@ -887,6 +966,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               Chi Tiết
                             </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRollbackStatus(ord)}
+                            title="Hoàn tác về bước liền trước nếu lỡ bấm nhầm"
+                            className="w-full py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>⏪ Lùi 1 bước (Hoàn tác)</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -926,6 +1013,23 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Thu COD lúc giao:</span>
+                            <span className="font-mono font-bold text-red-600">
+                              {((ord.totalVnd || 0) - (ord.depositAmountVnd || 0) > 0
+                                ? (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)
+                                : Math.round((ord.totalVnd || 0) * 0.5)
+                              ).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "COMPLETED" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">100% Đã tất toán</span>
+                          </div>
+                        )}
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
                             onClick={() => {
@@ -966,6 +1070,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               Chi Tiết
                             </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRollbackStatus(ord)}
+                            title="Hoàn tác về bước liền trước nếu lỡ bấm nhầm"
+                            className="w-full py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>⏪ Lùi 1 bước (Hoàn tác)</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1009,6 +1121,23 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Thu COD lúc giao:</span>
+                            <span className="font-mono font-bold text-red-600">
+                              {((ord.totalVnd || 0) - (ord.depositAmountVnd || 0) > 0
+                                ? (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)
+                                : Math.round((ord.totalVnd || 0) * 0.5)
+                              ).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "COMPLETED" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">100% Đã tất toán</span>
+                          </div>
+                        )}
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           {ord.status !== "COMPLETED" && (
                             <button
@@ -1039,6 +1168,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                               Chi Tiết
                             </button>
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRollbackStatus(ord)}
+                            title="Hoàn tác về bước liền trước nếu lỡ bấm nhầm"
+                            className="w-full py-1 rounded-lg border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[10px] font-bold transition-colors flex items-center justify-center space-x-1"
+                          >
+                            <span>⏪ Lùi 1 bước (Hoàn tác)</span>
+                          </button>
                         </div>
                       </div>
                     ))}

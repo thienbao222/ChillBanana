@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { MIN_ORDER_THRESHOLD_VND, ORDER_STATUS_FLOW, isNextOrderStatus } from "@/features/orders/policy";
+import {
+  MIN_ORDER_THRESHOLD_VND,
+  ORDER_STATUS_FLOW,
+  isNextOrderStatus,
+  getPreviousOrderStatus,
+} from "@/features/orders/policy";
 import {
   getDepositAmount,
   getRecordedPaymentStatus,
@@ -14,10 +19,18 @@ describe("quy trình trạng thái đơn", () => {
     }
   });
 
-  it("không cho nhảy cóc, lùi hoặc giữ nguyên", () => {
+  it("không cho nhảy cóc, lùi hoặc giữ nguyên trong hàm isNextOrderStatus", () => {
     expect(isNextOrderStatus("PENDING_DEPOSIT", "WAREHOUSE_JP")).toBe(false);
     expect(isNextOrderStatus("WAREHOUSE_JP", "PURCHASING_JP")).toBe(false);
     expect(isNextOrderStatus("PENDING_DEPOSIT", "PENDING_DEPOSIT")).toBe(false);
+  });
+
+  it("lùi đúng về trạng thái trước đó với getPreviousOrderStatus", () => {
+    for (let i = 1; i < ORDER_STATUS_FLOW.length; i++) {
+      expect(getPreviousOrderStatus(ORDER_STATUS_FLOW[i])).toBe(ORDER_STATUS_FLOW[i - 1]);
+    }
+    expect(getPreviousOrderStatus("PENDING_DEPOSIT")).toBeNull();
+    expect(getPreviousOrderStatus("RAC")).toBeNull();
   });
 
   it("trạng thái cuối và trạng thái lạ không có bước tiếp theo", () => {
