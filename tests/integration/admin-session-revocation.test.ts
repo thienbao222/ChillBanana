@@ -73,4 +73,11 @@ describe("cookie admin của tài khoản đã bị xóa mất hiệu lực trê
     const o = await makeOrder();
     expect((await orderById.GET(get(`/api/orders/${o.orderCode}`, { cookies }), params({ id: o.orderCode }))).status).toBe(200);
   });
+
+  it("cookie admin có pwdDigest không khớp (mật khẩu đã thay đổi) bị từ chối 401", async () => {
+    await makeAdmin("admin-doi-pass");
+    const fakeDigest = "0000000000000000";
+    const cookies = adminCookies("admin-doi-pass", "SUPER_ADMIN", fakeDigest);
+    expect((await orders.GET(get("/api/orders", { cookies }))).status).toBe(401);
+  });
 });

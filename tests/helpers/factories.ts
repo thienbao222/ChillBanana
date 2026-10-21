@@ -39,10 +39,9 @@ export async function makeAdmin(username = "admin", role = "SUPER_ADMIN", passwo
   });
 }
 
-export const adminCookies = (username = "admin", role = "SUPER_ADMIN") => {
-  const pwdDigest = computePasswordDigest(hashAdminPassword(PASSWORD));
-  return { [ADMIN_COOKIE_NAME]: createAdminSessionTokenWithRole(username, role, pwdDigest) };
-};
+export const adminCookies = (username = "admin", role = "SUPER_ADMIN", pwdDigest?: string) => ({
+  [ADMIN_COOKIE_NAME]: createAdminSessionTokenWithRole(username, role, pwdDigest),
+});
 
 export async function makeCustomer(email = `khach-${randomUUID().slice(0, 8)}@example.test`, over: Record<string, unknown> = {}) {
   return prisma.customer.create({
@@ -56,8 +55,8 @@ export async function makeCustomer(email = `khach-${randomUUID().slice(0, 8)}@ex
   });
 }
 
-export const customerCookies = (customer: { id: string; email: string; passwordHash?: string }) => {
-  const pwdDigest = customer.passwordHash ? computePasswordDigest(customer.passwordHash) : computePasswordDigest(hashCustomerPassword(PASSWORD));
+export const customerCookies = (customer: { id: string; email: string; pwdDigest?: string; passwordHash?: string }) => {
+  const pwdDigest = customer.pwdDigest || (customer.passwordHash ? computePasswordDigest(customer.passwordHash) : undefined);
   return {
     [CUSTOMER_COOKIE_NAME]: createCustomerSessionToken({ id: customer.id, email: customer.email, pwdDigest }),
   };
