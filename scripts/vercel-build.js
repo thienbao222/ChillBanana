@@ -52,6 +52,16 @@ if (isProductionDeployment) {
     process.exit(1);
   }
   const migrationEnv = databaseUrl ? { DATABASE_URL: databaseUrl } : {};
+
+  // Dọn dẹp advisory lock treo (nếu có từ phiên trước) để tránh lỗi P1002 timeout
+  const clearLockScript = path.join(__dirname, "clear-advisory-lock.js");
+  if (fs.existsSync(clearLockScript)) {
+    spawnSync(process.execPath, [clearLockScript], {
+      env: { ...process.env, ...migrationEnv },
+      stdio: "ignore",
+    });
+  }
+
   runNpm(["run", "prisma:migrate:deploy"], migrationEnv);
   runNpm(["run", "prisma:seed"], migrationEnv);
 } else {
