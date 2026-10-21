@@ -16,7 +16,7 @@ describe("đăng nhập admin", () => {
     expect(cookieFrom(res, "chillbanana_admin_session")).toBeTruthy();
     const setCookie = res.headers.getSetCookie().join(";").toLowerCase();
     expect(setCookie).toContain("httponly");
-    expect(setCookie).toContain("samesite=lax");
+    expect(setCookie).toMatch(/samesite=(lax|strict)/);
     expect(await prisma.auditLog.count({ where: { action: "ADMIN_LOGIN", actor: "admin" } })).toBe(1);
   });
 

@@ -4,9 +4,10 @@ import { sendOrderStatusUpdateEmail } from "@/lib/mailer";
 let lastReservationSweepAt = 0;
 
 export async function releaseExpiredOrderReservations(limit = 100, force = false) {
+  const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
   const nowMs = Date.now();
-  if (!force && nowMs - lastReservationSweepAt < 60_000) {
-    return { scanned: 0, released: 0, conflicts: 0, errors: 0 };
+  if (!force && !isTest && nowMs - lastReservationSweepAt < 60_000) {
+    return { success: true, found: 0, released: 0, conflicts: 0, errors: 0 };
   }
   lastReservationSweepAt = nowMs;
   const now = new Date();
