@@ -392,3 +392,65 @@ model AuditLog {
   @@index([entityType, entityId])
 }
 
+// =========================================================================
+// PHÂN HỆ ĐỘC LẬP: KÝ GỬI & VẬN CHUYỂN HÀNG KHÔNG VIỆT NAM ➔ NHẬT BẢN (VN ➔ JP)
+// =========================================================================
+model VnJpShipment {
+  id                    String   @id @default(cuid())
+  trackingCode          String   @unique // Ví dụ: VNJP-2026-8891
+
+  // Người gửi tại Việt Nam
+  senderName            String
+  senderPhone           String
+  senderAddress         String
+  senderCity            String   @default("Hà Nội")
+  pickupDate            String?  // Ngày hẹn bưu tá qua lấy hàng tận nơi
+
+  // Người nhận tại Nhật Bản
+  receiverName          String   // Tên Romaji in hoa (VD: NGUYEN VAN A)
+  receiverPhone         String   // SĐT nội địa Nhật (+81 hoặc 070/080/090)
+  receiverPostalCode    String   // Mã bưu điện Nhật Bản 〒 7 số (VD: 160-0022)
+  receiverPrefecture    String   // Tỉnh/Thành (Tokyo, Osaka, Kanagawa...)
+  receiverAddress       String   // Địa chỉ chi tiết, Tên Mansion, Số phòng
+
+  // Hàng hóa & Cước tính IATA
+  cargoType             String   // gift, food, doc, other
+  cargoDetails          String   // Mô tả chi tiết từng món hàng
+  estimatedWeightKg     Float    // Cân nặng ước tính ban đầu (kg)
+  actualWeightKg        Float?   // Cân nặng thực tế cân tại kho VN (kg)
+  dimensionLengthCm     Float?   // Dài (cm)
+  dimensionWidthCm      Float?   // Rộng (cm)
+  dimensionHeightCm     Float?   // Cao (cm)
+  chargeableWeightKg    Float?   // Cân tính cước = Max(Cân thực, D*R*C/5000)
+  unitPricePerKg        Int      // Đơn giá cước VNĐ/kg (180.000, 210.000, 220.000, 200.000)
+  totalShippingFeeVnd   Int      // Tổng cước VNĐ
+  paymentStatus         String   @default("UNPAID") // UNPAID, PAID
+
+  // Cam kết kiểm dịch MAFF Nhật Bản (Chống gửi thịt, xúc xích, hàng cấm)
+  maffAgreement         Boolean  @default(true)
+
+  // Vòng đời 5 bước điều phối chuyên biệt:
+  // 1. PENDING_CONFIRMATION: Mới tiếp nhận (Chờ gọi điện xác minh)
+  // 2. CONFIRMED_PICKUP: Đã gọi xác nhận, hẹn bưu tá qua lấy tại VN
+  // 3. WAREHOUSE_VN_INSPECTED: Đã về kho VN, kiểm tra hàng cấm & cân đo IATA
+  // 4. IN_FLIGHT_TO_JP: Đang bay sang Nhật (Narita/Haneda/Kansai)
+  // 5. DELIVERED_JP: Bưu tá Yamato/Sagawa đã phát tận tay thành công
+  // (CANCELLED: Hủy đơn nếu khách gửi đồ cấm hoặc từ chối)
+  status                String   @default("PENDING_CONFIRMATION")
+
+  // Thông tin tác nghiệp điều phối viên
+  dispatcherNote        String?  // Ghi chú cuộc gọi của nhân viên
+  flightNumber          String?  // Số hiệu chuyến bay (VD: VN310, JL752)
+  japanCourier          String?  @default("Yamato Transport") // Yamato Transport, Sagawa, Japan Post
+  japanTrackingCode     String?  // Mã vận đơn nội địa Nhật
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([status])
+  @@index([trackingCode])
+  @@index([senderPhone])
+  @@index([createdAt])
+}
+
+

@@ -81,11 +81,20 @@ export default function OrderCalculator() {
   // VN -> JP Form state
   const [vnJpSenderName, setVnJpSenderName] = useState("");
   const [vnJpSenderPhone, setVnJpSenderPhone] = useState("");
+  const [vnJpSenderAddress, setVnJpSenderAddress] = useState("");
+  const [vnJpPickupDate, setVnJpPickupDate] = useState("Sáng mai (8h - 12h)");
+  const [vnJpReceiverName, setVnJpReceiverName] = useState("");
+  const [vnJpReceiverPhone, setVnJpReceiverPhone] = useState("");
+  const [vnJpReceiverPostalCode, setVnJpReceiverPostalCode] = useState("");
+  const [vnJpReceiverAddress, setVnJpReceiverAddress] = useState("");
   const [vnJpCargoType, setVnJpCargoType] = useState("gift");
+  const [vnJpCargoDetails, setVnJpCargoDetails] = useState("");
   const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
   const [vnJpCity, setVnJpCity] = useState("Tokyo");
+  const [vnJpMaffAgreement, setVnJpMaffAgreement] = useState(true);
   const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
   const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
+  const [vnJpLoading, setVnJpLoading] = useState(false);
 
   const getVnJpRatePerKg = (type: string) => {
     switch (type) {
@@ -444,137 +453,301 @@ export default function OrderCalculator() {
 
           {!vnJpSubmitted ? (
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim()) {
-                  toast.warning("Vui lòng điền họ tên và số điện thoại liên hệ.");
+                if (!vnJpSenderName.trim() || !vnJpSenderPhone.trim() || !vnJpSenderAddress.trim()) {
+                  toast.error("Vui lòng điền đầy đủ họ tên, SĐT và địa chỉ lấy hàng tại Việt Nam.");
                   return;
                 }
                 const phoneClean = vnJpSenderPhone.replace(/\s+/g, "");
                 if (!/^(03|05|07|08|09)\d{8}$/.test(phoneClean)) {
-                  toast.warning("Số điện thoại không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
+                  toast.error("Số điện thoại người gửi không hợp lệ (10 số, đầu 03, 05, 07, 08, 09).");
+                  return;
+                }
+                if (!vnJpReceiverName.trim() || !vnJpReceiverPhone.trim() || !vnJpReceiverPostalCode.trim() || !vnJpReceiverAddress.trim()) {
+                  toast.error("Vui lòng điền đầy đủ thông tin người nhận tại Nhật (Họ tên, SĐT, Mã bưu điện 〒 7 số, Số phòng).");
+                  return;
+                }
+                if (!vnJpCargoDetails.trim()) {
+                  toast.error("Vui lòng mô tả danh mục hàng gửi chi tiết (không ghi chung chung quà tặng).");
+                  return;
+                }
+                if (!vnJpMaffAgreement) {
+                  toast.error("Bạn bắt buộc phải cam kết không gửi hàng cấm kiểm dịch MAFF sang Nhật.");
                   return;
                 }
 
-                const code = `VNJP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
-                const totalEst = Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg);
-                setVnJpDispatchCode(code);
-
-                fetch("/api/ai/chat", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    message: `[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT] Mã phiếu: ${code} - Họ tên: ${vnJpSenderName.trim()} - SĐT: ${vnJpSenderPhone.trim()} - Loại hàng: ${getVnJpCargoLabel(vnJpCargoType)} - Trọng lượng: ${vnJpWeightKg}kg - Tỉnh/Thành nhận: ${vnJpCity} - Tổng cước tạm tính: ${totalEst.toLocaleString("vi-VN")} đ`,
-                    personality: "omotenashi",
-                  }),
-                }).catch(() => {});
-                setVnJpSubmitted(true);
-                toast.success(`Đã ghi nhận phiếu điều phối #${code}! Điều phối viên sẽ gọi bạn trong 15 phút.`);
+                setVnJpLoading(true);
+                try {
+                  const res = await fetch("/api/vn-jp-shipments", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      senderName: vnJpSenderName,
+                      senderPhone: vnJpSenderPhone,
+                      senderAddress: vnJpSenderAddress,
+                      senderCity: "Hà Nội",
+                      pickupDate: vnJpPickupDate,
+                      receiverName: vnJpReceiverName,
+                      receiverPhone: vnJpReceiverPhone,
+                      receiverPostalCode: vnJpReceiverPostalCode,
+                      receiverPrefecture: vnJpCity,
+                      receiverAddress: vnJpReceiverAddress,
+                      cargoType: vnJpCargoType,
+                      cargoDetails: vnJpCargoDetails,
+                      estimatedWeightKg: vnJpWeightKg,
+                      maffAgreement: vnJpMaffAgreement,
+                    }),
+                  });
+                  const data = await res.json();
+                  if (res.ok && data.success) {
+                    setVnJpDispatchCode(data.trackingCode);
+                    setVnJpSubmitted(true);
+                    toast.success(`Đã ghi nhận phiếu điều phối #${data.trackingCode}!`);
+                  } else {
+                    toast.error(data.error || "Lỗi ghi nhận phiếu gửi hàng.");
+                  }
+                } catch {
+                  toast.error("Lỗi kết nối máy chủ. Vui lòng thử lại!");
+                } finally {
+                  setVnJpLoading(false);
+                }
               }}
               className="space-y-4 pt-4 border-t border-slate-200"
             >
-              <h4 className="font-bold text-sm text-navy-900">
-                Đăng Ký Nhận Báo Giá Tuyến VN ➔ JP & Điều Phối Lấy Hàng Tận Nơi
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Họ tên người gửi tại Việt Nam *</label>
+                  <h4 className="font-extrabold text-base text-navy-950 flex items-center gap-1.5">
+                    <span>✈️ Phiếu Đăng Ký Vận Đơn Tuyến Việt Nam ➔ Nhật Bản</span>
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Điều phối bưu tá lấy hàng tận nơi tại Việt Nam và chuyển phát tận tay tại Nhật Bản.
+                  </p>
+                </div>
+                <span className="text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 px-2.5 py-0.5 rounded-full">
+                  ⚡ Chuẩn Bay IATA & Thông Quan Nhanh
+                </span>
+              </div>
+
+              {/* KHỐI 1: THÔNG TIN NGƯỜI GỬI TẠI VIỆT NAM */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>🇻🇳 1. Thông Tin Người Gửi & Điểm Lấy Hàng Tại Việt Nam</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Họ tên người gửi tại VN *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpSenderName}
+                      onChange={(e) => setVnJpSenderName(e.target.value)}
+                      placeholder="VD: Trần Hoàng Long"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Số điện thoại / Zalo người gửi *</label>
+                    <input
+                      type="tel"
+                      required
+                      value={vnJpSenderPhone}
+                      onChange={(e) => setVnJpSenderPhone(e.target.value)}
+                      placeholder="VD: 0912 345 678"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Địa chỉ lấy hàng tận nhà (Số nhà, Phường, Quận) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpSenderAddress}
+                      onChange={(e) => setVnJpSenderAddress(e.target.value)}
+                      placeholder="VD: Số 18 Ngõ 45 Cầu Giấy, Dịch Vọng, Hà Nội"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Hẹn thời gian lấy</label>
+                    <select
+                      value={vnJpPickupDate}
+                      onChange={(e) => setVnJpPickupDate(e.target.value)}
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    >
+                      <option value="Sáng mai (8h - 12h)">Sáng mai (8h - 12h)</option>
+                      <option value="Chiều mai (13h - 18h)">Chiều mai (13h - 18h)</option>
+                      <option value="Trong ngày hôm nay (Hỏa tốc)">Hôm nay (Hỏa tốc)</option>
+                      <option value="Hẹn ngày khác">Hẹn ngày khác</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* KHỐI 2: THÔNG TIN NGƯỜI NHẬN TẠI NHẬT BẢN */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>🇯🇵 2. Thông Tin Người Nhận Tại Nhật Bản (Bắt buộc để bưu tá Yamato/Sagawa giao tận nơi)</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Họ tên người nhận (Romaji in hoa) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpReceiverName}
+                      onChange={(e) => setVnJpReceiverName(e.target.value)}
+                      placeholder="VD: NGUYEN VAN A"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">SĐT nội địa Nhật *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpReceiverPhone}
+                      onChange={(e) => setVnJpReceiverPhone(e.target.value)}
+                      placeholder="070-1234-5678 hoặc 080/090"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Mã bưu điện (〒 7 số) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpReceiverPostalCode}
+                      onChange={(e) => setVnJpReceiverPostalCode(e.target.value)}
+                      placeholder="VD: 160-0022"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white font-mono"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Tỉnh/Thành tại Nhật Bản *</label>
+                    <select
+                      value={vnJpCity}
+                      onChange={(e) => setVnJpCity(e.target.value)}
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    >
+                      <option value="Tokyo">Tokyo (東京都)</option>
+                      <option value="Osaka">Osaka (大阪府)</option>
+                      <option value="Kanagawa">Kanagawa (神奈川県)</option>
+                      <option value="Aichi">Aichi (愛知県)</option>
+                      <option value="Saitama">Saitama (埼玉県)</option>
+                      <option value="Chiba">Chiba (千葉県)</option>
+                      <option value="Fukuoka">Fukuoka (福岡県)</option>
+                      <option value="Other">Tỉnh khác</option>
+                    </select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Địa chỉ chi tiết (Tòa nhà Mansion, Số phòng) *</label>
+                    <input
+                      type="text"
+                      required
+                      value={vnJpReceiverAddress}
+                      onChange={(e) => setVnJpReceiverAddress(e.target.value)}
+                      placeholder="VD: Shinjuku Sky Mansion Room 302, 1-2-3 Shinjuku"
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* KHỐI 3: HÀNG HÓA & CƯỚC TÍNH IATA */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>📦 3. Chi Tiết Mặt Hàng & Tạm Tính Cước Phí</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Loại mặt hàng</label>
+                    <select
+                      value={vnJpCargoType}
+                      onChange={(e) => setVnJpCargoType(e.target.value)}
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    >
+                      <option value="gift">Quà biếu / Quần áo / Đồ dùng cá nhân (180.000 đ/kg)</option>
+                      <option value="food">Thực phẩm khô / Cà phê / Trà / Bánh kẹo (220.000 đ/kg)</option>
+                      <option value="doc">Tài liệu / Hồ sơ du học / Bằng cấp (210.000 đ/kg)</option>
+                      <option value="other">Hàng mẫu / Hàng hóa khác (200.000 đ/kg)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">Cân nặng dự kiến (kg)</label>
+                    <input
+                      type="number"
+                      min={0.5}
+                      step={0.5}
+                      value={vnJpWeightKg}
+                      onChange={(e) => setVnJpWeightKg(Math.max(0.5, Number(e.target.value) || 0.5))}
+                      className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">Danh mục hàng hóa cụ thể (Bắt buộc khai báo hải quan) *</label>
                   <input
                     type="text"
                     required
-                    value={vnJpSenderName}
-                    onChange={(e) => setVnJpSenderName(e.target.value)}
-                    placeholder="VD: Trần Hoàng Long"
-                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
+                    value={vnJpCargoDetails}
+                    onChange={(e) => setVnJpCargoDetails(e.target.value)}
+                    placeholder="VD: 2 hộp bánh đậu xanh (1kg), 1 áo khoác len (0.8kg), 2 gói cà phê hòa tan"
+                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Số điện thoại / Zalo người gửi *</label>
+
+                {/* Hộp tự động tính Tạm tính cước vận chuyển VN ➔ JP */}
+                {(() => {
+                  const rate = getVnJpRatePerKg(vnJpCargoType);
+                  const totalEst = Math.round(rate * vnJpWeightKg);
+                  return (
+                    <div className="p-3 bg-gradient-to-r from-amber-50 to-emerald-50 border border-amber-200 rounded-xl flex flex-wrap justify-between items-center gap-2">
+                      <div>
+                        <span className="text-xs font-bold text-slate-700 block">
+                          Tạm tính cước vận chuyển VN ➔ JP ({vnJpWeightKg} kg):
+                        </span>
+                        <span className="text-xs text-slate-600">
+                          Đơn giá: <b>{rate.toLocaleString("vi-VN")} đ/kg</b> × {vnJpWeightKg} kg —{" "}
+                          <span className="text-emerald-700 font-bold">Đã gồm đóng thùng carton đạt chuẩn bay</span>
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-black text-navy-950 font-mono">
+                          {totalEst.toLocaleString("vi-VN")} đ
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Cam kết kiểm dịch MAFF */}
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2.5">
                   <input
-                    type="tel"
+                    type="checkbox"
+                    id="maffCalcCheck"
+                    checked={vnJpMaffAgreement}
+                    onChange={(e) => setVnJpMaffAgreement(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-rose-600"
                     required
-                    value={vnJpSenderPhone}
-                    onChange={(e) => setVnJpSenderPhone(e.target.value)}
-                    placeholder="VD: 0912 345 678"
-                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
                   />
+                  <label htmlFor="maffCalcCheck" className="text-xs text-rose-800 leading-relaxed cursor-pointer">
+                    <b>CAM KẾT KIỂM DỊCH MAFF:</b> Tôi cam đoan kiện hàng <b>KHÔNG CHỨA</b> các loại thịt động vật (thịt tươi, khô bò, khô gà, xúc xích, giò chả, nem chua, chà bông), hoa quả tươi hay chất cấm/dễ cháy nổ theo quy định kiểm dịch của Bộ Nông Lâm Thủy Sản Nhật Bản. Tôi chịu hoàn toàn trách nhiệm pháp lý nếu vi phạm.
+                  </label>
                 </div>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Loại mặt hàng</label>
-                  <select
-                    value={vnJpCargoType}
-                    onChange={(e) => setVnJpCargoType(e.target.value)}
-                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
-                  >
-                    <option value="gift">Quà biếu / Quần áo / Đồ dùng cá nhân</option>
-                    <option value="food">Thực phẩm khô / Cà phê / Trà / Bánh kẹo</option>
-                    <option value="doc">Tài liệu / Hồ sơ du học / Bằng cấp</option>
-                    <option value="other">Hàng mẫu / Hàng hóa khác</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Cân nặng dự kiến (kg)</label>
-                  <input
-                    type="number"
-                    min={0.5}
-                    step={0.5}
-                    value={vnJpWeightKg}
-                    onChange={(e) => setVnJpWeightKg(Math.max(0.5, Number(e.target.value) || 0.5))}
-                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Tỉnh/Thành tại Nhật Bản</label>
-                  <select
-                    value={vnJpCity}
-                    onChange={(e) => setVnJpCity(e.target.value)}
-                    className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
-                  >
-                    <option value="Tokyo">Tokyo (東京都)</option>
-                    <option value="Osaka">Osaka (大阪府)</option>
-                    <option value="Kanagawa">Kanagawa (神奈川県)</option>
-                    <option value="Aichi">Aichi (愛知県)</option>
-                    <option value="Saitama">Saitama (埼玉県)</option>
-                    <option value="Chiba">Chiba (千葉県)</option>
-                    <option value="Fukuoka">Fukuoka (福岡県)</option>
-                    <option value="Other">Tỉnh khác</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Hộp tự động tính Tạm tính cước vận chuyển VN ➔ JP */}
-              {(() => {
-                const rate = getVnJpRatePerKg(vnJpCargoType);
-                const totalEst = Math.round(rate * vnJpWeightKg);
-                return (
-                  <div className="p-3.5 bg-gradient-to-r from-amber-50 to-emerald-50 border border-amber-200 rounded-2xl flex flex-wrap justify-between items-center gap-2">
-                    <div>
-                      <span className="text-xs font-bold text-slate-700 block">
-                        Tạm tính cước vận chuyển VN ➔ JP ({vnJpWeightKg} kg):
-                      </span>
-                      <span className="text-xs text-slate-600">
-                        Đơn giá: <b>{rate.toLocaleString("vi-VN")} đ/kg</b> × {vnJpWeightKg} kg —{" "}
-                        <span className="text-emerald-700 font-bold">Đã gồm đóng thùng carton đạt chuẩn bay</span>
-                      </span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-lg font-black text-navy-950 font-mono">
-                        {totalEst.toLocaleString("vi-VN")} đ
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
                 <button
                   type="submit"
+                  disabled={vnJpLoading}
                   className="px-6 py-3 bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-sm rounded-xl shadow-md transition-all flex items-center space-x-1.5"
                 >
-                  <span>Gửi Yêu Cầu Báo Giá & Đón Hàng</span>
+                  <span>{vnJpLoading ? "Đang xử lý..." : "Khởi Tạo Vận Đơn & Hẹn Lấy Hàng"}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
                 <a
@@ -589,25 +762,28 @@ export default function OrderCalculator() {
             <div className="p-6 bg-emerald-50 border border-emerald-200 rounded-3xl text-center space-y-3">
               <span className="text-3xl block">✅</span>
               <h4 className="font-bold text-base text-emerald-900">
-                Đã Ghi Nhận Phiếu Điều Phối Tuyến VN ➔ JP Thành Công!
+                Đã Ghi Nhận Phiếu Điều Phối Vận Đơn VN ➔ JP Thành Công!
               </h4>
               {vnJpDispatchCode && (
                 <div className="inline-block px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full font-mono font-bold text-xs border border-emerald-300">
-                  Mã phiếu: {vnJpDispatchCode}
+                  Mã vận đơn: {vnJpDispatchCode}
                 </div>
               )}
               <div className="bg-white p-4 rounded-2xl border border-emerald-100 text-xs text-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-2 text-left">
                 <div>
                   <span className="text-slate-400 block font-semibold">Người gửi tại VN:</span>
                   <b>{vnJpSenderName}</b> ({vnJpSenderPhone})
+                  <div className="text-[11px] text-slate-500">📍 {vnJpSenderAddress}</div>
                 </div>
                 <div>
-                  <span className="text-slate-400 block font-semibold">Tuyến gửi đến Nhật Bản:</span>
-                  <b>Việt Nam ➔ {vnJpCity} (Nhật Bản)</b>
+                  <span className="text-slate-400 block font-semibold">Người nhận tại Nhật Bản:</span>
+                  <b>{vnJpReceiverName}</b> ({vnJpReceiverPhone})
+                  <div className="text-[11px] text-slate-500">〒 {vnJpReceiverPostalCode} · {vnJpCity} · {vnJpReceiverAddress}</div>
                 </div>
                 <div>
-                  <span className="text-slate-400 block font-semibold">Kiện hàng & Trọng lượng:</span>
+                  <span className="text-slate-400 block font-semibold">Hàng hóa & Cân nặng:</span>
                   <b>{vnJpWeightKg} kg</b> ({getVnJpCargoLabel(vnJpCargoType)})
+                  <div className="text-[11px] text-slate-500">📦 {vnJpCargoDetails}</div>
                 </div>
                 <div>
                   <span className="text-slate-400 block font-semibold">Tổng cước tạm tính:</span>
@@ -618,7 +794,7 @@ export default function OrderCalculator() {
                 </div>
               </div>
               <p className="text-xs text-emerald-700">
-                Nhân viên điều phối ChillBanana sẽ liên hệ tới số <strong>{vnJpSenderPhone}</strong> trong ít phút để xác nhận điểm lấy hàng và quy cách đóng thùng carton chuẩn bay.
+                Điều phối viên ChillBanana đang tiếp nhận trên hệ thống và sẽ liên hệ số <strong>{vnJpSenderPhone}</strong> để xác nhận lịch bưu tá qua lấy hàng tận nơi!
               </p>
               <button
                 type="button"
@@ -626,6 +802,12 @@ export default function OrderCalculator() {
                   setVnJpSubmitted(false);
                   setVnJpSenderName("");
                   setVnJpSenderPhone("");
+                  setVnJpSenderAddress("");
+                  setVnJpReceiverName("");
+                  setVnJpReceiverPhone("");
+                  setVnJpReceiverPostalCode("");
+                  setVnJpReceiverAddress("");
+                  setVnJpCargoDetails("");
                   setVnJpDispatchCode("");
                 }}
                 className="mt-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition-all"

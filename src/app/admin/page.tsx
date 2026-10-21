@@ -17,12 +17,14 @@ import {
   RefreshCw,
   FlaskConical,
   Settings2,
+  Plane,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
 import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
+import VnJpDispatchTab from "@/app/admin/components/VnJpDispatchTab";
 import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
 import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import AuditLogsTab from "@/app/admin/components/AuditLogsTab";
@@ -34,8 +36,8 @@ function AdminDashboardPageInner() {
   const router = useRouter();
   const { adminToast } = useAdminToast();
 
-  // Chế độ giao diện: "dashboard" | "operations"
-  const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations">("dashboard");
+  // Chế độ giao diện: "dashboard" | "operations" | "vn_jp_dispatch"
+  const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations" | "vn_jp_dispatch">("dashboard");
 
   // Auth
   const [authChecking, setAuthChecking] = useState(true);
@@ -137,10 +139,23 @@ function AdminDashboardPageInner() {
             <button
               onClick={() => setAdminViewMode("operations")}
               className={`admin-neoday-mode ${adminViewMode === "operations" ? "is-active" : ""}`}
-              title="Bàn tác nghiệp đơn hàng Kanban"
+              title="Bàn tác nghiệp đơn hàng Kanban (Mua Hộ JP ➔ VN)"
             >
               <Columns className="h-4 w-4" />
-              <span>Tác nghiệp</span>
+              <span>Tác nghiệp (JP➔VN)</span>
+            </button>
+            <button
+              onClick={() => setAdminViewMode("vn_jp_dispatch")}
+              className={`admin-neoday-mode ${adminViewMode === "vn_jp_dispatch" ? "is-active" : ""}`}
+              title="Bàn điều phối vận đơn tuyến Việt Nam sang Nhật Bản"
+              style={{
+                borderColor: adminViewMode === "vn_jp_dispatch" ? "#10b981" : undefined,
+                color: adminViewMode === "vn_jp_dispatch" ? "#065f46" : undefined,
+                fontWeight: 700,
+              }}
+            >
+              <Plane className="h-4 w-4 text-emerald-600" />
+              <span>✈️ Điều phối VN➔JP</span>
             </button>
           </div>
 
@@ -167,11 +182,17 @@ function AdminDashboardPageInner() {
                 </button>
               ))}
             </nav>
-          ) : (
+          ) : adminViewMode === "operations" ? (
             <div className="admin-neoday-workspace-label">
               <Columns className="h-4 w-4" />
-              <span>Bàn tác nghiệp đơn hàng</span>
-              <span className="admin-neoday-kanban-pill">Kanban</span>
+              <span>Bàn tác nghiệp đơn hàng (Mua Hộ JP ➔ VN)</span>
+              <span className="admin-neoday-kanban-pill">Kanban 7 bước</span>
+            </div>
+          ) : (
+            <div className="admin-neoday-workspace-label" style={{ background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
+              <Plane className="h-4 w-4 text-emerald-700" />
+              <span style={{ color: "#065f46", fontWeight: 800 }}>Bàn điều phối vận đơn ký gửi (VN ➔ JP)</span>
+              <span className="admin-neoday-kanban-pill" style={{ background: "#059669", color: "#ffffff" }}>Kanban 5 bước</span>
             </div>
           )}
         </div>
@@ -180,13 +201,20 @@ function AdminDashboardPageInner() {
       {/* Main Admin Workspace */}
       <main className="admin-neoday-main">
 
+        {/* Phân hệ Điều Phối VN ➔ JP chạy song song độc lập */}
+        {adminViewMode === "vn_jp_dispatch" && (
+          <VnJpDispatchTab />
+        )}
+
         {/* OrderManagementTab handles both Dashboard Orders tab and Kanban Operations view */}
-        <OrderManagementTab
-          adminViewMode={adminViewMode}
-          activeTab={activeTab}
-          externalSearchTerm={searchTerm}
-          onClearSearch={() => setSearchTerm("")}
-        />
+        {adminViewMode !== "vn_jp_dispatch" && (
+          <OrderManagementTab
+            adminViewMode={adminViewMode}
+            activeTab={activeTab}
+            externalSearchTerm={searchTerm}
+            onClearSearch={() => setSearchTerm("")}
+          />
+        )}
 
         {/* Other dashboard tabs — rendered only in dashboard mode */}
         {adminViewMode === "dashboard" && (
