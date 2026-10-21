@@ -648,12 +648,12 @@ export default function ProductsTab() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block font-bold text-slate-700">
-                      Lưu ý &amp; Cảnh báo sản phẩm (nếu có)
+                      Lưu ý / Cảnh báo sản phẩm (Điện áp, Bảo quản, Đóng gói...)
                     </label>
                   </div>
                   <input
                     type="text"
-                    placeholder="Điện áp 100V / Hàng chính hãng Bandai nguyên seal / Hàng dễ vỡ..."
+                    placeholder="Điện áp 100V / Bọc xốp giữ hộp Seal / Hàng dễ vỡ..."
                     value={productForm.voltageNote}
                     onChange={(e) => setProductForm({ ...productForm, voltageNote: e.target.value })}
                     className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500 text-xs"
@@ -661,12 +661,12 @@ export default function ProductsTab() {
                   {/* Preset chips chọn nhanh */}
                   <div className="flex flex-wrap gap-1.5 pt-1.5">
                     {[
-                      { label: "⚡ Điện 100V", val: "Điện áp 100V - Cần dùng biến áp đổi nguồn" },
-                      { label: "🔌 Auto-volt 100V-240V", val: "Hỗ trợ điện áp toàn cầu 100V-240V (Cắm trực tiếp tại VN)" },
-                      { label: "🎎 Nguyên seal Bandai", val: "Hàng chính hãng Bandai Nhật, nguyên seal hộp" },
-                      { label: "📦 Hàng dễ vỡ", val: "Hàng dễ vỡ, ChillBanana gia cố bọc xốp nổ & chống sốc" },
+                      { label: "⚡ Điện 100V (Cần biến áp)", val: "Điện áp 100V - Cần dùng biến áp đổi nguồn" },
+                      { label: "🔌 Đa điện áp 100V-240V", val: "Hỗ trợ điện áp toàn cầu 100V-240V (Cắm trực tiếp tại VN)" },
+                      { label: "📦 Bọc xốp giữ hộp Seal", val: "Hàng nguyên seal hộp Bandai/Figure, bọc xốp nổ giữ seal" },
+                      { label: "❄️ Bảo quản mát < 25°C", val: "Bảo quản nơi thoáng mát < 25°C, tránh nhiệt độ cao" },
+                      { label: "⚠️ Hàng dễ vỡ / Thủy tinh", val: "Hàng dễ vỡ, ChillBanana gia cố bọc xốp nổ & chống sốc nhiều lớp" },
                       { label: "🌸 Hàng Cosme JP", val: "Cam kết chính hãng mua trực tiếp Store Cosme Nhật Bản" },
-                      { label: "🌿 Date mới nhất", val: "Hàng nội địa Nhật, đầy đủ tem mác & date mới nhất" },
                     ].map((chip) => (
                       <button
                         key={chip.label}

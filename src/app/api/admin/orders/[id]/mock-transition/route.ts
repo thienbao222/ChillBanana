@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
-import { isNextOrderStatus } from "@/features/orders/policy";
+import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
+import { getDepositAmount } from "@/features/payments/policy";
+import { writeAuditLog } from "@/lib/audit";
 import { sendOrderStatusUpdateEmail, sendZaloTrackingNotification } from "@/lib/mailer";
 
 export const dynamic = "force-dynamic";
@@ -50,11 +52,78 @@ export async function POST(
   const adminUsername = guard.username;
   const { id } = await params;
 
-  let body: { targetStatus?: string; description?: string; location?: string };
+  let body: { targetStatus?: string; description?: string; location?: string; action?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Body JSON không hợp lệ." }, { status: 400 });
+  }
+
+  if (body.action === "rollback") {
+    const order = await prisma.order.findFirst({
+      where: { OR: [{ id }, { orderCode: id }] },
+    });
+    if (!order) {
+      return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
+    }
+    if (order.status === "PENDING_DEPOSIT" || order.status === "CANCELLED") {
+      return NextResponse.json(
+        { error: `Đơn hàng ở trạng thái "${order.status}" không thể hoàn tác lùi bước.` },
+        { status: 400 }
+      );
+    }
+    const prevStatus = getPreviousOrderStatus(order.status);
+    if (!prevStatus) {
+      return NextResponse.json({ error: "Không tìm thấy trạng thái trước đó để hoàn tác." }, { status: 400 });
+    }
+
+    const rollbackUpdateData: any = {
+      status: prevStatus,
+      trackingLogs: {
+        create: {
+          status: prevStatus,
+          title: "Hoàn tác trạng thái đơn hàng (Mock Sandbox)",
+          description: `Quản trị viên hoàn tác trạng thái từ "${order.status}" về "${prevStatus}" trong Sandbox.`,
+          location: "Hệ thống Quản trị ChillBanana",
+        },
+      },
+    };
+
+    if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY" && order.depositPercent === 50) {
+      rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+      rollbackUpdateData.depositAmountVnd = getDepositAmount(
+        order.productPriceVnd + order.serviceFeeVnd,
+        50
+      );
+    }
+
+    const rolledBackOrder = await prisma.$transaction(async (tx) => {
+      if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
+        await tx.paymentTransaction.deleteMany({
+          where: { orderId: order.id, provider: "COD_SETTLEMENT" },
+        });
+      }
+      return tx.order.update({
+        where: { id: order.id },
+        data: rollbackUpdateData,
+      });
+    });
+
+    await writeAuditLog({
+      actor: adminUsername || "admin",
+      action: "ORDER_STATUS_ROLLBACK",
+      entityType: "Order",
+      entityId: order.orderCode,
+      summary: `[Sandbox] Hoàn tác trạng thái đơn ${order.orderCode} từ ${order.status} về ${prevStatus}.`,
+      metadata: { fromStatus: order.status, toStatus: prevStatus },
+      req,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: `Đã hoàn tác đơn #${order.orderCode} từ ${order.status} về ${prevStatus}`,
+      order: rolledBackOrder,
+    });
   }
 
   const { targetStatus, description, location } = body;
