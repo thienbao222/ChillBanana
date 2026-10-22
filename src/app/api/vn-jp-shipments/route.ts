@@ -2,19 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
+import { getVnJpRatePerKg } from "@/features/pricing/vn-jp-rates";
 
 export const dynamic = "force-dynamic";
 
-const VN_JP_RATES: Record<string, number> = {
-  gift: 180000,
-  food: 220000,
-  doc: 210000,
-  other: 200000,
-};
 
-function getRatePerKg(cargoType: string): number {
-  return VN_JP_RATES[cargoType] || 200000;
-}
 
 // --------------------------------------------------------------------------
 // POST /api/vn-jp-shipments
@@ -118,7 +110,7 @@ export async function POST(req: NextRequest) {
     }
     const weight = Math.max(0.5, rawWeight);
     const selectedType = typeof cargoType === "string" ? cargoType : "gift";
-    const unitPrice = getRatePerKg(selectedType);
+    const unitPrice = getVnJpRatePerKg(selectedType);
     const totalEstFee = Math.round(unitPrice * weight);
 
     // Bảo mật #15: Sinh mã vận đơn entropy cao và bọc try-catch retry chống P2002 collision

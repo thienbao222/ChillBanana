@@ -382,7 +382,58 @@ async function lookupOrderStatus(
         ["Mã đơn hàng"],
         [{ label: "Trang theo dõi đơn hàng", href: "/tracking" }]
       ),
-      guardedReply: "Bạn gửi mã đơn hàng (dạng CB-...) nhé. Để xem chi tiết, cần đăng nhập tài khoản đặt hàng hoặc mở liên kết xác minh qua email.",
+      guardedReply: "Bạn gửi mã đơn hàng (dạng CB-... hoặc VNJP-...) nhé. Để xem chi tiết, cần đăng nhập tài khoản đặt hàng hoặc mở liên kết xác minh qua email.",
+    };
+  }
+
+  if (orderCode.startsWith("VNJP-")) {
+    const shipment = await prisma.vnJpShipment.findUnique({
+      where: { trackingCode: orderCode },
+    });
+    if (!shipment) {
+      return {
+        evidence: createEvidence(
+          "order_status",
+          "needs_input",
+          "Hệ thống vận đơn VN → JP ChillBanana",
+          { requestedCode: orderCode, found: false },
+          ["Mã vận đơn VNJP hợp lệ"],
+          [{ label: "Tra cứu vận đơn", href: `/tracking?code=${encodeURIComponent(orderCode)}` }]
+        ),
+        guardedReply: `Neo không tìm thấy vận đơn ký gửi mã **#${orderCode}** trong hệ thống. Bạn kiểm tra lại ký tự mã vận đơn (dạng VNJP-2026-...) nhé!`,
+      };
+    }
+    const effectiveWeight =
+      shipment.chargeableWeightKg ?? shipment.actualWeightKg ?? shipment.estimatedWeightKg;
+    return {
+      evidence: createEvidence(
+        "order_status",
+        "ok",
+        "Hệ thống điều phối vận đơn VN → JP ChillBanana",
+        {
+          trackingCode: shipment.trackingCode,
+          route: `${shipment.senderCity} (Việt Nam) → ${shipment.receiverPrefecture} (〒 ${shipment.receiverPostalCode}, Nhật Bản)`,
+          status: shipment.status,
+          chargeableWeightKg: effectiveWeight,
+          totalShippingFeeVnd: shipment.totalShippingFeeVnd,
+          flightNumber: shipment.flightNumber,
+          japanCourier: shipment.japanCourier,
+          japanTrackingCode: shipment.japanTrackingCode,
+        },
+        [],
+        [{ label: "Xem hành trình chi tiết", href: `/tracking?code=${encodeURIComponent(orderCode)}` }],
+        shipment.updatedAt.toISOString()
+      ),
+      guardedReply: [
+        `Vận đơn ký gửi **#${shipment.trackingCode}** (tuyến ${shipment.senderCity} → ${shipment.receiverPrefecture}, 〒 ${shipment.receiverPostalCode}) hiện ở trạng thái: **${shipment.status}**.`,
+        `Cân tính cước IATA: **${effectiveWeight} kg** — Tổng cước: **${shipment.totalShippingFeeVnd.toLocaleString("vi-VN")} đ** (${shipment.paymentStatus === "PAID" ? "Đã thanh toán" : "Chưa thanh toán"}).`,
+        shipment.flightNumber ? `Chuyến bay quốc tế: **${shipment.flightNumber}**.` : "",
+        shipment.japanTrackingCode
+          ? `Đối tác giao phát tại Nhật: **${shipment.japanCourier}** (Mã bưu kiện JP: **#${shipment.japanTrackingCode}**).`
+          : "Kiện hàng sẽ được cấp mã Yamato/Sagawa ngay khi xuất kho bay sang Nhật.",
+      ]
+        .filter(Boolean)
+        .join(" "),
     };
   }
 

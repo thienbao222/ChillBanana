@@ -1,18 +1,27 @@
+// FILE: src/app/api/vn-jp-shipments/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin-guard";
+import { requireAdmin, verifySameOrigin } from "@/lib/admin-guard";
+import { writeAuditLog } from "@/lib/audit";
+import { getClientIp } from "@/lib/rate-limit";
+import {
+  VALID_VN_JP_TRANSITIONS,
+  getPreviousVnJpStatus,
+  calculateIataChargeableWeight,
+} from "@/features/pricing/vn-jp-rates";
 
 export const dynamic = "force-dynamic";
 
-// --------------------------------------------------------------------------
-// PATCH /api/vn-jp-shipments/[id]
-// Admin cập nhật trạng thái vận đơn VN ➔ JP, nhập cân đo IATA, ghi chú điều phối
-// --------------------------------------------------------------------------
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    // 1. Bảo vệ chống tấn công CSRF (Cross-Site Request Forgery)
+    const csrfError = verifySameOrigin(req);
+    if (csrfError) return csrfError;
+
+    // 2. Xác thực phiên Admin & kiểm tra thu hồi quyền tức thời (pwdDigest)
     const guard = await requireAdmin(req);
     if (!guard.ok) return guard.response;
 
@@ -25,13 +34,15 @@ export async function PATCH(
 
     if (!existing) {
       return NextResponse.json(
-        { success: false, error: "Không tìm thấy vận đơn VN ➔ JP tương ứng." },
+        { success: false, error: "Không tìm thấy vận đơn VN → JP tương ứng." },
         { status: 404 }
       );
     }
 
     const {
+      action, // Hỗ trợ action: "rollback" để lùi bước an toàn
       status,
+      paymentStatus,
       dispatcherNote,
       flightNumber,
       japanCourier,
@@ -42,20 +53,26 @@ export async function PATCH(
       dimensionHeightCm,
     } = body;
 
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
+    let auditAction = "VN_JP_SHIPMENT_UPDATED";
 
-    if (status && status !== existing.status) {
-      // BẢO MẬT & NGHIỆP VỤ (P2-03): State Machine kiểm soát luồng chuyển trạng thái vận đơn VN -> JP
-      const VALID_TRANSITIONS: Record<string, string[]> = {
-        PENDING_CONFIRMATION: ["CONFIRMED_PICKUP", "CANCELLED"],
-        CONFIRMED_PICKUP: ["WAREHOUSE_VN_INSPECTED", "CANCELLED"],
-        WAREHOUSE_VN_INSPECTED: ["IN_FLIGHT_TO_JP", "CANCELLED"],
-        IN_FLIGHT_TO_JP: ["DELIVERED_JP", "CANCELLED"],
-        DELIVERED_JP: [], // Terminal
-        CANCELLED: [],    // Terminal
-      };
-
-      const allowedNext = VALID_TRANSITIONS[existing.status] || [];
+    // 3. Xử lý Hoàn tác lùi bước (Step Rollback) cho Quản trị viên
+    if (action === "rollback") {
+      const prevStatus = getPreviousVnJpStatus(existing.status);
+      if (!prevStatus) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Không thể hoàn tác lùi bước từ trạng thái ${existing.status}.`,
+          },
+          { status: 409 }
+        );
+      }
+      updateData.status = prevStatus;
+      auditAction = "VN_JP_SHIPMENT_ROLLBACK";
+    } else if (status && status !== existing.status) {
+      // 4. Kiểm soát Máy trạng thái tiến 5 bước (State Machine)
+      const allowedNext = VALID_VN_JP_TRANSITIONS[existing.status] || [];
       if (!allowedNext.includes(status)) {
         return NextResponse.json(
           {
@@ -67,34 +84,39 @@ export async function PATCH(
       }
 
       if (status === "IN_FLIGHT_TO_JP") {
-        const checkWeight = actualWeightKg !== undefined ? Number(actualWeightKg) : existing.actualWeightKg;
+        const checkWeight =
+          actualWeightKg !== undefined ? Number(actualWeightKg) : existing.actualWeightKg;
         if (!checkWeight || checkWeight <= 0) {
           return NextResponse.json(
-            { success: false, error: "Kiện hàng phải được cân đo IATA (actualWeightKg > 0) trước khi xuất kho bay." },
+            {
+              success: false,
+              error: "Kiện hàng phải được cân đo IATA (actualWeightKg > 0) trước khi xuất kho bay.",
+            },
             { status: 400 }
           );
         }
       }
       updateData.status = status;
+      auditAction = "VN_JP_SHIPMENT_STATUS_CHANGED";
     }
 
-    if (typeof dispatcherNote === "string") {
-      updateData.dispatcherNote = dispatcherNote.trim();
+    // 5. Cập nhật trạng thái thanh toán cước (UNPAID | PAID)
+    if (paymentStatus !== undefined) {
+      if (paymentStatus !== "UNPAID" && paymentStatus !== "PAID") {
+        return NextResponse.json(
+          { success: false, error: "Trạng thái thanh toán không hợp lệ (chỉ nhận UNPAID hoặc PAID)." },
+          { status: 400 }
+        );
+      }
+      updateData.paymentStatus = paymentStatus;
     }
 
-    if (typeof flightNumber === "string") {
-      updateData.flightNumber = flightNumber.trim();
-    }
+    if (typeof dispatcherNote === "string") updateData.dispatcherNote = dispatcherNote.trim();
+    if (typeof flightNumber === "string") updateData.flightNumber = flightNumber.trim();
+    if (typeof japanCourier === "string") updateData.japanCourier = japanCourier.trim();
+    if (typeof japanTrackingCode === "string") updateData.japanTrackingCode = japanTrackingCode.trim();
 
-    if (typeof japanCourier === "string") {
-      updateData.japanCourier = japanCourier.trim();
-    }
-
-    if (typeof japanTrackingCode === "string") {
-      updateData.japanTrackingCode = japanTrackingCode.trim();
-    }
-
-    // Khi kho VN cân đo kích thước theo chuẩn IATA (Bảo mật #17: Chặn số âm & NaN):
+    // 6. Kiểm tra giới hạn vật lý và tự động tính cân thể tích chuẩn IATA (D×R×C/5000)
     let actW = existing.actualWeightKg;
     if (actualWeightKg !== undefined) {
       const numW = Number(actualWeightKg);
@@ -147,15 +169,16 @@ export async function PATCH(
       updateData.dimensionHeightCm = numH;
     }
 
-    // Tính cước theo chuẩn thể tích IATA:
-    if (l && w && h) {
-      const volumetricWeight = Number(((l * w * h) / 5000).toFixed(2));
-      const effectiveWeight = Math.max(actW || existing.estimatedWeightKg, volumetricWeight);
-      updateData.chargeableWeightKg = effectiveWeight;
-      updateData.totalShippingFeeVnd = Math.round(existing.unitPricePerKg * effectiveWeight);
-    } else if (actW) {
-      updateData.chargeableWeightKg = actW;
-      updateData.totalShippingFeeVnd = Math.round(existing.unitPricePerKg * actW);
+    if (actW || (l && w && h)) {
+      const calc = calculateIataChargeableWeight({
+        actualWeightKg: actW || existing.estimatedWeightKg,
+        lengthCm: l,
+        widthCm: w,
+        heightCm: h,
+        unitPricePerKg: existing.unitPricePerKg,
+      });
+      updateData.chargeableWeightKg = calc.chargeableWeightKg;
+      updateData.totalShippingFeeVnd = calc.totalShippingFeeVnd;
     }
 
     const updatedShipment = await prisma.vnJpShipment.update({
@@ -163,10 +186,32 @@ export async function PATCH(
       data: updateData,
     });
 
+    // 7. Ghi nhật ký kiểm toán (AuditLog) phục vụ hậu kiểm an ninh
+    await writeAuditLog({
+      actor: guard.admin.username,
+      actorType: "ADMIN",
+      action: auditAction,
+      entityType: "VnJpShipment",
+      entityId: updatedShipment.id,
+      summary: `Cập nhật vận đơn #${updatedShipment.trackingCode}: ${existing.status} -> ${updatedShipment.status} (Cân tính cước: ${updatedShipment.chargeableWeightKg ?? updatedShipment.estimatedWeightKg} kg)`,
+      metadata: {
+        trackingCode: updatedShipment.trackingCode,
+        previousStatus: existing.status,
+        newStatus: updatedShipment.status,
+        chargeableWeightKg: updatedShipment.chargeableWeightKg,
+        totalShippingFeeVnd: updatedShipment.totalShippingFeeVnd,
+        paymentStatus: updatedShipment.paymentStatus,
+      },
+      ip: getClientIp(req),
+    });
+
     return NextResponse.json({
       success: true,
       shipment: updatedShipment,
-      message: `Đã cập nhật vận đơn #${updatedShipment.trackingCode} thành công.`,
+      message:
+        action === "rollback"
+          ? `Đã hoàn tác vận đơn #${updatedShipment.trackingCode} về bước ${updatedShipment.status}.`
+          : `Đã cập nhật vận đơn #${updatedShipment.trackingCode} thành công.`,
     });
   } catch (error) {
     console.error("[API VnJpShipment PATCH] Lỗi cập nhật vận đơn VN-JP:", error);

@@ -58,6 +58,7 @@ function TrackingCosmosContent() {
 
   const [searchCode, setSearchCode] = useState("");
   const [order, setOrder] = useState<StoredOrder | null>(null);
+  const [vnJpShipment, setVnJpShipment] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [requiresEmailAccess, setRequiresEmailAccess] = useState(false);
@@ -271,6 +272,7 @@ function TrackingCosmosContent() {
           ],
         };
         setOrder(demoOrder);
+        setVnJpShipment(null);
         saveRecentCode(demoOrder.orderCode);
         setLoading(false);
         toast.success("Đang hiển thị dữ liệu hành trình mẫu trực quan!");
@@ -286,6 +288,7 @@ function TrackingCosmosContent() {
       const data = await res.json();
       if (res.ok && data.success && data.order) {
         setOrder(data.order);
+        setVnJpShipment(null);
         saveRecentCode(c);
         setAccessRequestSent(false);
       } else {

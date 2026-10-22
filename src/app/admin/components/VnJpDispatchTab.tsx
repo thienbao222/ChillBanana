@@ -121,7 +121,7 @@ export default function VnJpDispatchTab() {
 
   useEffect(() => {
     fetchShipments();
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search, selectedPrefecture]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateShipmentStatus = async (id: string, payload: any) => {
     setSavingAction(true);
@@ -384,6 +384,14 @@ export default function VnJpDispatchTab() {
                     <span>Đã Nhận Về Kho VN</span>
                   </button>
                   <button
+                    onClick={() => updateShipmentStatus(s.id, { action: "rollback" })}
+                    disabled={savingAction}
+                    className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200"
+                    title="Lùi về chặng trước (Rollback)"
+                  >
+                    ↺
+                  </button>
+                  <button
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
@@ -479,6 +487,14 @@ export default function VnJpDispatchTab() {
                     <span>Cân Đo IATA</span>
                   </button>
                   <button
+                    onClick={() => updateShipmentStatus(s.id, { action: "rollback" })}
+                    disabled={savingAction}
+                    className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200"
+                    title="Lùi về chặng trước (Rollback)"
+                  >
+                    ↺
+                  </button>
+                  <button
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditFlight("VN310 (HAN ➔ NRT - Vietnam Airlines)");
@@ -549,6 +565,14 @@ export default function VnJpDispatchTab() {
                     <span>Báo Phát Thành Công</span>
                   </button>
                   <button
+                    onClick={() => updateShipmentStatus(s.id, { action: "rollback" })}
+                    disabled={savingAction}
+                    className="px-2 py-1.5 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200"
+                    title="Lùi về chặng trước (Rollback)"
+                  >
+                    ↺
+                  </button>
+                  <button
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
@@ -603,16 +627,26 @@ export default function VnJpDispatchTab() {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => {
-                    setSelectedShipment(s);
-                    setEditNote(s.dispatcherNote || "");
-                    setShowDetailModal(true);
-                  }}
-                  className="w-full py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition"
-                >
-                  Xem Hồ Sơ Vận Đơn
-                </button>
+                <div className="flex items-center gap-1.5 pt-1">
+                  <button
+                    onClick={() => {
+                      setSelectedShipment(s);
+                      setEditNote(s.dispatcherNote || "");
+                      setShowDetailModal(true);
+                    }}
+                    className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition"
+                  >
+                    Xem Hồ Sơ Vận Đơn
+                  </button>
+                  <button
+                    onClick={() => updateShipmentStatus(s.id, { action: "rollback" })}
+                    disabled={savingAction}
+                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 text-[11px] font-bold rounded-lg border border-amber-200"
+                    title="Lùi về chặng trước (Rollback)"
+                  >
+                    ↺ Lùi
+                  </button>
+                </div>
               </div>
             ))}
             {getByStatus("DELIVERED_JP").length === 0 && (
@@ -690,6 +724,44 @@ export default function VnJpDispatchTab() {
                   placeholder="VD: Đã gọi khách lúc 10h, xác nhận chỉ gửi 2 hộp bánh và áo ấm. Tài xế qua lấy sáng mai."
                   className="w-full p-2.5 border rounded-xl text-xs focus:ring-2 focus:ring-emerald-500 bg-white"
                 />
+              </div>
+
+              {/* Nút Hoàn tác lùi bước (Rollback) & Xác nhận thu cước (PAID) */}
+              <div className="pt-3 border-t border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  {selectedShipment.status !== "PENDING_CONFIRMATION" &&
+                    selectedShipment.status !== "CANCELLED" && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateShipmentStatus(selectedShipment.id, { action: "rollback" })
+                        }
+                        disabled={savingAction}
+                        className="px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold rounded-xl border border-amber-300"
+                      >
+                        ↺ Lùi Bước (Rollback)
+                      </button>
+                    )}
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateShipmentStatus(selectedShipment.id, {
+                        paymentStatus:
+                          selectedShipment.paymentStatus === "PAID" ? "UNPAID" : "PAID",
+                      })
+                    }
+                    disabled={savingAction}
+                    className={`px-3 py-2 font-bold rounded-xl border ${
+                      selectedShipment.paymentStatus === "PAID"
+                        ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                        : "bg-slate-100 text-slate-700 border-slate-300"
+                    }`}
+                  >
+                    {selectedShipment.paymentStatus === "PAID"
+                      ? "✅ Đã Thu Cước (PAID)"
+                      : "💳 Đánh Dấu Đã Thu Cước"}
+                  </button>
+                </div>
               </div>
 
               {/* CHUYỂN TRẠNG THÁI NHANH (P2-03: Chỉ cho phép chốt/hủy khi đang chờ xác nhận) */}

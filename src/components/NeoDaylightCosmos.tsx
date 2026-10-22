@@ -13,6 +13,7 @@ import NewsCorner from "@/components/NewsCorner";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
 import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+import { getVnJpRatePerKg, VN_JP_CARGO_LABELS } from "@/features/pricing/vn-jp-rates";
 
 // Bảng cấu hình danh mục hàng hóa & phụ phí thông quan
 const CATEGORY_MAP: Record<string, { label: string; surchargePercent: number; suggestedWeight: number; note: string }> = {
@@ -68,33 +69,9 @@ export default function NeoDaylightCosmos() {
   const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
   const [vnJpLoading, setVnJpLoading] = useState(false);
 
-  const getVnJpRatePerKg = (type: string) => {
-    switch (type) {
-      case "doc":
-        return 210000;
-      case "food":
-        return 220000;
-      case "other":
-        return 200000;
-      case "gift":
-      default:
-        return 180000;
-    }
-  };
+  
 
-  const getVnJpCargoLabel = (type: string) => {
-    switch (type) {
-      case "doc":
-        return "Tài liệu / Hồ sơ du học (EMS)";
-      case "food":
-        return "Thực phẩm khô / Bánh kẹo / Trà";
-      case "other":
-        return "Hàng mẫu kinh doanh / Khác";
-      case "gift":
-      default:
-        return "Kiện quà / Đồ khô / Quần áo";
-    }
-  };
+  const getVnJpCargoLabel = (type: string) => VN_JP_CARGO_LABELS[type] || "Kiện quà / Đồ cá nhân";
 
   // Order form state
   const [showOrderForm, setShowOrderForm] = useState(false);

@@ -18,6 +18,7 @@ export type AuditEntry = {
   summary?: string;
   metadata?: Record<string, unknown>;
   req?: NextRequest | Request;
+  ip?: string;
 };
 
 export async function writeAuditLog(entry: AuditEntry): Promise<void> {
@@ -31,7 +32,7 @@ export async function writeAuditLog(entry: AuditEntry): Promise<void> {
         entityId: entry.entityId?.slice(0, 120),
         summary: entry.summary?.slice(0, 500),
         metadata: entry.metadata as Prisma.InputJsonValue | undefined,
-        ip: entry.req ? getClientIp(entry.req) : undefined,
+        ip: entry.ip ?? (entry.req ? getClientIp(entry.req) : undefined),
       },
     });
   } catch (error) {

@@ -15,6 +15,7 @@ import {
   Activity
 } from "lucide-react";
 import { calculateOrderPrice, DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+import { getVnJpRatePerKg, VN_JP_CARGO_LABELS } from "@/features/pricing/vn-jp-rates";
 import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
@@ -96,33 +97,9 @@ export default function OrderCalculator() {
   const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
   const [vnJpLoading, setVnJpLoading] = useState(false);
 
-  const getVnJpRatePerKg = (type: string) => {
-    switch (type) {
-      case "doc":
-        return 210000;
-      case "food":
-        return 220000;
-      case "other":
-        return 200000;
-      case "gift":
-      default:
-        return 180000;
-    }
-  };
+  
 
-  const getVnJpCargoLabel = (type: string) => {
-    switch (type) {
-      case "doc":
-        return "Tài liệu / Hồ sơ du học (EMS)";
-      case "food":
-        return "Thực phẩm khô / Bánh kẹo / Trà";
-      case "other":
-        return "Hàng mẫu kinh doanh / Khác";
-      case "gift":
-      default:
-        return "Kiện quà / Đồ khô / Quần áo";
-    }
-  };
+  const getVnJpCargoLabel = (type: string) => VN_JP_CARGO_LABELS[type] || "Kiện quà / Đồ cá nhân";
 
   // Lắng nghe URL param để tự động dán và cào dữ liệu khi từ chat qua
   useEffect(() => {

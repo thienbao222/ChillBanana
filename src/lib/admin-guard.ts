@@ -4,7 +4,7 @@ import {
   ADMIN_COOKIE_NAME,
   computePasswordDigest,
   verifyAdminSessionTokenFull,
-  verifySameOrigin,
+  verifySameOrigin as verifySameOriginCore,
 } from "@/lib/auth-session";
 
 // Kiểm tra quyền admin ở backend: ngoài việc cookie hợp lệ, còn đối chiếu với bảng AdminUser
@@ -13,18 +13,26 @@ import {
 export type AdminRole = "SUPER_ADMIN" | "OPERATOR";
 
 export type AdminGuardResult =
-  | { ok: true; username: string; role: string }
+  | { ok: true; username: string; role: string; admin: { username: string; role: string } }
   | { ok: false; response: NextResponse };
+
+export function verifySameOrigin(req: NextRequest): NextResponse | null {
+  if (!verifySameOriginCore(req)) {
+    return NextResponse.json(
+      { success: false, error: "Yêu cầu vi phạm kiểm soát nguồn gốc (CSRF protection)." },
+      { status: 403 }
+    );
+  }
+  return null;
+}
 
 export async function requireAdmin(req: NextRequest, options: { roles?: AdminRole[] } = {}): Promise<AdminGuardResult> {
   if (["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
-    if (!verifySameOrigin(req)) {
+    const csrfErr = verifySameOrigin(req);
+    if (csrfErr) {
       return {
         ok: false,
-        response: NextResponse.json(
-          { error: "Yêu cầu vi phạm kiểm soát nguồn gốc (CSRF protection)." },
-          { status: 403 }
-        ),
+        response: csrfErr,
       };
     }
   }
@@ -73,10 +81,16 @@ export async function requireAdmin(req: NextRequest, options: { roles?: AdminRol
   if (options.roles && !options.roles.includes(admin.role as AdminRole)) {
     return { ok: false, response: NextResponse.json({ error: "Tài khoản của bạn không đủ quyền cho thao tác này." }, { status: 403 }) };
   }
-  return { ok: true, username: admin.username, role: admin.role };
+  return {
+    ok: true,
+    username: admin.username,
+    role: admin.role,
+    admin: { username: admin.username, role: admin.role },
+  };
 }
 
 /** Dùng cho route dùng chung (khách và admin): true chỉ khi cookie hợp lệ VÀ tài khoản admin còn tồn tại trong database. */
 export async function isVerifiedAdmin(req: NextRequest): Promise<boolean> {
-  return (await requireAdmin(req)).ok;
+  const result = await requireAdmin(req);
+  return result.ok;
 }

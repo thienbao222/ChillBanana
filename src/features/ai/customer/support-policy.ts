@@ -71,10 +71,17 @@ export function extractCatalogSearchTerms(message: string): string[] {
   return [...new Set(tokens.map((token) => token.slice(0, 60)))].slice(0, 6);
 }
 
+const ORDER_CODE_PATTERN = /\b((?:CB|VNJP)-\d{4}-[A-Z0-9-]{4,16})\b/i;
+
+export function extractOrderCode(message: string): string | null {
+  const match = message.match(ORDER_CODE_PATTERN);
+  return match ? match[1].toUpperCase() : null;
+}
+
 export function detectSupportIntents(message: string, hasScrapedProduct = false): SupportIntents {
   const normalized = normalizeSupportText(message);
   const category = CATEGORY_PATTERNS.find(([, pattern]) => pattern.test(normalized))?.[0] ?? null;
-  const orderCode = message.match(/\bCB-\d{4}-[A-Z0-9]+-\d{4,6}\b/i)?.[0]?.toUpperCase() ?? null;
+  const orderCode = extractOrderCode(message);
   const orderStatus = Boolean(orderCode) || /\b(don hang|ma don|theo doi don|tinh trang don)\b/.test(normalized);
   const quote = hasScrapedProduct || /\b(tinh gia|bao gia|uoc tinh|tong chi phi|gia ve viet nam|tinh bill|gia bao nhieu|bao nhieu tien)\b/.test(normalized);
   const shipping = /\b(van chuyen|cuoc|phi ship|shipping|gop don|group buy|thoi gian giao|bao lau nhan|phi mua ho|phi dich vu|bieu phi|cach tinh phi|cach tinh gia|cong thuc tinh|dat coc)\b/.test(normalized);
@@ -85,7 +92,7 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
 }
 
 export function isValidOrderCode(value: string): boolean {
-  return /^CB-\d{4}-[A-Z0-9]+-\d{4,6}$/i.test(value);
+  return /^(?:CB|VNJP)-\d{4}-[A-Z0-9-]{4,16}$/i.test(value);
 }
 
 export function isSupportedMarketplaceUrl(value: unknown): value is string {
