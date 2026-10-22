@@ -16,6 +16,7 @@
     "prisma:migrate:status": "prisma migrate status",
     "prisma:seed": "prisma db seed",
     "admin:reset": "node scripts/set-admin.js",
+    "seed:demo": "npx tsx scripts/seed-demo-showcase.ts",
     "eval:customer-support": "node scripts/evals/customer-support-evals.cjs",
     "eval:support": "node scripts/evals/customer-support-evals.cjs",
     "test": "vitest run",
