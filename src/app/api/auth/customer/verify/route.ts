@@ -19,7 +19,11 @@ function getBaseUrl() {
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token") || "";
-  return NextResponse.redirect(`${getBaseUrl()}/verify-email?token=${encodeURIComponent(token)}`);
+  const origin =
+    req.nextUrl?.origin && req.nextUrl.origin !== "null"
+      ? req.nextUrl.origin.replace(/\/+$/, "")
+      : getBaseUrl();
+  return NextResponse.redirect(`${origin}/verify-email?token=${encodeURIComponent(token)}`);
 }
 
 export async function POST(req: NextRequest) {

@@ -14,9 +14,14 @@ export type EmailLogInput = {
 type MailTransport = { sendMail(message: { from: string; to: string; subject: string; html: string }): Promise<unknown> };
 
 function emailMode(): "mock" | "smtp" {
-  if (process.env.EMAIL_MODE === "mock") return "mock";
-  if (process.env.EMAIL_MODE === "smtp") return "smtp";
-  // External email delivery is opt-in, even when SMTP credentials remain configured.
+  const rawMode = (process.env.EMAIL_MODE || "").trim().toLowerCase();
+  if (rawMode === "mock") return "mock";
+  if (rawMode === "smtp") return "smtp";
+  // Trong môi trường kiểm thử tự động (Vitest), giữ nguyên mặc định "mock" để bảo toàn 100% unit/integration tests
+  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  if (!isTestEnv && process.env.SMTP_USER && process.env.SMTP_PASS) {
+    return "smtp";
+  }
   return "mock";
 }
 

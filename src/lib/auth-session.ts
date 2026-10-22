@@ -376,6 +376,8 @@ export function verifySameOrigin(req: NextRequest): boolean {
         return (
           refOrigin === req.nextUrl.origin ||
           refOrigin.includes("chill-banana") ||
+          refOrigin.includes("chillbanana") ||
+          refOrigin.endsWith(".vercel.app") ||
           refOrigin.includes("localhost")
         );
       } catch {
@@ -386,6 +388,14 @@ export function verifySameOrigin(req: NextRequest): boolean {
     return true;
   }
   try {
+    if (
+      origin === req.nextUrl.origin ||
+      origin === "http://localhost:3000" ||
+      origin === "https://chill-banana.vercel.app" ||
+      origin.endsWith(".vercel.app")
+    ) {
+      return true;
+    }
     const allowed = [
       req.nextUrl.origin,
       "http://localhost:3000",

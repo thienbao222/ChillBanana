@@ -16,7 +16,47 @@ import {
 } from "lucide-react";
 
 export default function AuthModal() {
-  const { isAuthModalOpen, closeAuthModal, authModalTab, openAuthModal, login, register } = useAuth();
+  const {
+    isAuthModalOpen,
+    closeAuthModal,
+    authModalTab,
+    openAuthModal,
+    login,
+    register,
+    refreshSession,
+  } = useAuth();
+
+  const [pendingVerifyToken, setPendingVerifyToken] = useState<string | null>(null);
+
+  const handleInstantVerify = async () => {
+    if (!pendingVerifyToken) return;
+    setIsLoading(true);
+    setErrorMessage("");
+    try {
+      const res = await fetch("/api/auth/customer/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: pendingVerifyToken }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        await refreshSession();
+        setPendingVerifyToken(null);
+        const msg = data.message || "Đã kích hoạt tài khoản và đăng nhập thành công!";
+        setSuccessMessage(msg);
+        toast.success(msg);
+        setTimeout(() => {
+          closeAuthModal();
+        }, 900);
+      } else {
+        setErrorMessage(data.error || "Không thể kích hoạt nhanh tài khoản.");
+      }
+    } catch {
+      setErrorMessage("Lỗi kết nối máy chủ khi kích hoạt tài khoản.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const { toast } = useToast();
 
   // Login form state
@@ -47,6 +87,9 @@ export default function AuthModal() {
     setIsLoading(false);
     if (!res.success) {
       setErrorMessage(res.message || "Đăng nhập thất bại.");
+      if (res.verificationToken) {
+        setPendingVerifyToken(res.verificationToken);
+      }
     } else {
       const msg = res.message || "Đăng nhập thành công! Chào mừng trở lại.";
       setSuccessMessage(msg);
@@ -74,14 +117,24 @@ export default function AuthModal() {
     setIsLoading(false);
     if (!res.success) {
       setErrorMessage(res.message || "Đăng ký thất bại.");
+      if (res.verificationToken) {
+        setPendingVerifyToken(res.verificationToken);
+      }
     } else {
-      const msg = res.message || "Đăng ký tài khoản thành công! Chào mừng bạn.";
-      setSuccessMessage(msg);
-      const delay = (res.stitched && res.stitched.orders > 0) ? 2500 : 1000;
-      setTimeout(() => {
-        closeAuthModal();
-        toast.success(msg);
-      }, delay);
+      if (res.requiresEmailVerification) {
+        setSuccessMessage(res.message || "Tài khoản đã được tạo. Vui lòng kiểm tra email để xác minh.");
+        if (res.verificationToken) {
+          setPendingVerifyToken(res.verificationToken);
+        }
+      } else {
+        const msg = res.message || "Đăng ký tài khoản thành công! Chào mừng bạn.";
+        setSuccessMessage(msg);
+        const delay = (res.stitched && res.stitched.orders > 0) ? 2500 : 1000;
+        setTimeout(() => {
+          closeAuthModal();
+          toast.success(msg);
+        }, delay);
+      }
     }
   };
 
@@ -119,6 +172,7 @@ export default function AuthModal() {
             onClick={() => {
               setErrorMessage("");
               setSuccessMessage("");
+              setPendingVerifyToken(null);
               openAuthModal("login");
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
@@ -134,6 +188,7 @@ export default function AuthModal() {
             onClick={() => {
               setErrorMessage("");
               setSuccessMessage("");
+              setPendingVerifyToken(null);
               openAuthModal("register");
             }}
             className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all ${
@@ -145,6 +200,27 @@ export default function AuthModal() {
             Đăng Ký Mới
           </button>
         </div>
+
+        {/* 1-Click Instant Verify Button for Demo */}
+        {pendingVerifyToken && (
+          <div className="mb-4 p-3 bg-gradient-to-r from-amber-50 to-banana-50 border border-amber-300 rounded-2xl text-xs space-y-2 animate-in fade-in">
+            <div className="font-bold text-amber-950 flex items-center justify-between">
+              <span className="flex items-center gap-1">⚡ Kích Hoạt Nhanh Bằng 1-Click</span>
+              <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-mono font-bold">Live Demo</span>
+            </div>
+            <p className="text-[11px] text-amber-900 leading-relaxed">
+              Bạn có thể mở email xác nhận (hoặc bấm nút bên dưới để kích hoạt tài khoản và đăng nhập ngay tức thì mà không cần mở hộp thư):
+            </p>
+            <button
+              type="button"
+              disabled={isLoading}
+              onClick={handleInstantVerify}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-banana-500 hover:from-amber-600 hover:to-banana-600 text-navy-950 font-bold text-xs rounded-xl shadow-md transition flex items-center justify-center gap-1.5"
+            >
+              <span>{isLoading ? "Đang kích hoạt..." : "⚡ Kích Hoạt Tài Khoản & Đăng Nhập Ngay"}</span>
+            </button>
+          </div>
+        )}
 
         {/* Alert messages */}
         {errorMessage && (

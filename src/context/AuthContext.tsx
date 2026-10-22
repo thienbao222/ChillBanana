@@ -16,6 +16,7 @@ interface AuthResponse {
   message?: string;
   stitched?: { orders: number; sessions: number };
   requiresEmailVerification?: boolean;
+  verificationToken?: string;
 }
 
 interface AuthContextType {
@@ -89,7 +90,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
         return { success: true, message: data.message, stitched: data.stitched, requiresEmailVerification: data.requiresEmailVerification };
       }
-      return { success: false, message: data.error || "Đăng nhập thất bại" };
+      return {
+        success: false,
+        message: data.error || "Đăng nhập thất bại",
+        verificationToken: data.verificationToken,
+        requiresEmailVerification: Boolean(data.verificationToken),
+      };
     } catch (err: any) {
       return { success: false, message: err.message || "Lỗi kết nối máy chủ" };
     }
@@ -106,13 +112,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (res.ok && data.success) {
         if (data.customer) setCustomer(data.customer);
         else setCustomer(null);
-        // Keep modal open briefly to show stitching success message
-        if (!data.stitched || data.stitched.orders === 0) {
+        // Chỉ đóng Modal khi tài khoản đã được kích hoạt ngay và không có thông báo nối đơn
+        if (!data.requiresEmailVerification && (!data.stitched || data.stitched.orders === 0)) {
           setIsAuthModalOpen(false);
         }
-        return { success: true, message: data.message, stitched: data.stitched, requiresEmailVerification: data.requiresEmailVerification };
+        return {
+          success: true,
+          message: data.message,
+          stitched: data.stitched,
+          requiresEmailVerification: data.requiresEmailVerification,
+          verificationToken: data.verificationToken,
+        };
       }
-      return { success: false, message: data.error || "Đăng ký thất bại" };
+      return { success: false, message: data.error || "Đăng ký thất bại", verificationToken: data.verificationToken };
     } catch (err: any) {
       return { success: false, message: err.message || "Lỗi kết nối máy chủ" };
     }
