@@ -66,6 +66,10 @@ export class ApiKeyPool {
     return null; // All keys are RATE_LIMITED or DEAD
   }
 
+  public getAvailableKey(): string | null {
+    return this.getNextKey();
+  }
+
   public markError(key: string, statusCode: number): void {
     const stats = this.keyStats.get(key);
     if (!stats) return;

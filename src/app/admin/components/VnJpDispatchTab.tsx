@@ -20,6 +20,8 @@ import {
   ArrowRight,
   ChevronRight,
   Filter,
+  Sparkles,
+  Bot,
 } from "lucide-react";
 import { useAdminToast } from "@/context/AdminToastContext";
 
@@ -85,6 +87,8 @@ export default function VnJpDispatchTab() {
   const [showWeighModal, setShowWeighModal] = useState(false);
   const [showFlightModal, setShowFlightModal] = useState(false);
   const [savingAction, setSavingAction] = useState(false);
+  const [generatingCn23, setGeneratingCn23] = useState(false);
+  const [cn23Result, setCn23Result] = useState<any | null>(null);
 
   // Form Fields for Modal updates
   const [editNote, setEditNote] = useState("");
@@ -122,6 +126,48 @@ export default function VnJpDispatchTab() {
   useEffect(() => {
     fetchShipments();
   }, [search, selectedPrefecture]); // eslint-disable-line react-hooks/exhaustive-deps
+
+
+  const handleGenerateCn23Ai = async () => {
+    if (!selectedShipment) return;
+    setGeneratingCn23(true);
+    try {
+      const res = await fetch("/api/ai/vn-jp-inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "ADMIN",
+          cargoDetails: selectedShipment.cargoDetails,
+          estimatedWeightKg: selectedShipment.actualWeightKg || selectedShipment.estimatedWeightKg,
+          receiverName: selectedShipment.receiverName,
+          receiverPostalCode: selectedShipment.receiverPostalCode,
+          receiverPrefecture: selectedShipment.receiverPrefecture,
+          senderCity: selectedShipment.senderCity,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.inspection) {
+        setCn23Result(data.inspection);
+        adminToast.success("AI đã tạo tờ khai CN23 & đề xuất điều phối chuyến bay!");
+      } else {
+        adminToast.error(data.error || "Không thể tạo tờ khai CN23 từ AI.");
+      }
+    } catch {
+      adminToast.error("Lỗi kết nối máy chủ AI");
+    } finally {
+      setGeneratingCn23(false);
+    }
+  };
+
+  const handleApplyCn23ToShipment = () => {
+    if (!cn23Result?.adminCustomsDeclaration) return;
+    const decl = cn23Result.adminCustomsDeclaration;
+    setEditFlight(decl.recommendedFlight);
+    setEditCourier(decl.recommendedCourier);
+    const appendedNote = `[CN23 EN]: ${decl.invoiceSummaryEn}\n[CN23 JP]: ${decl.invoiceSummaryJp}\n[Lộ trình]: ${decl.routingReasonVi}`;
+    setEditNote((prev) => (prev ? `${prev}\n\n${appendedNote}` : appendedNote));
+    adminToast.success("Đã áp dụng thông tin tờ khai CN23 & chuyến bay vào form!");
+  };
 
   const updateShipmentStatus = async (id: string, payload: any) => {
     setSavingAction(true);
@@ -319,6 +365,7 @@ export default function VnJpDispatchTab() {
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
+                      setCn23Result(null);
                       setShowDetailModal(true);
                     }}
                     className="flex-1 py-1.5 bg-amber-500 hover:bg-amber-600 text-navy-950 font-bold text-[11px] rounded-lg transition text-center flex items-center justify-center gap-1"
@@ -395,6 +442,7 @@ export default function VnJpDispatchTab() {
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
+                      setCn23Result(null);
                       setShowDetailModal(true);
                     }}
                     className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg"
@@ -576,6 +624,7 @@ export default function VnJpDispatchTab() {
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
+                      setCn23Result(null);
                       setShowDetailModal(true);
                     }}
                     className="px-2 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold rounded-lg"
@@ -632,6 +681,7 @@ export default function VnJpDispatchTab() {
                     onClick={() => {
                       setSelectedShipment(s);
                       setEditNote(s.dispatcherNote || "");
+                      setCn23Result(null);
                       setShowDetailModal(true);
                     }}
                     className="flex-1 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px] rounded-lg transition"
@@ -712,6 +762,77 @@ export default function VnJpDispatchTab() {
                   <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span><b>Đã cam kết MAFF:</b> Khách hàng cam kết kiện hàng không chứa thịt, xúc xích, đồ cấm kiểm dịch Nhật Bản.</span>
                 </div>
+              </div>
+
+              {/* KHỐI AI COPILOT: TỜ KHAI HẢI QUAN CN23 & GỢI Ý CHUYẾN BAY (ADMIN MODE) */}
+              <div className="bg-indigo-50/70 border border-indigo-200 rounded-2xl p-3.5 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-indigo-600 animate-pulse" />
+                    <span className="font-bold text-slate-900 text-xs">
+                      Neo AI Customs & Flight Dispatch Copilot (Chế độ Quản trị)
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleGenerateCn23Ai}
+                    disabled={generatingCn23}
+                    className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] rounded-xl shadow-sm transition flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  >
+                    <Bot className={`w-3.5 h-3.5 ${generatingCn23 ? "animate-spin" : ""}`} />
+                    <span>{generatingCn23 ? "Đang phân tích..." : "🤖 AI Tạo Tờ Khai CN23 & Gợi Ý Chuyến Bay"}</span>
+                  </button>
+                </div>
+
+                {cn23Result?.adminCustomsDeclaration && (
+                  <div className="bg-white p-3 rounded-xl border border-indigo-200 space-y-2.5 text-slate-700 text-[11px]">
+                    <div className="flex items-center justify-between border-b border-indigo-100 pb-2">
+                      <span className="font-bold text-indigo-950 flex items-center gap-1">
+                        📄 Tờ Khai Hải Quan Quốc Tế CN23 / Invoice
+                      </span>
+                      <span className="font-mono text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full">
+                        {cn23Result.adminCustomsDeclaration.declaredCategory}
+                      </span>
+                    </div>
+
+                    <div className="space-y-1">
+                      <div>
+                        <span className="text-slate-500 font-semibold block text-[10px]">Tên tiếng Anh & HS Code (English):</span>
+                        <div className="font-mono text-slate-800 bg-slate-50 p-1.5 rounded border border-slate-100 font-medium">
+                          {cn23Result.adminCustomsDeclaration.invoiceSummaryEn}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 font-semibold block text-[10px]">Tên tiếng Nhật (Japanese):</span>
+                        <div className="font-medium text-slate-800 bg-slate-50 p-1.5 rounded border border-slate-100">
+                          {cn23Result.adminCustomsDeclaration.invoiceSummaryJp}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-2 rounded-lg border border-indigo-100 space-y-1">
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600">✈️ Chuyến bay đề xuất:</span>
+                        <b className="text-indigo-900 font-mono">{cn23Result.adminCustomsDeclaration.recommendedFlight}</b>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-600">🚚 Đối tác giao phát JP:</span>
+                        <b className="text-slate-900">{cn23Result.adminCustomsDeclaration.recommendedCourier}</b>
+                      </div>
+                      <div className="text-[10px] text-slate-500 italic mt-0.5 border-t border-slate-200/60 pt-1">
+                        💡 {cn23Result.adminCustomsDeclaration.routingReasonVi}
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleApplyCn23ToShipment}
+                      className="w-full py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] rounded-lg shadow-sm transition flex items-center justify-center gap-1.5"
+                    >
+                      <span>⚡ Áp Dụng Ngay Vào Vận Đơn (Điền Flight, Hãng & Ghi Chú)</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* GHI CHÚ ĐIỀU PHỐI VIÊN */}

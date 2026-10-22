@@ -17,6 +17,7 @@ import {
   HelpCircle,
   Copy,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import {
   VnJpCargoType,
@@ -57,7 +58,64 @@ export default function GuiHangDiNhatPage() {
   // Trạng thái gửi
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [successShipment, setSuccessShipment] = useState<{
+  const [inspectingAi, setInspectingAi] = useState(false);
+  const [inspectionResult, setInspectionResult] = useState<any | null>(null);
+
+  const handleInspectMaffAi = async () => {
+    if (!cargoDetails.trim()) {
+      setErrorMsg("Vui lòng nhập mô tả chi tiết hàng hóa trước khi quét AI.");
+      return;
+    }
+    setInspectingAi(true);
+    setErrorMsg("");
+    try {
+      const res = await fetch("/api/ai/vn-jp-inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cargoDetails,
+          estimatedWeightKg: actualWeightKg,
+          receiverName,
+          receiverPostalCode,
+          receiverPrefecture,
+          senderCity,
+          mode: "CUSTOMER",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.inspection) {
+        setInspectionResult(data.inspection);
+      } else {
+        setErrorMsg(data.error || "Không thể thực hiện quét kiểm dịch AI.");
+      }
+    } catch {
+      setErrorMsg("Lỗi kết nối máy chủ AI kiểm dịch.");
+    } finally {
+      setInspectingAi(false);
+    }
+  };
+
+  const handleApplyCleanedCargo = () => {
+    if (!inspectionResult) return;
+    if (inspectionResult.cleanedCargoDetails) {
+      setCargoDetails(inspectionResult.cleanedCargoDetails);
+    }
+    if (inspectionResult.suggestedCargoType) {
+      setCargoType(inspectionResult.suggestedCargoType);
+    }
+    if (inspectionResult.normalizedRomajiName) {
+      setReceiverName(inspectionResult.normalizedRomajiName);
+    }
+    if (inspectionResult.recommendedBox) {
+      setUseDimensions(true);
+      setLengthCm(inspectionResult.recommendedBox.lengthCm);
+      setWidthCm(inspectionResult.recommendedBox.widthCm);
+      setHeightCm(inspectionResult.recommendedBox.heightCm);
+    }
+    setInspectionResult(null);
+  };
+
+    const [successShipment, setSuccessShipment] = useState<{
     trackingCode: string;
     totalFee: number;
     chargeableWeight: number;
@@ -448,6 +506,116 @@ export default function GuiHangDiNhatPage() {
                   onChange={(e) => setCargoDetails(e.target.value)}
                   className="w-full p-2.5 border rounded-xl bg-slate-50 focus:bg-white"
                 />
+
+                {/* NÚT KÍCH HOẠT NEO AI QUÉT KIỂM DỊCH */}
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={handleInspectMaffAi}
+                    disabled={inspectingAi || !cargoDetails.trim()}
+                    className="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-md transition"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{inspectingAi ? "✨ Neo AI Đang Quét..." : "✨ Neo AI Quét Kiểm Dịch MAFF & Chuẩn Hóa Địa Chỉ"}</span>
+                  </button>
+                  <span className="text-[11px] text-slate-500">Phát hiện món cấm, đối chiếu mã 〒 & chuẩn hóa Romaji</span>
+                </div>
+
+                {/* THẺ KẾT QUẢ NEO UNIVERSE AI */}
+                {inspectionResult && (
+                  <div className="mt-4 p-4 rounded-2xl border-2 border-purple-300 bg-gradient-to-br from-purple-50/90 via-indigo-50/50 to-slate-50 space-y-3.5 text-xs animate-fadeIn shadow-sm">
+                    {/* Header: Lời bình Neo Universe */}
+                    <div className="flex items-start space-x-2.5">
+                      <span className="text-xl">🛸</span>
+                      <div className="flex-1">
+                        <div className="font-extrabold text-purple-950 flex items-center gap-1.5">
+                          <span>Neo Universe AI Kiểm Dịch & Bưu Chính</span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            inspectionResult.overallRisk === "PROHIBITED"
+                              ? "bg-rose-100 text-rose-800 border border-rose-300"
+                              : inspectionResult.overallRisk === "CONDITIONAL"
+                              ? "bg-amber-100 text-amber-800 border border-amber-300"
+                              : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                          }`}>
+                            {inspectionResult.overallRisk === "PROHIBITED" ? "🔴 CÓ MÓN CẤM" : inspectionResult.overallRisk === "CONDITIONAL" ? "🟡 CẦN HÚT CHÂN KHÔNG" : "🟢 100% HỢP LỆ BAY"}
+                          </span>
+                        </div>
+                        <p className="text-slate-700 italic mt-0.5 leading-relaxed font-serif">
+                          &ldquo;{inspectionResult.neoKuudereComment}&rdquo;
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Danh sách từng món phân tích */}
+                    <div className="space-y-1.5 pt-1 border-t border-purple-200/60">
+                      <div className="font-bold text-slate-800 text-[11px]">Chi tiết phân tích từng món hàng:</div>
+                      <div className="grid grid-cols-1 gap-2">
+                        {inspectionResult.items.map((item: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`p-2.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 ${
+                              item.status === "PROHIBITED"
+                                ? "bg-rose-50 border-rose-200 text-rose-950"
+                                : item.status === "CONDITIONAL"
+                                ? "bg-amber-50 border-amber-200 text-amber-950"
+                                : "bg-emerald-50 border-emerald-200 text-emerald-950"
+                            }`}
+                          >
+                            <div className="space-y-0.5">
+                              <div className="font-bold flex items-center gap-1.5">
+                                <span>{item.status === "PROHIBITED" ? "🔴" : item.status === "CONDITIONAL" ? "🟡" : "🟢"}</span>
+                                <b>{item.rawText}</b>
+                                <span className="text-[10px] font-mono text-slate-500">[{item.englishCustomsName}]</span>
+                              </div>
+                              <div className="text-[11px] text-slate-600">{item.reasonVi}</div>
+                            </div>
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-lg border self-start sm:self-center">
+                              {item.status === "PROHIBITED" ? "CẤM BAY" : item.status === "CONDITIONAL" ? "ĐIỀU KIỆN" : "AN TOÀN"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Kiểm tra đối chiếu mã bưu điện 〒 */}
+                    {!inspectionResult.postalPrefectureMatch.isValid && (
+                      <div className="p-2.5 bg-amber-100/80 border border-amber-300 rounded-xl text-amber-900 font-semibold text-[11px] flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-700" />
+                        <span>{inspectionResult.postalPrefectureMatch.expectedRegionNote}</span>
+                      </div>
+                    )}
+
+                    {/* Gợi ý thùng Carton IATA & Tên Romaji */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] bg-white/70 p-2.5 rounded-xl border border-purple-200">
+                      <div>
+                        <span className="text-slate-500">Gợi ý thùng IATA: </span>
+                        <b className="text-purple-900">{inspectionResult.recommendedBox.boxCode}</b> ({inspectionResult.recommendedBox.lengthCm}×{inspectionResult.recommendedBox.widthCm}×{inspectionResult.recommendedBox.heightCm} cm)
+                      </div>
+                      <div>
+                        <span className="text-slate-500">Tên người nhận chuẩn Romaji: </span>
+                        <b className="text-blue-900 font-mono">{inspectionResult.normalizedRomajiName || receiverName || "(Chưa nhập)"}</b>
+                      </div>
+                    </div>
+
+                    {/* Nút hành động 1-click */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-purple-200/60">
+                      <button
+                        type="button"
+                        onClick={handleApplyCleanedCargo}
+                        className="px-4 py-2 bg-purple-700 hover:bg-purple-800 text-white font-extrabold rounded-xl text-xs shadow transition inline-flex items-center space-x-1.5"
+                      >
+                        <span>🧹 Tự động loại bỏ món cấm & Chuẩn hóa Romaji (1-Click)</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setInspectionResult(null)}
+                        className="text-slate-500 hover:text-slate-700 text-xs font-semibold px-2"
+                      >
+                        Đóng thẻ kết quả
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Tùy chọn cân thể tích IATA */}

@@ -93,6 +93,58 @@ export default function OrderCalculator() {
   const [vnJpWeightKg, setVnJpWeightKg] = useState<number>(2);
   const [vnJpCity, setVnJpCity] = useState("Tokyo");
   const [vnJpMaffAgreement, setVnJpMaffAgreement] = useState(true);
+  const [vnJpInspectingAi, setVnJpInspectingAi] = useState(false);
+  const [vnJpInspectionResult, setVnJpInspectionResult] = useState<any | null>(null);
+
+  const handleVnJpInspectMaffAi = async () => {
+    if (!vnJpCargoDetails.trim()) {
+      toast.error("Vui lòng nhập mô tả chi tiết hàng hóa trước khi quét AI.");
+      return;
+    }
+    setVnJpInspectingAi(true);
+    try {
+      const res = await fetch("/api/ai/vn-jp-inspect", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          cargoDetails: vnJpCargoDetails,
+          estimatedWeightKg: vnJpWeightKg,
+          receiverName: vnJpReceiverName,
+          receiverPostalCode: vnJpReceiverPostalCode,
+          receiverPrefecture: vnJpCity,
+          senderCity: "Hà Nội",
+          mode: "CUSTOMER",
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success && data.inspection) {
+        setVnJpInspectionResult(data.inspection);
+        toast.success("Neo AI đã hoàn tất quét kiểm dịch hàng hóa!");
+      } else {
+        toast.error(data.error || "Không thể thực hiện quét kiểm dịch AI.");
+      }
+    } catch {
+      toast.error("Lỗi kết nối máy chủ AI kiểm dịch.");
+    } finally {
+      setVnJpInspectingAi(false);
+    }
+  };
+
+  const handleApplyCleanedCargoOrderCalc = () => {
+    if (!vnJpInspectionResult) return;
+    if (vnJpInspectionResult.cleanedCargoDetails) {
+      setVnJpCargoDetails(vnJpInspectionResult.cleanedCargoDetails);
+    }
+    if (vnJpInspectionResult.suggestedCargoType) {
+      setVnJpCargoType(vnJpInspectionResult.suggestedCargoType);
+    }
+    if (vnJpInspectionResult.normalizedRomajiName) {
+      setVnJpReceiverName(vnJpInspectionResult.normalizedRomajiName);
+    }
+    setVnJpInspectionResult(null);
+    toast.success("Đã tự động loại bỏ món cấm & chuẩn hóa tên Romaji!");
+  };
+
   const [vnJpSubmitted, setVnJpSubmitted] = useState(false);
   const [vnJpDispatchCode, setVnJpDispatchCode] = useState("");
   const [vnJpLoading, setVnJpLoading] = useState(false);
@@ -677,6 +729,88 @@ export default function OrderCalculator() {
                     placeholder="VD: 2 hộp bánh đậu xanh (1kg), 1 áo khoác len (0.8kg), 2 gói cà phê hòa tan"
                     className="w-full px-3.5 py-2 border rounded-xl text-sm focus:ring-2 focus:ring-banana-500 bg-white"
                   />
+
+                  {/* NÚT KÍCH HOẠT NEO AI QUÉT KIỂM DỊCH */}
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={handleVnJpInspectMaffAi}
+                      disabled={vnJpInspectingAi || !vnJpCargoDetails.trim()}
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs shadow-sm transition"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>{vnJpInspectingAi ? "✨ Neo AI Đang Quét..." : "✨ Neo AI Quét Kiểm Dịch MAFF & Chuẩn Hóa"}</span>
+                    </button>
+                    <span className="text-[10px] text-slate-500">Phát hiện món cấm, gợi ý thùng IATA & chuẩn hóa Romaji</span>
+                  </div>
+
+                  {/* THẺ KẾT QUẢ NEO UNIVERSE AI */}
+                  {vnJpInspectionResult && (
+                    <div className="mt-3 p-3.5 rounded-2xl border-2 border-purple-300 bg-gradient-to-br from-purple-50/90 via-indigo-50/50 to-slate-50 space-y-3 text-xs shadow-sm">
+                      <div className="flex items-start space-x-2">
+                        <span className="text-lg">🛸</span>
+                        <div className="flex-1">
+                          <div className="font-extrabold text-purple-950 flex items-center gap-1.5">
+                            <span>Neo Universe AI Kiểm Dịch</span>
+                            <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                              vnJpInspectionResult.overallRisk === "PROHIBITED"
+                                ? "bg-rose-100 text-rose-800 border border-rose-300"
+                                : vnJpInspectionResult.overallRisk === "CONDITIONAL"
+                                ? "bg-amber-100 text-amber-800 border border-amber-300"
+                                : "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                            }`}>
+                              {vnJpInspectionResult.overallRisk === "PROHIBITED" ? "🔴 CÓ MÓN CẤM" : vnJpInspectionResult.overallRisk === "CONDITIONAL" ? "🟡 CẦN HÚT CHÂN KHÔNG" : "🟢 100% HỢP LỆ BAY"}
+                            </span>
+                          </div>
+                          <p className="text-slate-700 italic mt-0.5 leading-relaxed font-serif text-[11px]">
+                            &ldquo;{vnJpInspectionResult.neoKuudereComment}&rdquo;
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1 pt-1 border-t border-purple-200/60">
+                        {vnJpInspectionResult.items.map((item: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`p-2 rounded-lg border flex items-center justify-between gap-1 text-[11px] ${
+                              item.status === "PROHIBITED"
+                                ? "bg-rose-50 border-rose-200 text-rose-950 font-semibold"
+                                : item.status === "CONDITIONAL"
+                                ? "bg-amber-50 border-amber-200 text-amber-950"
+                                : "bg-emerald-50 border-emerald-200 text-emerald-950"
+                            }`}
+                          >
+                            <span>{item.status === "PROHIBITED" ? "🔴" : item.status === "CONDITIONAL" ? "🟡" : "🟢"} {item.rawText}</span>
+                            <span className="text-[9px] font-mono opacity-80">{item.status === "PROHIBITED" ? "CẤM BAY" : item.status === "CONDITIONAL" ? "ĐIỀU KIỆN" : "AN TOÀN"}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Gợi ý thùng IATA & Tên Romaji */}
+                      <div className="text-[10px] bg-white/70 p-2 rounded-lg border border-purple-200 flex justify-between">
+                        <span>Thùng IATA: <b>{vnJpInspectionResult.recommendedBox.boxCode}</b></span>
+                        <span>Romaji: <b className="font-mono">{vnJpInspectionResult.normalizedRomajiName || "(Trống)"}</b></span>
+                      </div>
+
+                      {/* Nút 1-click */}
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          type="button"
+                          onClick={handleApplyCleanedCargoOrderCalc}
+                          className="px-3 py-1.5 bg-purple-700 hover:bg-purple-800 text-white font-bold rounded-lg text-xs shadow-sm transition"
+                        >
+                          🧹 Loại bỏ món cấm & Chuẩn hóa (1-Click)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setVnJpInspectionResult(null)}
+                          className="text-slate-500 hover:text-slate-700 text-xs px-1"
+                        >
+                          Đóng
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Hộp tự động tính Tạm tính cước vận chuyển VN ➔ JP */}

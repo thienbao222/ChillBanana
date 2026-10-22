@@ -4,6 +4,7 @@ import { prisma } from "../helpers/db";
 import { adminCookies, makeAdmin } from "../helpers/factories";
 import { get, json, params, patch, post } from "../helpers/request";
 import { calculateIataChargeableWeight } from "@/features/pricing/vn-jp-rates";
+import { inspectVnJpCargoDeterministic, toUpperRomaji, recommendIataBox } from "@/features/ai/vn-jp/maff-inspector";
 import { POST as createShipment, GET as getShipments } from "@/app/api/vn-jp-shipments/route";
 import { PATCH as updateShipment } from "@/app/api/vn-jp-shipments/[id]/route";
 import { GET as trackShipment } from "@/app/api/vn-jp-shipments/track/[code]/route";
@@ -253,5 +254,89 @@ describe("Integration: Phân hệ Ký gửi & Vận chuyển Hàng không VN -> 
     expect(trackBody.shipment.senderPhoneMasked).toMatch(/^091\*{4}678$/);
     expect(trackBody.shipment.senderNameMasked).toContain("***");
     expect(trackBody.shipment.receiverNameMasked).toContain("***");
+  });
+
+  it("9. inspectVnJpCargoDeterministic(): Chặn chính xác hàng cấm MAFF/IATA (khô bò, khô gà, pin dự phòng) và chuẩn hóa Romaji", () => {
+    // 1. Thử nghiệm với kiện hàng chứa hàng cấm MAFF & pin IATA
+    const inspection = inspectVnJpCargoDeterministic({
+      cargoDetails: "2 hộp khô bò, 1 bịch khô gà lá chanh, 1 sạc dự phòng 10000mAh, 2 cái áo thun",
+      estimatedWeightKg: 4.5,
+      receiverName: "Nguyễn Văn Đạt",
+      receiverPostalCode: "160-0022",
+      receiverPrefecture: "Tokyo",
+      senderCity: "Hà Nội",
+    });
+
+    expect(inspection.overallRisk).toBe("PROHIBITED");
+    expect(inspection.canFly).toBe(false);
+    expect(inspection.items.length).toBe(4);
+
+    // Món 1: Khô bò (Cấm MAFF)
+    expect(inspection.items[0].status).toBe("PROHIBITED");
+    expect(inspection.items[0].reasonVi).toContain("MAFF");
+
+    // Món 2: Khô gà (Cấm MAFF)
+    expect(inspection.items[1].status).toBe("PROHIBITED");
+    expect(inspection.items[1].reasonVi).toContain("MAFF");
+
+    // Món 3: Sạc dự phòng (Cấm IATA)
+    expect(inspection.items[2].status).toBe("PROHIBITED");
+    expect(inspection.items[2].reasonVi).toContain("IATA");
+
+    // Món 4: Áo thun (SAFE)
+    expect(inspection.items[3].status).toBe("SAFE");
+
+    // Tự động loại bỏ món cấm chỉ giữ lại món SAFE
+    expect(inspection.cleanedCargoDetails).toBe("2 cái áo thun");
+
+    // Chuẩn hóa Romaji tên người nhận
+    expect(inspection.normalizedRomajiName).toBe("NGUYEN VAN DAT");
+    expect(toUpperRomaji("Đỗ Thiên Bảo")).toBe("DO THIEN BAO");
+
+    // Gợi ý kích thước thùng IATA cho 4.5 kg -> Size M (40x30x25cm)
+    expect(inspection.recommendedBox.boxCode).toContain("Size M");
+    expect(inspection.recommendedBox.volumetricWeightKg).toBe(6.0);
+
+    // Lời bình Kuudere cảnh báo quỹ đạo đỏ
+    expect(inspection.neoKuudereComment).toContain("quỹ đạo đỏ");
+  });
+
+  it("10. inspectVnJpCargoDeterministic(): Gợi ý đúng chuyến bay Kanto (NRT) vs Kansai (KIX) và sinh tờ khai CN23 cho Admin", () => {
+    // Kịch bản A: Người nhận tại Osaka (Kansai), người gửi tại TP.HCM -> Bay thẳng KIX qua VN320, chuyển phát Sagawa
+    const kansaiShipment = inspectVnJpCargoDeterministic({
+      cargoDetails: "3 gói cà phê Trung Nguyên, 2 hộp bánh đậu xanh",
+      estimatedWeightKg: 2.0,
+      receiverName: "Tran Thi Mai",
+      receiverPostalCode: "530-0001",
+      receiverPrefecture: "Osaka",
+      senderCity: "Hồ Chí Minh",
+      includeAdminCopilot: true,
+    });
+
+    expect(kansaiShipment.overallRisk).toBe("CONDITIONAL");
+    expect(kansaiShipment.canFly).toBe(true);
+    expect(kansaiShipment.adminCustomsDeclaration).toBeDefined();
+    expect(kansaiShipment.adminCustomsDeclaration?.recommendedFlight).toBe("VN320 (SGN ➔ KIX)");
+    expect(kansaiShipment.adminCustomsDeclaration?.recommendedCourier).toBe("Sagawa Express");
+    expect(kansaiShipment.adminCustomsDeclaration?.invoiceSummaryEn).toContain("[HS:");
+    expect(kansaiShipment.adminCustomsDeclaration?.invoiceSummaryJp).toContain("個人用贈答品");
+    expect(kansaiShipment.adminCustomsDeclaration?.routingReasonVi).toContain("Kansai");
+
+    // Kịch bản B: Người nhận tại Tokyo (Kanto), gửi hồ sơ giấy tờ từ Hà Nội -> Bay NRT qua VN310, chuyển phát Japan Post
+    const kantoDocShipment = inspectVnJpCargoDeterministic({
+      cargoDetails: "Hồ sơ du học, học bạ, bằng tốt nghiệp THPT",
+      estimatedWeightKg: 1.0,
+      receiverName: "Le Hoang Nam",
+      receiverPostalCode: "100-0001",
+      receiverPrefecture: "Tokyo",
+      senderCity: "Hà Nội",
+      includeAdminCopilot: true,
+    });
+
+    expect(kantoDocShipment.overallRisk).toBe("SAFE");
+    expect(kantoDocShipment.suggestedCargoType).toBe("doc");
+    expect(kantoDocShipment.adminCustomsDeclaration?.declaredCategory).toBe("DOCUMENTS");
+    expect(kantoDocShipment.adminCustomsDeclaration?.recommendedFlight).toBe("VN310 (HAN ➔ NRT)");
+    expect(kantoDocShipment.adminCustomsDeclaration?.recommendedCourier).toBe("Japan Post (Yu-Pack / EMS)");
   });
 });

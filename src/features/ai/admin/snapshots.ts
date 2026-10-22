@@ -85,12 +85,14 @@ async function buildReportsSnapshot() {
   }
 
   const now = new Date();
-  const [chatSummary, customerCount, catalogProductCount, catalogSlots, hotProducts] = await Promise.all([
+  const [chatSummary, customerCount, catalogProductCount, catalogSlots, hotProducts, vnJpCount, vnJpRevenue] = await Promise.all([
     getChatTagSummary(current.from),
     prisma.customer.count(),
     prisma.product.count(),
     prisma.product.aggregate({ _sum: { stockSlots: true } }),
     prisma.product.findMany({ where: { isHot: true }, select: { name: true }, take: 10 }),
+    prisma.vnJpShipment.count(),
+    prisma.vnJpShipment.aggregate({ where: { paymentStatus: "PAID" }, _sum: { totalShippingFeeVnd: true } }),
   ]);
   const [totalChatSessions, identifiedChatSessions, chatLeadSessions, chatLeadEmails, customersWithOrders, ordersByCustomerType] = await Promise.all([
     prisma.chatSession.count(),
@@ -128,6 +130,11 @@ async function buildReportsSnapshot() {
         note: "Phễu dùng số phiên, không phải người duy nhất; quy kết Chat Lead dựa trên email khớp đơn và chỉ cho biết liên hệ dữ liệu, không chứng minh chat tạo ra đơn.",
       },
       note: "Chủ đề và từ khóa là tag được hệ thống lưu, không đại diện toàn thị trường và không phải số lượt tìm kiếm độc lập.",
+    },
+    vnJpSubsystem: {
+      totalShipments: vnJpCount,
+      paidRevenueVnd: vnJpRevenue._sum.totalShippingFeeVnd || 0,
+      note: "Phân hệ vận chuyển hàng không chiều VN -> JP.",
     },
     catalog: {
       listedProductCount: catalogProductCount,
