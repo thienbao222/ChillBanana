@@ -417,7 +417,7 @@ export default function OrderCalculator() {
           Dán Link Nhật - ChillBanana Báo Giá Trong 3 Giây
         </h2>
         <p className="mt-2 text-sm sm:text-base text-slate-600">
-          Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo Auctions... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
+          Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo! Auctions, Uniqlo, Surugaya, Bic Camera, Yodobashi... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
         </p>
 
         {/* Chuyển đổi chiều mua */}
@@ -954,7 +954,7 @@ export default function OrderCalculator() {
                     setProductUrl(e.target.value);
                     setProductId(null);
                   }}
-                  placeholder="https://www.amazon.co.jp/... hoặc https://jp.mercari.com/..."
+                  placeholder="Dán link Amazon JP, Mercari, Rakuten, Yahoo, Uniqlo, Surugaya, Bic Camera, Yodobashi..."
                   className="w-full pl-4 pr-10 py-3 bg-slate-50 border border-slate-300 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white transition-all"
                 />
                 <ExternalLink className="absolute right-3.5 top-3.5 w-4 h-4 text-slate-400" />
@@ -968,6 +968,28 @@ export default function OrderCalculator() {
                 <RefreshCw className={`w-3.5 h-3.5 ${isScraping ? "animate-spin" : ""}`} />
                 <span>{isScraping ? "Đang quét..." : "Quét Link Tự Động"}</span>
               </button>
+            </div>
+
+            {/* Sàn hỗ trợ bóc tách */}
+            <div className="flex flex-wrap items-center gap-1.5 mt-2.5 text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">Sàn hỗ trợ:</span>
+              {[
+                "Amazon JP",
+                "Mercari",
+                "Rakuten",
+                "Yahoo! Auctions",
+                "Uniqlo JP",
+                "Surugaya (駿河屋)",
+                "Bic Camera",
+                "Yodobashi",
+              ].map((store) => (
+                <span
+                  key={store}
+                  className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-medium"
+                >
+                  {store}
+                </span>
+              ))}
             </div>
 
             {/* Preview ảnh & tên hoặc Loading Skeleton */}
@@ -990,13 +1012,20 @@ export default function OrderCalculator() {
                   />
                 )}
                 <div className="flex-1 min-w-0">
-                  <span className="text-[10px] font-bold text-banana-800 bg-banana-200/80 px-2 py-0.5 rounded">
-                    {detectedStore || "Website Nhật"}
-                  </span>
-                  <p className="text-xs font-bold text-navy-900 truncate mt-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] font-bold text-banana-800 bg-banana-200/80 px-2 py-0.5 rounded">
+                      {detectedStore || "Website Nhật"}
+                    </span>
+                    {categoryBreadcrumb && (
+                      <span className="text-[10px] text-amber-800 bg-amber-100/90 border border-amber-200 px-1.5 py-0.5 rounded font-medium">
+                        🔍 Phân loại sàn: {categoryBreadcrumb}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-bold text-navy-900 truncate mt-1">
                     {productName}
                   </p>
-                  <p className="text-[11px] text-emerald-700 font-semibold">
+                  <p className="text-[11px] text-emerald-700 font-semibold mt-0.5">
                     ✓ Đã cập nhật giá gốc: {priceJpy.toLocaleString()} ¥
                   </p>
                 </div>
@@ -1017,11 +1046,21 @@ export default function OrderCalculator() {
                 placeholder="VD: Kem chống nắng Anessa / Mô hình Gundam"
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white"
               />
+              <div className="mt-1 text-[11px] text-slate-400">
+                {productName ? "✓ Tên sản phẩm đã trích xuất từ sàn" : "Tự động điền khi quét link hoặc nhập tay"}
+              </div>
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                3. Danh Mục Hàng Hóa
-              </label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  3. Danh Mục Hàng Hóa
+                </label>
+                <span className="text-[11px] text-banana-700 font-semibold">
+                  {currentCategoryInfo.surchargePercent > 0
+                    ? `Phụ phí ~${currentCategoryInfo.surchargePercent}%`
+                    : "0% phụ phí"}
+                </span>
+              </div>
               <select
                 value={category}
                 onChange={(e) => handleCategoryChange(e.target.value)}
@@ -1033,12 +1072,16 @@ export default function OrderCalculator() {
                   </option>
                 ))}
               </select>
-              {categoryBreadcrumb && (
-                <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-1.5 leading-snug">
+              {categoryBreadcrumb ? (
+                <div className="mt-1 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1 flex items-center gap-1.5 leading-snug">
                   <span className="shrink-0 text-amber-600 font-bold">🔍</span>
                   <span className="truncate">
-                    <strong>Đối chiếu từ mục loại sản phẩm trên sàn:</strong> {categoryBreadcrumb}
+                    <strong>Khớp từ sàn:</strong> {categoryBreadcrumb}
                   </span>
+                </div>
+              ) : (
+                <div className="mt-1 text-[11px] text-slate-400">
+                  {currentCategoryInfo.customsRuleNote}
                 </div>
               )}
             </div>

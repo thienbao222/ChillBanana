@@ -613,13 +613,51 @@ export default function NeoDaylightCosmos() {
             <h1>{t("Ủy Thác Mua Hộ Hàng Nhật ")}<u>{t("Tự Động Bóc Tách Link")}</u> &amp; <em>{t("ChillBanana AI")}</em></h1>
             <p className="lead">
               {preferences.language === "ja"
-                ? "Amazon JP、Mercari、Rakuten、Yahoo Auctionsの商品リンクを貼り付けると、実際の円価格と銀行為替レートに基づく費用を自動で計算します。ChillBanana AIが24時間サポートし、まとめ買いで送料を節約できます。"
-                : <>Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo Auctions</b> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn và giải pháp <b>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</b>.</>}
+                ? "Amazon JP、Mercari、Rakuten、Yahoo! Auctions、Uniqlo、駿河屋 (Surugaya)、Bic Camera、Yodobashiの商品リンクを貼り付けると、実際の円価格と銀行為替レートに基づく費用を自動で計算します。ChillBanana AIが24時間サポートし、まとめ買いで送料を節約できます。"
+                : <>Dán link từ <b>Amazon JP, Mercari, Rakuten, Yahoo! Auctions, Uniqlo, Surugaya, Bic Camera, Yodobashi</b> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <b>Trợ lý ChillBanana AI Agent</b> tư vấn và giải pháp <b>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</b>.</>}
             </p>
             <div className="trust">
               <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "日本国内正規品をお届け" : "Cam kết 100% chính hãng nội địa Nhật"}</span>
               <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "為替レートを随時更新" : "Tỷ giá cập nhật liên tục theo thời gian thực"}</span>
               <span><svg><use href="#i-ok" /></svg>{preferences.language === "ja" ? "紛失・破損時は補償" : "Bảo hiểm đền bù 100% khi mất mát, bể vỡ"}</span>
+            </div>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: "6px",
+              marginTop: "12px",
+              marginBottom: "16px",
+              fontSize: "0.75rem",
+            }}>
+              <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
+                {t("Sàn hỗ trợ bóc tách:")}
+              </span>
+              {[
+                "Amazon JP",
+                "Mercari",
+                "Rakuten",
+                "Yahoo! Auctions",
+                "Uniqlo JP",
+                "Surugaya (駿河屋)",
+                "Bic Camera",
+                "Yodobashi",
+              ].map((site) => (
+                <span
+                  key={site}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "8px",
+                    background: "rgba(224, 242, 254, 0.7)",
+                    border: "1px solid rgba(186, 230, 253, 0.9)",
+                    color: "#0369a1",
+                    fontWeight: 600,
+                    fontSize: "0.72rem",
+                  }}
+                >
+                  {site}
+                </span>
+              ))}
             </div>
             <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
               {t("Dán Link Tính Giá Tự Động")} <svg><use href="#i-arrow" /></svg>
@@ -669,7 +707,7 @@ export default function NeoDaylightCosmos() {
             <span className="tag">{t("Công Cụ Tự Động Bóc Tách Link & Báo Giá Trọn Gói")}</span>
             <h2>{t("Dán Link Nhật - ChillBanana Báo Giá Trong 3 Giây")}</h2>
             <p className="sub">
-              Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo Auctions... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
+              Hỗ trợ bóc tách tự động link từ Amazon JP, Mercari, Rakuten, Yahoo! Auctions, Uniqlo, Surugaya, Bic Camera, Yodobashi... Tỷ giá cập nhật liên tục, cước vận chuyển minh bạch, bảo hiểm 100%.
             </p>
           </div>
 
@@ -1107,7 +1145,7 @@ export default function NeoDaylightCosmos() {
                   <input
                     id="u"
                     inputMode="url"
-                    placeholder={t("https://www.amazon.co.jp/... hoặc https://jp.mercari.com/...")}
+                    placeholder={t("Dán link Amazon JP, Mercari, Rakuten, Yahoo, Uniqlo, Surugaya, Bic Camera, Yodobashi...")}
                     value={inputUrl}
                     onChange={(e) => {
                       setInputUrl(e.target.value);
@@ -1123,6 +1161,45 @@ export default function NeoDaylightCosmos() {
                     {isScanning ? t("Đang quét...") : t("Quét Link Tự Động")}
                   </button>
                 </div>
+                {/* Sàn hỗ trợ bóc tách link */}
+                <div style={{
+                  display: "flex",
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  gap: "6px",
+                  marginTop: "8px",
+                  fontSize: "0.72rem",
+                  color: "var(--muted)",
+                }}>
+                  <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
+                    {t("Sàn hỗ trợ bóc tách:")}
+                  </span>
+                  {[
+                    "Amazon JP",
+                    "Mercari",
+                    "Rakuten",
+                    "Yahoo! Auctions",
+                    "Uniqlo JP",
+                    "Surugaya (駿河屋)",
+                    "Bic Camera",
+                    "Yodobashi",
+                  ].map((store) => (
+                    <span
+                      key={store}
+                      style={{
+                        padding: "2px 7px",
+                        borderRadius: "6px",
+                        background: "rgba(224, 242, 254, 0.6)",
+                        border: "1px solid rgba(186, 230, 253, 0.8)",
+                        color: "#0369a1",
+                        fontWeight: 600,
+                        fontSize: "0.7rem",
+                      }}
+                    >
+                      {store}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Preview sản phẩm cào được nếu có */}
@@ -1137,8 +1214,18 @@ export default function NeoDaylightCosmos() {
                     <b style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {productName}
                     </b>
-                    <small style={{ color: "var(--muted)" }}>
-                      Nguồn: <b>{detectedStore || "Sàn Nhật"}</b> · Giá web: <b>{priceJpy.toLocaleString("vi-VN")} ¥</b>
+                    <small style={{ color: "var(--muted)", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginTop: "2px" }}>
+                      <span>Nguồn: <b>{detectedStore || "Sàn Nhật"}</b></span>
+                      <span>·</span>
+                      <span>Giá web: <b>{priceJpy.toLocaleString("vi-VN")} ¥</b></span>
+                      {categoryBreadcrumb && (
+                        <>
+                          <span>·</span>
+                          <span style={{ color: "#b45309", background: "#fef3c7", padding: "1px 6px", borderRadius: "6px", fontWeight: 600 }}>
+                            🔍 Phân loại sàn: {categoryBreadcrumb}
+                          </span>
+                        </>
+                      )}
                     </small>
                   </div>
                 </div>
@@ -1146,17 +1233,30 @@ export default function NeoDaylightCosmos() {
 
               <div className="fg">
                 <div className="f">
-                  <label htmlFor="n">{t("2. Tên sản phẩm (hiển thị trên đơn)")}</label>
+                  <label htmlFor="n">
+                    <span>{t("2. Tên sản phẩm (hiển thị trên đơn)")}</span>
+                  </label>
                   <input
                     id="n"
                     placeholder={t("VD: Kem chống nắng Anessa / Mô hình Gundam")}
                     value={productName}
                     onChange={(e) => setProductName(e.target.value)}
                   />
+                  <div style={{
+                    marginTop: "2px",
+                    fontSize: "0.72rem",
+                    color: "var(--muted)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}>
+                    {productName ? <span>✓ Tên sản phẩm đã trích xuất từ sàn</span> : <span>Tự động điền khi quét link hoặc nhập tay</span>}
+                  </div>
                 </div>
                 <div className="f">
                   <label htmlFor="c">
-                    {t("3. Danh mục hàng hóa")} <em>({currentCategory.customsRuleNote})</em>
+                    <span>{t("3. Danh mục hàng hóa")}</span>
+                    <em>{currentCategory.surchargePercent > 0 ? `Phụ phí ~${currentCategory.surchargePercent}%` : "0% phụ phí"}</em>
                   </label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
                     {Object.values(JP_VN_CATEGORIES).map((cat) => (
@@ -1165,24 +1265,36 @@ export default function NeoDaylightCosmos() {
                       </option>
                     ))}
                   </select>
-                  {categoryBreadcrumb && (
+                  {categoryBreadcrumb ? (
                     <div style={{
-                      marginTop: "6px",
-                      fontSize: "0.75rem",
+                      marginTop: "2px",
+                      fontSize: "0.72rem",
                       color: "#b45309",
                       background: "#fffbeb",
                       border: "1px solid #fde68a",
-                      borderRadius: "8px",
-                      padding: "4px 8px",
+                      borderRadius: "6px",
+                      padding: "2px 6px",
                       display: "flex",
                       alignItems: "center",
                       gap: "4px",
                       overflow: "hidden",
+                      whiteSpace: "nowrap",
                     }}>
-                      <span style={{ flexShrink: 0 }}>🔍 Đối chiếu từ mục loại sản phẩm trên sàn:</span>
-                      <strong style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                      <span style={{ flexShrink: 0 }}>🔍 Khớp từ sàn:</span>
+                      <strong style={{ overflow: "hidden", textOverflow: "ellipsis" }}>
                         {categoryBreadcrumb}
                       </strong>
+                    </div>
+                  ) : (
+                    <div style={{
+                      marginTop: "2px",
+                      fontSize: "0.72rem",
+                      color: "var(--muted)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}>
+                      <span>{currentCategory.customsRuleNote}</span>
                     </div>
                   )}
                 </div>
@@ -1191,7 +1303,7 @@ export default function NeoDaylightCosmos() {
               <div className="fg">
                 <div className="f">
                   <label htmlFor="y">
-                    {t("4. Giá gốc tại Nhật (¥ Yên)")} <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ (Tối thiểu 100 ¥)</em>
+                    <span>{t("4. Giá gốc tại Nhật (¥ Yên)")}</span> <em>≈ {productPriceVnd.toLocaleString("vi-VN")} đ (Tối thiểu 100 ¥)</em>
                   </label>
                   <input
                     id="y"

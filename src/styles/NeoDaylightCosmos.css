@@ -1713,11 +1713,17 @@
 .cosmos-root .f > label {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+
+.cosmos-root .f > label > span:first-child {
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .cosmos-root .f label em {
@@ -1727,6 +1733,9 @@
   color: var(--banana-d);
   font-weight: 700;
   white-space: nowrap;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .cosmos-root .in {

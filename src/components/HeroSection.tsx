@@ -71,8 +71,30 @@ export default function HeroSection() {
 
             {/* Subtitle */}
             <motion.p variants={itemVariants} className="text-sm sm:text-base text-slate-600 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
-              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo Auctions</strong> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <strong>Trợ lý ChillBanana AI Agent</strong> tư vấn và giải pháp <strong>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</strong>.
+              Dán link từ <strong>Amazon JP, Mercari, Rakuten, Yahoo! Auctions, Uniqlo, Surugaya, Bic Camera, Yodobashi</strong> — hệ thống hỗ trợ ước tính chi phí theo tỷ giá hiện hành, tích hợp <strong>Trợ lý ChillBanana AI Agent</strong> tư vấn và giải pháp <strong>Gộp đơn tiết kiệm {pricingConfig.groupBuyShippingDiscountPercent}% cước</strong>.
             </motion.p>
+
+            {/* Supported Platforms Pills */}
+            <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center lg:justify-start gap-1.5 pt-1 text-xs">
+              <span className="text-slate-500 font-semibold mr-1">Sàn hỗ trợ:</span>
+              {[
+                "Amazon JP",
+                "Mercari",
+                "Rakuten",
+                "Yahoo! Auctions",
+                "Uniqlo JP",
+                "Surugaya (駿河屋)",
+                "Bic Camera",
+                "Yodobashi",
+              ].map((site) => (
+                <span
+                  key={site}
+                  className="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 border border-sky-200/80 font-semibold text-[11px] shadow-2xs"
+                >
+                  {site}
+                </span>
+              ))}
+            </motion.div>
 
             {/* Key Value Badges */}
             <motion.div variants={itemVariants} className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1 text-xs text-slate-700 font-medium">

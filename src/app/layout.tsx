@@ -6,7 +6,7 @@ import LayoutWrapper from "@/components/LayoutWrapper";
 
 export const metadata: Metadata = {
   title: "ChillBanana - Mua Hàng Hộ Nhật Bản Thư Thái & Trợ Lý AI 24/7",
-  description: "Nền tảng thương mại điện tử mua hộ hàng Nhật Bản ChillBanana: Tự động bóc tách link Amazon/Mercari, Trợ lý ảo AI tư vấn 24/7, tỷ giá minh bạch, cước bay cố định và thanh toán VietQR Napas 247.",
+  description: "Nền tảng thương mại điện tử mua hộ hàng Nhật Bản ChillBanana: Tự động bóc tách link Amazon JP, Mercari, Rakuten, Yahoo Auctions, Uniqlo, Surugaya, Trợ lý ảo AI tư vấn 24/7, tỷ giá minh bạch, cước bay cố định và thanh toán VietQR Napas 247.",
 };
 
 export default function RootLayout({
