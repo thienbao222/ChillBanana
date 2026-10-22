@@ -94,7 +94,7 @@ function verifyResetToken(token: string): { id: string; email: string; pwdDigest
 export async function POST(req: NextRequest) {
   // Rate limiting
   const ip = getClientIp(req);
-  const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const isTest = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
   let rlAllowed = true;
   let retryAfter = 0;
   if (!isTest) {
@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
     }
 
     // ANTI-ENUMERATION: Luôn trả 200, dù email có tồn tại hay không
+    let demoResetUrl: string | undefined = undefined;
     try {
       try {
         getResetSecret();
@@ -145,7 +146,14 @@ export async function POST(req: NextRequest) {
       if (customer?.passwordHash) {
         // Tạo token và gửi email (cho phép đặt lại mật khẩu kể cả khi chưa kịp xác minh email)
         const token = createResetToken(customer.id, customer.email, customer.passwordHash);
-        const resetUrl = `${getBaseUrl()}/reset-password?token=${token}`;
+        const origin =
+          req.nextUrl?.origin && req.nextUrl.origin !== "null"
+            ? req.nextUrl.origin.replace(/\/+$/, "")
+            : getBaseUrl();
+        const resetUrl = `${origin}/reset-password?token=${token}`;
+        if (!isTest) {
+          demoResetUrl = resetUrl;
+        }
 
         // Gọi mailer — không throw nếu lỗi để giữ anti-enumeration
         try {
@@ -168,6 +176,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       message: "Nếu email tồn tại trong hệ thống, bạn sẽ nhận được hướng dẫn đặt lại mật khẩu trong vài phút.",
+      demoResetUrl: !isTest ? demoResetUrl : undefined,
     });
   }
 

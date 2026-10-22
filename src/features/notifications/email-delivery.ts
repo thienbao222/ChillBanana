@@ -18,7 +18,7 @@ function emailMode(): "mock" | "smtp" {
   if (rawMode === "mock") return "mock";
   if (rawMode === "smtp") return "smtp";
   // Trong môi trường kiểm thử tự động (Vitest), giữ nguyên mặc định "mock" để bảo toàn 100% unit/integration tests
-  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
   if (!isTestEnv && process.env.SMTP_USER && process.env.SMTP_PASS) {
     return "smtp";
   }

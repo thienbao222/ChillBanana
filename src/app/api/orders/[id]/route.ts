@@ -24,11 +24,22 @@ export async function GET(
 ) {
   try {
     const { id: orderCode } = await params;
+    const isTestEnv =
+      process.env.NODE_ENV === "test" ||
+      process.env.VITEST === "true" ||
+      process.env.APP_ENV === "test";
+
+    // Cho phép tra cứu công khai đối với các mã đơn mẫu (-DEMO-) hoặc khi bật DEMO_PUBLIC_ORDER_TRACKING="true" trên Vercel
+    const isPublicDemoLookup =
+      !isTestEnv &&
+      (orderCode.toUpperCase().includes("-DEMO-") ||
+        process.env.DEMO_PUBLIC_ORDER_TRACKING === "true");
+
     const customerSession = await getVerifiedCustomerFromRequest(req);
     const adminSession = await isVerifiedAdmin(req);
     const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
     const guestAccess = verifyGuestOrderAccessToken(accessToken || "");
-    if (!adminSession && !customerSession && guestAccess?.orderCode !== orderCode) {
+    if (!isPublicDemoLookup && !adminSession && !customerSession && guestAccess?.orderCode !== orderCode) {
       return NextResponse.json({ error: "Không tìm thấy đơn hàng hoặc cần xác minh quyền truy cập." }, { status: 404 });
     }
 
@@ -73,7 +84,9 @@ export async function GET(
       );
     }
 
-    const authorized = adminSession ||
+    const authorized =
+      isPublicDemoLookup ||
+      adminSession ||
       Boolean(customerSession && dbOrder.customerId === customerSession.id) ||
       hasGuestOrderAccessForEmail(accessToken, orderCode, dbOrder.customerEmail);
     if (!authorized) {

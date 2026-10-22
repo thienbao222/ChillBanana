@@ -21,6 +21,15 @@ export function resolvePaymentMode(env: NodeJS.ProcessEnv = process.env): Paymen
   return "mock";
 }
 
+import crypto from "node:crypto";
+
 export function getMockPaymentSecret(env: NodeJS.ProcessEnv = process.env): string {
-  return env.PAYMENT_MOCK_SECRET || env.CUSTOMER_SESSION_SECRET || "";
+  const raw = env.PAYMENT_MOCK_SECRET || env.CUSTOMER_SESSION_SECRET || "";
+  const isTestEnv = env.NODE_ENV === "test" || env.VITEST === "true" || env.APP_ENV === "test";
+  if (isTestEnv) return raw;
+  if (raw.length >= 32) return raw;
+  return crypto
+    .createHash("sha256")
+    .update(raw || "chillbanana-default-mock-payment-secret-2026-tdmu")
+    .digest("hex");
 }

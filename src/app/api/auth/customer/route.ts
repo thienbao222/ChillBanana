@@ -208,7 +208,7 @@ export async function POST(req: NextRequest) {
               createdAt: true,
             },
           });
-          const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+          const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
           const autoVerifyDemo = !isTestEnv && process.env.DEMO_AUTO_VERIFY_EMAIL === "true";
           const newPasswordHash = hashPassword(password);
           try {

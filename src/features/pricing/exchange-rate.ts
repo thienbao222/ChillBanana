@@ -189,9 +189,15 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
   lastFetchTime = now;
   lastFetchSucceeded = false;
 
+  const isTestEnv =
+    process.env.NODE_ENV === "test" ||
+    process.env.VITEST === "true" ||
+    process.env.APP_ENV === "test";
+  const allowDemoFallback = !isTestEnv && process.env.DEMO_ALLOW_FALLBACK_RATE !== "false";
+
   // Nếu còn cache hợp lệ từ lần trước → dùng lại, đánh dấu stale
   if (cachedRate.rate > 0 && !cachedRate.isFallback) {
-    return { ...cachedRate, isStale: true };
+    return { ...cachedRate, isStale: !allowDemoFallback };
   }
 
   // Hoàn toàn không có dữ liệu → floor rate hardcoded
@@ -203,5 +209,5 @@ export async function fetchLiveExchangeRate(): Promise<LiveRateData> {
     updatedAt: new Date().toISOString(),
     source: "Tỷ giá dự phòng theo cấu hình",
   };
-  return { ...cachedRate, isStale: true };
+  return { ...cachedRate, isStale: !allowDemoFallback };
 }

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getRecordedPaymentStatus } from "@/features/payments/policy";
 
 export type MockPaymentOutcome = "success" | "failed" | "pending" | "timeout";
 
@@ -26,6 +27,9 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
     return { result: "not_payable" as const };
   }
 
+  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
+  const autoConfirmOrder = !isTestEnv && process.env.PAYMENT_AUTO_CONFIRM_ORDER === "true";
+
   let confirmed = false;
   try {
     confirmed = await prisma.$transaction(async (tx) => {
@@ -34,6 +38,48 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
         data: { status: "CONFIRMED", providerReference: `MOCK-${attempt.id}`, failureCode: null, completedAt: now },
       });
       if (claimedAttempt.count !== 1) return false;
+
+      if (autoConfirmOrder) {
+        const recordedStatus = getRecordedPaymentStatus(attempt.order.depositPercent);
+        const claimedOrder = await tx.order.updateMany({
+          where: {
+            id: attempt.orderId,
+            status: "PENDING_DEPOSIT",
+            paymentStatus: "UNPAID",
+          },
+          data: {
+            paymentStatus: recordedStatus,
+            paymentMethod: "MOCK",
+            status: "PURCHASING_JP",
+            reservationExpiresAt: null,
+          },
+        });
+        if (claimedOrder.count === 1) {
+          const mockTxnId = `MOCK_${attempt.order.orderCode}_${Date.now()}`;
+          await tx.paymentTransaction.create({
+            data: {
+              orderId: attempt.orderId,
+              provider: "MOCK",
+              amountVnd: attempt.amountVnd,
+              providerTransactionId: mockTxnId,
+              reference: `Live Demo Mock Auto-Confirm (${attempt.order.depositPercent}%)`,
+              status: "CONFIRMED",
+              confirmedByAdmin: "SYSTEM_DEMO",
+            },
+          });
+          await tx.trackingLog.create({
+            data: {
+              orderId: attempt.orderId,
+              status: "PURCHASING_JP",
+              title: attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Live Demo)" : "Thanh toán cọc 50% thành công (Live Demo)",
+              description: `Hệ thống ghi nhận thanh toán mô phỏng ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
+              location: "ChillBanana Payment Gateway",
+            },
+          });
+          return true;
+        }
+      }
+
       await tx.trackingLog.create({
         data: {
           orderId: attempt.orderId,

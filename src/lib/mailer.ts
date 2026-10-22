@@ -176,7 +176,7 @@ export async function sendCustomerEmailVerification(customer: {
     getTransporter()
   );
 
-  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
   if (!sent && isTestEnv) {
     throw new Error("EMAIL_VERIFICATION_NOT_SENT");
   }

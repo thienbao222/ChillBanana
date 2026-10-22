@@ -11,6 +11,7 @@ export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [demoResetUrl, setDemoResetUrl] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,6 +29,9 @@ export default function ForgotPasswordPage() {
       if (res.ok) {
         setStatus("done");
         setMessage(data.message || "Đã gửi email hướng dẫn đặt lại mật khẩu.");
+        if (data.demoResetUrl) {
+          setDemoResetUrl(data.demoResetUrl);
+        }
       } else if (res.status === 429) {
         setStatus("error");
         setMessage("Quá nhiều yêu cầu. Vui lòng thử lại sau vài phút.");
@@ -66,6 +70,24 @@ export default function ForgotPasswordPage() {
               <p className="text-gray-500 text-sm mt-2">
                 Kiểm tra hộp thư đến (và thư mục Spam nếu không thấy).
               </p>
+              {demoResetUrl && (
+                <div className="mt-4 p-3.5 bg-gradient-to-r from-amber-50 to-banana-50 border border-amber-300 rounded-2xl text-left text-xs space-y-2 animate-in fade-in">
+                  <div className="font-bold text-amber-950 flex items-center justify-between">
+                    <span className="flex items-center gap-1">⚡ Đường Dẫn Đặt Lại Mật Khẩu (Live Demo)</span>
+                    <span className="text-[10px] bg-amber-200 text-amber-900 px-2 py-0.5 rounded-full font-mono font-bold">1-Click</span>
+                  </div>
+                  <p className="text-[11px] text-amber-900 leading-relaxed">
+                    Đang ở chế độ Live Demo, bạn có thể bấm trực tiếp để đổi mật khẩu mới ngay mà không cần mở hộp thư email:
+                  </p>
+                  <a
+                    href={demoResetUrl}
+                    className="inline-block w-full text-center py-2.5 bg-gradient-to-r from-amber-500 to-banana-500 hover:from-amber-600 hover:to-banana-600 text-navy-950 font-bold text-xs rounded-xl transition shadow-md"
+                  >
+                    🔑 Mở Trang Đặt Lại Mật Khẩu Ngay
+                  </a>
+                </div>
+              )}
+
               <Link
                 href="/?auth=login"
                 className="mt-6 inline-block text-yellow-600 hover:text-yellow-700 font-medium text-sm"
