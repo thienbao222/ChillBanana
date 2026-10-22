@@ -92,7 +92,7 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
 }
 
 export function isValidOrderCode(value: string): boolean {
-  return /^(?:CB|VNJP)-\d{4}-[A-Z0-9-]{4,16}$/i.test(value);
+  return /^CB-\d{4}-[A-Z0-9]+-\d{4,6}$/i.test(value) || /^VNJP-\d{4}-[A-Z0-9-]{4,16}$/i.test(value);
 }
 
 export function isSupportedMarketplaceUrl(value: unknown): value is string {
