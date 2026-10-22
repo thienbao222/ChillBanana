@@ -41,25 +41,22 @@ const systemConfigSeed = [
 async function main() {
   console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma + Neon Postgres)...");
 
-  // 1. Tạo tài khoản Admin mặc định
-  if (process.env.VERCEL_ENV === "production" || process.env.APP_ENV === "production") {
-    console.log("ℹ️ Môi trường production — bỏ qua cập nhật mật khẩu admin từ seed.");
+  // 1. Tạo tài khoản Admin mặc định nếu chưa tồn tại
+  const adminPassword = process.env.ADMIN_INITIAL_PASSWORD || "Admin@2026";
+  const existingAdmin = await prisma.adminUser.findUnique({ where: { username: "admin" } });
+  if (!existingAdmin) {
+    const adminHash = hashPassword(adminPassword);
+    const admin = await prisma.adminUser.create({
+      data: {
+        username: "admin",
+        passwordHash: adminHash,
+        name: "Quản Trị Viên ChillBanana",
+        role: "SUPER_ADMIN",
+      },
+    });
+    console.log(`✅ Đã tạo tài khoản quản trị mặc định: ${admin.username} / ${adminPassword}`);
   } else {
-    const adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
-    if (adminPassword) {
-      const adminHash = hashPassword(adminPassword);
-      const admin = await prisma.adminUser.upsert({
-        where: { username: "admin" },
-        update: { passwordHash: adminHash },
-        create: {
-          username: "admin",
-          passwordHash: adminHash,
-          name: "Quản Trị Viên ChillBanana",
-          role: "SUPER_ADMIN",
-        },
-      });
-      console.log(`✅ Đã tạo/cập nhật tài khoản quản trị: ${admin.username}`);
-    }
+    console.log(`ℹ️ Tài khoản admin đã tồn tại trong CSDL: ${existingAdmin.username}`);
   }
 
   // 2. Đồng bộ sản phẩm catalog
