@@ -422,7 +422,7 @@ export async function POST(req: NextRequest) {
             customerAddress: body.customerAddress.trim(),
             originalUrl: validatedOriginalUrl,
             productName: verifiedProductName,
-            category: ["cosmetics", "health", "gadgets", "anime", "other"].includes(body.category) ? body.category : "other",
+            category: ["cosmetics", "health", "gadgets", "anime", "fashion", "food", "luxury", "other"].includes(body.category) ? body.category : "other",
             priceJpy: verifiedPriceJpy,
             weightKg: verifiedWeightKg,
             exchangeRate: liveRate,

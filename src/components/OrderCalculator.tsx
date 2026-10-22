@@ -20,13 +20,11 @@ import { ShoppingCart } from "lucide-react";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
-const CATEGORY_CUSTOMS: Record<string, { label: string; surchargePercent: number; note: string }> = {
-  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 0, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  anime: { label: "Anime, Manga & Figure Chính Hãng", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
-  other: { label: "Danh Mục Khác", surchargePercent: 0, note: "Miễn phụ phí thông quan" },
-};
+import {
+  JP_VN_CATEGORIES,
+  getCategoryCustomsInfo,
+  JpVnProductCategory,
+} from "@/features/pricing/customs-categories";
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
@@ -52,6 +50,7 @@ export default function OrderCalculator() {
   const [productImage, setProductImage] = useState("");
   const [detectedStore, setDetectedStore] = useState("");
   const [category, setCategory] = useState("cosmetics");
+  const [categoryBreadcrumb, setCategoryBreadcrumb] = useState<string | null>(null);
   const [priceJpy, setPriceJpy] = useState<number>(3500);
   const [weightKg, setWeightKg] = useState<number>(0);
   const [showWeightPreview, setShowWeightPreview] = useState(false);
@@ -257,6 +256,7 @@ export default function OrderCalculator() {
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
         if (data.data.category) setCategory(data.data.category);
+        if (data.data.categoryBreadcrumb) setCategoryBreadcrumb(data.data.categoryBreadcrumb);
         // Trọng lượng để 0 để chờ cân đo thực tế tại kho Tokyo/VN, không tự động gán
         setWeightKg(0);
         setShowWeightPreview(false);
@@ -276,10 +276,10 @@ export default function OrderCalculator() {
     setCategory(newCat);
   };
 
-  const currentCategoryInfo = CATEGORY_CUSTOMS[category] || CATEGORY_CUSTOMS.cosmetics;
+  const currentCategoryInfo = getCategoryCustomsInfo(category);
   const calc = calculateOrderPrice(priceJpy, weightKg, exchangeRate, isGroupBuy, pricingConfig);
   const customsFeeVnd = Math.round(calc.productPriceVnd * (currentCategoryInfo.surchargePercent / 100));
-  const effectiveBaseOrderCostVnd = calc.baseOrderCostVnd + customsFeeVnd;
+  const effectiveBaseOrderCostVnd = calc.baseOrderCostVnd;
   const effectiveDeposit50Vnd = Math.round(effectiveBaseOrderCostVnd * 0.5);
   const effectiveTotalVnd = effectiveBaseOrderCostVnd + calc.shippingFeeVnd;
 
@@ -1027,12 +1027,20 @@ export default function OrderCalculator() {
                 onChange={(e) => handleCategoryChange(e.target.value)}
                 className="w-full px-4 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-banana-500 focus:bg-white cursor-pointer"
               >
-                <option value="cosmetics">🌸 Mỹ Phẩm & Chăm Sóc Da (Đã gồm thông quan)</option>
-                <option value="health">🌿 Thực Phẩm Chức Năng & Sức Khỏe (Đã gồm thông quan)</option>
-                <option value="gadgets">⚡ Gia Dụng & Điện Tử Mini (Hỗ trợ điện 100V)</option>
-                <option value="anime">🎎 Anime, Manga & Figure Chính Hãng (Đã gồm thông quan)</option>
-                <option value="other">📦 Danh Mục Khác (Đã gồm thông quan)</option>
+                {Object.values(JP_VN_CATEGORIES).map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.selectOptionLabel}
+                  </option>
+                ))}
               </select>
+              {categoryBreadcrumb && (
+                <div className="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-xl p-2.5 flex items-center gap-1.5 leading-snug">
+                  <span className="shrink-0 text-amber-600 font-bold">🔍</span>
+                  <span className="truncate">
+                    <strong>Đối chiếu từ mục loại sản phẩm trên sàn:</strong> {categoryBreadcrumb}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1245,10 +1253,12 @@ export default function OrderCalculator() {
               </div>
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
-                  Phụ phí hải quan ({currentCategoryInfo.label}):
+                  Phụ phí hải quan (Đối chiếu: {currentCategoryInfo.shortLabel}):
                 </span>
-                <span className={`font-medium ${customsFeeVnd > 0 ? "text-white" : "text-emerald-400"}`}>
-                  {customsFeeVnd > 0 ? `${customsFeeVnd.toLocaleString("vi-VN")} đ (+${currentCategoryInfo.surchargePercent}%)` : "0 đ (Miễn phí)"}
+                <span className={`font-medium ${currentCategoryInfo.surchargePercent > 0 ? "text-amber-400" : "text-emerald-400"}`}>
+                  {currentCategoryInfo.surchargePercent > 0
+                    ? `Tính sau khi qua hải quan (~${customsFeeVnd.toLocaleString("vi-VN")} đ · ${currentCategoryInfo.surchargePercent}% theo danh mục)`
+                    : "Tính sau khi qua hải quan (0% phụ phí danh mục)"}
                 </span>
               </div>
               <div className="flex justify-between text-slate-300">
@@ -1257,7 +1267,7 @@ export default function OrderCalculator() {
                   {isGroupBuy && <span className="ml-1 text-[10px] text-banana-300 bg-banana-900/60 px-1.5 rounded">-{pricingConfig.groupBuyShippingDiscountPercent}% Gộp</span>}
                 </span>
                 <span className="font-medium text-emerald-400">
-                  {weightKg > 0 ? `${calc.shippingFeeVnd.toLocaleString("vi-VN")} đ (${weightKg}kg tham khảo)` : "Cân đo thực tế khi về kho (0 đ)"}
+                  {weightKg > 0 ? `~${calc.shippingFeeVnd.toLocaleString("vi-VN")} đ (${weightKg}kg · Tính sau khi qua hải quan)` : "Tính sau khi qua hải quan & cân đo tại kho"}
                 </span>
               </div>
             </div>
@@ -1287,7 +1297,7 @@ export default function OrderCalculator() {
               <div className="mt-3 p-2.5 rounded-xl bg-banana-500/10 border border-banana-500/20 text-[11px] text-banana-200 flex items-start space-x-2">
                 <Info className="w-4 h-4 text-banana-400 shrink-0 mt-0.5" />
                 <span className="leading-relaxed">
-                  <strong>Chuẩn quốc tế:</strong> Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!
+                  <strong>Chuẩn quốc tế:</strong> Đợt 1 bạn chỉ cần đặt cọc trên Tiền hàng gốc &amp; Phí mua hộ. Cước bay quốc tế và Phụ phí hải quan (đối chiếu từ danh mục hàng hóa thực tế) sẽ được tính sau khi kiện hàng thông quan hải quan và cân đo tại kho!
                 </span>
               </div>
 

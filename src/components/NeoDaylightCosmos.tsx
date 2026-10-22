@@ -14,14 +14,11 @@ import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel"
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
 import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 import { getVnJpRatePerKg, VN_JP_CARGO_LABELS } from "@/features/pricing/vn-jp-rates";
-
-// Bảng cấu hình danh mục hàng hóa & phụ phí thông quan
-const CATEGORY_MAP: Record<string, { label: string; surchargePercent: number; suggestedWeight: number; note: string }> = {
-  cosmetics: { label: "Mỹ Phẩm & Chăm Sóc Da", surchargePercent: 0, suggestedWeight: 0.3, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  health: { label: "Thực Phẩm Chức Năng", surchargePercent: 0, suggestedWeight: 0.4, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  gadgets: { label: "Gia Dụng & Điện Tử Mini", surchargePercent: 0, suggestedWeight: 0.8, note: "Đã bao gồm thông quan tiêu chuẩn" },
-  anime: { label: "Anime, Figure & Sưu Tầm", surchargePercent: 0, suggestedWeight: 0.5, note: "Miễn phụ phí thông quan" },
-};
+import {
+  JP_VN_CATEGORIES,
+  getCategoryCustomsInfo,
+  JpVnProductCategory,
+} from "@/features/pricing/customs-categories";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
@@ -45,6 +42,7 @@ export default function NeoDaylightCosmos() {
   const [productImage, setProductImage] = useState("");
   const [detectedStore, setDetectedStore] = useState("");
   const [category, setCategory] = useState("cosmetics");
+  const [categoryBreadcrumb, setCategoryBreadcrumb] = useState<string | null>(null);
   const [priceJpy, setPriceJpy] = useState<number>(3500);
   const [weightKg, setWeightKg] = useState<number>(0);
   const [isGroupBuy, setIsGroupBuy] = useState(false);
@@ -249,6 +247,7 @@ export default function NeoDaylightCosmos() {
         if (data.data.imageUrl) setProductImage(data.data.imageUrl);
         if (data.data.storeName) setDetectedStore(data.data.storeName);
         if (data.data.category) setCategory(data.data.category);
+        if (data.data.categoryBreadcrumb) setCategoryBreadcrumb(data.data.categoryBreadcrumb);
       } else {
         showToast(data.error || "Không thể tự động bóc tách link này (do tường lửa bảo mật). Vui lòng nhập thông tin thủ công.");
       }
@@ -260,11 +259,11 @@ export default function NeoDaylightCosmos() {
   };
 
   // Tính toán chi phí theo tỷ giá live và danh mục
-  const currentCategory = CATEGORY_MAP[category] || CATEGORY_MAP.cosmetics;
+  const currentCategory = getCategoryCustomsInfo(category);
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
   const serviceFeeVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(productPriceVnd * pricingConfig.serviceFeePercent / 100));
   const customsFeeVnd = Math.round(productPriceVnd * (currentCategory.surchargePercent / 100));
-  const baseOrderCost = productPriceVnd + serviceFeeVnd + customsFeeVnd;
+  const baseOrderCost = productPriceVnd + serviceFeeVnd;
 
   // Cước bay quốc tế ước tính & tiết kiệm gộp đơn
   const standardShippingVnd = weightKg > 0 ? Math.round(weightKg * pricingConfig.airShippingPerKgVnd) : 0;
@@ -1157,14 +1156,35 @@ export default function NeoDaylightCosmos() {
                 </div>
                 <div className="f">
                   <label htmlFor="c">
-                    {t("3. Danh mục hàng hóa")} <em>({currentCategory.note})</em>
+                    {t("3. Danh mục hàng hóa")} <em>({currentCategory.customsRuleNote})</em>
                   </label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="cosmetics">{t("Mỹ Phẩm & Chăm Sóc Da (Đã gồm thông quan)")}</option>
-                    <option value="health">{t("Thực Phẩm Chức Năng (Đã gồm thông quan)")}</option>
-                    <option value="gadgets">{t("Gia Dụng & Điện Tử Mini (Hỗ trợ điện 100V)")}</option>
-                    <option value="anime">{t("Anime, Figure & Sưu Tầm (Đã gồm thông quan)")}</option>
+                    {Object.values(JP_VN_CATEGORIES).map((cat) => (
+                      <option key={cat.id} value={cat.id}>
+                        {cat.selectOptionLabel}
+                      </option>
+                    ))}
                   </select>
+                  {categoryBreadcrumb && (
+                    <div style={{
+                      marginTop: "6px",
+                      fontSize: "0.75rem",
+                      color: "#b45309",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      borderRadius: "8px",
+                      padding: "4px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      overflow: "hidden",
+                    }}>
+                      <span style={{ flexShrink: 0 }}>🔍 Đối chiếu từ mục loại sản phẩm trên sàn:</span>
+                      <strong style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {categoryBreadcrumb}
+                      </strong>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1240,19 +1260,21 @@ export default function NeoDaylightCosmos() {
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>{`Phụ phí hải quan (${currentCategory.label}):`}</span>
-                <b className={customsFeeVnd > 0 ? "" : "ok"}>
-                  {customsFeeVnd > 0 ? `${customsFeeVnd.toLocaleString("vi-VN")} đ (+${currentCategory.surchargePercent}%)` : "0 đ (Miễn phí)"}
+                <span>{`Phụ phí hải quan (Đối chiếu: ${currentCategory.shortLabel}):`}</span>
+                <b className="ok" style={{ color: currentCategory.surchargePercent > 0 ? "#fbbf24" : "#34d399" }}>
+                  {currentCategory.surchargePercent > 0
+                    ? `Tính sau khi qua hải quan (~${customsFeeVnd.toLocaleString("vi-VN")} đ · ${currentCategory.surchargePercent}% theo danh mục)`
+                    : "Tính sau khi qua hải quan (0% phụ phí danh mục)"}
                 </b>
               </div>
               <div className="row">
-                <span>{t("Cước bay quốc tế (ước tính):")}</span>
+                <span>{t("Cước bay quốc tế (185.000 đ/kg):")}</span>
                 <b className="ok">
                   {weightKg > 0
                     ? (isGroupBuyEligible
-                        ? `${estimatedShippingVnd.toLocaleString("vi-VN")} đ (-${pricingConfig.groupBuyShippingDiscountPercent}% Gộp)`
-                        : `${standardShippingVnd.toLocaleString("vi-VN")} đ`)
-                    : "0 đ (Cân đo thực tế khi về kho)"}
+                        ? `~${estimatedShippingVnd.toLocaleString("vi-VN")} đ (${weightKg}kg · Tính sau khi qua hải quan · -${pricingConfig.groupBuyShippingDiscountPercent}% Gộp)`
+                        : `~${standardShippingVnd.toLocaleString("vi-VN")} đ (${weightKg}kg · Tính sau khi qua hải quan)`)
+                    : "Tính sau khi qua hải quan & cân đo tại kho"}
                 </b>
               </div>
               {isGroupBuyEligible && (
@@ -1270,7 +1292,7 @@ export default function NeoDaylightCosmos() {
                 <b>{depositVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <p className="n1">
-                <b>{t("Chuẩn quốc tế:")}</b> {t("Bạn chỉ cần cọc tiền mua hàng. Cước bay quốc tế sẽ được cân đo chính xác khi kiện hàng về tới kho Tokyo/VN và thanh toán khi nhận hàng!")}
+                <b>{t("Chuẩn quốc tế:")}</b> {t("Đợt 1 bạn chỉ cần đặt cọc trên Tiền hàng gốc & Phí mua hộ. Cước bay quốc tế và Phụ phí hải quan (đối chiếu từ danh mục hàng hóa thực tế) sẽ được tính sau khi kiện hàng thông quan hải quan và cân đo tại kho!")}
               </p>
 
               {isRateStale && (
