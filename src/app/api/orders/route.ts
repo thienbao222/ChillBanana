@@ -20,8 +20,11 @@ export const dynamic = "force-dynamic";
 const ORDER_CREATE_RATE_LIMIT = { max: 15, windowMs: 2 * 60_000, blockMs: 5 * 60_000 };
 
 const ALLOWED_DOMAINS = [
-  'amazon.co.jp', 'amazon.com', 'mercari.com', 'jp.mercari.com',
-  'rakuten.co.jp', 'yahoo.co.jp', 'auctions.yahoo.co.jp',
+  'amazon.co.jp', 'amazon.com', 'amzn.asia', 'amzn.to',
+  'mercari.com', 'jp.mercari.com',
+  'rakuten.co.jp', 'a.r10.to',
+  'yahoo.co.jp', 'auctions.yahoo.co.jp', 'shopping.yahoo.co.jp',
+  'page.auctions.yahoo.co.jp', 'paypayfleamarket.yahoo.co.jp',
   'uniqlo.com', 'suruga-ya.jp', 'biccamera.com', 'yodobashi.com'
 ];
 

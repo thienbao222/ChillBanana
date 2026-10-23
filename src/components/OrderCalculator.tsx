@@ -25,17 +25,7 @@ import {
   getCategoryCustomsInfo,
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
-
-const JAPAN_STORE_SAMPLES: Record<string, string> = {
-  "Amazon JP": "https://www.amazon.co.jp/dp/B09V3KXJPB",
-  "Mercari": "https://jp.mercari.com/item/m789012345",
-  "Rakuten": "https://item.rakuten.co.jp/kanebo/allie-chrono-beauty/",
-  "Yahoo! Auctions": "https://page.auctions.yahoo.co.jp/jp/auction/m1098765432",
-  "Uniqlo JP": "https://www.uniqlo.com/jp/ja/products/E467144-000/00",
-  "Surugaya (駿河屋)": "https://www.suruga-ya.jp/product/detail/602123456",
-  "Bic Camera": "https://www.biccamera.com/bc/item/10892345/",
-  "Yodobashi": "https://www.yodobashi.com/product/100000001006543210/",
-};
+import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
@@ -987,16 +977,29 @@ export default function OrderCalculator() {
             {/* Sàn hỗ trợ bóc tách */}
             <div className="flex flex-wrap items-center gap-1.5 mt-2.5 text-xs text-slate-500">
               <span className="font-semibold text-slate-700">Sàn hỗ trợ bóc tách:</span>
-              {Object.entries(JAPAN_STORE_SAMPLES).map(([store, sampleUrl]) => (
-                <button
-                  key={store}
-                  type="button"
-                  onClick={() => handleAutoScrape(sampleUrl)}
-                  title={`Bấm để điền và quét link mẫu sàn ${store}`}
-                  className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-900 border border-sky-200 hover:border-sky-300 text-[11px] font-medium transition cursor-pointer flex items-center gap-0.5"
+              {JAPAN_SUPPORTED_STORES.map((store) => (
+                <div
+                  key={store.id}
+                  className="inline-flex items-center rounded-md bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 hover:text-sky-900 text-[11px] font-medium transition overflow-hidden"
                 >
-                  <span>{store}</span>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => handleAutoScrape(store.sampleUrl)}
+                    title={`Bấm để điền và quét link mẫu sàn ${store.name}`}
+                    className="px-2 py-0.5 hover:bg-sky-200/50 transition cursor-pointer"
+                  >
+                    <span>{store.shortName || store.name}</span>
+                  </button>
+                  <a
+                    href={store.homeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Mở trang chủ chính thức ${store.name} trong tab mới`}
+                    className="px-1 py-0.5 border-l border-sky-200 hover:bg-sky-200/70 transition flex items-center justify-center text-sky-600 hover:text-sky-800"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                  </a>
+                </div>
               ))}
             </div>
 

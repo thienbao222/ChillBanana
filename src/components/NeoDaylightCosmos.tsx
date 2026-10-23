@@ -19,17 +19,7 @@ import {
   getCategoryCustomsInfo,
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
-
-const JAPAN_STORE_SAMPLES: Record<string, string> = {
-  "Amazon JP": "https://www.amazon.co.jp/dp/B09V3KXJPB",
-  "Mercari": "https://jp.mercari.com/item/m789012345",
-  "Rakuten": "https://item.rakuten.co.jp/kanebo/allie-chrono-beauty/",
-  "Yahoo! Auctions": "https://page.auctions.yahoo.co.jp/jp/auction/m1098765432",
-  "Uniqlo JP": "https://www.uniqlo.com/jp/ja/products/E467144-000/00",
-  "Surugaya (駿河屋)": "https://www.suruga-ya.jp/product/detail/602123456",
-  "Bic Camera": "https://www.biccamera.com/bc/item/10892345/",
-  "Yodobashi": "https://www.yodobashi.com/product/100000001006543210/",
-};
+import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
@@ -648,29 +638,58 @@ export default function NeoDaylightCosmos() {
               <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
                 {t("Sàn hỗ trợ bóc tách:")}
               </span>
-              {Object.entries(JAPAN_STORE_SAMPLES).map(([site, sampleUrl]) => (
-                <button
-                  key={site}
-                  type="button"
-                  onClick={() => {
-                    handleScanLink(sampleUrl);
-                    scrollToSection("quote");
-                  }}
-                  title={`Bấm để điền và quét link mẫu sàn ${site}`}
+              {JAPAN_SUPPORTED_STORES.map((store) => (
+                <div
+                  key={store.id}
                   style={{
-                    padding: "3px 8px",
+                    display: "inline-flex",
+                    alignItems: "center",
                     borderRadius: "8px",
-                    background: "rgba(224, 242, 254, 0.7)",
+                    background: "rgba(224, 242, 254, 0.75)",
                     border: "1px solid rgba(186, 230, 253, 0.9)",
-                    color: "#0369a1",
-                    fontWeight: 600,
+                    overflow: "hidden",
                     fontSize: "0.72rem",
-                    cursor: "pointer",
                     transition: "all 0.15s ease",
                   }}
                 >
-                  {site}
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleScanLink(store.sampleUrl);
+                      scrollToSection("quote");
+                    }}
+                    title={`Bấm để tự điền link mẫu và quét giá sàn ${store.name}`}
+                    style={{
+                      padding: "3px 8px",
+                      background: "transparent",
+                      border: "none",
+                      color: "#0369a1",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      fontSize: "0.72rem",
+                    }}
+                  >
+                    {store.shortName || store.name}
+                  </button>
+                  <a
+                    href={store.homeUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Mở trang chủ chính thức ${store.name} trong tab mới`}
+                    style={{
+                      padding: "3px 6px",
+                      borderLeft: "1px solid rgba(186, 230, 253, 0.7)",
+                      color: "#0284c7",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textDecoration: "none",
+                      background: "rgba(255, 255, 255, 0.4)",
+                    }}
+                  >
+                    <ExternalLink style={{ width: "10px", height: "10px" }} />
+                  </a>
+                </div>
               ))}
             </div>
             <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
@@ -1188,26 +1207,55 @@ export default function NeoDaylightCosmos() {
                   <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
                     {t("Sàn hỗ trợ bóc tách:")}
                   </span>
-                  {Object.entries(JAPAN_STORE_SAMPLES).map(([store, sampleUrl]) => (
-                    <button
-                      key={store}
-                      type="button"
-                      onClick={() => handleScanLink(sampleUrl)}
-                      title={`Bấm để điền và quét link mẫu sàn ${store}`}
+                  {JAPAN_SUPPORTED_STORES.map((store) => (
+                    <div
+                      key={store.id}
                       style={{
-                        padding: "2px 7px",
+                        display: "inline-flex",
+                        alignItems: "center",
                         borderRadius: "6px",
                         background: "rgba(224, 242, 254, 0.6)",
                         border: "1px solid rgba(186, 230, 253, 0.8)",
-                        color: "#0369a1",
-                        fontWeight: 600,
+                        overflow: "hidden",
                         fontSize: "0.7rem",
-                        cursor: "pointer",
                         transition: "all 0.15s ease",
                       }}
                     >
-                      {store}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => handleScanLink(store.sampleUrl)}
+                        title={`Bấm để điền & quét link mẫu ${store.name}`}
+                        style={{
+                          padding: "2px 7px",
+                          background: "transparent",
+                          border: "none",
+                          color: "#0369a1",
+                          fontWeight: 600,
+                          fontSize: "0.7rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {store.shortName || store.name}
+                      </button>
+                      <a
+                        href={store.homeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Mở trang chủ ${store.name} trong tab mới`}
+                        style={{
+                          padding: "2px 5px",
+                          borderLeft: "1px solid rgba(186, 230, 253, 0.7)",
+                          color: "#0284c7",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          textDecoration: "none",
+                          background: "rgba(255, 255, 255, 0.4)",
+                        }}
+                      >
+                        <ExternalLink style={{ width: "9px", height: "9px" }} />
+                      </a>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -1243,8 +1291,9 @@ export default function NeoDaylightCosmos() {
 
               <div className="fg">
                 <div className="f">
-                  <label htmlFor="n">
-                    <span>{t("2. Tên sản phẩm (hiển thị trên đơn)")}</span>
+                  <label htmlFor="n" style={{ minHeight: "18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span>{t("2. Tên sản phẩm")}</span>
+                    <em style={{ fontSize: "0.68rem", color: "var(--muted)", textTransform: "none" }}>{t("Hiển thị trên đơn")}</em>
                   </label>
                   <input
                     id="n"
@@ -1254,6 +1303,9 @@ export default function NeoDaylightCosmos() {
                   />
                   <div style={{
                     marginTop: "2px",
+                    minHeight: "22px",
+                    display: "flex",
+                    alignItems: "center",
                     fontSize: "0.72rem",
                     color: "var(--muted)",
                     overflow: "hidden",
@@ -1264,9 +1316,9 @@ export default function NeoDaylightCosmos() {
                   </div>
                 </div>
                 <div className="f">
-                  <label htmlFor="c">
+                  <label htmlFor="c" style={{ minHeight: "18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                     <span>{t("3. Danh mục hàng hóa")}</span>
-                    <em>{currentCategory.surchargePercent > 0 ? `Phụ phí ~${currentCategory.surchargePercent}%` : "0% phụ phí"}</em>
+                    <em style={{ fontSize: "0.68rem" }}>{currentCategory.surchargePercent > 0 ? `+${currentCategory.surchargePercent}% thuế/phí` : "0% phụ phí"}</em>
                   </label>
                   <select id="c" value={category} onChange={(e) => setCategory(e.target.value)}>
                     {Object.values(JP_VN_CATEGORIES).map((cat) => (
@@ -1278,6 +1330,7 @@ export default function NeoDaylightCosmos() {
                   {categoryBreadcrumb ? (
                     <div style={{
                       marginTop: "2px",
+                      minHeight: "22px",
                       fontSize: "0.72rem",
                       color: "#b45309",
                       background: "#fffbeb",
@@ -1298,8 +1351,11 @@ export default function NeoDaylightCosmos() {
                   ) : (
                     <div style={{
                       marginTop: "2px",
+                      minHeight: "22px",
                       fontSize: "0.72rem",
                       color: "var(--muted)",
+                      display: "flex",
+                      alignItems: "center",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
