@@ -191,10 +191,11 @@ export async function POST(req: NextRequest) {
           // BẢO MẬT (P1-02): Chống Pre-Account Takeover.
           // Tài khoản chưa xác minh email: Cho phép cập nhật mật khẩu và thông tin mới,
           // rồi gửi lại email xác minh tới hộp thư để chủ sở hữu thực sự kích hoạt.
+          const newPasswordHash = hashPassword(password);
           const updatedCustomer = await prisma.customer.update({
             where: { id: existing.id },
             data: {
-              passwordHash: hashPassword(password),
+              passwordHash: newPasswordHash,
               name: name.trim(),
               phone: phone ? phone.trim() : null,
               address: address ? address.trim() : null,
@@ -210,7 +211,6 @@ export async function POST(req: NextRequest) {
           });
           const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
           const autoVerifyDemo = !isTestEnv && process.env.DEMO_AUTO_VERIFY_EMAIL === "true";
-          const newPasswordHash = hashPassword(password);
           try {
             const mailResult = await sendCustomerEmailVerification(updatedCustomer);
             const sentOk = mailResult && typeof mailResult === "object" && "sent" in mailResult
