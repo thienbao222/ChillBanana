@@ -23,12 +23,36 @@ import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
-  const { customer, openAuthModal } = useAuth();
+  const { customer, openAuthModal, logout } = useAuth();
   const [showMini, setShowMini] = useState(false);
   const { preferences } = useWebsitePreferences();
   const t = useWebsiteText();
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
+
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (userDropdownRef.current && !userDropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setUserDropdownOpen(false);
+      }
+    };
+    if (userDropdownOpen) {
+      document.addEventListener("mousedown", handleOutsideClick);
+      document.addEventListener("keydown", handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [userDropdownOpen]);
 
   // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường)
   const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
@@ -544,10 +568,78 @@ export default function NeoDaylightCosmos() {
             </button>
 
             {customer ? (
-              <Link href="/profile" className="chip chip-user" title={customer.email}>
-                <span className="user-icon">👤</span>
-                <span className="user-name">{customer.name || t("Tài khoản")}</span>
-              </Link>
+              <div className="relative" ref={userDropdownRef}>
+                <button
+                  type="button"
+                  className="chip chip-user"
+                  onClick={() => setUserDropdownOpen((prev) => !prev)}
+                  title={customer.email}
+                  aria-expanded={userDropdownOpen}
+                  aria-haspopup="true"
+                >
+                  <span className="user-icon">👤</span>
+                  <span className="user-name">{customer.name || t("Tài khoản")}</span>
+                  <span className="text-[10px] ml-0.5 opacity-70">▾</span>
+                </button>
+
+                {userDropdownOpen && (
+                  <div
+                    className="absolute right-0 mt-2 w-56 rounded-2xl shadow-2xl border p-2 z-[9999] animate-in fade-in zoom-in-95 duration-150"
+                    style={{
+                      background: "var(--surface-strong, #ffffff)",
+                      borderColor: "var(--line, #e2e8f0)",
+                      boxShadow: "0 18px 40px -12px rgba(0,0,0,0.25)",
+                    }}
+                    role="menu"
+                  >
+                    <div className="px-3 py-2 border-b mb-1" style={{ borderColor: "var(--line, #e2e8f0)" }}>
+                      <p className="text-xs font-bold truncate" style={{ color: "var(--ink, #0f172a)" }}>
+                        {customer.name || "Khách hàng"}
+                      </p>
+                      <p className="text-[11px] truncate opacity-70" style={{ color: "var(--muted, #64748b)" }}>
+                        {customer.email}
+                      </p>
+                    </div>
+
+                    <Link
+                      href="/profile"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/5"
+                      style={{ color: "var(--ink, #0f172a)" }}
+                      role="menuitem"
+                    >
+                      <span>👤</span>
+                      <span>{t("Hồ sơ của tôi")}</span>
+                    </Link>
+
+                    <Link
+                      href="/tracking"
+                      onClick={() => setUserDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-semibold transition hover:bg-black/5 dark:hover:bg-white/5"
+                      style={{ color: "var(--ink, #0f172a)" }}
+                      role="menuitem"
+                    >
+                      <span>📦</span>
+                      <span>{t("Đơn hàng của tôi")}</span>
+                    </Link>
+
+                    <div className="my-1 border-t" style={{ borderColor: "var(--line, #e2e8f0)" }} />
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUserDropdownOpen(false);
+                        logout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition text-left"
+                      role="menuitem"
+                    >
+                      <span>🚪</span>
+                      <span>{t("Đăng xuất")}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             ) : (
               <button className="chip chip-user" onClick={() => openAuthModal("login")}>
                 <span className="user-icon">👤</span>
