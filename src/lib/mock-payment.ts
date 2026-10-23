@@ -7,7 +7,10 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
   const now = new Date();
   const attempt = await prisma.paymentAttempt.findUnique({ where: { id: attemptId }, include: { order: true } });
   if (!attempt || attempt.provider !== "MOCK" || attempt.mode !== "mock") return { result: "not_found" as const };
-  if (attempt.status === "CONFIRMED") return { result: "simulated_success" as const, orderCode: attempt.order.orderCode };
+  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
+  const autoConfirmOrder = !isTestEnv && process.env.PAYMENT_AUTO_CONFIRM_ORDER === "true";
+
+  if (attempt.status === "CONFIRMED") return { result: (autoConfirmOrder ? "confirmed" : "simulated_success") as "confirmed" | "simulated_success", orderCode: attempt.order.orderCode };
   if (attempt.status === "FAILED" || attempt.status === "EXPIRED") return { result: "terminal" as const };
   if (attempt.expiresAt <= now) {
     await prisma.paymentAttempt.updateMany({ where: { id: attempt.id, status: { in: ["INITIATED", "PENDING"] } }, data: { status: "EXPIRED", failureCode: "ATTEMPT_EXPIRED", completedAt: now } });
@@ -26,9 +29,6 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
   if (attempt.order.paymentStatus !== "UNPAID" || attempt.order.status !== "PENDING_DEPOSIT" || !attempt.order.isPriceVerified || attempt.amountVnd !== attempt.order.depositAmountVnd) {
     return { result: "not_payable" as const };
   }
-
-  const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true" || process.env.APP_ENV === "test";
-  const autoConfirmOrder = !isTestEnv && process.env.PAYMENT_AUTO_CONFIRM_ORDER === "true";
 
   let confirmed = false;
   try {
@@ -97,10 +97,12 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
   if (!confirmed) {
     const current = await prisma.paymentAttempt.findUnique({ where: { id: attempt.id }, select: { status: true } });
     return current?.status === "CONFIRMED"
-      ? { result: "simulated_success" as const, orderCode: attempt.order.orderCode }
+      ? { result: (autoConfirmOrder ? "confirmed" : "simulated_success") as "confirmed" | "simulated_success", orderCode: attempt.order.orderCode }
       : { result: "terminal" as const };
   }
 
-  // A simulation is recorded on PaymentAttempt only; it never marks the order paid or triggers a receipt email.
-  return { result: "simulated_success" as const, orderCode: attempt.order.orderCode };
+  return {
+    result: (autoConfirmOrder ? "confirmed" : "simulated_success") as "confirmed" | "simulated_success",
+    orderCode: attempt.order.orderCode,
+  };
 }

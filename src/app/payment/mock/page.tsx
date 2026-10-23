@@ -24,7 +24,12 @@ function MockPaymentContent() {
       });
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Không thể chạy kịch bản mô phỏng.");
-      if (result.result === "simulated_success") {
+      if (result.result === "confirmed" || result.result === "simulated_success") {
+        if (result.result === "confirmed") {
+          const code = result.orderCode || orderCode;
+          router.push(`/tracking?code=${encodeURIComponent(code)}&payment=success`);
+          return;
+        }
         setMessage("Đã ghi nhận kịch bản thành công. Đơn vẫn ở trạng thái chờ thanh toán thật và chưa chuyển sang xử lý mua hàng.");
         return;
       }
