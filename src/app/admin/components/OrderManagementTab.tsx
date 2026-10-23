@@ -53,6 +53,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [updateLocation, setUpdateLocation] = useState("Tokyo, Nhật Bản");
   const [jpTrack, setJpTrack] = useState("");
   const [vnTrack, setVnTrack] = useState("");
+  const [updateWeightKg, setUpdateWeightKg] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
   const [cancelModalOrder, setCancelModalOrder] = useState<StoredOrder | null>(null);
   const [cancelReason, setCancelReason] = useState("Sản phẩm hết hàng tại Nhật / Người bán hủy bán");
@@ -108,6 +109,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     setNewStatus(order.status as OrderStatus);
     setJpTrack(order.jpDomesticTrack || "");
     setVnTrack(order.vnDomesticTrack || "");
+    setUpdateWeightKg(order.weightKg > 0 ? String(order.weightKg) : "");
 
     if (order.status === "PENDING_DEPOSIT") {
       if (order.isPriceVerified) {
@@ -164,6 +166,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
           location: updateLocation || "Việt Nam",
           jpTrack,
           vnTrack,
+          weightKg: updateWeightKg.trim() ? parseFloat(updateWeightKg) : undefined,
         }),
       });
 
@@ -1359,6 +1362,22 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                   onChange={(e) => setUpdateDesc(e.target.value)}
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
                   placeholder="VD: Kiện hàng đã được kiểm tra và cân nặng chuẩn xác."
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Cân nặng thực tế (kg) {newStatus === "IN_TRANSIT_AIR" && <span className="text-rose-500 font-semibold">* (Bắt buộc &gt; 0 khi chuyển sang Bay quốc tế)</span>}
+                </label>
+                <input
+                  type="number"
+                  step="0.05"
+                  min="0.05"
+                  max="100"
+                  value={updateWeightKg}
+                  onChange={(e) => setUpdateWeightKg(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl"
+                  placeholder="VD: 0.8"
                 />
               </div>
 
