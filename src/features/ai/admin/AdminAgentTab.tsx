@@ -41,10 +41,10 @@ function renderAnswer(content: string) {
   });
 }
 
-export default function AdminAgentTab({ initialModule = "overview" }: { initialModule?: AdminAiModuleId }) {
+export default function AdminAgentTab({ initialModule = "overview", initialQuestion = "" }: { initialModule?: AdminAiModuleId; initialQuestion?: string }) {
   const [moduleId, setModuleId] = useState<AdminAiModuleId>(initialModule);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
-  const [question, setQuestion] = useState("");
+  const [question, setQuestion] = useState(initialQuestion);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [operationalData, setOperationalData] = useState<any>(null);
@@ -63,7 +63,10 @@ export default function AdminAgentTab({ initialModule = "overview" }: { initialM
     setModuleId(initialModule);
     setMessages([]);
     setError("");
-  }, [initialModule]);
+    if (initialQuestion) {
+      setQuestion(initialQuestion);
+    }
+  }, [initialModule, initialQuestion]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });

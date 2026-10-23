@@ -1326,6 +1326,34 @@ export default function OrderCalculator() {
                 </div>
               </div>
 
+              {/* Nút chuyển đổi Cọc 50% vs Thanh toán 100% */}
+              <div className="grid grid-cols-2 gap-2 mt-3 mb-1">
+                <button
+                  type="button"
+                  onClick={() => setDepositChoice("50")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    depositChoice === "50"
+                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                  }`}
+                >
+                  <span>Cọc 50%</span>
+                  {depositChoice === "50" && <span className="text-[10px]">✓</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDepositChoice("100")}
+                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                    depositChoice === "100"
+                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                  }`}
+                >
+                  <span>Thanh toán 100%</span>
+                  {depositChoice === "100" && <span className="text-[10px]">✓</span>}
+                </button>
+              </div>
+
               <div className="mt-2.5 flex justify-between items-center text-xs bg-white/10 p-3 rounded-2xl">
                 <div>
                   <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : "Đặt cọc 50%:"}</span>

@@ -51,6 +51,9 @@ interface CartContextType {
   totalVnd: number;
   depositOption: DepositOption;
   setDepositOption: (option: DepositOption) => void;
+  depositPercent: DepositOption;
+  setDepositPercent: (percent: DepositOption) => void;
+  isShippingWeightPending: boolean;
   deposit50Vnd: number;
   depositAmountVnd: number;
   remainingAmountVnd: number;
@@ -262,6 +265,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
   const depositAmountVnd = depositOption === 100 ? baseOrderCostVnd : deposit50Vnd;
   const remainingAmountVnd = depositOption === 100 ? 0 : (baseOrderCostVnd - depositAmountVnd);
+  const isShippingWeightPending = totalWeightKg <= 0;
 
   return (
     <CartContext.Provider
@@ -289,6 +293,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalVnd,
         depositOption,
         setDepositOption,
+        depositPercent: depositOption,
+        setDepositPercent: setDepositOption,
+        isShippingWeightPending,
         deposit50Vnd,
         depositAmountVnd,
         remainingAmountVnd,

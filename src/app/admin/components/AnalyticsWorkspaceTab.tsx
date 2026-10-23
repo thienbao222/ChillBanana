@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { BarChart3, MessageSquareText, Sparkles } from "lucide-react";
+import { BarChart3, MessageSquareText, Sparkles, Clock, AlertTriangle, Scale, Flame, ArrowRight } from "lucide-react";
 import ReportsTab from "@/app/admin/components/ReportsTab";
 import AiTrendsTab from "@/app/admin/components/AiTrendsTab";
 import AdminAgentTab from "@/features/ai/admin/AdminAgentTab";
@@ -23,14 +23,38 @@ const sections: { id: AnalyticsSection; label: string; description: string; icon
 export default function AnalyticsWorkspaceTab({ initialSection = "reports", initialAgentModule = "overview" }: Props) {
   const [section, setSection] = useState<AnalyticsSection>(initialSection);
   const [agentModule, setAgentModule] = useState<AdminAiModuleId>(initialAgentModule);
+  const [agentQuestion, setAgentQuestion] = useState("");
+  const [alertStats, setAlertStats] = useState<{
+    pendingDepositOver3Days: number;
+    unverifiedPrice: number;
+    unweighedOrders: number;
+    hotLeads: number;
+  } | null>(null);
 
   useEffect(() => {
     setSection(initialSection);
     setAgentModule(initialAgentModule);
   }, [initialSection, initialAgentModule]);
 
-  const openAgent = (module: AdminAiModuleId) => {
+  useEffect(() => {
+    fetch("/api/admin/ai-analytics")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.operationalAlerts) {
+          setAlertStats({
+            pendingDepositOver3Days: data.operationalAlerts.orders?.pendingDepositOver3Days || 0,
+            unverifiedPrice: data.operationalAlerts.orders?.unverifiedPrice || 0,
+            unweighedOrders: data.operationalAlerts.orders?.unweighedOrders || 0,
+            hotLeads: data.operationalAlerts.customersAndLeads?.hotLeads || 0,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const openAgent = (module: AdminAiModuleId, question = "") => {
     setAgentModule(module);
+    setAgentQuestion(question);
     setSection("assistant");
   };
 
@@ -41,6 +65,94 @@ export default function AnalyticsWorkspaceTab({ initialSection = "reports", init
           <h1 className="text-xl font-bold text-navy-950 sm:text-2xl">Phân tích kinh doanh &amp; AI</h1>
           <p className="text-sm text-slate-600">Theo dõi kết quả kinh doanh, nhu cầu khách ghi nhận trên website và dùng AI để hỗ trợ ra quyết định.</p>
         </div>
+
+        {/* Actionable Insights Panel */}
+        {alertStats && (
+          <div className="mt-5 rounded-2xl border border-amber-200 bg-gradient-to-r from-amber-50/80 via-orange-50/40 to-amber-50/60 p-4">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-800">
+              <Sparkles className="h-3.5 w-3.5 text-amber-600 animate-pulse" />
+              <span>Cảnh báo vận hành cần xử lý ngay</span>
+            </div>
+            <div className="mt-3 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="flex items-center justify-between rounded-xl bg-white/90 p-3 shadow-xs border border-amber-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-100 text-red-600">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Chờ cọc &gt;3 ngày</div>
+                    <div className="text-base font-bold text-slate-900">{alertStats.pendingDepositOver3Days} đơn</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAgent("orders", "Có bao nhiêu đơn chờ cọc quá 3 ngày và cần nhắc cọc?")}
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-banana-200 hover:text-navy-950 transition flex items-center gap-1"
+                >
+                  Xử lý <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-white/90 p-3 shadow-xs border border-amber-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-100 text-amber-700">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Chờ duyệt giá</div>
+                    <div className="text-base font-bold text-slate-900">{alertStats.unverifiedPrice} đơn</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAgent("orders", "Đơn hàng nào chưa duyệt giá (isPriceVerified: false) cần nhân viên kiểm tra?")}
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-banana-200 hover:text-navy-950 transition flex items-center gap-1"
+                >
+                  Duyệt giá <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-white/90 p-3 shadow-xs border border-amber-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                    <Scale className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Ở kho chưa cân (0kg)</div>
+                    <div className="text-base font-bold text-slate-900">{alertStats.unweighedOrders} đơn</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAgent("orders", "Đơn hàng nào đã vào kho Nhật/VN nhưng cân nặng vẫn bằng 0kg?")}
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-banana-200 hover:text-navy-950 transition flex items-center gap-1"
+                >
+                  Cân hàng <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between rounded-xl bg-white/90 p-3 shadow-xs border border-amber-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
+                    <Flame className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500">Khách Lead tiềm năng</div>
+                    <div className="text-base font-bold text-slate-900">{alertStats.hotLeads} khách</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => openAgent("trends", "Có những phiên chat lead nào đang có nhu cầu mua hàng cần liên hệ chốt đơn?")}
+                  className="rounded-lg bg-slate-100 px-2 py-1 text-[11px] font-semibold text-slate-700 hover:bg-banana-200 hover:text-navy-950 transition flex items-center gap-1"
+                >
+                  Tư vấn <ArrowRight className="h-3 w-3" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <nav aria-label="Phân tích kinh doanh" className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
           {sections.map((item) => (
             <button key={item.id} type="button" onClick={() => setSection(item.id)} aria-current={section === item.id ? "page" : undefined}
@@ -57,7 +169,7 @@ export default function AnalyticsWorkspaceTab({ initialSection = "reports", init
 
       {section === "reports" && <ReportsTab onOpenAgent={() => openAgent("reports")} />}
       {section === "trends" && <AiTrendsTab onOpenAgent={() => openAgent("trends")} />}
-      {section === "assistant" && <AdminAgentTab initialModule={agentModule} />}
+      {section === "assistant" && <AdminAgentTab initialModule={agentModule} initialQuestion={agentQuestion} />}
     </div>
   );
 }

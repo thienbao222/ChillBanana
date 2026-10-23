@@ -25,6 +25,7 @@ export async function GET(req: NextRequest) {
       inFlightShipments,
       unpaidShipmentsCount,
       pendingDepositOver3DaysCount,
+      unverifiedPriceCount,
       unweighedOrdersCount,
       purchasingJpCount,
       hotLeadsCount,
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
       prisma.vnJpShipment.count({ where: { status: "IN_FLIGHT_TO_JP" } }),
       prisma.vnJpShipment.count({ where: { paymentStatus: "UNPAID", status: { not: "CANCELLED" } } }),
       prisma.order.count({ where: { status: "PENDING_DEPOSIT", createdAt: { lt: threeDaysAgo } } }),
+      prisma.order.count({ where: { status: "PENDING_DEPOSIT", isPriceVerified: false } }),
       prisma.order.count({ where: { status: { notIn: ["COMPLETED", "CANCELLED"] }, weightKg: { lte: 0 } } }),
       prisma.order.count({ where: { status: "PURCHASING_JP" } }),
       prisma.chatSession.count({ where: { customerType: "CHAT_LEAD" } }),
@@ -82,6 +84,7 @@ export async function GET(req: NextRequest) {
       operationalAlerts: {
         orders: {
           pendingDepositOver3Days: pendingDepositOver3DaysCount,
+          unverifiedPrice: unverifiedPriceCount,
           purchasingJp: purchasingJpCount,
           unweighedOrders: unweighedOrdersCount,
         },

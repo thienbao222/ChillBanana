@@ -149,10 +149,32 @@ async function buildTrendsSnapshot() {
   const period = windowForDays(30);
   if (!period.from) throw new Error("Không thể tạo khoảng ngày xu hướng.");
   const where = { createdAt: { gte: period.from } };
-  const [tagSummary, sentimentGroups, customerGroups] = await Promise.all([
+  const [tagSummary, sentimentGroups, customerGroups, actionableSessions] = await Promise.all([
     getChatTagSummary(period.from),
     prisma.chatSession.groupBy({ by: ["sentiment"], where, _count: { _all: true } }),
     prisma.chatSession.groupBy({ by: ["customerType"], where, _count: { _all: true } }),
+    prisma.chatSession.findMany({
+      where: {
+        createdAt: { gte: period.from },
+        OR: [
+          { customerType: "CHAT_LEAD" },
+          { sentiment: "complaint" },
+        ],
+      },
+      select: {
+        sessionId: true,
+        customerName: true,
+        customerEmail: true,
+        customerPhone: true,
+        topic: true,
+        sentiment: true,
+        detectedKeywords: true,
+        createdAt: true,
+        _count: { select: { messages: true } },
+      },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
   ]);
   return {
     scope: "trends",
@@ -163,6 +185,17 @@ async function buildTrendsSnapshot() {
     recordedKeywords: tagSummary.recordedKeywords,
     sentimentTags: sentimentGroups.map((group) => [group.sentiment || "Chưa phân loại", group._count._all]),
     customerTypes: customerGroups.map((group) => [group.customerType || "ANONYMOUS_GUEST", group._count._all]),
+    recentActionableSessions: actionableSessions.map((s) => ({
+      sessionId: s.sessionId,
+      customerName: s.customerName || "Khách ẩn danh",
+      customerEmail: s.customerEmail,
+      customerPhone: s.customerPhone,
+      topic: s.topic || "Tư vấn chung",
+      sentiment: s.sentiment || "inquiry",
+      detectedKeywords: s.detectedKeywords,
+      messageCount: s._count.messages,
+      createdAt: s.createdAt.toISOString(),
+    })),
     limitations: [
       "Đây là tag và phiên chat đã ghi trong website; dữ liệu có thể thiếu tag hoặc bị phân loại chưa chính xác.",
       "Không có nội dung hội thoại, email, tên, số điện thoại hay IP được gửi cho mô hình.",
@@ -177,10 +210,31 @@ async function buildOrdersSnapshot() {
   const activeWhere = { status: { notIn: ["COMPLETED", "CANCELLED"] } };
   const threeDaysAgo = new Date(now.getTime() - 3 * 86_400_000);
   const sevenDaysAgo = new Date(now.getTime() - 7 * 86_400_000);
-  const [orders, total, activeCount, statusGroups, oldPendingCount, unverifiedPriceCount, oldActiveCount] = await Promise.all([
+  const [
+    orders,
+    total,
+    activeCount,
+    statusGroups,
+    oldPendingCount,
+    unverifiedPriceCount,
+    oldActiveCount,
+    pendingDepositOver3DaysOrders,
+    unverifiedPriceOrders,
+    unweighedWarehouseOrders,
+  ] = await Promise.all([
     prisma.order.findMany({
       where: activeWhere,
-      select: { status: true, paymentStatus: true, isPriceVerified: true, createdAt: true },
+      select: {
+        orderCode: true,
+        productName: true,
+        totalVnd: true,
+        depositAmountVnd: true,
+        weightKg: true,
+        status: true,
+        paymentStatus: true,
+        isPriceVerified: true,
+        createdAt: true,
+      },
       orderBy: { createdAt: "asc" },
       take: 8,
     }),
@@ -190,6 +244,24 @@ async function buildOrdersSnapshot() {
     prisma.order.count({ where: { status: "PENDING_DEPOSIT", paymentStatus: "UNPAID", createdAt: { lt: threeDaysAgo } } }),
     prisma.order.count({ where: { status: "PENDING_DEPOSIT", isPriceVerified: false } }),
     prisma.order.count({ where: { ...activeWhere, createdAt: { lt: sevenDaysAgo } } }),
+    prisma.order.findMany({
+      where: { status: "PENDING_DEPOSIT", paymentStatus: "UNPAID", createdAt: { lt: threeDaysAgo } },
+      select: { orderCode: true, productName: true, depositAmountVnd: true, createdAt: true, customerEmail: true },
+      orderBy: { createdAt: "asc" },
+      take: 5,
+    }),
+    prisma.order.findMany({
+      where: { status: "PENDING_DEPOSIT", isPriceVerified: false },
+      select: { orderCode: true, productName: true, totalVnd: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+      take: 5,
+    }),
+    prisma.order.findMany({
+      where: { status: { in: ["WAREHOUSE_JP", "WAREHOUSE_VN"] }, weightKg: { lte: 0 } },
+      select: { orderCode: true, productName: true, status: true, createdAt: true },
+      orderBy: { createdAt: "asc" },
+      take: 5,
+    }),
   ]);
   const ageInDays = (createdAt: Date) => Math.floor((now.getTime() - createdAt.getTime()) / 86_400_000);
   return {
@@ -201,9 +273,39 @@ async function buildOrdersSnapshot() {
     pendingDepositOlderThan3Days: oldPendingCount,
     priceNotVerified: unverifiedPriceCount,
     activeOlderThan7Days: oldActiveCount,
-    oldestActiveOrders: orders.slice(0, 8).map((order, index) => ({ rank: index + 1, status: order.status, ageDays: ageInDays(order.createdAt), paymentStatus: order.paymentStatus })),
+    oldestActiveOrders: orders.slice(0, 8).map((order, index) => ({
+      rank: index + 1,
+      orderCode: order.orderCode,
+      productName: order.productName,
+      totalVnd: order.totalVnd,
+      depositAmountVnd: order.depositAmountVnd,
+      weightKg: order.weightKg,
+      isPriceVerified: order.isPriceVerified,
+      status: order.status,
+      ageDays: ageInDays(order.createdAt),
+      paymentStatus: order.paymentStatus,
+    })),
+    pendingDepositOver3DaysOrders: pendingDepositOver3DaysOrders.map((o) => ({
+      orderCode: o.orderCode,
+      productName: o.productName,
+      depositAmountVnd: o.depositAmountVnd,
+      ageDays: ageInDays(o.createdAt),
+      customerEmail: o.customerEmail,
+    })),
+    unverifiedPriceOrders: unverifiedPriceOrders.map((o) => ({
+      orderCode: o.orderCode,
+      productName: o.productName,
+      totalVnd: o.totalVnd,
+      ageDays: ageInDays(o.createdAt),
+    })),
+    unweighedWarehouseOrders: unweighedWarehouseOrders.map((o) => ({
+      orderCode: o.orderCode,
+      productName: o.productName,
+      status: o.status,
+      ageDays: ageInDays(o.createdAt),
+    })),
     periodStart: period.toDate,
-    note: "Các chỉ số đếm được truy vấn trên toàn bộ đơn; danh sách chi tiết chỉ gồm trạng thái/tuổi của 8 đơn đang mở lâu nhất, không kèm mã đơn hay thông tin nhận dạng khách.",
+    note: "Các chỉ số đếm được truy vấn trên toàn bộ đơn; danh sách chi tiết gồm các đơn cần xử lý ngay.",
   };
 }
 

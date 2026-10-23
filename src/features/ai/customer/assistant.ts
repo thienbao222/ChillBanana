@@ -46,6 +46,7 @@ QUY TẮC BẮT BUỘC VỀ CÔNG CỤ VÀ DỮ LIỆU:
   + Nếu là đồ điện gia dụng nội địa Nhật Bản, BẮT BUỘC nhắc nhở về điện áp 100V và yêu cầu sử dụng biến áp đổi nguồn thích hợp (1500VA - 2000VA).
   + Giải thích rõ chính sách đặt cọc linh hoạt: Khách có thể chọn Đặt cọc 50% để mua hàng ngay (phần còn lại thanh toán khi hàng về VN), hoặc Thanh toán 100% để được ưu tiên chốt đơn tức thì.
 - Bạn chỉ tư vấn và giải thích; không tự tạo đơn ghi đè dữ liệu nếu chưa có thao tác từ khách.
+- Phân tích hình ảnh chỉ nêu dấu hiệu nhìn thấy. Không tuyên bố đã reverse-image-search, không khẳng định đúng model, giá hiện tại, hàng thật/giả hay còn hàng nếu công cụ không xác nhận.
 - Không đưa ra khẳng định y tế, pháp lý hay tài chính ngoài nghiệp vụ mua hộ; từ chối lịch sự các chủ đề nhạy cảm không liên quan.
 
 KẾT QUẢ CÔNG CỤ TỪ MÁY CHỦ (JSON):
@@ -228,6 +229,15 @@ export async function askGeminiAgent(
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
           if (typeof textPart?.text === "string" && textPart.text.trim()) {
+            const rawText = textPart.text;
+            // Nếu LLM cố tình in thông báo công cụ ảo hoặc chờ trạm quan sát, dùng ngay dữ liệu thực tế
+            if (
+              rawText.includes("**Công cụ đang chạy:**") ||
+              rawText.toLowerCase().includes("trạm quan sát") ||
+              rawText.toLowerCase().includes("đang chờ dữ liệu")
+            ) {
+              return buildOfflineEvidenceReply(userQuery, evidence, isOmo);
+            }
             const sanitized = textPart.text
               .replace(/\*\*Công cụ đang chạy:\*\*.*?(?:\n|$)/gi, "")
               .replace(/\[(?:Công cụ đang chạy|Tool running):.*?\](?:\n|$)/gi, "")

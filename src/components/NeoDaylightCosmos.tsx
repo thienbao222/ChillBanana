@@ -1399,6 +1399,44 @@ export default function NeoDaylightCosmos() {
                 <span>{t("Tiền Hàng & Phí Mua Hộ:")}</span>
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
               </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", margin: "10px 0" }}>
+                <button
+                  type="button"
+                  onClick={() => setDepositChoice("50")}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: depositChoice === "50" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                    background: depositChoice === "50" ? "#fef9c3" : "#ffffff",
+                    color: depositChoice === "50" ? "#713f12" : "#475569",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {preferences.language === "ja" ? "50% 予約金" : "Cọc 50%"}
+                  {depositChoice === "50" ? " ✓" : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDepositChoice("100")}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: "10px",
+                    fontSize: "0.8rem",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                    border: depositChoice === "100" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                    background: depositChoice === "100" ? "#fef9c3" : "#ffffff",
+                    color: depositChoice === "100" ? "#713f12" : "#475569",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {preferences.language === "ja" ? "100% 全額" : "Thanh toán 100%"}
+                  {depositChoice === "100" ? " ✓" : ""}
+                </button>
+              </div>
               <div className="dep">
                 <span>{preferences.language === "ja" ? `お支払い予定額（${depositChoice}%）：` : `Ước tính thanh toán (${depositChoice}%):`}<small>{t("Chờ ChillBanana duyệt giá trước khi thanh toán")}</small></span>
                 <b>{depositVnd.toLocaleString("vi-VN")} đ</b>

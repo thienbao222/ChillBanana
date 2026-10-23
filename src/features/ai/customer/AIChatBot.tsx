@@ -531,10 +531,12 @@ export default function AIChatBot() {
       }
 
       // Chuẩn bị lịch sử hội thoại ngắn gửi kèm lên Gemini
-      const conversationHistory = messages.filter(m => !m.id.startsWith("system-scrape-")).map((m) => ({
-        role: m.sender === "user" ? "user" : "model",
-        text: m.text,
-      }));
+      const conversationHistory = messages
+        .filter((m) => m.id !== "welcome-1" && !m.id.startsWith("switch-") && !m.id.startsWith("system-scrape-"))
+        .map((m) => ({
+          role: m.sender === "user" ? "user" : "model",
+          text: m.text,
+        }));
 
       const res = await fetch("/api/ai/chat", {
         method: "POST",

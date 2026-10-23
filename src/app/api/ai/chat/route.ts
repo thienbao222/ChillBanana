@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
         customerId: customerSession?.id ?? null,
         guestOrderAccessToken: req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value ?? null,
         scrapedProduct,
+        history: validHistory,
       });
 
       // Order privacy and missing quote inputs use deterministic replies; never ask the model
@@ -141,18 +142,27 @@ export async function POST(req: NextRequest) {
     } else if (/\b(100v|220v|biến áp|đổi nguồn|cháy máy|cắm điện|điện áp)\b/i.test(msgLower)) {
       topic = "Tư vấn điện áp 100V";
       detectedKeywords.push("điện 100v", "biến áp");
-    } else if (/\b(bảng size|chọn size|vừa không|size mấy|chiều dài chân|hướng dẫn size)\b/i.test(msgLower)) {
+    } else if (/\b(bảng size|chọn size|vừa không|size mấy|chiều dài chân|hướng dẫn size|vừa chân|kích cỡ)\b/i.test(msgLower)) {
       topic = "Tư vấn kích cỡ (Sizing)";
       detectedKeywords.push("tư vấn size");
     } else if (
       budgetInfo.minJpy || budgetInfo.rawVndText ||
-      /\b(tìm|mua|order|săn|giá|báo giá|bao nhiêu|gucci|t-fal|tfal|zojirushi|anessa|gundam|uniqlo|giày|túi|nồi cơm|ấm đun|tai nghe|đồng hồ)\b/i.test(msgLower)
+      /\b(tìm|mua|order|săn|giá|báo giá|bao nhiêu|gucci|t-fal|tfal|zojirushi|anessa|gundam|uniqlo|giày|túi|nồi cơm|ấm đun|tai nghe|đồng hồ|quần áo|sneaker)\b/i.test(msgLower)
     ) {
       topic = "Tìm mua sản phẩm (Buying Lead)";
-      if (msgLower.includes("giày")) detectedKeywords.push("giày");
-      if (msgLower.includes("gucci")) detectedKeywords.push("gucci");
-      if (msgLower.includes("ấm đun") || msgLower.includes("t-fal")) detectedKeywords.push("ấm đun t-fal");
-      if (msgLower.includes("nồi cơm")) detectedKeywords.push("nồi cơm");
+      if (/\b(giày|sneaker|gucci|uniqlo|quần áo|túi)\b/i.test(msgLower)) {
+        detectedKeywords.push("fashion");
+        if (msgLower.includes("giày")) detectedKeywords.push("giày");
+        if (msgLower.includes("gucci")) detectedKeywords.push("gucci");
+        if (msgLower.includes("uniqlo")) detectedKeywords.push("uniqlo");
+        if (msgLower.includes("túi")) detectedKeywords.push("túi");
+      }
+      if (/\b(đồng hồ|t-fal|tfal|ấm đun|nồi cơm|tai nghe)\b/i.test(msgLower)) {
+        detectedKeywords.push("gadgets");
+        if (msgLower.includes("đồng hồ")) detectedKeywords.push("đồng hồ");
+        if (msgLower.includes("ấm đun") || msgLower.includes("t-fal")) detectedKeywords.push("ấm đun t-fal");
+        if (msgLower.includes("nồi cơm")) detectedKeywords.push("nồi cơm");
+      }
       if (msgLower.includes("gundam")) detectedKeywords.push("gundam");
       if (msgLower.includes("anessa")) detectedKeywords.push("anessa");
     } else if (/\b(vận chuyển|cước|ship|gộp đơn|thời gian giao)\b/i.test(msgLower)) {
@@ -226,12 +236,25 @@ export async function POST(req: NextRequest) {
     }
 
     try {
+      const existingChatSession = await prisma.chatSession.findUnique({
+        where: { sessionId: resolvedSessionId },
+        select: { topic: true, detectedKeywords: true },
+      });
+
+      const existingKeywordsList = existingChatSession?.detectedKeywords
+        ? existingChatSession.detectedKeywords.split(",").map((k) => k.trim()).filter(Boolean)
+        : [];
+      const mergedKeywords = [...new Set([...existingKeywordsList, ...detectedKeywords])].slice(0, 20).join(",");
+      const finalTopic = (topic === "Tư vấn chung" && existingChatSession?.topic)
+        ? existingChatSession.topic
+        : topic;
+
       await prisma.chatSession.upsert({
         where: { sessionId: resolvedSessionId },
         update: {
           personality: selectedPersonality,
-          topic,
-          detectedKeywords: detectedKeywords.join(","),
+          topic: finalTopic,
+          detectedKeywords: mergedKeywords,
           sentiment,
           ...(customerId ? { customerId, customerType: "REGISTERED" } : {}),
           ...(customerName ? { customerName } : {}),
@@ -240,7 +263,7 @@ export async function POST(req: NextRequest) {
           ...(!customerId && customerType === "CHAT_LEAD" ? { customerType: "CHAT_LEAD" } : {}),
           messages: {
             create: [
-              { role: "user", content: message, categoryTag: topic },
+              { role: "user", content: message, categoryTag: finalTopic },
               { role: "assistant", content: reply },
             ],
           },
@@ -248,8 +271,8 @@ export async function POST(req: NextRequest) {
         create: {
           sessionId: resolvedSessionId,
           personality: selectedPersonality,
-          topic,
-          detectedKeywords: detectedKeywords.join(","),
+          topic: finalTopic,
+          detectedKeywords: mergedKeywords,
           sentiment,
           userIp: ip,
           customerId,

@@ -4,10 +4,29 @@ import { GEMINI_MODELS } from '@/lib/gemini-models';
 import { prisma } from '@/lib/prisma';
 import { checkAndRecordHit, getClientIp } from '@/lib/rate-limit';
 import { getImageCatalogSearchTerms, rankImageCatalogCandidates } from '@/features/ai/customer/image-catalog-matcher';
-import { translateToJapaneseKeywords, buildMarketplaceSearchLinks } from '@/features/ai/customer/japanese-translator';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
+
+function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy?: number) {
+  const encoded = encodeURIComponent(keywordsJa.trim());
+  let amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
+  let mercariUrl = `https://jp.mercari.com/search?keyword=${encoded}`;
+  let rakutenUrl = `https://search.rakuten.co.jp/search/mall/${encoded}/`;
+
+  if (minJpy && maxJpy) {
+    mercariUrl += `&price_min=${minJpy}&price_max=${maxJpy}`;
+    rakutenUrl += `?min=${minJpy}&max=${maxJpy}`;
+  } else if (maxJpy) {
+    mercariUrl += `&price_max=${maxJpy}`;
+  }
+
+  return {
+    amazon: { label: "Amazon JP", url: amazonUrl },
+    mercari: { label: "Mercari JP (Săn đồ lướt/hiếm)", url: mercariUrl },
+    rakuten: { label: "Rakuten Ichiba", url: rakutenUrl },
+  };
+}
 
 // Rate limit: 10 image analyses per minute per IP (chống memory leak & IP spoofing)
 const IMAGE_ANALYZE_LIMIT = { max: 10, windowMs: 60 * 1000, blockMs: 60 * 1000 };
@@ -244,10 +263,8 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       }
     }
 
-    // Tự động dịch từ khóa và tạo link tìm kiếm sàn Nhật (Amazon JP, Mercari JP, Rakuten)
-    const searchTarget = normalizedResult.nameJp || normalizedResult.nameVi || (normalizedResult.searchKeywords && normalizedResult.searchKeywords[0]) || question || '';
-    const translated = translateToJapaneseKeywords(searchTarget);
-    const effectiveKeywordsJa = normalizedResult.nameJp || translated.keywordsJa;
+    // Tự động tạo link tìm kiếm sàn Nhật (Amazon JP, Mercari JP, Rakuten)
+    const effectiveKeywordsJa = normalizedResult.nameJp || (normalizedResult.searchKeywords && normalizedResult.searchKeywords[0]) || normalizedResult.nameVi || question || '';
     const marketplaceLinks = buildMarketplaceSearchLinks(effectiveKeywordsJa, undefined, normalizedResult.visiblePriceJpy ? Math.round(normalizedResult.visiblePriceJpy * 1.2) : undefined);
 
     return NextResponse.json({
