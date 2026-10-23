@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
 import { getRecordedPaymentStatus } from "@/features/payments/policy";
 import { requireAdmin } from "@/lib/admin-guard";
+import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
+import { ORDER_ACCESS_COOKIE_NAME, hasGuestOrderAccessForEmail } from "@/lib/auth-session";
 import { writeAuditLog } from "@/lib/audit";
 
 export const dynamic = "force-dynamic";
@@ -10,17 +12,14 @@ export const dynamic = "force-dynamic";
 /**
  * /api/payment/mock-sandbox
  * ─────────────────────────────────────────────────────────────────────────────
- * API mô phỏng kết quả cổng thanh toán Sandbox dành riêng cho Quản trị viên (Admin Testbed).
- * Bắt buộc xác thực phiên Admin (requireAdmin) để ngăn chặn kích hoạt trái phép từ bên ngoài.
+ * API mô phỏng kết quả cổng thanh toán Sandbox.
+ * Cho phép khách có quyền với đơn (hasCustomerAccessToOrder) hoặc Admin (OPERATOR / SUPER_ADMIN).
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function POST(req: NextRequest) {
-  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
-  if (!guard.ok) return guard.response;
-
   try {
-    const body = await req.json();
-    const { orderCode, action } = body;
+    const body = await req.json().catch(() => null);
+    const { orderCode, action } = body || {};
 
     if (!orderCode || typeof orderCode !== "string") {
       return NextResponse.json({ error: "Thiếu mã đơn hàng." }, { status: 400 });
@@ -34,11 +33,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
     }
 
+    // Kiểm tra quyền: Admin (OPERATOR hoặc SUPER_ADMIN) hoặc Khách hàng sở hữu đơn
+    const adminGuard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
+    let isAuthorized = adminGuard.ok;
+    let actorName = adminGuard.ok ? adminGuard.username : "";
+
+    if (!isAuthorized) {
+      const customer = await getVerifiedCustomerFromRequest(req);
+      if (customer && order.customerId === customer.id) {
+        isAuthorized = true;
+        actorName = customer.email;
+      } else {
+        const accessToken = req.cookies.get(ORDER_ACCESS_COOKIE_NAME)?.value;
+        if (hasGuestOrderAccessForEmail(accessToken, order.orderCode, order.customerEmail)) {
+          isAuthorized = true;
+          actorName = order.customerEmail;
+        }
+      }
+    }
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "Bạn không có quyền thực hiện thao tác trên đơn hàng này." },
+        { status: 403 }
+      );
+    }
+
     if (action === "cancel") {
       return NextResponse.json({
         success: false,
         message: "Giao dịch đã được hủy bởi người dùng.",
-        redirectUrl: `/tracking?orderCode=${encodeURIComponent(order.orderCode)}&payment=cancelled`,
+        redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=cancelled`,
       });
     }
 
@@ -46,7 +71,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         success: false,
         message: "Giao dịch giả lập thất bại (mô phỏng số dư không đủ / thẻ lỗi).",
-        redirectUrl: `/tracking?orderCode=${encodeURIComponent(order.orderCode)}&payment=failed`,
+        redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=failed`,
       });
     }
 
@@ -55,7 +80,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: true,
           message: "Đơn hàng này đã được thanh toán trước đó.",
-          redirectUrl: `/tracking?orderCode=${encodeURIComponent(order.orderCode)}&payment=already_paid`,
+          redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=already_paid`,
         });
       }
 
@@ -95,9 +120,9 @@ export async function POST(req: NextRequest) {
             provider: "MOCK_SANDBOX",
             amountVnd,
             providerTransactionId: mockTxnId,
-            reference: `Mô phỏng thanh toán Admin Sandbox (${order.depositPercent}%)`,
+            reference: `Mô phỏng thanh toán Sandbox (${order.depositPercent}%)`,
             status: "CONFIRMED",
-            confirmedByAdmin: guard.username,
+            confirmedByAdmin: adminGuard.ok ? adminGuard.username : "CUSTOMER_SANDBOX",
           },
         });
 
@@ -105,9 +130,11 @@ export async function POST(req: NextRequest) {
           data: {
             orderId: order.id,
             status: "PURCHASING_JP",
-            title: order.depositPercent === 100 ? "Thanh toán 100% thành công (Admin Sandbox)" : "Thanh toán cọc 50% thành công (Admin Sandbox)",
-            description: `Admin ${guard.username} xác nhận thanh toán Sandbox ${amountVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
-            location: "ChillBanana Admin Sandbox",
+            title: order.depositPercent === 100 ? "Thanh toán 100% thành công (Sandbox)" : "Thanh toán cọc 50% thành công (Sandbox)",
+            description: adminGuard.ok
+              ? `Admin ${adminGuard.username} xác nhận thanh toán Sandbox ${amountVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng chuyển sang bước mua hàng tại Nhật.`
+              : `Khách hàng hoàn tất thanh toán Sandbox ${amountVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
+            location: "ChillBanana Payment Gateway",
           },
         });
 
@@ -121,12 +148,12 @@ export async function POST(req: NextRequest) {
       }
 
       await writeAuditLog({
-        actor: guard.username,
+        actor: actorName || "customer",
         action: "ORDER_PAYMENT_RECORDED",
         entityType: "Order",
         entityId: order.orderCode,
-        summary: `Admin ${guard.username} mô phỏng thanh toán Sandbox cho đơn ${order.orderCode}`,
-        metadata: { amountVnd, transactionId: mockTxnId, mode: "ADMIN_SANDBOX" },
+        summary: `Thanh toán Sandbox cho đơn ${order.orderCode}`,
+        metadata: { amountVnd, transactionId: mockTxnId, mode: adminGuard.ok ? "ADMIN_SANDBOX" : "CUSTOMER_SANDBOX" },
       });
 
       sendPaymentSuccessEmail(updated).catch((err) =>
@@ -137,7 +164,7 @@ export async function POST(req: NextRequest) {
         success: true,
         message: "Xác nhận thanh toán Sandbox thành công!",
         transactionId: mockTxnId,
-        redirectUrl: `/tracking?orderCode=${encodeURIComponent(order.orderCode)}&payment=success`,
+        redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=success`,
       });
     }
 

@@ -154,7 +154,7 @@ function TrackingCosmosContent() {
   const [isCancelling, setIsCancelling] = useState(false);
 
   // Trạng thái thanh toán VNPAY trả về
-  const [paymentStatus, setPaymentStatus] = useState<"success" | "simulated" | "failed" | "invalid" | "pending" | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "simulated" | "failed" | "invalid" | "pending" | "cancelled" | null>(null);
 
   // Tỷ giá live
   const [exchangeRate, setExchangeRate] = useState<number>(DEFAULT_EXCHANGE_RATE);
@@ -405,7 +405,7 @@ function TrackingCosmosContent() {
   useEffect(() => {
     const codeParam = searchParams.get("code") || searchParams.get("orderCode");
     const accessToken = searchParams.get("access");
-    const payment = searchParams.get("payment") as "success" | "simulated" | "failed" | "invalid" | "pending" | null;
+    const payment = searchParams.get("payment") as "success" | "simulated" | "failed" | "invalid" | "pending" | "cancelled" | null;
     if (payment) setPaymentStatus(payment);
     if (codeParam) {
       setSearchCode(codeParam);
@@ -692,9 +692,23 @@ function TrackingCosmosContent() {
               <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
               <div>
                 <p className="font-bold text-rose-950">{t("Thanh toán chưa hoàn tất")}</p>
-                <p className="text-xs text-rose-700">{t("Giao dịch bị hủy hoặc chưa hoàn tất. Đơn vẫn được lưu; bạn có thể thử thanh toán lại từ trang này.")}</p>
+                <p className="text-xs text-rose-700">{t("Giao dịch bị lỗi hoặc chưa hoàn tất. Đơn vẫn được lưu; bạn có thể thử thanh toán lại từ trang này.")}</p>
               </div>
               <button onClick={() => setPaymentStatus(null)} className="ml-auto text-rose-700 hover:text-rose-950">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+        {paymentStatus === "cancelled" && (
+          <div className="track-card mb-6" style={{ background: "#fff8e6", borderColor: "#f4d27d" }}>
+            <div className="flex items-center gap-3">
+              <Ban className="w-6 h-6 text-amber-700 shrink-0" />
+              <div>
+                <p className="font-bold text-amber-950">{t("Giao dịch thanh toán đã bị hủy")}</p>
+                <p className="text-xs text-amber-800">{t("Bạn đã hủy giao dịch thanh toán. Đơn hàng vẫn được lưu ở trạng thái chờ đặt cọc; bạn có thể bấm thanh toán lại bất cứ lúc nào.")}</p>
+              </div>
+              <button onClick={() => setPaymentStatus(null)} className="ml-auto text-amber-700 hover:text-amber-950" aria-label="Đóng thông báo">
                 <X className="w-4 h-4" />
               </button>
             </div>
