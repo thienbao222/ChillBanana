@@ -20,6 +20,17 @@ import {
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
 
+const JAPAN_STORE_SAMPLES: Record<string, string> = {
+  "Amazon JP": "https://www.amazon.co.jp/dp/B09V3KXJPB",
+  "Mercari": "https://jp.mercari.com/item/m789012345",
+  "Rakuten": "https://item.rakuten.co.jp/kanebo/allie-chrono-beauty/",
+  "Yahoo! Auctions": "https://page.auctions.yahoo.co.jp/jp/auction/m1098765432",
+  "Uniqlo JP": "https://www.uniqlo.com/jp/ja/products/E467144-000/00",
+  "Surugaya (駿河屋)": "https://www.suruga-ya.jp/product/detail/602123456",
+  "Bic Camera": "https://www.biccamera.com/bc/item/10892345/",
+  "Yodobashi": "https://www.yodobashi.com/product/100000001006543210/",
+};
+
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
   const { customer, openAuthModal } = useAuth();
@@ -210,9 +221,13 @@ export default function NeoDaylightCosmos() {
   };
 
   // Quét link tự động (kiểm tra client-side và fallback thân thiện)
-  const handleScanLink = async () => {
+  const handleScanLink = async (overrideUrl?: string | React.MouseEvent) => {
     setSelectedProductId(null);
-    const trimmed = inputUrl.trim();
+    const targetUrl = typeof overrideUrl === "string" ? overrideUrl : inputUrl;
+    if (typeof overrideUrl === "string") {
+      setInputUrl(overrideUrl);
+    }
+    const trimmed = targetUrl.trim();
     if (!trimmed) {
       showToast("Vui lòng dán link sản phẩm (Amazon JP, Mercari, Rakuten...)");
       return;
@@ -633,18 +648,15 @@ export default function NeoDaylightCosmos() {
               <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
                 {t("Sàn hỗ trợ bóc tách:")}
               </span>
-              {[
-                "Amazon JP",
-                "Mercari",
-                "Rakuten",
-                "Yahoo! Auctions",
-                "Uniqlo JP",
-                "Surugaya (駿河屋)",
-                "Bic Camera",
-                "Yodobashi",
-              ].map((site) => (
-                <span
+              {Object.entries(JAPAN_STORE_SAMPLES).map(([site, sampleUrl]) => (
+                <button
                   key={site}
+                  type="button"
+                  onClick={() => {
+                    handleScanLink(sampleUrl);
+                    scrollToSection("quote");
+                  }}
+                  title={`Bấm để điền và quét link mẫu sàn ${site}`}
                   style={{
                     padding: "3px 8px",
                     borderRadius: "8px",
@@ -653,10 +665,12 @@ export default function NeoDaylightCosmos() {
                     color: "#0369a1",
                     fontWeight: 600,
                     fontSize: "0.72rem",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
                   }}
                 >
                   {site}
-                </span>
+                </button>
               ))}
             </div>
             <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
@@ -1174,18 +1188,12 @@ export default function NeoDaylightCosmos() {
                   <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
                     {t("Sàn hỗ trợ bóc tách:")}
                   </span>
-                  {[
-                    "Amazon JP",
-                    "Mercari",
-                    "Rakuten",
-                    "Yahoo! Auctions",
-                    "Uniqlo JP",
-                    "Surugaya (駿河屋)",
-                    "Bic Camera",
-                    "Yodobashi",
-                  ].map((store) => (
-                    <span
+                  {Object.entries(JAPAN_STORE_SAMPLES).map(([store, sampleUrl]) => (
+                    <button
                       key={store}
+                      type="button"
+                      onClick={() => handleScanLink(sampleUrl)}
+                      title={`Bấm để điền và quét link mẫu sàn ${store}`}
                       style={{
                         padding: "2px 7px",
                         borderRadius: "6px",
@@ -1194,10 +1202,12 @@ export default function NeoDaylightCosmos() {
                         color: "#0369a1",
                         fontWeight: 600,
                         fontSize: "0.7rem",
+                        cursor: "pointer",
+                        transition: "all 0.15s ease",
                       }}
                     >
                       {store}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>

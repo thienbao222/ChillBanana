@@ -26,6 +26,17 @@ import {
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
 
+const JAPAN_STORE_SAMPLES: Record<string, string> = {
+  "Amazon JP": "https://www.amazon.co.jp/dp/B09V3KXJPB",
+  "Mercari": "https://jp.mercari.com/item/m789012345",
+  "Rakuten": "https://item.rakuten.co.jp/kanebo/allie-chrono-beauty/",
+  "Yahoo! Auctions": "https://page.auctions.yahoo.co.jp/jp/auction/m1098765432",
+  "Uniqlo JP": "https://www.uniqlo.com/jp/ja/products/E467144-000/00",
+  "Surugaya (駿河屋)": "https://www.suruga-ya.jp/product/detail/602123456",
+  "Bic Camera": "https://www.biccamera.com/bc/item/10892345/",
+  "Yodobashi": "https://www.yodobashi.com/product/100000001006543210/",
+};
+
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
   const { customer } = useAuth();
@@ -226,8 +237,11 @@ export default function OrderCalculator() {
   }, []);
 
   // Hàm tự động cào dữ liệu từ URL thật
-  const handleAutoScrape = async (overrideUrl?: string) => {
-    const targetUrl = overrideUrl || productUrl;
+  const handleAutoScrape = async (overrideUrl?: string | React.MouseEvent) => {
+    const targetUrl = typeof overrideUrl === "string" ? overrideUrl : productUrl;
+    if (typeof overrideUrl === "string") {
+      setProductUrl(overrideUrl);
+    }
     if (!targetUrl || !targetUrl.startsWith("http")) {
       toast.warning("Vui lòng nhập đường dẫn đầy đủ bắt đầu bằng https://.");
       return;
@@ -262,7 +276,7 @@ export default function OrderCalculator() {
         setShowWeightPreview(false);
         setScrapeSuccess(true);
       } else {
-        toast.info("Chưa đọc được thông tin từ link này. Bạn có thể nhập tên và giá Yên thủ công.");
+        toast.info(data.error || "Chưa đọc được thông tin từ link này. Bạn có thể nhập tên và giá Yên thủ công.");
       }
     } catch (err) {
       console.warn(err);
@@ -972,23 +986,17 @@ export default function OrderCalculator() {
 
             {/* Sàn hỗ trợ bóc tách */}
             <div className="flex flex-wrap items-center gap-1.5 mt-2.5 text-xs text-slate-500">
-              <span className="font-semibold text-slate-700">Sàn hỗ trợ:</span>
-              {[
-                "Amazon JP",
-                "Mercari",
-                "Rakuten",
-                "Yahoo! Auctions",
-                "Uniqlo JP",
-                "Surugaya (駿河屋)",
-                "Bic Camera",
-                "Yodobashi",
-              ].map((store) => (
-                <span
+              <span className="font-semibold text-slate-700">Sàn hỗ trợ bóc tách:</span>
+              {Object.entries(JAPAN_STORE_SAMPLES).map(([store, sampleUrl]) => (
+                <button
                   key={store}
-                  className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[11px] font-medium"
+                  type="button"
+                  onClick={() => handleAutoScrape(sampleUrl)}
+                  title={`Bấm để điền và quét link mẫu sàn ${store}`}
+                  className="px-2 py-0.5 rounded-md bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-900 border border-sky-200 hover:border-sky-300 text-[11px] font-medium transition cursor-pointer flex items-center gap-0.5"
                 >
-                  {store}
-                </span>
+                  <span>{store}</span>
+                </button>
               ))}
             </div>
 
