@@ -208,6 +208,34 @@ function TrackingCosmosContent() {
     const c = code.trim();
     if (!c) return;
 
+    // Tra cứu vận đơn gửi hàng chiều Việt Nam -> Nhật Bản
+    if (c.toUpperCase().startsWith("VNJP-")) {
+      setLoading(true);
+      setError("");
+      setRequiresEmailAccess(false);
+      try {
+        const res = await fetch(`/api/vn-jp-shipments/track/${encodeURIComponent(c)}`);
+        const data = await res.json();
+        if (res.ok && data.success && data.shipment) {
+          setVnJpShipment(data.shipment);
+          setOrder(null);
+          saveRecentCode(c);
+          setAccessRequestSent(false);
+        } else {
+          setError(data.error || "Không tìm thấy mã vận đơn VN → JP. Vui lòng kiểm tra lại.");
+          setVnJpShipment(null);
+          setOrder(null);
+        }
+      } catch {
+        setError("Lỗi kết nối máy chủ khi tra cứu vận đơn VN → JP. Vui lòng thử lại!");
+        setVnJpShipment(null);
+        setOrder(null);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     // Hỗ trợ mã đơn mô phỏng trực quan nhanh (Demo Order)
     if (c.toUpperCase() === "CB-2026-DEMO" || c.toUpperCase() === "CB-DEMO" || c.toUpperCase() === "CB-2026-TOKYO") {
       setLoading(true);
@@ -1305,6 +1333,179 @@ function TrackingCosmosContent() {
                         Chưa có ghi nhận nhật ký vận chuyển mới cho đơn hàng này.
                       </div>
                     )}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Chi tiết vận đơn tuyến Việt Nam -> Nhật Bản */}
+            {vnJpShipment && (
+              <div className="space-y-6">
+                <div className="track-card space-y-6">
+                  {/* Top Bar: Mã vận đơn & Badge */}
+                  <div className="flex flex-col md:flex-row md:items-center justify-between pb-6 border-b border-slate-200/60 gap-4">
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="track-badge" style={{ background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0" }}>
+                          🇻🇳 Tuyến Việt Nam ➔ Nhật Bản 🇯🇵
+                        </span>
+                        <h2 style={{ fontSize: "1.4rem", fontWeight: 800, margin: 0, fontFamily: "monospace", color: "var(--ink)" }}>
+                          #{vnJpShipment.trackingCode}
+                        </h2>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyOrderCode(vnJpShipment.trackingCode)}
+                          className="track-action-btn"
+                          title="Sao chép mã vận đơn"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Sao chép</span>
+                        </button>
+                      </div>
+                      <p style={{ fontSize: "0.75rem", color: "var(--muted)", margin: "4px 0 0" }}>
+                        Khởi tạo lúc: {new Date(vnJpShipment.createdAt).toLocaleString("vi-VN")} • Cập nhật: {new Date(vnJpShipment.updatedAt).toLocaleString("vi-VN")}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className="track-badge font-bold"
+                        style={{
+                          background: vnJpShipment.status === "DELIVERED_JP" ? "#ecfdf5" : vnJpShipment.status === "CANCELLED" ? "#ffeef0" : "#fffbeb",
+                          color: vnJpShipment.status === "DELIVERED_JP" ? "#065f46" : vnJpShipment.status === "CANCELLED" ? "#b91c1c" : "#92400e",
+                          border: `1px solid ${vnJpShipment.status === "DELIVERED_JP" ? "#a7f3d0" : vnJpShipment.status === "CANCELLED" ? "#fecdd6" : "#fde68a"}`,
+                          fontSize: "0.82rem",
+                          padding: "6px 12px",
+                        }}
+                      >
+                        {vnJpShipment.statusLabel || vnJpShipment.status}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Tiến trình 5 bước chiều VN -> JP */}
+                  <div className="py-2">
+                    <h3 style={{ fontSize: "0.95rem", fontWeight: 800, margin: "0 0 16px", color: "var(--ink)" }}>
+                      Lộ Trình Vận Chuyển Chuyên Tuyến (5 Bước)
+                    </h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                      {[
+                        { key: "PENDING_CONFIRMATION", title: "1. Tiếp Nhận", desc: "Xác minh & MAFF" },
+                        { key: "CONFIRMED_PICKUP", title: "2. Lấy Hàng", desc: "Bưu tá nhận tại VN" },
+                        { key: "WAREHOUSE_VN_INSPECTED", title: "3. Kho VN", desc: "Cân đo chuẩn IATA" },
+                        { key: "IN_FLIGHT_TO_JP", title: "4. Bay Sang Nhật", desc: "Chuyến bay & Hải quan" },
+                        { key: "DELIVERED_JP", title: "5. Hoàn Tất", desc: "Giao tận tay người nhận" },
+                      ].map((step, idx) => {
+                        const stepOrder = ["PENDING_CONFIRMATION", "CONFIRMED_PICKUP", "WAREHOUSE_VN_INSPECTED", "IN_FLIGHT_TO_JP", "DELIVERED_JP"];
+                        const currentIdx = stepOrder.indexOf(vnJpShipment.status);
+                        const isDone = currentIdx > idx || vnJpShipment.status === "DELIVERED_JP";
+                        const isCurrent = currentIdx === idx && vnJpShipment.status !== "CANCELLED";
+
+                        return (
+                          <div
+                            key={step.key}
+                            className="p-3 rounded-2xl border transition-all flex flex-col items-center text-center"
+                            style={{
+                              background: isCurrent ? "var(--banana-soft, #fef9c3)" : isDone ? "rgba(16,185,129,0.06)" : "var(--field-bg, rgba(0,0,0,0.02))",
+                              borderColor: isCurrent ? "var(--banana-500, #eab308)" : isDone ? "#10b981" : "var(--line, #e2e8f0)",
+                            }}
+                          >
+                            <div
+                              className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs mb-2"
+                              style={{
+                                background: isCurrent ? "#eab308" : isDone ? "#10b981" : "#cbd5e1",
+                                color: isCurrent ? "#0f172a" : "#ffffff",
+                              }}
+                            >
+                              {isDone ? <Check className="w-4 h-4" /> : idx + 1}
+                            </div>
+                            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: isCurrent ? "var(--ink)" : "var(--muted)" }}>
+                              {step.title}
+                            </span>
+                            <span style={{ fontSize: "0.68rem", color: "var(--muted)", marginTop: "2px" }}>
+                              {step.desc}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Thông tin chi tiết 2 cột */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-200/60" style={{ borderTop: "1px solid var(--line)" }}>
+                    {/* Cột 1: Thông tin kiện hàng */}
+                    <div className="space-y-3 p-4 rounded-2xl" style={{ background: "var(--field-bg, rgba(0,0,0,0.02))" }}>
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">Thông Tin Kiện Hàng</h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Phân loại:</span>
+                          <span className="font-bold" style={{ color: "var(--ink)" }}>{vnJpShipment.cargoTypeLabel || vnJpShipment.cargoType}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Trọng lượng tính cước:</span>
+                          <span className="font-bold" style={{ color: "var(--ink)" }}>
+                            {vnJpShipment.chargeableWeightKg || vnJpShipment.actualWeightKg || vnJpShipment.estimatedWeightKg || 0} kg
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Tổng cước vận chuyển:</span>
+                          <span className="font-bold text-emerald-600" style={{ fontSize: "0.9rem" }}>
+                            {vnJpShipment.totalShippingFeeVnd ? `${vnJpShipment.totalShippingFeeVnd.toLocaleString("vi-VN")} đ` : "Đang tính"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Trạng thái thanh toán:</span>
+                          <span className="font-bold">
+                            {vnJpShipment.paymentStatus === "PAID" ? "✅ Đã thanh toán cước" : "⏳ Chờ thanh toán khi cân đo"}
+                          </span>
+                        </div>
+                        {vnJpShipment.maffAgreement && (
+                          <div className="flex items-center gap-1.5 text-emerald-700 text-[11px] pt-1">
+                            <ShieldCheck className="w-4 h-4 shrink-0 text-emerald-600" />
+                            <span>Đã cam kết tuân thủ kiểm dịch MAFF Nhật Bản</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Cột 2: Lộ trình & Giao hàng */}
+                    <div className="space-y-3 p-4 rounded-2xl" style={{ background: "var(--field-bg, rgba(0,0,0,0.02))" }}>
+                      <h4 className="font-bold text-xs uppercase tracking-wider text-slate-500">Lộ Trình & Giao Hàng</h4>
+                      <div className="space-y-2 text-xs">
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Người gửi tại VN:</span>
+                          <span className="font-medium" style={{ color: "var(--ink)" }}>
+                            {vnJpShipment.senderNameMasked} ({vnJpShipment.senderCity})
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Người nhận tại JP:</span>
+                          <span className="font-medium" style={{ color: "var(--ink)" }}>
+                            {vnJpShipment.receiverNameMasked} ({vnJpShipment.receiverPrefecture} {vnJpShipment.receiverPostalCode})
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Chuyến bay:</span>
+                          <span className="font-bold" style={{ color: "var(--ink)" }}>
+                            {vnJpShipment.flightNumber || "Đang phân bổ chuyến bay"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span style={{ color: "var(--muted)" }}>Đơn vị phát tại Nhật:</span>
+                          <span className="font-medium" style={{ color: "var(--ink)" }}>
+                            {vnJpShipment.japanCourier || "Yamato / Sagawa / Japan Post"}
+                          </span>
+                        </div>
+                        {vnJpShipment.japanTrackingCode && (
+                          <div className="flex justify-between">
+                            <span style={{ color: "var(--muted)" }}>Mã tra cứu nội địa Nhật:</span>
+                            <span className="font-mono font-bold text-banana-600">
+                              {vnJpShipment.japanTrackingCode}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
