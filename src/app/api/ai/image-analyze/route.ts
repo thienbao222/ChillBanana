@@ -8,25 +8,15 @@ import {
   normalizeImageCatalogText,
 } from "@/features/ai/customer/image-catalog-matcher";
 
-let curatedSeedProducts: any[] = [];
-try {
-  curatedSeedProducts = require("../../../../lib/curated-products.json");
-} catch {
-  curatedSeedProducts = [];
-}
+import curatedSeedProducts from "../../../../lib/curated-products.json";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 30;
 
-const isTestEnv =
-  process.env.NODE_ENV === "test" ||
-  process.env.VITEST === "true" ||
-  process.env.APP_ENV === "test";
-
 function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy?: number) {
   const cleanKw = (keywordsJa || "日本 人気 商品").trim();
   const encoded = encodeURIComponent(cleanKw);
-  let amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
+  const amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
   let mercariUrl = `https://jp.mercari.com/search?keyword=${encoded}`;
   let rakutenUrl = `https://search.rakuten.co.jp/search/mall/${encoded}/`;
 

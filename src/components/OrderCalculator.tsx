@@ -23,7 +23,6 @@ import { useToast } from "@/context/ToastContext";
 import {
   JP_VN_CATEGORIES,
   getCategoryCustomsInfo,
-  JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
 import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
 

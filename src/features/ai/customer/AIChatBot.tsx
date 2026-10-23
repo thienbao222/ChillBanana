@@ -122,7 +122,7 @@ export default function AIChatBot() {
   const [wanderingEnabled] = useState(false);
   const [isPetHovered, setIsPetHovered] = useState(false);
   const [isPetDragging, setIsPetDragging] = useState(false);
-  const [isPageScrolling, setIsPageScrolling] = useState(false);
+  const [, setIsPageScrolling] = useState(false);
   const [facingLeft, setFacingLeft] = useState(false);
   const petRef = useRef<HTMLDivElement>(null);
   const petDialogueRef = useRef<HTMLDivElement>(null);
@@ -542,7 +542,7 @@ export default function AIChatBot() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: query,
+          message: enrichedQuery,
           personality,
           history: conversationHistory,
           scrapedProduct: scrapedProductForQuote,

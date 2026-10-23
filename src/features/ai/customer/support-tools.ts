@@ -245,7 +245,7 @@ export function translateToJapaneseKeywords(text: string, currentRate = 165): Tr
 
 export function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy?: number) {
   const encoded = encodeURIComponent(keywordsJa.trim());
-  let amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
+  const amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
   let mercariUrl = `https://jp.mercari.com/search?keyword=${encoded}`;
   let rakutenUrl = `https://search.rakuten.co.jp/search/mall/${encoded}/`;
 
@@ -345,7 +345,7 @@ function normalizeForMatching(value: string): string {
   return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
 }
 
-async function searchCatalog(message: string, category: string | null, includePriceEstimate = true): Promise<SupportEvidence> {
+async function searchCatalog(message: string, category: string | null): Promise<SupportEvidence> {
   const terms = extractCatalogSearchTerms(message);
   const [rate, pricingConfig] = await Promise.all([
     fetchLiveExchangeRate().catch(() => null),
@@ -566,33 +566,6 @@ async function searchCatalog(message: string, category: string | null, includePr
       CATALOG_LINKS
     );
   }
-}
-
-function createQuoteEvidence(scrapedProduct: ScrapedProductInput | null): {
-  evidence: SupportEvidence;
-  guardedReply?: string;
-  quoteFooter?: string;
-} {
-  const rawPrice = scrapedProduct?.priceJpy;
-  const url = scrapedProduct?.url;
-
-  if (!scrapedProduct || !isValidQuotePrice(rawPrice) || !isSupportedMarketplaceUrl(url)) {
-    const evidence = createEvidence(
-      "quote_estimate",
-      "needs_input",
-      "Công cụ báo giá phía máy chủ",
-      {},
-      ["Liên kết sàn được hỗ trợ và giá JPY đọc được từ trang", "Cân nặng thực tế"],
-      [{ label: "Mở công cụ tính giá", href: "/#quote" }]
-    );
-    return {
-      evidence,
-    };
-  }
-
-  return {
-    evidence: createEvidence("quote_estimate", "needs_input", "Công cụ giá ChillBanana và nguồn tỷ giá", {}, ["Đang lấy tỷ giá hiện hành"], [{ label: "Công cụ tính giá", href: "/" }]),
-  };
 }
 
 async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise<{
@@ -966,7 +939,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   const jobs: Array<Promise<SupportEvidence | { evidence: SupportEvidence; guardedReply?: string; quoteFooter?: string }>> = [];
 
   const catalogPromise = intents.catalog || intents.compatibility
-    ? searchCatalog(effectiveMessage, intents.category, intents.catalog)
+    ? searchCatalog(effectiveMessage, intents.category)
     : null;
   if (intents.catalog && catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
