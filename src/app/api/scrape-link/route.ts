@@ -1,6 +1,8 @@
+// FILE: src/app/api/scrape-link/route.ts
+
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
-import { scrapeKeyPool } from "@/lib/api-key-manager";
+import { scrapeKeyPool, chatKeyPool, visionKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { isPrivateHost } from "@/lib/ssrf";
@@ -67,22 +69,40 @@ export interface ExtractedProduct {
 interface HtmlExtractedMeta {
   title: string;
   priceJpy: number;
+  highConfidencePrice: boolean;
   imageUrl: string;
   breadcrumbs: string;
   rawSnippet: string;
+}
+
+function getAvailableScrapeApiKey(): string | null {
+  return (
+    scrapeKeyPool?.getNextKey?.() ||
+    chatKeyPool?.getNextKey?.() ||
+    visionKeyPool?.getNextKey?.() ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GOOGLE_API_KEY ||
+    null
+  );
 }
 
 /**
  * Tải HTML trực tiếp với cơ chế kiểm tra từng bước Redirect (tối đa 4 bước)
  * Chuẩn hóa URL Amazon JP, giả lập headers trình duyệt tại Nhật và giải mã EUC-JP / Shift_JIS.
  */
-async function safeFetchHtmlWithRedirects(initialUrl: string, maxRedirects = 4): Promise<string> {
+async function safeFetchHtmlWithRedirects(
+  initialUrl: string,
+  maxRedirects = 4
+): Promise<{ html: string; finalUrl: string }> {
   let currentUrl = initialUrl;
 
   // Chuẩn hóa link Amazon JP nếu có ASIN để luôn trả về đúng trang chi tiết với tiền tệ JPY
-  const asinMatch = initialUrl.match(/(?:\/dp\/|\/gp\/product\/)([A-Z0-9]{10})/i);
-  if (asinMatch && (initialUrl.includes("amazon.co.jp") || initialUrl.includes("amazon.com") || initialUrl.includes("amzn."))) {
-    currentUrl = `https://www.amazon.co.jp/dp/${asinMatch[1]}?language=ja_JP&th=1&psc=1`;
+  const asinMatch = initialUrl.match(/(?:\/dp\/|\/gp\/product\/|\/product\/)([A-Z0-9]{10})/i);
+  if (
+    asinMatch &&
+    (initialUrl.includes("amazon.co.jp") || initialUrl.includes("amazon.com") || initialUrl.includes("amzn."))
+  ) {
+    currentUrl = `https://www.amazon.co.jp/dp/${asinMatch[1].toUpperCase()}?language=ja_JP&th=1&psc=1`;
   }
 
   for (let hop = 0; hop <= maxRedirects; hop++) {
@@ -95,10 +115,10 @@ async function safeFetchHtmlWithRedirects(initialUrl: string, maxRedirects = 4):
       redirect: "manual",
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept-Language": "ja-JP,ja;q=0.9,en-US;q=0.7,en;q=0.6",
-        "Cookie": "i18n-prefs=JPY; lc-acbjp=ja_JP",
-        "Sec-CH-UA": '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept-Language": "ja-JP,ja;q=0.95,en-US;q=0.7,en;q=0.6",
+        Cookie: "i18n-prefs=JPY; lc-acbjp=ja_JP",
+        "Sec-CH-UA": '"Chromium";v="126", "Google Chrome";v="126", "Not-A.Brand";v="99"',
         "Sec-CH-UA-Mobile": "?0",
         "Sec-CH-UA-Platform": '"Windows"',
         "Sec-Fetch-Dest": "document",
@@ -108,17 +128,23 @@ async function safeFetchHtmlWithRedirects(initialUrl: string, maxRedirects = 4):
         "Upgrade-Insecure-Requests": "1",
         Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
       },
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(9000),
     });
 
     if (res.status >= 300 && res.status < 400) {
       const location = res.headers.get("location");
       if (!location) break;
-      currentUrl = new URL(location, currentUrl).toString();
+      const nextUrl = new URL(location, currentUrl).toString();
+      const nextAsin = nextUrl.match(/(?:\/dp\/|\/gp\/product\/|\/product\/)([A-Z0-9]{10})/i);
+      if (nextAsin && nextUrl.includes("amazon.co.jp")) {
+        currentUrl = `https://www.amazon.co.jp/dp/${nextAsin[1].toUpperCase()}?language=ja_JP&th=1&psc=1`;
+      } else {
+        currentUrl = nextUrl;
+      }
       continue;
     }
 
-    if (!res.ok) return "";
+    if (!res.ok) return { html: "", finalUrl: currentUrl };
 
     const contentType = res.headers.get("content-type") || "";
     let encoding = "utf-8";
@@ -129,10 +155,10 @@ async function safeFetchHtmlWithRedirects(initialUrl: string, maxRedirects = 4):
     }
 
     const arrayBuffer = await res.arrayBuffer();
-    const bytes = new Uint8Array(arrayBuffer.slice(0, 1500 * 1024));
+    const bytes = new Uint8Array(arrayBuffer.slice(0, 2500 * 1024));
 
     if (encoding === "utf-8") {
-      const asciiProbe = new TextDecoder("ascii").decode(bytes.slice(0, 2048));
+      const asciiProbe = new TextDecoder("ascii").decode(bytes.slice(0, 4096));
       if (/charset=["']?(?:euc-jp)/i.test(asciiProbe)) {
         encoding = "euc-jp";
       } else if (/charset=["']?(?:shift_jis|sjis|windows-31j)/i.test(asciiProbe)) {
@@ -142,12 +168,12 @@ async function safeFetchHtmlWithRedirects(initialUrl: string, maxRedirects = 4):
 
     try {
       const decoder = new TextDecoder(encoding);
-      return decoder.decode(bytes);
+      return { html: decoder.decode(bytes), finalUrl: currentUrl };
     } catch {
-      return new TextDecoder("utf-8").decode(bytes);
+      return { html: new TextDecoder("utf-8").decode(bytes), finalUrl: currentUrl };
     }
   }
-  return "";
+  return { html: "", finalUrl: currentUrl };
 }
 
 /**
@@ -163,8 +189,10 @@ async function fetchUniqloProductApi(url: string): Promise<HtmlExtractedMeta | n
     const res = await fetch(apiUrl, {
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         Accept: "application/json",
+        "Accept-Language": "ja-JP,ja;q=0.9",
+        "x-fr-clientid": "uq.jp.web-spa",
       },
       signal: AbortSignal.timeout(8000),
     });
@@ -175,25 +203,36 @@ async function fetchUniqloProductApi(url: string): Promise<HtmlExtractedMeta | n
     const title = result.name || "";
     const rawPrice =
       result.prices?.promo?.value ??
-      result.prices?.promo?.origin?.value ??
       result.prices?.base?.value ??
+      result.prices?.promo?.origin?.value ??
       0;
     const priceJpy = Math.round(Number(rawPrice)) || 0;
     let imageUrl = "";
     if (result.images?.main) {
-      const first = Object.values(result.images.main)[0] as { image?: string } | undefined;
+      const first = Object.values(result.images.main)[0] as { image?: string; url?: string } | undefined;
       if (first?.image) imageUrl = first.image;
+      else if (first?.url) imageUrl = first.url;
+    }
+    if (!imageUrl && result.images?.sub && Array.isArray(result.images.sub) && result.images.sub[0]?.image) {
+      imageUrl = result.images.sub[0].image;
     }
     const breadcrumbList: string[] = [];
     if (Array.isArray(result.breadcrumbs)) {
       for (const b of result.breadcrumbs) {
         if (b?.name) breadcrumbList.push(String(b.name));
       }
+    } else if (result.breadcrumbs && typeof result.breadcrumbs === "object") {
+      for (const val of Object.values(result.breadcrumbs)) {
+        if (val && typeof val === "object" && "name" in val && typeof (val as any).name === "string") {
+          breadcrumbList.push((val as any).name);
+        }
+      }
     }
-    const breadcrumbs = breadcrumbList.join(" > ");
+    const breadcrumbs = breadcrumbList.join(" > ") || "ファッション > ユニクロ (Uniqlo JP)";
     return {
       title,
       priceJpy,
+      highConfidencePrice: priceJpy > 0,
       imageUrl,
       breadcrumbs,
       rawSnippet: `${title} | Uniqlo JP | ${breadcrumbs} | Giá: ${priceJpy} JPY`,
@@ -219,42 +258,65 @@ function cleanHtmlText(input: string): string {
 
 /**
  * Bộ bóc tách chuyên biệt đa sàn từ HTML (Amazon JP, Rakuten, Yahoo Auctions/Shopping, Surugaya, Uniqlo, Bic Camera, Yodobashi, Mercari)
- * Trích xuất chính xác: Title, Price JPY, Image, và đặc biệt là Mục loại sản phẩm (Breadcrumb Category Path).
+ * Trích xuất chính xác: Title, Price JPY, Image, và Mục loại sản phẩm (Breadcrumb Category Path).
+ * Đặc biệt: Cô lập đúng khối thông tin sản phẩm chính để KHÔNG BAO GIỜ lấy nhầm giá của sản phẩm quảng cáo/liên quan.
  */
 function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtractedMeta {
   let title = "";
   let priceJpy = 0;
+  let highConfidencePrice = false;
   let imageUrl = "";
   const breadcrumbParts: string[] = [];
 
   if (!html) {
-    return { title, priceJpy, imageUrl, breadcrumbs: "", rawSnippet: "" };
+    return { title, priceJpy, highConfidencePrice, imageUrl, breadcrumbs: "", rawSnippet: "" };
   }
 
-  // 1. Bóc tách Title từ og:title / twitter:title / <title>
+  // Kiểm tra nhanh nếu HTML là trang chặn Bot / Captcha / Error page của sàn
+  const isBlockedPage =
+    /api-services-support@amazon\.com|Robot Check|驗證|アクセスが集中|エラーが発生しました|403 Forbidden|Access Denied|Cloudflare/i.test(
+      html.slice(0, 6000)
+    ) && html.length < 25000;
+
+  if (isBlockedPage) {
+    return { title, priceJpy, highConfidencePrice, imageUrl, breadcrumbs: "", rawSnippet: "" };
+  }
+
+  // 1. Bóc tách Title từ #productTitle (Amazon) / og:title / twitter:title / <title>
+  const amzProductTitle = html.match(/id=["']productTitle["'][^>]*>([\s\S]*?)<\/span>/i);
   const ogTitle =
     html.match(/<meta\s+(?:property|name)=["']og:title["']\s+content=["']([^"']+)["']/i) ||
     html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:title["']/i);
   const tagTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const rawTitle = cleanHtmlText(ogTitle?.[1] || tagTitle?.[1] || "");
-  if (rawTitle && !/captcha|robot check|access denied/i.test(rawTitle)) {
+
+  const rawTitle = cleanHtmlText(amzProductTitle?.[1] || ogTitle?.[1] || tagTitle?.[1] || "");
+  if (
+    rawTitle &&
+    !/captcha|robot check|access denied|just a moment|ページが見つかりません|エラー/i.test(rawTitle)
+  ) {
     title = rawTitle
-      .replace(/\s*(?:by\s*メルカリ|-\s*メルカリ|\|\s*Amazon\.co\.jp.*|-\s*楽天市場.*|-\s*Yahoo!オークション.*|-\s*ヤフオク!.*|\|\s*ユニクロ.*|\|\s*駿河屋.*)$/i, "")
+      .replace(
+        /\s*(?:by\s*メルカリ|-\s*メルカリ|\|\s*Amazon\.co\.jp.*|-\s*楽天市場.*|-\s*Yahoo!オークション.*|-\s*ヤフオク!.*|\|\s*ユニクロ.*|\|\s*駿河屋.*|\|\s*ビックカメラ.*|\|\s*ヨドバシ\.com.*)$/i,
+        ""
+      )
+      .replace(/^Amazon\.co\.jp[:：]\s*/i, "")
       .replace(/^【楽天市場】/i, "")
+      .replace(/^ヨドバシ\.com\s*-\s*/i, "")
       .trim();
   }
 
-  // 2. Bóc tách Image từ og:image / lander image Amazon
+  // 2. Bóc tách Image từ og:image / landingImage (Amazon)
   const ogImg =
-    html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
-    html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i) ||
     html.match(/"hiRes"\s*:\s*"(https:\/\/m\.media-amazon\.com\/images\/I\/[^"]+)"/i) ||
-    html.match(/id=["']landingImage["'][^>]+src=["'](https:\/\/[^"']+)["']/i);
+    html.match(/data-old-hires=["'](https:\/\/m\.media-amazon\.com\/images\/I\/[^"']+)["']/i) ||
+    html.match(/id=["']landingImage["'][^>]+src=["'](https:\/\/[^"']+)["']/i) ||
+    html.match(/<meta\s+(?:property|name)=["']og:image["']\s+content=["']([^"']+)["']/i) ||
+    html.match(/<meta\s+content=["']([^"']+)["']\s+(?:property|name)=["']og:image["']/i);
   if (ogImg?.[1]) {
     imageUrl = ogImg[1].trim();
   }
 
-  // 3. Quét toàn bộ thẻ JSON-LD (<script type="application/ld+json">) để lấy cả Product Price & BreadcrumbList!
+  // 3. Quét toàn bộ thẻ JSON-LD (<script type="application/ld+json">) để lấy Product Price & BreadcrumbList chính thức
   const ldRegex = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
   let ldMatch;
   while ((ldMatch = ldRegex.exec(html)) !== null) {
@@ -270,11 +332,7 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
       for (const node of nodes) {
         if (!node || typeof node !== "object") continue;
 
-        // Lấy BreadcrumbList từ JSON-LD (Chuẩn trên Rakuten, Yahoo, BicCamera, Yodobashi, Uniqlo)
-        if (
-          node["@type"] === "BreadcrumbList" &&
-          Array.isArray(node.itemListElement)
-        ) {
+        if (node["@type"] === "BreadcrumbList" && Array.isArray(node.itemListElement)) {
           const names = node.itemListElement
             .map((el: any) => el?.item?.name || el?.name || "")
             .map((s: string) => cleanHtmlText(String(s)))
@@ -284,13 +342,16 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
           }
         }
 
-        // Lấy Product từ JSON-LD
         if (node["@type"] === "Product" || node.offers) {
           if (!title && typeof node.name === "string") {
             title = cleanHtmlText(node.name);
           }
           if (!imageUrl) {
-            const ldImg = Array.isArray(node.image) ? node.image[0] : node.image?.url || node.image;
+            const ldImg = Array.isArray(node.image)
+              ? typeof node.image[0] === "string"
+                ? node.image[0]
+                : node.image[0]?.url
+              : node.image?.url || node.image;
             if (typeof ldImg === "string" && ldImg.startsWith("https://")) {
               imageUrl = ldImg;
             }
@@ -302,8 +363,9 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
           const rawP = offers?.price ?? offers?.lowPrice ?? offers?.highPrice;
           if (rawP !== undefined && !priceJpy) {
             const p = Math.round(Number(String(rawP).replace(/[,¥￥円\s]/g, "")));
-            if (Number.isFinite(p) && p > 50 && p < 10_000_000) {
+            if (Number.isFinite(p) && p >= 100 && p < 10_000_000) {
               priceJpy = p;
+              highConfidencePrice = true;
             }
           }
         }
@@ -313,44 +375,63 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
     }
   }
 
-  // 4. Bóc tách __NEXT_DATA__ (Cực kỳ hiệu quả cho Yahoo! Auctions, Yahoo! Shopping, Uniqlo, Mercari)
+  // 4. Bóc tách __NEXT_DATA__ (Chuẩn xác 100% cho Yahoo! Auctions, Yahoo! Shopping, PayPay Flea Market, Mercari)
   const nextDataMatch = html.match(/<script[^>]+id=["']__NEXT_DATA__["'][^>]*>([\s\S]*?)<\/script>/i);
   if (nextDataMatch?.[1]) {
     try {
       const nextJson = nextDataMatch[1];
       const parsed = JSON.parse(nextJson);
       const item =
-        parsed?.props?.pageProps?.item ||
         parsed?.props?.pageProps?.initialState?.item?.detail?.item ||
-        parsed?.props?.pageProps?.data?.item;
+        parsed?.props?.pageProps?.item ||
+        parsed?.props?.pageProps?.data?.item ||
+        parsed?.props?.pageProps?.product;
+
       if (item) {
-        if (!title && item.title) title = cleanHtmlText(item.title);
+        if (!title && (item.title || item.name)) title = cleanHtmlText(item.title || item.name);
         if (!priceJpy) {
-          const p = Number(item.price ?? item.taxinPrice ?? item.bidOrBuy ?? item.currentPrice);
-          if (Number.isFinite(p) && p > 50 && p < 10_000_000) priceJpy = Math.round(p);
+          const p = Number(
+            item.taxinPrice ?? item.price ?? item.bidOrBuy ?? item.currentPrice ?? item.salePrice
+          );
+          if (Number.isFinite(p) && p >= 100 && p < 10_000_000) {
+            priceJpy = Math.round(p);
+            highConfidencePrice = true;
+          }
         }
         if (!imageUrl && Array.isArray(item.image) && item.image[0]?.url) {
           imageUrl = item.image[0].url;
+        } else if (!imageUrl && Array.isArray(item.images) && item.images[0]?.url) {
+          imageUrl = item.images[0].url;
         } else if (!imageUrl && typeof item.imgUrl === "string") {
           imageUrl = item.imgUrl;
         }
         if (Array.isArray(item.categoryPath)) {
-          const cat = item.categoryPath.map((c: any) => c.name).filter(Boolean).join(" > ");
+          const cat = item.categoryPath
+            .map((c: any) => c.name)
+            .filter(Boolean)
+            .join(" > ");
+          if (cat) breadcrumbParts.push(cat);
+        } else if (item.category?.path && Array.isArray(item.category.path)) {
+          const cat = item.category.path
+            .map((c: any) => c.name)
+            .filter(Boolean)
+            .join(" > ");
           if (cat) breadcrumbParts.push(cat);
         }
       }
 
-      // Tìm giá phụ nếu chưa lấy được
       if (!priceJpy) {
         const yPrice =
-          nextJson.match(/"(?:taxinPrice|currentPrice|price|priceValue)"\s*:\s*([0-9]{2,8})/i) ||
-          nextJson.match(/"bidOrBuy"\s*:\s*([0-9]{2,8})/i);
+          nextJson.match(/"(?:taxinPrice|currentPrice|bidOrBuy|priceValue)"\s*:\s*([0-9]{3,8})/i) ||
+          nextJson.match(/"price"\s*:\s*([0-9]{3,8})/i);
         if (yPrice?.[1]) {
           const p = parseInt(yPrice[1], 10);
-          if (p > 50 && p < 10_000_000) priceJpy = p;
+          if (p >= 100 && p < 10_000_000) {
+            priceJpy = p;
+            highConfidencePrice = true;
+          }
         }
       }
-      // Tìm đường dẫn danh mục phụ trong __NEXT_DATA__
       const catMatches = Array.from(
         nextJson.matchAll(/"(?:categoryName|genreName|departmentName)"\s*:\s*"([^"]{2,60})"/gi)
       ).map((m) => m[1]);
@@ -360,7 +441,7 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
     } catch {}
   }
 
-  // 5. Bộ bóc tách chuyên biệt theo từng sàn Nhật nếu JSON-LD chưa có đủ Giá hoặc Breadcrumb
+  // 5. Bộ bóc tách chuyên biệt theo từng sàn Nhật (Chỉ quét vùng DOM chính của sản phẩm)
   // --- A. AMAZON.CO.JP ---
   if (urlLower.includes("amazon.") || urlLower.includes("amzn.")) {
     const amzBreadMatch = html.match(
@@ -372,15 +453,31 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
         .filter(Boolean);
       if (crumbs.length > 0) breadcrumbParts.push(crumbs.join(" > "));
     }
+
     if (!priceJpy) {
+      // QUAN TRỌNG: Cắt riêng vùng sản phẩm chính (#ppd / #centerCol / #apex_desktop) để KHÔNG lấy nhầm giá sản phẩm Sponsored
+      const mainProductZone =
+        html.match(
+          /id=["'](?:corePriceDisplay_desktop_feature_div|corePrice_feature_div|apex_desktop|twister-plus-inline-twister)["'][\s\S]{1,12000}/i
+        )?.[0] || html.slice(0, 180000);
+
       const amzPrice =
+        html.match(/id=["']twister-plus-price-data-price["'][^>]+value=["']([0-9]+(?:\.[0-9]+)?)["']/i) ||
         html.match(/"priceAmount"\s*:\s*([0-9]+(?:\.[0-9]+)?)/i) ||
-        html.match(/class=["'][^"']*apexPriceToPay[^"']*["'][\s\S]*?class=["']a-offscreen["']>[¥￥]?([0-9,]+)/i) ||
-        html.match(/id=["']corePriceDisplay_desktop_feature_div["'][\s\S]*?class=["']a-price-whole["']>([0-9,]+)/i) ||
-        html.match(/class=["']a-price-whole["']>([0-9,]+)/i);
+        mainProductZone.match(
+          /class=["'][^"']*(?:priceToPay|apexPriceToPay)[^"']*["'][\s\S]{1,800}?class=["']a-offscreen["']>[¥￥]?([0-9,]+)/i
+        ) ||
+        mainProductZone.match(
+          /class=["'][^"']*(?:priceToPay|apexPriceToPay)[^"']*["'][\s\S]{1,800}?class=["']a-price-whole["']>([0-9,]+)/i
+        ) ||
+        mainProductZone.match(/id=["']priceblock_(?:ourprice|dealprice|saleprice)["'][^>]*>[¥￥\s]*([0-9,]+)/i);
+
       if (amzPrice?.[1]) {
         const p = Math.round(Number(amzPrice[1].replace(/,/g, "")));
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
@@ -395,15 +492,20 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
     if (rakutenCrumbs.length > 0) breadcrumbParts.push(rakutenCrumbs.join(" > "));
 
     if (!priceJpy) {
+      // Chỉ lấy từ các thuộc tính dữ liệu chuẩn của Rakuten Item Page (không quét đại trà chữ 円 ở banner)
       const rakPrice =
-        html.match(/"taxIncludedPrice"\s*:\s*([0-9]{2,8})/i) ||
-        html.match(/itemprop=["']price["']\s+content=["']([0-9,]+)["']/i) ||
         html.match(/property=["']apprakuten:price["']\s+content=["']([0-9,]+)["']/i) ||
-        html.match(/class=["'][^"']*price2[^"']*["'][^>]*>\s*([0-9,]+)\s*円/i) ||
-        html.match(/([0-9]{1,3}(?:,[0-9]{3})+)\s*円\s*(?:\(税込\)|税込)/i);
+        html.match(/content=["']([0-9,]+)["']\s+property=["']apprakuten:price["']/i) ||
+        html.match(/itemprop=["']price["']\s+content=["']([0-9,]+)["']/i) ||
+        html.match(/"taxIncludedPrice"\s*:\s*([0-9]{3,8})/i) ||
+        html.match(/"minPrice"\s*:\s*([0-9]{3,8})/i) ||
+        html.match(/class=["'][^"']*price2[^"']*["'][^>]*>\s*([0-9,]+)\s*円/i);
       if (rakPrice?.[1]) {
         const p = parseInt(rakPrice[1].replace(/,/g, ""), 10);
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
@@ -416,11 +518,15 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
     }
     if (!priceJpy) {
       const yPrice =
-        html.match(/(?:現在|即決|価格|税込)\s*[:：]?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,8})\s*円/i) ||
-        html.match(/class=["'][^"']*Price__value[^"']*["'][^>]*>\s*([0-9,]+)/i);
+        html.match(/class=["'][^"']*Price__value[^"']*["'][^>]*>\s*([0-9,]+)/i) ||
+        html.match(/dd\s+class=["'][^"']*Price__value[^"']*["'][^>]*>([0-9,]+)/i) ||
+        html.match(/(?:現在|即決)\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,8})\s*円/i);
       if (yPrice?.[1]) {
         const p = parseInt(yPrice[1].replace(/,/g, ""), 10);
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
@@ -428,17 +534,20 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
   // --- D. BIC CAMERA ---
   if (urlLower.includes("biccamera.com")) {
     const bicBread = html.match(/class=["'][^"']*bcs_breadcrumb[^"']*["'][\s\S]*?<\/div>/i);
-    if (bicBread?.[1]) {
-      breadcrumbParts.push(cleanHtmlText(bicBread[1]));
+    if (bicBread?.[0]) {
+      breadcrumbParts.push(cleanHtmlText(bicBread[0]));
     }
     if (!priceJpy) {
       const bicPrice =
-        html.match(/class=["'][^"']*bcs_price[^"']*["'][^>]*>\s*([0-9,]+)\s*円/i) ||
-        html.match(/class=["'][^"']*val[^"']*["'][^>]*>\s*([0-9,]+)\s*円/i) ||
-        html.match(/id=["']price_box["'][\s\S]*?class=["'][^"']*price[^"']*["'][^>]*>([0-9,]+)/i);
+        html.match(/itemprop=["']price["'][^>]*content=["']([0-9,]+)["']/i) ||
+        html.match(/class=["'][^"']*bcs_price[^"']*["'][\s\S]{1,300}?<strong>\s*([0-9,]+)\s*<\/strong>/i) ||
+        html.match(/class=["'][^"']*bcs_price[^"']*["'][^>]*>\s*([0-9,]+)\s*円/i);
       if (bicPrice?.[1]) {
         const p = parseInt(bicPrice[1].replace(/,/g, ""), 10);
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
@@ -446,16 +555,19 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
   // --- E. YODOBASHI ---
   if (urlLower.includes("yodobashi.com")) {
     const yodoBread = html.match(/id=["']js_header_pankuzu["'][\s\S]*?<\/div>/i);
-    if (yodoBread?.[1]) {
-      breadcrumbParts.push(cleanHtmlText(yodoBread[1]));
+    if (yodoBread?.[0]) {
+      breadcrumbParts.push(cleanHtmlText(yodoBread[0]));
     }
     if (!priceJpy) {
       const yodoPrice =
-        html.match(/class=["'][^"']*(?:productPrice|salesPrice)[^"']*["'][^>]*>[¥￥]?\s*([0-9,]+)/i) ||
-        html.match(/id=["']js_scl_finalPrice["'][^>]*>[¥￥]?\s*([0-9,]+)/i);
+        html.match(/id=["']js_scl_finalPrice["'][^>]*>[¥￥]?\s*([0-9,]+)/i) ||
+        html.match(/class=["'][^"']*(?:productPrice|salesPrice)[^"']*["'][^>]*>[¥￥]?\s*([0-9,]+)/i);
       if (yodoPrice?.[1]) {
         const p = parseInt(yodoPrice[1].replace(/,/g, ""), 10);
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
@@ -463,21 +575,24 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
   // --- F. SURUGAYA ---
   if (urlLower.includes("suruga-ya.jp")) {
     const suruBread = html.match(/class=["'][^"']*breadcrumb[^"']*["'][\s\S]*?<\/(?:ol|ul|div)>/i);
-    if (suruBread?.[1]) {
-      breadcrumbParts.push(cleanHtmlText(suruBread[1]));
+    if (suruBread?.[0]) {
+      breadcrumbParts.push(cleanHtmlText(suruBread[0]));
     }
     if (!priceJpy) {
       const suruPrice =
-        html.match(/class=["'][^"']*(?:price_text|text-price-detail)[^"']*["'][^>]*>[¥￥]?\s*([0-9,]+)\s*円?/i) ||
-        html.match(/id=["']price["'][^>]*>[¥￥]?\s*([0-9,]+)/i);
+        html.match(/class=["'][^"']*(?:text-price-detail|price-buy)[^"']*["'][^>]*>[¥￥]?\s*([0-9,]+)\s*円?/i) ||
+        html.match(/(?:税込価格|販売価格)\s*[:：]?\s*([0-9,]+)\s*円/i);
       if (suruPrice?.[1]) {
         const p = parseInt(suruPrice[1].replace(/,/g, ""), 10);
-        if (p > 50 && p < 10_000_000) priceJpy = p;
+        if (p >= 100 && p < 10_000_000) {
+          priceJpy = p;
+          highConfidencePrice = true;
+        }
       }
     }
   }
 
-  // --- G. GENERIC FALLBACK CHO CÁC SÀN KHÁC ---
+  // --- G. META PRICE FALLBACK ---
   if (!breadcrumbParts.length) {
     const genericBread = html.match(
       /(?:id|class)=["'][^"']*(?:breadcrumb|pankuzu|topicpath)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|nav|ol|ul)>/i
@@ -489,11 +604,13 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
   if (!priceJpy) {
     const metaPrice =
       html.match(/<meta\s+(?:name|property)=["']product:price:amount["']\s+content=["']([0-9.]+)["']/i) ||
-      html.match(/(?:税込価格|販売価格|価格)\s*[:：]?\s*[¥￥]?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,7})\s*(?:円|\(税込\))/i) ||
-      html.match(/[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+)/i);
+      html.match(/<meta\s+content=["']([0-9.]+)["']\s+(?:name|property)=["']product:price:amount["']/i);
     if (metaPrice?.[1]) {
       const p = Math.round(Number(metaPrice[1].replace(/,/g, "")));
-      if (p > 50 && p < 10_000_000) priceJpy = p;
+      if (p >= 100 && p < 10_000_000) {
+        priceJpy = p;
+        highConfidencePrice = true;
+      }
     }
   }
 
@@ -504,6 +621,7 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
   return {
     title,
     priceJpy,
+    highConfidencePrice,
     imageUrl,
     breadcrumbs,
     rawSnippet: `${title} | Danh mục gốc: ${breadcrumbs} | Giá phát hiện: ${priceJpy} JPY`,
@@ -511,241 +629,259 @@ function extractStructuredMetaFromHtml(html: string, urlLower: string): HtmlExtr
 }
 
 /**
- * Lọc nội dung Jina AI thông minh: bỏ qua phần Header menu rác ở đầu trang Rakuten/Amazon/Yahoo,
- * ưu tiên giữ lại các dòng chứa Breadcrumb (>, カテゴリ, ジャンル), Giá (¥, 円, 税込) và Thông tin sản phẩm.
+ * Trích xuất nhanh Title, Price JPY, Image từ văn bản Markdown của Jina AI Reader
+ * (Phục vụ khi Direct HTML bị sàn chặn 403/Captcha trên IP Vercel nhưng Jina Reader vượt qua được)
+ */
+function extractMetaFromJinaMarkdown(jinaText: string, urlLower: string): Partial<HtmlExtractedMeta> {
+  if (!jinaText) return {};
+
+  // Cắt bỏ phần sản phẩm gợi ý / liên quan ở cuối trang để không lấy nhầm giá của sản phẩm khác
+  const relatedCutoff = jinaText.search(
+    /\n(?:#+\s*)?(?:関連商品|おすすめ商品|この商品を見た人は|よく一緒に購入されている商品|スポンサー\s*プロダクト|こちらもおすすめ|同じカテゴリの商品|Customers who viewed)/i
+  );
+  const mainJina = relatedCutoff > 400 ? jinaText.slice(0, relatedCutoff) : jinaText.slice(0, 12000);
+
+  let title = "";
+  const titleHeader = mainJina.match(/^Title:\s*(.+)$/m);
+  if (titleHeader?.[1]) {
+    const raw = titleHeader[1].trim();
+    if (!/captcha|robot check|access denied|just a moment|403 forbidden/i.test(raw)) {
+      title = raw
+        .replace(
+          /\s*(?:by\s*メルカリ|-\s*メルカリ|\|\s*Amazon\.co\.jp.*|-\s*楽天市場.*|-\s*Yahoo!オークション.*|-\s*ヤフオク!.*|\|\s*ユニクロ.*|\|\s*駿河屋.*|\|\s*ビックカメラ.*|\|\s*ヨドバシ\.com.*)$/i,
+          ""
+        )
+        .replace(/^Amazon\.co\.jp[:：]\s*/i, "")
+        .replace(/^【楽天市場】/i, "")
+        .replace(/^ヨドバシ\.com\s*-\s*/i, "")
+        .trim();
+    }
+  }
+
+  // Tìm giá Yên chính của sản phẩm trong mainJina (bỏ qua giá ship 送料 và coupon クーポン)
+  let priceJpy = 0;
+  const lines = mainJina.split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.length > 180) continue;
+    // Bỏ qua các dòng nói về phí ship, điểm thưởng, giảm giá hoặc điều kiện freeship
+    if (/送料|クーポン|ポイント|以上購入|送料無料ライン|OFF|割引|手数料|参考価格|定価/i.test(trimmed)) {
+      continue;
+    }
+
+    const strongPriceMatch =
+      trimmed.match(/(?:税込価格|販売価格|価格|現在|即決)\s*[:：]?\s*[¥￥]?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,7})\s*(?:円|\(税込\)|税込)?/i) ||
+      trimmed.match(/^[¥￥]\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,7})\b/) ||
+      trimmed.match(/\b([0-9]{1,3}(?:,[0-9]{3})+|[0-9]{3,7})\s*円\s*(?:\(税込\)|税込)/i);
+
+    if (strongPriceMatch?.[1]) {
+      const p = parseInt(strongPriceMatch[1].replace(/,/g, ""), 10);
+      if (p >= 150 && p < 10_000_000) {
+        priceJpy = p;
+        break;
+      }
+    }
+  }
+
+  return { title, priceJpy };
+}
+
+/**
+ * Lọc nội dung Jina AI thông minh: bỏ qua phần Header menu rác và cắt bỏ phần Sản phẩm liên quan ở cuối trang.
  */
 function buildFocusedScrapeContext(jinaText: string, htmlMeta: HtmlExtractedMeta): string {
-  const lines = jinaText
+  const relatedCutoff = jinaText.search(
+    /\n(?:#+\s*)?(?:関連商品|おすすめ商品|この商品を見た人は|よく一緒に購入されている商品|スポンサー\s*プロダクト|こちらもおすすめ)/i
+  );
+  const cleanJina = relatedCutoff > 400 ? jinaText.slice(0, relatedCutoff) : jinaText;
+
+  const lines = cleanJina
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter((l) => l.length > 1);
 
   const priorityLines: string[] = [];
   for (const line of lines) {
+    if (/送料|クーポン|ポイント還元|送料無料ライン/i.test(line)) continue;
     if (
       /[¥￥円]|税込|価格|カテゴリ|ジャンル|パンくず|ブランド|サイズ|仕様|商品説明|商品の説明|>|＞/i.test(line) &&
       line.length < 300
     ) {
       priorityLines.push(line);
-      if (priorityLines.length >= 60) break;
+      if (priorityLines.length >= 45) break;
     }
   }
 
   const headerContext = [
-    htmlMeta.title ? `TIÊU ĐỀ HTML: ${htmlMeta.title}` : "",
+    htmlMeta.title ? `TIÊU ĐỀ SẢN PHẨM CHÍNH THỨC: ${htmlMeta.title}` : "",
     htmlMeta.breadcrumbs ? `MỤC LOẠI SẢN PHẨM (BREADCRUMB TRANG GỐC): ${htmlMeta.breadcrumbs}` : "",
-    htmlMeta.priceJpy > 0 ? `GIÁ JPY TRONG HTML/JSON-LD: ${htmlMeta.priceJpy} JPY` : "",
+    htmlMeta.priceJpy > 0 ? `GIÁ JPY CHÍNH THỨC TRONG HTML/JSON-LD: ${htmlMeta.priceJpy} JPY` : "",
   ]
     .filter(Boolean)
     .join("\n");
 
   const bodyContext =
-    priorityLines.length > 8
-      ? `${priorityLines.join("\n")}\n---\n${jinaText.slice(0, 4500)}`
-      : jinaText.slice(0, 6500);
+    priorityLines.length > 6
+      ? `${priorityLines.join("\n")}\n---\n${cleanJina.slice(0, 4000)}`
+      : cleanJina.slice(0, 6000);
 
-  return `${headerContext}\n\n${bodyContext}`.slice(0, 8000);
+  return `${headerContext}\n\n${bodyContext}`.slice(0, 7500);
 }
 
 /**
- * Dùng Gemini để trích xuất thông tin sản phẩm có cấu trúc từ nội dung Jina AI.
+ * Dùng Gemini để trích xuất thông tin sản phẩm có cấu trúc từ nội dung đã lọc.
  */
 async function extractWithGemini(
   contextText: string,
-  storeName: string,
-  productUrl: string
+  storeName: string
 ): Promise<Partial<ExtractedProduct> | null> {
-  const apiKey = scrapeKeyPool.getNextKey();
+  const apiKey = getAvailableScrapeApiKey();
   if (!apiKey) {
-    console.warn("[ScrapeLink] Không có Gemini key khả dụng, dùng fallback.");
+    console.warn("[ScrapeLink] Không có Gemini key khả dụng, dùng kết quả bóc tách trực tiếp.");
     return null;
   }
 
-  const prompt = `Bạn là agent trích xuất dữ liệu sản phẩm từ trang thương mại điện tử Nhật Bản.
-Phân tích nội dung dưới đây từ trang "${storeName}" và trả về JSON theo schema chính xác.
+  const prompt = `Bạn là agent trích xuất dữ liệu sản phẩm chính xác từ sàn thương mại điện tử Nhật Bản (${storeName}).
+Phân tích nội dung dưới đây và trả về đúng 1 JSON object theo schema.
 
-QUY TẮC NGHIÊM NGẶT:
-- priceJpy: chỉ lấy giá JPY thực sự hiển thị trên trang (ký hiệu ¥ hoặc 円 hoặc 税込). Nếu không thấy hoặc đã bán hết → 0.
-- categoryBreadcrumb: chuỗi cây danh mục / loại sản phẩm (ví dụ: 家電 > キッチン家電 > 炊飯器 hoặc ファッション > メンズ > トップス hoặc từ khóa Breadcrumb trên trang).
-- category: phân loại sản phẩm vào đúng 1 trong 8 danh mục sau:
-  "cosmetics" (mỹ phẩm, skincare, nước hoa),
-  "health" (thực phẩm chức năng, vitamin, collagen, thuốc),
-  "gadgets" (gia dụng, điện tử, máy tính, tai nghe, 100V),
-  "anime" (anime, manga, figure, gunpla, thẻ bài, hobby),
-  "fashion" (quần áo, giày dép, túi xách, phụ kiện vải, Uniqlo),
-  "food" (thực phẩm khô, bánh kẹo, trà, matcha, gia vị, đồ bếp thường),
-  "luxury" (đồng hồ, máy chơi game PS5/Switch, máy ảnh, hàng hiệu xa xỉ),
-  "other" (mặt hàng khác).
-- voltageWarning: true CHỈ KHI thấy "100V", "AC100V", "100V専用" trên trang.
-- sellerRating: chỉ điền nếu thấy số đánh giá rõ ràng (Mercari/Yahoo). Không đoán.
-- variants: chỉ điền nếu trang có màu/size rõ ràng (色, サイズ, カラー).
-- riskFlags: ["new_seller"] nếu seller < 10 đánh giá, ["limited_stock"] nếu thấy "残り", ["sold_out"] nếu hết hàng.
-- KHÔNG tự đoán, KHÔNG điền thông tin không có trên trang.
-- Trả về JSON thuần túy, không markdown, không giải thích.
+QUY TẮC NGHIÊM NGẶT CHỐNG LẤY SAI DỮ LIỆU:
+1. Nếu phần đầu có dòng "TIÊU ĐỀ SẢN PHẨM CHÍNH THỨC" và "GIÁ JPY CHÍNH THỨC TRONG HTML/JSON-LD", hãy ưu tiên tuyệt đối sản phẩm và mức giá đó!
+2. TUYỆT ĐỐI KHÔNG lấy giá vận chuyển (送料), giá giảm coupon (クーポン), ngưỡng freeship (3,980円以上送料無料) hay giá của các sản phẩm quảng cáo/gợi ý bên dưới (関連商品 / おすすめ商品).
+3. Dịch hoặc làm rõ "title" sang tiếng Việt tự nhiên kèm tên model/thương hiệu gốc dễ hiểu (ví dụ: "Nồi cơm điện cao tần Zojirushi NW-VH10 1.0L nội địa Nhật" hoặc "Mô hình Bandai RG 1/144 RX-78-2 Gundam Ver 2.0"), giữ tên tiếng Nhật gốc ở "titleJp".
+4. Phân loại "category" vào đúng 1 trong 8 danh mục: "cosmetics", "health", "gadgets", "anime", "fashion", "food", "luxury", "other".
 
 NỘI DUNG TRANG:
 ${contextText}
 
-JSON SCHEMA:
+BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
 {
-  "title": "string (tên sản phẩm rõ ràng, dễ hiểu)",
-  "titleJp": "string | null (tên gốc tiếng Nhật nếu có)",
-  "priceJpy": number,
-  "categoryBreadcrumb": "string | null (chuỗi mục loại sản phẩm đọc được từ trang)",
+  "title": "string",
+  "titleJp": "string | null",
+  "priceJpy": 0,
+  "categoryBreadcrumb": "string | null",
   "category": "cosmetics" | "health" | "gadgets" | "anime" | "fashion" | "food" | "luxury" | "other",
-  "variants": [{"label": "string", "priceJpy": number | null}],
-  "sellerRating": number | null,
-  "soldCount": number | null,
+  "variants": [{"label": "string", "priceJpy": null}],
+  "sellerRating": null,
+  "soldCount": null,
   "stockStatus": "available" | "sold_out" | "limited" | "unknown",
-  "voltageWarning": boolean,
-  "riskFlags": string[],
-  "imageUrl": "string (URL ảnh sản phẩm đầu tiên, để trống nếu không tìm thấy)"
+  "voltageWarning": false,
+  "riskFlags": [],
+  "imageUrl": ""
 }`;
 
-  try {
-    let response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: {
-            maxOutputTokens: 1024,
-            temperature: 0.2,
-          },
-        }),
-        signal: AbortSignal.timeout(15000),
-      }
-    );
+  const models = Array.from(
+    new Set([
+      GEMINI_MODELS?.lightweight || "gemini-2.5-flash-lite",
+      GEMINI_MODELS?.neoFallback || "gemini-2.0-flash",
+      GEMINI_MODELS?.neo || "gemini-2.5-flash",
+    ])
+  );
 
-    if (!response.ok) {
-      // Tự động gọi lại ngay với model gemini-2.5-flash
-      const fallbackResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+  for (const modelName of models) {
+    try {
+      const isGemini25 = modelName.includes("2.5");
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-              maxOutputTokens: 1024,
-              temperature: 0.2,
+              maxOutputTokens: 1536,
+              temperature: 0.1,
+              responseMimeType: "application/json",
+              ...(isGemini25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
             },
           }),
-          signal: AbortSignal.timeout(15000),
+          signal: AbortSignal.timeout(12000),
         }
       );
 
-      if (fallbackResponse.ok) {
-        response = fallbackResponse;
-      } else {
-        if ([401, 403, 429, 500, 503].includes(response.status)) {
-          scrapeKeyPool.markError(apiKey, response.status);
-        }
-        return null;
-      }
+      if (!response.ok) continue;
+
+      const data = await response.json();
+      const rawText: string =
+        data?.candidates?.[0]?.content?.parts
+          ?.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
+          ?.pop()?.text ?? "";
+
+      if (!rawText) continue;
+
+      const cleaned = rawText.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
+      const jsonStart = cleaned.indexOf("{");
+      const jsonEnd = cleaned.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1) continue;
+
+      const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+      const categoryVal = typeof parsed.category === "string" ? parsed.category.toLowerCase().trim() : "";
+      const validatedCategory = (VALID_JP_VN_CATEGORIES as string[]).includes(categoryVal)
+        ? (categoryVal as JpVnProductCategory)
+        : undefined;
+
+      return {
+        title:
+          typeof parsed.title === "string" && parsed.title.trim()
+            ? parsed.title.trim().slice(0, 200)
+            : undefined,
+        titleJp: typeof parsed.titleJp === "string" ? parsed.titleJp.trim().slice(0, 200) : null,
+        priceJpy:
+          typeof parsed.priceJpy === "number" && parsed.priceJpy >= 100
+            ? Math.round(parsed.priceJpy)
+            : 0,
+        category: validatedCategory,
+        categoryBreadcrumb:
+          typeof parsed.categoryBreadcrumb === "string" && parsed.categoryBreadcrumb.trim()
+            ? parsed.categoryBreadcrumb.trim().slice(0, 250)
+            : null,
+        variants: Array.isArray(parsed.variants)
+          ? parsed.variants
+              .slice(0, 10)
+              .filter(
+                (v: unknown): v is { label: string; priceJpy: number | null } =>
+                  Boolean(v && typeof (v as { label?: unknown }).label === "string")
+              )
+              .map((v) => ({
+                label: String(v.label).slice(0, 80),
+                priceJpy:
+                  typeof v.priceJpy === "number" && v.priceJpy > 0 ? Math.round(v.priceJpy) : null,
+              }))
+          : [],
+        sellerRating:
+          typeof parsed.sellerRating === "number" && parsed.sellerRating >= 0 && parsed.sellerRating <= 5
+            ? Number(parsed.sellerRating.toFixed(1))
+            : null,
+        soldCount:
+          typeof parsed.soldCount === "number" && parsed.soldCount >= 0
+            ? Math.round(parsed.soldCount)
+            : null,
+        stockStatus: (["available", "sold_out", "limited", "unknown"] as const).includes(
+          String(parsed.stockStatus) as any
+        )
+          ? (parsed.stockStatus as "available" | "sold_out" | "limited" | "unknown")
+          : "unknown",
+        voltageWarning: parsed.voltageWarning === true,
+        riskFlags: Array.isArray(parsed.riskFlags)
+          ? parsed.riskFlags.filter((f: unknown): f is string => typeof f === "string").slice(0, 5)
+          : [],
+        imageUrl:
+          typeof parsed.imageUrl === "string" && parsed.imageUrl.startsWith("https://")
+            ? (() => {
+                try {
+                  const u = new URL(parsed.imageUrl);
+                  return u.protocol === "https:" && !isPrivateHost(u.hostname) ? parsed.imageUrl : "";
+                } catch {
+                  return "";
+                }
+              })()
+            : "",
+      };
+    } catch (err) {
+      console.warn(`[ScrapeLink] Gemini (${modelName}) extraction error:`, err);
     }
-
-    const data = await response.json();
-    const rawText: string =
-      data?.candidates?.[0]?.content?.parts
-        ?.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
-        ?.pop()?.text ?? "";
-
-    if (!rawText) return null;
-
-    // Bóc tách JSON từ output Gemini
-    const cleaned = rawText.replace(/```(?:json)?\n?|\n?```/g, "").trim();
-
-    const jsonStart = cleaned.indexOf("{");
-    const jsonEnd = cleaned.lastIndexOf("}");
-    if (jsonStart === -1 || jsonEnd === -1) {
-      console.warn("[ScrapeLink] Gemini output không chứa JSON hợp lệ:", cleaned.slice(0, 100));
-      return null;
-    }
-
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
-    } catch (parseErr) {
-      console.warn("[ScrapeLink] JSON.parse thất bại:", parseErr);
-      return null;
-    }
-
-    const categoryVal = typeof parsed.category === "string" ? parsed.category.toLowerCase().trim() : "";
-    const validatedCategory = (VALID_JP_VN_CATEGORIES as string[]).includes(categoryVal)
-      ? (categoryVal as JpVnProductCategory)
-      : undefined;
-
-    return {
-      title:
-        typeof parsed.title === "string" && parsed.title.trim()
-          ? parsed.title.trim().slice(0, 200)
-          : undefined,
-      titleJp:
-        typeof parsed.titleJp === "string" ? parsed.titleJp.trim().slice(0, 200) : null,
-      priceJpy:
-        typeof parsed.priceJpy === "number" && parsed.priceJpy > 50
-          ? Math.round(parsed.priceJpy)
-          : 0,
-      category: validatedCategory,
-      categoryBreadcrumb:
-        typeof parsed.categoryBreadcrumb === "string" && parsed.categoryBreadcrumb.trim()
-          ? parsed.categoryBreadcrumb.trim().slice(0, 250)
-          : null,
-      variants: Array.isArray(parsed.variants)
-        ? parsed.variants
-            .slice(0, 10)
-            .filter(
-              (v: unknown): v is { label: string; priceJpy: number | null } =>
-                typeof (v as { label: unknown }).label === "string"
-            )
-            .map((v: { label: string; priceJpy: number | null }) => ({
-              label: String(v.label).slice(0, 80),
-              priceJpy:
-                typeof v.priceJpy === "number" && v.priceJpy > 0
-                  ? Math.round(v.priceJpy)
-                  : null,
-            }))
-        : [],
-      sellerRating:
-        typeof parsed.sellerRating === "number" &&
-        parsed.sellerRating >= 0 &&
-        parsed.sellerRating <= 5
-          ? Number(parsed.sellerRating.toFixed(1))
-          : null,
-      soldCount:
-        typeof parsed.soldCount === "number" && parsed.soldCount >= 0
-          ? Math.round(parsed.soldCount)
-          : null,
-      stockStatus: (["available", "sold_out", "limited", "unknown"] as const).includes(
-        String(parsed.stockStatus) as "available" | "sold_out" | "limited" | "unknown"
-      )
-        ? (parsed.stockStatus as "available" | "sold_out" | "limited" | "unknown")
-        : "unknown",
-      voltageWarning: parsed.voltageWarning === true,
-      riskFlags: Array.isArray(parsed.riskFlags)
-        ? parsed.riskFlags
-            .filter((f: unknown): f is string => typeof f === "string")
-            .slice(0, 5)
-        : [],
-      imageUrl:
-        typeof parsed.imageUrl === "string" && parsed.imageUrl.startsWith("https://")
-          ? (() => {
-              try {
-                const u = new URL(parsed.imageUrl);
-                return u.protocol === "https:" && !isPrivateHost(u.hostname) ? parsed.imageUrl : "";
-              } catch {
-                return "";
-              }
-            })()
-          : "",
-    };
-  } catch (err) {
-    console.warn("[ScrapeLink] Gemini extraction error:", err);
-    return null;
   }
+
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -766,6 +902,7 @@ export async function POST(req: NextRequest) {
         { status: 429, headers: { "Retry-After": String(retryAfter) } }
       );
     }
+
     const { url } = await req.json();
 
     if (!url || typeof url !== "string" || !url.startsWith("https://")) {
@@ -782,12 +919,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
     }
 
-    // BẢO MẬT (P1-07): Bắt buộc protocol === 'https:' và port === '' (chặn port nội bộ / bypass proxy)
     if (parsedUrl.protocol !== "https:" || parsedUrl.port !== "") {
-      return NextResponse.json({ error: "Chỉ chấp nhận URL HTTPS tiêu chuẩn không có cổng tùy chỉnh." }, { status: 400 });
+      return NextResponse.json(
+        { error: "Chỉ chấp nhận URL HTTPS tiêu chuẩn không có cổng tùy chỉnh." },
+        { status: 400 }
+      );
     }
 
-    // SSRF protection — block internal, link-local, cloud metadata & private IPv4/IPv6 addresses
     const hostname = parsedUrl.hostname.toLowerCase();
     if (isPrivateHost(hostname)) {
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
@@ -806,7 +944,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Xác định tên sàn
     const urlLower = url.toLowerCase();
     let storeName = "Website Nhật Bản";
     if (urlLower.includes("amazon.co.jp") || urlLower.includes("amazon.com") || urlLower.includes("amzn."))
@@ -826,101 +963,125 @@ export async function POST(req: NextRequest) {
     else if (urlLower.includes("yodobashi.com"))
       storeName = "Yodobashi JP";
 
-    // ── Bước 1: Lấy HTML trực tiếp từ web sàn Nhật (Hỗ trợ theo dõi tối đa 4 bước redirect) ──
+    // ── Bước 1: Chạy song song Direct HTML Fetch & Jina AI Reader để vừa nhanh vừa chống chặn Bot ──
     let directHtml = "";
-    try {
-      directHtml = await safeFetchHtmlWithRedirects(url, 4);
-    } catch (fetchErr) {
-      console.warn("[ScrapeLink] Direct fetch html error:", fetchErr);
-    }
+    let effectiveUrl = url;
 
-    // Bóc tách metadata có cấu trúc từ HTML gốc (Breadcrumbs, Price, Image, Title)
-    const htmlMeta = extractStructuredMetaFromHtml(directHtml, urlLower);
+    const directFetchPromise = safeFetchHtmlWithRedirects(url, 4)
+      .then((res) => {
+        directHtml = res.html;
+        if (res.finalUrl) effectiveUrl = res.finalUrl;
+      })
+      .catch((fetchErr) => {
+        console.warn("[ScrapeLink] Direct fetch html error:", fetchErr);
+      });
 
-    // Bổ trợ chuyên biệt cho Uniqlo JP qua API v5 nếu HTML tĩnh không có giá
-    if (urlLower.includes("uniqlo.com")) {
-      const uniqloMeta = await fetchUniqloProductApi(url);
-      if (uniqloMeta) {
-        if (uniqloMeta.title && !htmlMeta.title) htmlMeta.title = uniqloMeta.title;
-        if (uniqloMeta.priceJpy > 0 && !htmlMeta.priceJpy) htmlMeta.priceJpy = uniqloMeta.priceJpy;
-        if (uniqloMeta.imageUrl && !htmlMeta.imageUrl) htmlMeta.imageUrl = uniqloMeta.imageUrl;
-        if (uniqloMeta.breadcrumbs && !htmlMeta.breadcrumbs) htmlMeta.breadcrumbs = uniqloMeta.breadcrumbs;
-      }
-    }
-
-    // ── Bước 2: Lấy nội dung qua Jina AI Reader ──────────────────────────────
     let jinaText = "";
     let jinaImageUrl = "";
 
-    try {
-      const jinaHeaders: Record<string, string> = {
-        Accept: "text/plain",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "X-Locale": "ja-JP",
-        "X-Set-Cookie": "i18n-prefs=JPY; lc-acbjp=ja_JP",
-      };
-      if (process.env.JINA_API_KEY) {
-        jinaHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
-      }
+    const jinaFetchPromise = (async () => {
+      try {
+        const jinaHeaders: Record<string, string> = {
+          Accept: "text/plain",
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+          "X-Locale": "ja-JP",
+          "X-Set-Cookie": "i18n-prefs=JPY; lc-acbjp=ja_JP",
+        };
+        if (process.env.JINA_API_KEY) {
+          jinaHeaders["Authorization"] = `Bearer ${process.env.JINA_API_KEY}`;
+        }
 
-      const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
-        headers: jinaHeaders,
-        next: { revalidate: 1800 },
-        signal: AbortSignal.timeout(12000),
-      });
+        const jinaResponse = await fetch(`https://r.jina.ai/${url}`, {
+          headers: jinaHeaders,
+          signal: AbortSignal.timeout(11000),
+        });
 
-      if (jinaResponse.ok) {
-        jinaText = await jinaResponse.text();
-
-        // Lấy ảnh từ Jina reader header nếu có
-        const imageMatch =
-          jinaText.match(/!\[.*?\]\((https:\/\/.*?)\)/i) ||
-          jinaText.match(/Image\s*:\s*(https:\/\/\S+)/i);
-        if (imageMatch?.[1]) {
-          const rawImg = imageMatch[1];
-          try {
-            const u = new URL(rawImg);
-            if (u.protocol === "https:" && !isPrivateHost(u.hostname)) {
-              jinaImageUrl = rawImg;
-            }
-          } catch {
-            // bỏ qua URL ảnh lỗi
+        if (jinaResponse.ok) {
+          jinaText = await jinaResponse.text();
+          const imageMatch =
+            jinaText.match(/!\[[^\]]*\]\((https:\/\/[^)\s]+)\)/i) ||
+            jinaText.match(/Image\s*:\s*(https:\/\/\S+)/i);
+          if (imageMatch?.[1]) {
+            const rawImg = imageMatch[1];
+            try {
+              const u = new URL(rawImg);
+              if (
+                u.protocol === "https:" &&
+                !isPrivateHost(u.hostname) &&
+                !/logo|icon|sprite|banner|badge/i.test(rawImg)
+              ) {
+                jinaImageUrl = rawImg;
+              }
+            } catch {}
           }
         }
+      } catch (jinaErr) {
+        console.warn("[ScrapeLink] Jina AI reader error:", jinaErr);
       }
-    } catch (jinaErr) {
-      console.warn("[ScrapeLink] Jina AI reader error:", jinaErr);
+    })();
+
+    await Promise.allSettled([directFetchPromise, jinaFetchPromise]);
+
+    // Bóc tách metadata có cấu trúc từ HTML gốc
+    const htmlMeta = extractStructuredMetaFromHtml(directHtml, effectiveUrl.toLowerCase());
+
+    // Bổ trợ từ Jina Markdown nếu Direct HTML bị chặn Bot (trống title hoặc trống price)
+    if (jinaText && (!htmlMeta.title || !htmlMeta.priceJpy)) {
+      const jinaMeta = extractMetaFromJinaMarkdown(jinaText, effectiveUrl.toLowerCase());
+      if (!htmlMeta.title && jinaMeta.title) htmlMeta.title = jinaMeta.title;
+      if (!htmlMeta.priceJpy && jinaMeta.priceJpy && jinaMeta.priceJpy > 0) {
+        htmlMeta.priceJpy = jinaMeta.priceJpy;
+      }
     }
 
-    // ── Bước 3: Gọi Gemini Agent với nội dung tập trung (đã lọc rác menu) ──────
+    // Bổ trợ chuyên biệt cho Uniqlo JP qua API v5
+    if (urlLower.includes("uniqlo.com")) {
+      const uniqloMeta = await fetchUniqloProductApi(effectiveUrl);
+      if (uniqloMeta) {
+        if (uniqloMeta.title) htmlMeta.title = uniqloMeta.title;
+        if (uniqloMeta.priceJpy > 0) {
+          htmlMeta.priceJpy = uniqloMeta.priceJpy;
+          htmlMeta.highConfidencePrice = true;
+        }
+        if (uniqloMeta.imageUrl) htmlMeta.imageUrl = uniqloMeta.imageUrl;
+        if (uniqloMeta.breadcrumbs) htmlMeta.breadcrumbs = uniqloMeta.breadcrumbs;
+      }
+    }
+
+    // ── Bước 2: Gọi Gemini Agent với nội dung tập trung đã lọc bỏ sản phẩm liên quan ──
     let geminiResult: Partial<ExtractedProduct> | null = null;
     const focusedContext = buildFocusedScrapeContext(jinaText || directHtml, htmlMeta);
 
-    if (focusedContext.length > 50) {
-      geminiResult = await extractWithGemini(focusedContext, storeName, url);
+    if (focusedContext.length > 40) {
+      geminiResult = await extractWithGemini(focusedContext, storeName);
     }
 
-    // ── Bước 4: Hợp nhất kết quả ─────────────────────────────────────────────
+    // ── Bước 3: Hợp nhất kết quả thông minh (Khóa giá JSON-LD/DOM chuẩn để tránh AI lấy nhầm giá gợi ý) ──
     let finalTitle =
       geminiResult?.title ||
       htmlMeta.title ||
       `[${storeName}] Sản phẩm nội địa Nhật Bản`;
 
-    let finalPriceJpy = geminiResult?.priceJpy || htmlMeta.priceJpy || 0;
+    // QUAN TRỌNG: Nếu HTML/JSON-LD/NEXT_DATA của trang gốc đã bóc được giá độ tin cậy cao (highConfidencePrice),
+    // ưu tiên giữ giá đó thay vì để Gemini vô tình đọc nhầm giá sản phẩm quảng cáo trong văn bản Jina!
+    let finalPriceJpy = htmlMeta.highConfidencePrice && htmlMeta.priceJpy > 0
+      ? htmlMeta.priceJpy
+      : geminiResult?.priceJpy || htmlMeta.priceJpy || 0;
 
     let finalImageUrl =
+      htmlMeta.imageUrl ||
       (geminiResult?.imageUrl && geminiResult.imageUrl.startsWith("http")
         ? geminiResult.imageUrl
         : null) ||
-      htmlMeta.imageUrl ||
       jinaImageUrl ||
       "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
 
     let combinedBreadcrumb =
-      geminiResult?.categoryBreadcrumb || htmlMeta.breadcrumbs || null;
+      htmlMeta.breadcrumbs || geminiResult?.categoryBreadcrumb || null;
 
-    // Fallback thông minh: Nếu cào thất bại do sàn chặn bot/Cloudflare, nhưng URL trùng hoặc thuộc link mẫu của 8 sàn hỗ trợ
-    const sampleProduct = findSampleProductByUrl(url);
+    // Fallback thông minh cho các link mẫu của 8 sàn hỗ trợ
+    const sampleProduct = findSampleProductByUrl(effectiveUrl) || findSampleProductByUrl(url);
     if (sampleProduct) {
       if (!finalPriceJpy || finalPriceJpy <= 0) {
         finalPriceJpy = sampleProduct.samplePriceJpy;
@@ -936,13 +1097,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Cảnh báo điện áp: Gemini phát hiện OR title có "100V" OR sampleProduct is100v
     const voltageWarning =
       geminiResult?.voltageWarning === true ||
       /\b100V\b|AC100/i.test(finalTitle) ||
       sampleProduct?.is100v === true;
 
-    // Tự động thêm risk flag voltage nếu chưa có
     const riskFlags = [...(geminiResult?.riskFlags ?? [])];
     if (voltageWarning && !riskFlags.includes("voltage_100v")) {
       riskFlags.push("voltage_100v");
@@ -955,7 +1114,6 @@ export async function POST(req: NextRequest) {
       if (!riskFlags.includes("low_seller_rating")) riskFlags.push("low_seller_rating");
     }
 
-    // Phân loại danh mục chính xác dựa trên Breadcrumb cào từ trang gốc + Gemini + Từ khóa đa tầng
     const classification = classifyProductCategory({
       breadcrumbText: combinedBreadcrumb,
       title: finalTitle,
@@ -970,7 +1128,7 @@ export async function POST(req: NextRequest) {
       storeName,
       url,
       title: finalTitle,
-      titleJp: geminiResult?.titleJp ?? sampleProduct?.sampleProductTitleJp ?? null,
+      titleJp: geminiResult?.titleJp ?? (htmlMeta.title || sampleProduct?.sampleProductTitleJp || null),
       priceJpy: finalPriceJpy,
       priceDetected: finalPriceJpy > 0,
       variants: geminiResult?.variants ?? [],

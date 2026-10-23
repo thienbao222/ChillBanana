@@ -662,10 +662,12 @@ export default function AIChatBot() {
         const scale = Math.min(1, maxDimension / Math.max(image.naturalWidth, image.naturalHeight));
         canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
         canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
-        context.clearRect(0, 0, canvas.width, canvas.height);
+        // QUAN TRỌNG: Đổ nền trắng #FFFFFF trước khi vẽ ảnh để tranh vẽ PNG nền trong suốt không bị biến thành màu đen
+        context.fillStyle = "#FFFFFF";
+        context.fillRect(0, 0, canvas.width, canvas.height);
         context.drawImage(image, 0, 0, canvas.width, canvas.height);
-        compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
-        if (compressed && compressed.size <= 3 * 1024 * 1024) break;
+        compressed = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+        if (compressed && compressed.size <= 2.5 * 1024 * 1024) break;
         maxDimension = Math.round(maxDimension * 0.82);
       }
       if (!compressed || compressed.size > 3 * 1024 * 1024) {
@@ -734,17 +736,31 @@ export default function AIChatBot() {
 
       const catalogMatches = analysis.catalogMatches as {
         status?: "matched" | "no_match" | "unavailable" | "not_searched";
-        products?: Array<{ name: string; category: string; priceJpy: number }>;
+        products?: Array<{
+          id?: string;
+          name: string;
+          category: string;
+          priceJpy: number;
+          isExactMatch?: boolean;
+        }>;
       } | undefined;
       if (catalogMatches?.status === "matched" && catalogMatches.products?.length) {
-        replyText += "\n\n**Gợi ý gần trong danh mục ChillBanana (đối chiếu từ khóa, chưa xác nhận đúng sản phẩm):**\n";
+        const hasExact = catalogMatches.products.some((p) => p.isExactMatch);
+        if (hasExact) {
+          replyText += "\n\n✅ **Tìm thấy sản phẩm tương ứng ĐANG CÓ SẴN TẠI KHO ChillBanana:**\n";
+        } else {
+          replyText += "\n\n**Gợi ý gần trong danh mục ChillBanana (đối chiếu từ khóa, chưa xác nhận đúng sản phẩm):**\n";
+        }
         catalogMatches.products.forEach((product) => {
           const safeName = String(product.name || "Sản phẩm").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 120);
           const safeCategory = String(product.category || "Hàng Nhật").replace(/[\r\n<>\[\]()*_`!#>|]/g, " ").slice(0, 80);
           const safePrice = Number.isSafeInteger(product.priceJpy) && product.priceJpy > 0
-            ? `¥${product.priceJpy.toLocaleString("ja-JP")} (giá tham khảo trong danh mục)`
+            ? `¥${product.priceJpy.toLocaleString("ja-JP")}`
             : "giá cần kiểm tra";
-          replyText += `- **${safeName}** — ${safeCategory} · ${safePrice} · [Mở danh mục](/#products)\n`;
+          const link = product.isExactMatch
+            ? "[Xem tại Kho Sẵn Hàng](/#stock)"
+            : "[Mở danh mục](/#products)";
+          replyText += `- **${safeName}** — ${safeCategory} · Giá tại Nhật: **${safePrice}** · ${link}\n`;
         });
       } else if (catalogMatches?.status === "no_match") {
         replyText += "\n\nNeo chưa tìm thấy sản phẩm tương ứng trong danh mục ChillBanana. Từ khóa bên dưới chỉ mở kết quả tìm kiếm trên sàn Nhật; bạn có thể gửi thêm tên hoặc mã model để thu hẹp kết quả.\n";
