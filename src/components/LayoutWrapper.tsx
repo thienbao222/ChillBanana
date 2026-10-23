@@ -16,7 +16,7 @@ import { WebsitePreferencesProvider } from "@/context/WebsitePreferencesContext"
 export default function LayoutWrapper({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const isAdminRoute = pathname?.startsWith("/admin");
-  const isCosmosRoute = pathname === "/" || pathname === "/galaxy" || pathname === "/tracking";
+  const isCosmosRoute = pathname === "/" || pathname === "/galaxy" || pathname === "/tracking" || pathname === "/profile";
 
   if (isAdminRoute) {
     return <>{children}</>;
