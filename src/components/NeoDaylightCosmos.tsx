@@ -286,7 +286,7 @@ export default function NeoDaylightCosmos() {
       return;
     }
     const added = addToCart({
-      id: "calc-" + Date.now(),
+      id: selectedProductId || ("calc-" + Date.now()),
       name: productName.trim() || "Sản phẩm mua hộ từ Nhật Bản",
       priceJpy,
       priceVnd: productPriceVnd,
