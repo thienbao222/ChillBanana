@@ -1509,7 +1509,17 @@ export default function NeoDaylightCosmos() {
                   onChange={(e) => setIsGroupBuy(e.target.checked)}
                 />
                 <span>
-                  <b>{t("Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!")}</b><br />
+                  {baseOrderCost < pricingConfig.minimumBaseOrderVnd ? (
+                    <>
+                      <b style={{ color: "#b45309" }}>
+                        {t(`Giá trị đơn (${baseOrderCost.toLocaleString("vi-VN")} đ) chưa đạt hạn mức tối thiểu (${pricingConfig.minimumBaseOrderVnd.toLocaleString("vi-VN")} đ)`)}
+                      </b><br />
+                    </>
+                  ) : (
+                    <>
+                      <b>{t("Đơn hàng đã đạt hạn mức tối thiểu và đủ điều kiện vận chuyển chuyên biệt!")}</b><br />
+                    </>
+                  )}
                   {`Bật Chế Độ Gộp Đơn (Tiết kiệm ${pricingConfig.groupBuyShippingDiscountPercent}% cước vận chuyển cho kiện ≤ ${pricingConfig.groupBuyMaxWeightKg}kg)`}
                 </span>
               </label>
