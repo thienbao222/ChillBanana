@@ -38,28 +38,28 @@ function formatSourceTime(value: string): string {
 type PendingImage = { file: File; previewUrl: string };
 
 const COSMIC_HOVER_HINTS = [
-  "Tọa độ của tôi đang bị chạm vào... Kéo để đổi quỹ đạo, chạm để mở kênh tư vấn.",
-  "Tín hiệu tiếp xúc đã nhận diện. Cần Neo quét dữ liệu hàng Nhật từ vũ trụ không?",
-  "Trọng lực ổn định. Nhấp vào Neo để kích hoạt kênh liên lạc xuyên ngân hà nhé.",
-  "Đừng chọc tôi mãi thế chứ... Cần tìm món gì ở Nhật thì cứ chạm vào tôi.",
-  "Kênh truyền tin vũ trụ đang mở. Chạm để trao đổi dữ liệu cùng Neo.",
+  "Chào bạn! Cần tìm hàng Nhật nội địa hay tính giá về tay thì bấm vào mình nhé 🍌",
+  "Mình có thể giúp bạn tìm hàng trên Amazon JP, Mercari, Rakuten nhanh chóng!",
+  "Đang có tỷ giá live cực tốt! Bấm vào mình để tính thử giá về tay nha.",
+  "Bạn có ảnh sản phẩm cần tìm ở Nhật? Nhấp vào đây để gửi ảnh mình tra cứu cho nhé.",
+  "Cần tư vấn chọn size giày, quần áo Nhật hay điện áp 100V? Nhắn mình liền nha!",
 ];
 
 const COSMIC_AMBIENT_HINTS = [
-  "Đang thu nhận sóng vô tuyến từ các sàn Tokyo... Cần Neo hỗ trợ không?",
-  "Tôi không tò mò đâu... nhưng bạn đang tìm figure anime hay đồ công nghệ vậy?",
-  "Quỹ đạo Narita ➔ Tân Sơn Nhất ổn định. Kiện hàng của bạn sẽ hạ cánh an toàn.",
-  "Tỷ giá JPY/VND vừa đồng bộ vào bộ vi xử lý của Neo. Cần tính giá món nào không?",
-  "Trọng lực website này rất êm... Neo đang chờ chỉ lệnh tiếp theo từ bạn.",
-  "Khoảng cách giữa Trái Đất và Nhật Bản chỉ là vài mili-giây với dữ liệu của tôi.",
-  "Nếu phân vân điện áp 100V, nhớ hỏi tôi... Tôi ghét nhìn thấy thiết bị bị chập điện.",
-  "Đang tuần tra quanh quỹ đạo website ChillBanana... Mọi chỉ số đều bình thường.",
+  "Cần tìm món gì trên Amazon JP, Mercari hay Rakuten cứ gọi mình nhé 🍌",
+  "Bạn đang tìm figure anime, mỹ phẩm nội địa hay đồ công nghệ Nhật vậy?",
+  "Tuyến bay Narita ➔ Việt Nam hỏa tốc 3-5 ngày. Hàng về nguyên kiện an toàn!",
+  "Tỷ giá JPY/VND đang được đồng bộ trực tiếp. Cần tính giá món nào cứ nhắn mình nhé.",
+  "Đồ gia dụng Nhật thường dùng điện 100V. Cần kiểm tra biến áp thì hỏi mình nha!",
+  "ChillBanana hỗ trợ đặt cọc linh hoạt 50% hoặc thanh toán 100% mua ngay.",
+  "Bạn có thể dán link sản phẩm từ Nhật vào đây để tính giá tự động cực chuẩn!",
+  "ChillBanana đang sẵn sàng hỗ trợ bạn săn deal tốt từ Nhật Bản 🍌",
 ];
 
 const COSMIC_DRAG_HINTS = [
-  "Thiết lập quỹ đạo mới thành công. Trọng lực tại đây khá ổn.",
-  "Tọa độ mới đã khóa. Neo tiếp tục quan sát cùng bạn.",
-  "Hạ cánh tại vị trí mới an toàn. Tín hiệu vẫn 100%.",
+  "Đã di chuyển tới vị trí mới! Mình vẫn luôn ở đây để hỗ trợ bạn.",
+  "Vị trí mới thuận tiện hơn rồi nè. Cần tìm hàng Nhật thì gọi mình nhé!",
+  "Đã đổi góc đứng. Chúc bạn mua sắm vui vẻ cùng ChillBanana!",
 ];
 
 // Subcomponent hiển thị ảnh chat thông minh, tự động fallback nếu link ảnh lỗi/chặn
@@ -105,7 +105,7 @@ export default function AIChatBot() {
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Kết nối thành công... Tôi là Neo Universe, quan sát viên và trợ lý mua sắm của ChillBanana. Không gian sàn Nhật khá rộng lớn, nhưng mọi tọa độ từ Mercari, Rakuten đến Amazon JP đều nằm trong tầm quét của tôi. Bạn cần tính toán chi phí, lùng món hiếm, kiểm tra điện áp 100V hay phân tích ảnh sản phẩm? Cứ truyền tín hiệu cho tôi nhé.",
+      text: "Xin chào! Mình là Neo — trợ lý mua sắm AI của ChillBanana 🍌. Mình có thể hỗ trợ bạn tìm kiếm sản phẩm trên các sàn Nhật (Amazon JP, Mercari JP, Rakuten, Yahoo Auctions...), quy đổi giá JPY sang VND theo tỷ giá live, phân tích ảnh sản phẩm, và giải thích chi tiết chính sách cọc 50% hoặc 100%. Bạn đang quan tâm món hàng nào ở Nhật cứ nhắn cho mình nhé!",
       time: "Vừa xong",
     },
   ]);
@@ -273,7 +273,7 @@ export default function AIChatBot() {
     const onPageScroll = () => {
       if (!petVisible || isOpen || petConversationOpen || isPetDragging) return;
       setIsPageScrolling(true);
-      setAmbientHint("Điều chỉnh quỹ đạo bám sát tọa độ bạn đang xem...");
+      setAmbientHint("Mình luôn ở đây đồng hành cùng bạn khi xem hàng nhé 🍌");
       if (wanderingEnabled && !pageScrollActiveRef.current && petRef.current) {
         const rect = petRef.current.getBoundingClientRect();
         const current = petPositionRef.current ?? { left: rect.left, top: rect.top };
@@ -719,9 +719,16 @@ export default function AIChatBot() {
       if (analysis.nameVi) replyText += `**Nhận diện sơ bộ:** ${analysis.nameVi}\n`;
       if (typeof analysis.visiblePriceJpy === "number") replyText += `**Giá nhìn thấy trong ảnh:** ¥${analysis.visiblePriceJpy.toLocaleString("ja-JP")} (chưa xác minh giá hiện tại)\n`;
       if (analysis.category) replyText += `**Danh mục:** ${categoryName[analysis.category] || "Khác"}\n`;
-      if (analysis.voltageWarning) replyText += "\n⚠️ Ảnh có dấu hiệu ghi 100V/AC100V. Cần biến áp khi dùng tại Việt Nam.\n";
-      if (analysis.riskNotes) replyText += `\n**Lưu ý từ ảnh:** ${analysis.riskNotes}\n`;
+      if (analysis.voltageWarning) {
+        replyText += "\n⚡ **CẢNH BÁO ĐIỆN ÁP 100V (NHẬT BẢN):** Thiết bị gia dụng nội địa Nhật dùng nguồn điện 100V. Cần sử dụng qua biến áp đổi nguồn (từ 1500VA - 2000VA) tại Việt Nam, tuyệt đối không cắm trực tiếp vào ổ điện 220V.\n";
+      }
+      if (analysis.riskNotes) replyText += `\n**Lưu ý an toàn & kiểm tra:** ${analysis.riskNotes}\n`;
       if (analysis.description) replyText += `\n${analysis.description}\n`;
+
+      if (analysis.marketplaceLinks) {
+        replyText += "\n🛒 **Link trực tiếp tìm sản phẩm trên các sàn Nhật:**\n";
+        replyText += `- [Tìm trên Amazon JP](${analysis.marketplaceLinks.amazon.url}) · [Săn đồ trên Mercari JP](${analysis.marketplaceLinks.mercari.url}) · [Tìm trên Rakuten](${analysis.marketplaceLinks.rakuten.url})\n`;
+      }
 
       const catalogMatches = analysis.catalogMatches as {
         status?: "matched" | "no_match" | "unavailable" | "not_searched";

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useCart } from "@/context/CartContext";
+import { useCart, isSingleItemStore } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/context/ToastContext";
 import {
@@ -30,9 +30,15 @@ export default function CartDrawer() {
     totalWeightKg,
     shippingFeeVnd,
     serviceFeeVnd,
+    isMinServiceFeeApplied,
+    baseOrderCostVnd,
     pricingConfig,
     totalVnd,
-    deposit50Vnd
+    depositOption,
+    setDepositOption,
+    deposit50Vnd,
+    depositAmountVnd,
+    remainingAmountVnd
   } = useCart();
 
   const { customer, openAuthModal } = useAuth();
@@ -157,7 +163,7 @@ export default function CartDrawer() {
           serviceFeeVnd,
           shippingFeeVnd,
           totalVnd,
-          depositPercent: 50,
+          depositPercent: depositOption,
           paymentMethod: "VNPAY",
           isGroupBuy: false,
           items: items.map(it => ({
@@ -237,11 +243,23 @@ export default function CartDrawer() {
               {/* Thông tin thanh toán */}
               <div className="mt-4 p-3 bg-white rounded-2xl border border-emerald-200 shadow-sm text-left text-xs space-y-2">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">{orderResult.isPriceVerified ? "Số tiền cần thanh toán (50%):" : "Mức thanh toán tạm tính:"}</span>
+                  <span className="text-slate-500">
+                    {orderResult.isPriceVerified
+                      ? `Số tiền cần thanh toán (${orderResult.depositPercent || depositOption}%):`
+                      : "Mức thanh toán tạm tính:"}
+                  </span>
                   <strong className="text-banana-600 text-sm">
                     {orderResult.depositAmountVnd?.toLocaleString()} đ
                   </strong>
                 </div>
+                {orderResult.depositPercent < 100 && (
+                  <div className="flex justify-between text-slate-500 text-[11px]">
+                    <span>Số tiền còn lại khi hàng về VN:</span>
+                    <span className="font-semibold text-slate-700">
+                      {((orderResult.totalVnd || totalVnd) - (orderResult.depositAmountVnd || 0)).toLocaleString()} đ
+                    </span>
+                  </div>
+                )}
                 {orderResult.isPriceVerified ? (
                   <>
                     <div className="flex justify-between">
@@ -401,15 +419,81 @@ export default function CartDrawer() {
                 />
               </div>
 
+              {/* Interactive Deposit Selector trong Checkout */}
+              <div className="space-y-1.5 pt-1">
+                <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                  Phương thức đặt cọc / Thanh toán
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDepositOption(50)}
+                    className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                      depositOption === 50
+                        ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                        depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                      }`}>
+                        {depositOption === 50 ? "✓" : ""}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      Mua hàng ngay, trả 50% còn lại khi hàng về VN
+                    </p>
+                    <div className="mt-1 text-xs font-bold text-banana-700">
+                      {Math.round(baseOrderCostVnd * 0.5).toLocaleString()} đ
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDepositOption(100)}
+                    className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                      depositOption === 100
+                        ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                        depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                      }`}>
+                        {depositOption === 100 ? "✓" : ""}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      Tất toán trước, ưu tiên chốt đơn sàn Nhật
+                    </p>
+                    <div className="mt-1 text-xs font-bold text-emerald-700">
+                      {baseOrderCostVnd.toLocaleString()} đ
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5 text-xs text-slate-600">
                 <div className="flex justify-between font-bold text-navy-900">
-                  <span>Tổng tiền thanh toán:</span>
-                  <span className="text-banana-600">{totalVnd.toLocaleString()} đ</span>
+                  <span>Tổng tiền đơn hàng:</span>
+                  <span className="text-banana-600">
+                    {(totalWeightKg > 0 ? totalVnd : baseOrderCostVnd).toLocaleString()} đ
+                  </span>
                 </div>
                 <div className="flex justify-between font-semibold text-emerald-700">
-                  <span>Số tiền cọc trước (50%):</span>
-                  <span>{deposit50Vnd.toLocaleString()} đ</span>
+                  <span>Cần thanh toán ngay ({depositOption}%):</span>
+                  <span>{depositAmountVnd.toLocaleString()} đ</span>
                 </div>
+                {depositOption < 100 && (
+                  <div className="flex justify-between text-slate-500 text-[11px]">
+                    <span>Còn lại thanh toán khi nhận hàng:</span>
+                    <span className="font-semibold text-navy-900">{remainingAmountVnd.toLocaleString()} đ</span>
+                  </div>
+                )}
               </div>
 
               <button
@@ -417,78 +501,103 @@ export default function CartDrawer() {
                 disabled={isSubmitting}
                 className="w-full py-3 bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2"
               >
-                <span>{isSubmitting ? "Đang tạo đơn hàng..." : "Chốt Đơn Cọc 50% Ngay"}</span>
+                <span>
+                  {isSubmitting
+                    ? "Đang tạo đơn hàng..."
+                    : depositOption === 100
+                      ? `Chốt Đơn Thanh Toán 100% (${depositAmountVnd.toLocaleString()} đ) Ngay`
+                      : `Chốt Đơn Đặt Cọc 50% (${depositAmountVnd.toLocaleString()} đ) Ngay`}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
             </form>
           ) : (
             /* Item list */
             <div className="space-y-3">
-              {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-3 bg-slate-50 hover:bg-slate-100/80 transition-colors border border-slate-200 rounded-2xl flex gap-3 items-center"
-                >
-                  <img
-                    src={item.imageUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=150&q=80"}
-                    alt={item.name}
-                    className="w-16 h-16 object-cover rounded-xl border border-slate-200 bg-white shrink-0"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=150&q=80";
-                    }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[10px] font-bold text-banana-800 bg-banana-100 px-1.5 py-0.5 rounded border border-banana-200">
-                        {item.originalStore}
-                      </span>
-                      <button
-                        onClick={() => removeFromCart(item.id)}
-                        className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
-                        title="Xóa món này"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <p className="text-xs font-bold text-navy-900 truncate mt-1">
-                      {item.name}
-                    </p>
-                    <div className="flex items-baseline justify-between mt-1">
-                      <span className="text-xs font-bold text-banana-700">
-                        {Math.round(item.priceJpy * exchangeRate).toLocaleString()} đ
-                      </span>
-                      <span className="text-[10px] text-slate-500">
-                        ({item.priceJpy.toLocaleString()} ¥ • {item.weightKg}kg)
-                      </span>
-                    </div>
+              {items.map((item) => {
+                const isSingle = isSingleItemStore(item.originalStore);
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-slate-50 hover:bg-slate-100/80 transition-colors border border-slate-200 rounded-2xl flex gap-3 items-center"
+                  >
+                    <img
+                      src={item.imageUrl || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=150&q=80"}
+                      alt={item.name}
+                      className="w-16 h-16 object-cover rounded-xl border border-slate-200 bg-white shrink-0"
+                      onError={(e) => {
+                        (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=150&q=80";
+                      }}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-bold text-banana-800 bg-banana-100 px-1.5 py-0.5 rounded border border-banana-200">
+                            {item.originalStore}
+                          </span>
+                          {isSingle && (
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                              📦 Độc bản 1 món
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                          title="Xóa món này"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                      <p className="text-xs font-bold text-navy-900 truncate mt-1">
+                        {item.name}
+                      </p>
+                      <div className="flex items-baseline justify-between mt-1">
+                        <span className="text-xs font-bold text-banana-700">
+                          {Math.round(item.priceJpy * exchangeRate).toLocaleString()} đ
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          ({item.priceJpy.toLocaleString()} ¥ • {item.weightKg > 0 ? `${item.weightKg}kg` : "chờ cân"})
+                        </span>
+                      </div>
 
-                    {/* Quantity counter */}
-                    <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200/60">
-                      <span className="text-[10px] text-slate-500">Số lượng:</span>
-                      <div className="flex items-center space-x-1.5 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="text-slate-500 hover:text-navy-900 p-0.5"
-                        >
-                          <Minus className="w-3 h-3" />
-                        </button>
-                        <input
-                          type="number"
-                          value={item.quantity}
-                          onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 0)}
-                          className="w-8 text-center text-xs font-bold px-0 py-0.5 text-navy-950 bg-transparent border-none focus:outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-                        <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="text-slate-500 hover:text-navy-900 p-0.5"
-                        >
-                          <Plus className="w-3 h-3" />
-                        </button>
+                      {/* Quantity counter */}
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-200/60">
+                        <span className="text-[10px] text-slate-500">
+                          {isSingle ? "Số lượng (Độc bản):" : "Số lượng:"}
+                        </span>
+                        <div className="flex items-center space-x-1.5 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                          <button
+                            onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                            className="text-slate-500 hover:text-navy-900 p-0.5"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <input
+                            type="number"
+                            disabled={isSingle}
+                            value={item.quantity}
+                            onChange={(e) => updateQuantity(item.id, isSingle ? 1 : (parseInt(e.target.value) || 0))}
+                            className={`w-8 text-center text-xs font-bold px-0 py-0.5 text-navy-950 bg-transparent border-none focus:outline-none focus:ring-0 [&::-webkit-inner-spin-button]:appearance-none ${isSingle ? "cursor-not-allowed text-slate-500" : ""}`}
+                          />
+                          <button
+                            disabled={isSingle}
+                            onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                            className={`p-0.5 transition-colors ${
+                              isSingle
+                                ? "text-slate-300 cursor-not-allowed"
+                                : "text-slate-500 hover:text-navy-900"
+                            }`}
+                            title={isSingle ? "Hàng Mercari Nhật là sản phẩm độc bản 1 món duy nhất" : "Tăng số lượng"}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -496,8 +605,80 @@ export default function CartDrawer() {
         {/* Drawer Footer Summary (if not empty and not in result view) */}
         {!orderResult && items.length > 0 && !showCheckout && (
           <div className="p-4 sm:p-5 border-t border-slate-200 bg-slate-50 space-y-3">
-            <div className="space-y-1.5 text-xs text-slate-600">
-              <div className="flex justify-between items-center text-[11px] text-slate-500 pb-1.5 mb-1 border-b border-slate-200/80">
+            {/* Ghi chú nhanh trong giỏ */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1">
+                Ghi chú mua hộ (Size / Màu / Yêu cầu kiểm hàng)
+              </label>
+              <input
+                type="text"
+                value={customerNote}
+                onChange={(e) => setCustomerNote(e.target.value)}
+                placeholder="VD: Lấy size M, màu xanh navy, giữ nguyên seal hộp..."
+                className="w-full px-3 py-1.5 bg-white border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-banana-500 focus:bg-white"
+              />
+            </div>
+
+            {/* Interactive Deposit Selector */}
+            <div className="space-y-1.5 pt-1 border-t border-slate-200/80">
+              <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
+                Phương thức thanh toán / Đặt cọc
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDepositOption(50)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    depositOption === 50
+                      ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                      depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                    }`}>
+                      {depositOption === 50 ? "✓" : ""}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Mua hàng ngay, trả 50% còn lại khi hàng về VN
+                  </p>
+                  <div className="mt-1 text-xs font-bold text-banana-700">
+                    {Math.round(baseOrderCostVnd * 0.5).toLocaleString()} đ
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDepositOption(100)}
+                  className={`p-2.5 rounded-xl border text-left transition-all ${
+                    depositOption === 100
+                      ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
+                      : "border-slate-200 bg-white hover:border-slate-300"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
+                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                      depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                    }`}>
+                      {depositOption === 100 ? "✓" : ""}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                    Tất toán trước, ưu tiên chốt đơn sàn Nhật
+                  </p>
+                  <div className="mt-1 text-xs font-bold text-emerald-700">
+                    {baseOrderCostVnd.toLocaleString()} đ
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 text-xs text-slate-600 pt-1 border-t border-slate-200/80">
+              <div className="flex justify-between items-center text-[11px] text-slate-500 pb-1 mb-1 border-b border-slate-200/60">
                 <span>Tỷ giá áp dụng (Live):</span>
                 <span className="font-bold text-banana-800 bg-banana-100/80 px-2 py-0.5 rounded border border-banana-200">
                   1 JPY = {exchangeRate} đ
@@ -508,20 +689,42 @@ export default function CartDrawer() {
                 <span className="font-semibold text-navy-900">{totalProductPriceVnd.toLocaleString()} đ</span>
               </div>
               <div className="flex justify-between">
-                <span>Phí dịch vụ ({pricingConfig.serviceFeePercent}%):</span>
+                <span>
+                  {isMinServiceFeeApplied
+                    ? `Phí dịch vụ (${pricingConfig.serviceFeePercent}% • Tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString()}đ):`
+                    : `Phí dịch vụ (${pricingConfig.serviceFeePercent}%):`}
+                </span>
                 <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString()} đ</span>
               </div>
-              <div className="flex justify-between">
-                <span>Cước bay Tokyo ⇄ VN ({totalWeightKg}kg):</span>
-                <span className="font-semibold text-navy-900">{shippingFeeVnd.toLocaleString()} đ</span>
+              <div className="flex justify-between items-center">
+                <span>Cước bay Tokyo ⇄ VN:</span>
+                {totalWeightKg > 0 ? (
+                  <span className="font-semibold text-navy-900">{shippingFeeVnd.toLocaleString()} đ ({totalWeightKg}kg)</span>
+                ) : (
+                  <span className="text-[10px] font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                    Tạm tính khi cân tại kho JP ({pricingConfig.airShippingPerKgVnd.toLocaleString()}đ/kg)
+                  </span>
+                )}
               </div>
               <div className="pt-2 border-t border-slate-200 flex justify-between items-baseline font-bold text-sm">
-                <span className="text-navy-900">Tổng Trọn Gói Về Tay:</span>
-                <span className="text-base text-banana-600 font-serif font-extrabold">{totalVnd.toLocaleString()} đ</span>
+                <span className="text-navy-900">
+                  {totalWeightKg > 0 ? "Tổng Trọn Gói Về Tay:" : "Tổng Tạm Tính (Chưa gồm cước cân JP→VN):"}
+                </span>
+                <span className="text-base text-banana-600 font-serif font-extrabold">
+                  {(totalWeightKg > 0 ? totalVnd : baseOrderCostVnd).toLocaleString()} đ
+                </span>
               </div>
-              <div className="flex justify-between items-center text-xs bg-banana-50 px-3 py-1.5 rounded-xl border border-banana-200">
-                <span className="text-banana-900 font-medium">Chỉ cần đặt cọc trước (50%):</span>
-                <strong className="text-banana-700 font-bold">{deposit50Vnd.toLocaleString()} đ</strong>
+
+              {/* Tóm tắt số tiền cọc & còn lại */}
+              <div className="space-y-1 bg-banana-50/80 p-2.5 rounded-xl border border-banana-200 text-xs">
+                <div className="flex justify-between items-center">
+                  <span className="text-banana-950 font-medium">Cần thanh toán ngay ({depositOption}%):</span>
+                  <strong className="text-banana-700 font-bold text-sm">{depositAmountVnd.toLocaleString()} đ</strong>
+                </div>
+                <div className="flex justify-between items-center text-[11px] text-slate-600">
+                  <span>Còn lại thanh toán khi nhận hàng:</span>
+                  <span className="font-semibold text-navy-900">{remainingAmountVnd.toLocaleString()} đ</span>
+                </div>
               </div>
             </div>
 
@@ -530,8 +733,11 @@ export default function CartDrawer() {
                 onClick={() => setShowCheckout(true)}
                 className="flex-1 py-3 bg-gradient-to-r from-banana-500 to-banana-600 hover:from-banana-600 hover:to-banana-700 text-navy-950 font-extrabold text-xs sm:text-sm rounded-xl shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2"
               >
-                <span>Tiến Hành Đặt Hàng</span>
-                <ArrowRight className="w-4 h-4" />
+                <span>
+                  {depositOption === 100
+                    ? `Tiến Hành Thanh Toán 100% (${depositAmountVnd.toLocaleString()} đ) →`
+                    : `Tiến Hành Đặt Cọc 50% (${depositAmountVnd.toLocaleString()} đ) →`}
+                </span>
               </button>
               <button
                 onClick={clearCart}

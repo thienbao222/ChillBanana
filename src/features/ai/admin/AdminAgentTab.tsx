@@ -47,7 +47,17 @@ export default function AdminAgentTab({ initialModule = "overview" }: { initialM
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [operationalData, setOperationalData] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    fetch("/api/admin/ai-analytics")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.overview) setOperationalData(data);
+      })
+      .catch(() => { /* silent fallback */ });
+  }, []);
 
   useEffect(() => {
     setModuleId(initialModule);
@@ -66,9 +76,8 @@ export default function AdminAgentTab({ initialModule = "overview" }: { initialM
     setError("");
   };
 
-  const askAgent = async (event: FormEvent) => {
-    event.preventDefault();
-    const cleanQuestion = question.trim();
+  const executePrompt = async (promptText: string) => {
+    const cleanQuestion = promptText.trim();
     if (!cleanQuestion || loading) return;
     const currentHistory = messages.map(({ role, content }) => ({ role, content }));
     setQuestion("");
@@ -95,6 +104,11 @@ export default function AdminAgentTab({ initialModule = "overview" }: { initialM
     } finally {
       setLoading(false);
     }
+  };
+
+  const askAgent = async (event: FormEvent) => {
+    event.preventDefault();
+    void executePrompt(question);
   };
 
   const activeModule = ADMIN_AI_MODULES.find((item) => item.id === moduleId)!;
@@ -147,14 +161,232 @@ export default function AdminAgentTab({ initialModule = "overview" }: { initialM
 
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
             {messages.length === 0 ? (
-              <div className="mx-auto max-w-2xl py-5 text-center">
-                <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-banana-100 text-banana-700"><Sparkles className="h-6 w-6" /></div>
-                <h4 className="font-bold text-slate-800">Bạn muốn xem điều gì về {activeModule.label.toLowerCase()}?</h4>
-                <p className="mt-1 text-xs text-slate-500">Câu trả lời dựa trên số liệu website đang lưu, không tự tra cứu dữ liệu thị trường bên ngoài.</p>
-                <div className="mt-4 flex flex-wrap justify-center gap-2">
-                  {quickPrompts[moduleId].map((prompt) => (
-                    <button key={prompt} type="button" onClick={() => setQuestion(prompt)} className="rounded-full border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:border-banana-300 hover:bg-banana-50">{prompt}</button>
-                  ))}
+              <div className="mx-auto max-w-4xl py-4 space-y-6">
+                {/* Active AI Ops: Live Operational Cards */}
+                <div>
+                  <div className="flex items-center justify-between mb-3 px-1">
+                    <span className="text-xs font-bold text-navy-900 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-3.5 w-3.5 text-banana-600" />
+                      Trung Tâm Điều Hành Nghiệp Vụ Tức Thời (Live Operational Ops)
+                    </span>
+                    <span className="text-[10px] text-slate-400">Dữ liệu thời gian thực</span>
+                  </div>
+
+                  {moduleId === "orders" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                            <span>Đơn chờ cọc &gt; 3 ngày</span>
+                            <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px]">Cần nhắc</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-amber-950">
+                            {operationalData?.operationalAlerts?.orders?.pendingDepositOver3Days ?? "..."} <span className="text-xs font-normal">đơn</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-amber-800/80">Khách chưa hoàn tất cọc 50% sau 72 giờ.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Liệt kê các đơn hàng đang ở trạng thái chờ cọc quá 3 ngày và đề xuất hành động xử lý.")}
+                          className="mt-3 w-full rounded-xl bg-amber-900 text-white py-1.5 text-xs font-bold hover:bg-amber-800 transition">
+                          AI phân tích &amp; xử lý →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-blue-900">
+                            <span>Đơn chờ mua tại Nhật</span>
+                            <span className="rounded-full bg-blue-200 px-2 py-0.5 text-[10px]">Mua hộ</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-blue-950">
+                            {operationalData?.operationalAlerts?.orders?.purchasingJp ?? "..."} <span className="text-xs font-normal">đơn</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-blue-800/80">Đã cọc thành công, đang trong hàng đợi buyout.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Kiểm tra tiến độ các đơn hàng đã cọc đang chờ mua tại Nhật Bản (PURCHASING_JP).")}
+                          className="mt-3 w-full rounded-xl bg-blue-900 text-white py-1.5 text-xs font-bold hover:bg-blue-800 transition">
+                          Kiểm tra tác vụ mua →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-rose-900">
+                            <span>Đơn thiếu cân nặng (0kg)</span>
+                            <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px]">Cần cân</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-rose-950">
+                            {operationalData?.operationalAlerts?.orders?.unweighedOrders ?? "..."} <span className="text-xs font-normal">đơn</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-rose-800/80">Cần cân thực tế tại kho JP trước khi bay.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Rà soát các đơn hàng chưa có cân nặng thực tế tại kho Nhật Bản để cập nhật cước bay.")}
+                          className="mt-3 w-full rounded-xl bg-rose-900 text-white py-1.5 text-xs font-bold hover:bg-rose-800 transition">
+                          Rà soát cân nặng →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(moduleId === "trends" || moduleId === "customers") && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-purple-200 bg-purple-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-purple-900">
+                            <span>Lead Nóng từ AI Chat</span>
+                            <span className="rounded-full bg-purple-200 px-2 py-0.5 text-[10px]">Hot Lead</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-purple-950">
+                            {operationalData?.operationalAlerts?.customersAndLeads?.hotLeads ?? "..."} <span className="text-xs font-normal">khách</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-purple-800/80">Khách đã hỏi giá/gửi ảnh nhưng chưa lên đơn.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Tóm tắt danh sách Lead nóng từ chat AI chưa lên đơn hàng để nhân viên tư vấn chốt đơn.")}
+                          className="mt-3 w-full rounded-xl bg-purple-900 text-white py-1.5 text-xs font-bold hover:bg-purple-800 transition">
+                          Mở danh sách Hot Leads →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-amber-900">
+                            <span>Phiên chat cần hỗ trợ</span>
+                            <span className="rounded-full bg-amber-200 px-2 py-0.5 text-[10px]">Can thiệp</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-amber-950">
+                            {operationalData?.operationalAlerts?.customersAndLeads?.stuckSessions ?? "..."} <span className="text-xs font-normal">phiên</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-amber-800/80">Khách có phản hồi phàn nàn hoặc cần nhân viên tiếp quản.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Có những phiên chat nào khách đang phàn nàn hoặc cần nhân viên can thiệp trực tiếp?")}
+                          className="mt-3 w-full rounded-xl bg-amber-900 text-white py-1.5 text-xs font-bold hover:bg-amber-800 transition">
+                          Xem phiên cần hỗ trợ →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                            <span>Khách hàng thành viên</span>
+                            <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px]">Hệ thống</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-emerald-950">
+                            {operationalData?.operationalAlerts?.customersAndLeads?.totalCustomers ?? "..."} <span className="text-xs font-normal">thành viên</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-emerald-800/80">Đã đăng ký tài khoản trên nền tảng.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Tóm tắt tình hình khách hàng đăng ký và tỷ lệ chuyển đổi sang đơn hàng trong 30 ngày qua.")}
+                          className="mt-3 w-full rounded-xl bg-emerald-900 text-white py-1.5 text-xs font-bold hover:bg-emerald-800 transition">
+                          Phân tích hành vi khách →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {(moduleId === "overview" || moduleId === "reports") && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-emerald-900">
+                            <span>Tiền cọc thực thu (JP ➔ VN)</span>
+                            <span className="rounded-full bg-emerald-200 px-2 py-0.5 text-[10px]">Mua hộ</span>
+                          </div>
+                          <div className="mt-2 text-xl font-bold font-mono text-emerald-950">
+                            {Number(operationalData?.overview?.jpVnCollectedRevenueVnd || 0).toLocaleString("vi-VN")} <span className="text-xs font-normal">đ</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-emerald-800/80">Cọc 50% / thanh toán 100% đã xác nhận.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Giải thích doanh thu tiền cọc thực thu và đối chiếu với giá trị đơn ước tính.")}
+                          className="mt-3 w-full rounded-xl bg-emerald-900 text-white py-1.5 text-xs font-bold hover:bg-emerald-800 transition">
+                          Báo cáo doanh thu →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-blue-900">
+                            <span>Cước bay (VN ➔ JP)</span>
+                            <span className="rounded-full bg-blue-200 px-2 py-0.5 text-[10px]">Vận chuyển</span>
+                          </div>
+                          <div className="mt-2 text-xl font-bold font-mono text-blue-950">
+                            {Number(operationalData?.overview?.vnJpCollectedRevenueVnd || 0).toLocaleString("vi-VN")} <span className="text-xs font-normal">đ</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-blue-800/80">Vận chuyển ký gửi chiều đi Nhật.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Báo cáo số liệu vận chuyển hàng không chiều Việt Nam đi Nhật Bản.")}
+                          className="mt-3 w-full rounded-xl bg-blue-900 text-white py-1.5 text-xs font-bold hover:bg-blue-800 transition">
+                          Xem chi tiết tuyến bay →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-indigo-200 bg-indigo-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-indigo-900">
+                            <span>Tổng đơn toàn hệ thống</span>
+                            <span className="rounded-full bg-indigo-200 px-2 py-0.5 text-[10px]">2 chiều</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-indigo-950">
+                            {operationalData?.overview?.totalOrdersAllTime ?? "..."} <span className="text-xs font-normal">đơn</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-indigo-800/80">Bao gồm cả đơn mua hộ JP và vận đơn VN-JP.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Tóm tắt tình hình hiện tại và các điểm cần chú ý nhất trong vận hành.")}
+                          className="mt-3 w-full rounded-xl bg-indigo-900 text-white py-1.5 text-xs font-bold hover:bg-indigo-800 transition">
+                          Đánh giá hiệu quả →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {moduleId === "products" && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-rose-900">
+                            <span>Sản phẩm sắp hết suất (≤ 2 slot)</span>
+                            <span className="rounded-full bg-rose-200 px-2 py-0.5 text-[10px]">Cảnh báo</span>
+                          </div>
+                          <div className="mt-2 text-2xl font-bold font-mono text-rose-950">
+                            {operationalData?.operationalAlerts?.products?.lowSlots ?? "..."} <span className="text-xs font-normal">sản phẩm</span>
+                          </div>
+                          <p className="mt-1 text-[11px] text-rose-800/80">Cần bổ sung suất hiển thị hoặc cập nhật catalog.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Sản phẩm nào đang còn ít hơn 2 suất hiển thị trên website?")}
+                          className="mt-3 w-full rounded-xl bg-rose-900 text-white py-1.5 text-xs font-bold hover:bg-rose-800 transition">
+                          Xem sản phẩm ít suất →
+                        </button>
+                      </div>
+
+                      <div className="rounded-2xl border border-banana-300 bg-banana-50/70 p-4 shadow-sm flex flex-col justify-between">
+                        <div>
+                          <div className="flex items-center justify-between text-xs font-bold text-banana-950">
+                            <span>Sản phẩm có nhiều đơn đặt</span>
+                            <span className="rounded-full bg-banana-200 px-2 py-0.5 text-[10px]">Top Bán Chạy</span>
+                          </div>
+                          <div className="mt-2 text-base font-bold text-navy-950">
+                            Thống kê 30 ngày qua
+                          </div>
+                          <p className="mt-1 text-[11px] text-slate-600">Nhóm sản phẩm được khách chọn mua nhiều nhất.</p>
+                        </div>
+                        <button type="button" onClick={() => executePrompt("Tên mặt hàng nào có nhiều đơn nhất trong 30 ngày qua?")}
+                          className="mt-3 w-full rounded-xl bg-navy-950 text-white py-1.5 text-xs font-bold hover:bg-slate-800 transition">
+                          Xem top sản phẩm bán chạy →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Quick Prompts */}
+                <div className="pt-2 text-center">
+                  <span className="text-xs text-slate-500 font-medium">Hoặc bấm chọn nhanh câu hỏi mẫu:</span>
+                  <div className="mt-2 flex flex-wrap justify-center gap-2">
+                    {quickPrompts[moduleId].map((prompt) => (
+                      <button key={prompt} type="button" onClick={() => executePrompt(prompt)}
+                        className="rounded-full border border-slate-200 bg-white px-3 py-2 text-left text-xs text-slate-700 hover:border-banana-300 hover:bg-banana-50 transition shadow-sm">
+                        {prompt}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             ) : messages.map((message) => (

@@ -13,6 +13,8 @@ export async function GET(req: NextRequest) {
     const guard = await requireAdmin(req);
     if (!guard.ok) return guard.response;
 
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
+
     const [
       totalOrders,
       ordersByStatus,
@@ -22,6 +24,13 @@ export async function GET(req: NextRequest) {
       vnJpRevenueAgg,
       inFlightShipments,
       unpaidShipmentsCount,
+      pendingDepositOver3DaysCount,
+      unweighedOrdersCount,
+      purchasingJpCount,
+      hotLeadsCount,
+      stuckChatSessionsCount,
+      lowSlotProductsCount,
+      totalCustomersCount,
     ] = await Promise.all([
       prisma.order.count(),
       prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
@@ -37,6 +46,13 @@ export async function GET(req: NextRequest) {
       }),
       prisma.vnJpShipment.count({ where: { status: "IN_FLIGHT_TO_JP" } }),
       prisma.vnJpShipment.count({ where: { paymentStatus: "UNPAID", status: { not: "CANCELLED" } } }),
+      prisma.order.count({ where: { status: "PENDING_DEPOSIT", createdAt: { lt: threeDaysAgo } } }),
+      prisma.order.count({ where: { status: { notIn: ["COMPLETED", "CANCELLED"] }, weightKg: { lte: 0 } } }),
+      prisma.order.count({ where: { status: "PURCHASING_JP" } }),
+      prisma.chatSession.count({ where: { customerType: "CHAT_LEAD" } }),
+      prisma.chatSession.count({ where: { sentiment: "complaint" } }),
+      prisma.product.count({ where: { stockSlots: { lte: 2 } } }),
+      prisma.customer.count(),
     ]);
 
     const jpVnRevenue = jpVnRevenueAgg._sum.depositAmountVnd || 0;
@@ -62,6 +78,21 @@ export async function GET(req: NextRequest) {
         jpVnCollectedRevenueVnd: jpVnRevenue,
         vnJpCollectedRevenueVnd: vnJpRevenue,
         totalOrdersAllTime: totalOrders + totalVnJpShipments,
+      },
+      operationalAlerts: {
+        orders: {
+          pendingDepositOver3Days: pendingDepositOver3DaysCount,
+          purchasingJp: purchasingJpCount,
+          unweighedOrders: unweighedOrdersCount,
+        },
+        customersAndLeads: {
+          hotLeads: hotLeadsCount,
+          stuckSessions: stuckChatSessionsCount,
+          totalCustomers: totalCustomersCount,
+        },
+        products: {
+          lowSlots: lowSlotProductsCount,
+        },
       },
       jpToVnForwarding: {
         totalOrders,

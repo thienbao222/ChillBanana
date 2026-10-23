@@ -5,6 +5,14 @@ import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { useToast } from "@/context/ToastContext";
 
+export type DepositOption = 50 | 100;
+
+export function isSingleItemStore(storeName?: string): boolean {
+  if (!storeName) return false;
+  const s = storeName.toLowerCase();
+  return s.includes("mercari") || s.includes("yahoo auction") || s.includes("dau gia") || s.includes("đấu giá");
+}
+
 export interface CartItem {
   id: string;
   name: string;
@@ -38,9 +46,14 @@ interface CartContextType {
   totalWeightKg: number;
   shippingFeeVnd: number;
   serviceFeeVnd: number;
+  isMinServiceFeeApplied: boolean;
   baseOrderCostVnd: number;
   totalVnd: number;
+  depositOption: DepositOption;
+  setDepositOption: (option: DepositOption) => void;
   deposit50Vnd: number;
+  depositAmountVnd: number;
+  remainingAmountVnd: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -54,6 +67,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [isRateStale, setIsRateStale] = useState<boolean>(false);
   const [pricingConfig, setPricingConfig] = useState<PricingConfigValues>(DEFAULT_PRICING_CONFIG);
   const [pricingConfigVersion, setPricingConfigVersion] = useState(0);
+  const [depositOption, setDepositOption] = useState<DepositOption>(50);
 
   // Lấy tỷ giá thực tế live từ API
   useEffect(() => {
@@ -140,8 +154,13 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toast.warning("Sản phẩm này hiện đã hết hàng.");
       return false;
     }
+    const isSingle = isSingleItemStore(product.originalStore);
+    if (isSingle && quantity > 1) {
+      toast.info("Sản phẩm Mercari/Đấu giá Nhật Bản là hàng độc bản 1 món duy nhất.");
+      quantity = 1;
+    }
     const existingItem = items.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
-    const availableSlots = product.stockSlots ?? existingItem?.stockSlots ?? 99;
+    const availableSlots = isSingle ? 1 : (product.stockSlots ?? existingItem?.stockSlots ?? 99);
     if (existingItem && existingItem.quantity >= availableSlots) {
       if (existingItem.quantity > availableSlots) {
         setItems((prev) => prev.map((item) => item.id === existingItem.id
@@ -149,14 +168,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           : item
         ));
       }
-      toast.warning(`Chỉ còn tối đa ${availableSlots} sản phẩm trong kho.`);
+      toast.warning(isSingle ? "Sản phẩm Mercari/Đấu giá là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${availableSlots} sản phẩm trong kho.`);
       return false;
     }
 
     setItems((prev) => {
       const existing = prev.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
       if (existing) {
-        const maxQ = product.stockSlots ?? existing.stockSlots ?? 99;
+        const maxQ = isSingle ? 1 : (product.stockSlots ?? existing.stockSlots ?? 99);
         const newQ = Math.min(existing.quantity + quantity, maxQ);
         return prev.map((item) =>
           item.id === existing.id
@@ -164,7 +183,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             : item
         );
       }
-      const maxQ = product.stockSlots ?? 99;
+      const maxQ = isSingle ? 1 : (product.stockSlots ?? 99);
       const initialQ = Math.min(quantity, maxQ);
       return [...prev, { ...product, quantity: initialQ }];
     });
@@ -186,19 +205,24 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     const currentItem = items.find((item) => item.id === id);
-    const maxQ = currentItem?.stockSlots ?? 99;
+    const isSingle = isSingleItemStore(currentItem?.originalStore);
+    if (isSingle && quantity > 1) {
+      toast.info("Hàng Mercari Nhật là sản phẩm độc bản 1 món duy nhất.");
+      quantity = 1;
+    }
+    const maxQ = isSingle ? 1 : (currentItem?.stockSlots ?? 99);
     if (currentItem && maxQ < 1) {
       removeFromCart(id);
       toast.warning("Sản phẩm đã hết hàng và được xóa khỏi giỏ hàng.");
       return;
     }
     if (currentItem && quantity > maxQ) {
-      toast.warning(`Chỉ còn tối đa ${maxQ} sản phẩm trong kho.`);
+      toast.warning(isSingle ? "Sản phẩm Mercari là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${maxQ} sản phẩm trong kho.`);
     }
     setItems((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          return { ...item, quantity: Math.min(quantity, item.stockSlots ?? 99) };
+          return { ...item, quantity: Math.min(quantity, maxQ) };
         }
         return item;
       })
@@ -222,16 +246,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const shippingFeeVnd = totalWeightKg > 0 ? Math.round(totalWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
 
   // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 20.000đ)
+  const rawServiceFeeVnd = Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100);
+  const isMinServiceFeeApplied = totalItems > 0 && rawServiceFeeVnd < pricingConfig.serviceFeeMinimumVnd;
   const serviceFeeVnd = totalItems > 0
-    ? Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100))
+    ? Math.max(pricingConfig.serviceFeeMinimumVnd, rawServiceFeeVnd)
     : 0;
 
-  // Tổng tiền
+  // Tổng tiền hàng + phí mua hộ (cơ sở cọc)
+  const baseOrderCostVnd = totalProductPriceVnd + serviceFeeVnd;
+
+  // Tổng tiền bao gồm cước bay (nếu đã có cân nặng)
   const totalVnd = totalProductPriceVnd + shippingFeeVnd + serviceFeeVnd;
 
-  // Tiền cọc 50% chỉ tính trên (tiền hàng + phí dịch vụ), KHÔNG bao gồm cước bay
-  const baseOrderCostVnd = totalProductPriceVnd + serviceFeeVnd;
+  // Đặt cọc 50% hoặc Thanh toán 100%
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
+  const depositAmountVnd = depositOption === 100 ? baseOrderCostVnd : deposit50Vnd;
+  const remainingAmountVnd = depositOption === 100 ? 0 : (baseOrderCostVnd - depositAmountVnd);
 
   return (
     <CartContext.Provider
@@ -254,9 +284,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalWeightKg,
         shippingFeeVnd,
         serviceFeeVnd,
+        isMinServiceFeeApplied,
         baseOrderCostVnd,
         totalVnd,
+        depositOption,
+        setDepositOption,
         deposit50Vnd,
+        depositAmountVnd,
+        remainingAmountVnd,
       }}
     >
       {children}

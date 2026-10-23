@@ -4,6 +4,7 @@ import { GEMINI_MODELS } from '@/lib/gemini-models';
 import { prisma } from '@/lib/prisma';
 import { checkAndRecordHit, getClientIp } from '@/lib/rate-limit';
 import { getImageCatalogSearchTerms, rankImageCatalogCandidates } from '@/features/ai/customer/image-catalog-matcher';
+import { translateToJapaneseKeywords, buildMarketplaceSearchLinks } from '@/features/ai/customer/japanese-translator';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 30;
@@ -41,15 +42,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Hệ thống AI phân tích ảnh đang quá tải, vui lòng thử lại sau 1 phút.' }, { status: 503 });
     }
 
-    // Parse imageData
-    // Format: data:image/jpeg;base64,....
-    const matches = imageData.match(/^data:(image\/(?:png|jpe?g|webp|gif));base64,([A-Za-z0-9+/]+={0,2})$/i);
-    if (!matches || matches.length !== 3) {
-      return NextResponse.json({ success: false, error: 'Invalid imageData format' }, { status: 400 });
+    // Parse imageData an toàn: tách prefix và base64 không phụ thuộc regex cứng
+    let mimeType = 'image/jpeg';
+    let base64Data = imageData.trim();
+    if (base64Data.includes(';base64,')) {
+      const parts = base64Data.split(';base64,');
+      const mimeMatch = parts[0].match(/data:(image\/[a-zA-Z0-9.+-]+)/i);
+      if (mimeMatch) mimeType = mimeMatch[1].toLowerCase();
+      base64Data = parts[1].replace(/\s+/g, '');
+    } else {
+      base64Data = base64Data.replace(/\s+/g, '');
     }
 
-    const mimeType = matches[1];
-    const base64Data = matches[2];
+    if (!base64Data) {
+      return NextResponse.json({ success: false, error: 'Invalid imageData format' }, { status: 400 });
+    }
 
     const prompt = `Bạn là trợ lý tìm hàng Nhật của ChillBanana, hỗ trợ mua hộ từ Amazon JP, Mercari và Rakuten.
 Hãy phân tích những gì nhìn thấy trong ảnh và tạo gợi ý tìm kiếm bằng từ khóa, không tuyên bố đã thực hiện reverse image search.
@@ -95,6 +102,7 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       generationConfig: {
         maxOutputTokens: 2048,
         temperature: 0.2,
+        responseMimeType: "application/json",
       }
     };
 
@@ -113,6 +121,7 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
         generationConfig: {
           maxOutputTokens: 1024,
           temperature: 0.2,
+          responseMimeType: "application/json",
         },
       };
       const fallbackResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
@@ -138,7 +147,9 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
     }
 
     const data = await response.json();
-    const textOutput = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    const parts = data.candidates?.[0]?.content?.parts || [];
+    const textPart = parts.filter((part: any) => typeof part.text === 'string' && !part.thought).pop();
+    const textOutput = textPart?.text;
 
     if (!textOutput) {
       return NextResponse.json({ success: false, error: 'AI Vision không trả về kết quả. Vui lòng thử lại với ảnh rõ hơn.' }, { status: 502 });
@@ -150,8 +161,18 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       const cleanedText = textOutput.replace(/```(?:json)?\n?|\n?```/g, '').trim();
       parsedResult = JSON.parse(cleanedText);
     } catch {
-      console.error('Failed to parse Gemini output as JSON:', textOutput);
-      return NextResponse.json({ success: false, error: 'AI Vision trả kết quả không đọc được. Vui lòng thử lại với ảnh rõ hơn.' }, { status: 502 });
+      const jsonMatch = textOutput.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          parsedResult = JSON.parse(jsonMatch[0]);
+        } catch {
+          console.error('Failed to parse Gemini output as JSON:', textOutput);
+          return NextResponse.json({ success: false, error: 'AI Vision trả kết quả không đọc được. Vui lòng thử lại với ảnh rõ hơn.' }, { status: 502 });
+        }
+      } else {
+        console.error('Failed to parse Gemini output as JSON:', textOutput);
+        return NextResponse.json({ success: false, error: 'AI Vision trả kết quả không đọc được. Vui lòng thử lại với ảnh rõ hơn.' }, { status: 502 });
+      }
     }
 
     if (!parsedResult || typeof parsedResult !== 'object' || Array.isArray(parsedResult)) {
@@ -211,9 +232,32 @@ Không bọc markdown và không viết nội dung ngoài JSON.`;
       }
     }
 
+    // Nhận diện đồ điện gia dụng Nhật (ấm đun nước, nồi cơm, máy sấy tóc...)
+    const textCorpus = `${normalizedResult.nameJp || ''} ${normalizedResult.nameVi || ''} ${normalizedResult.description || ''} ${question}`.toLowerCase();
+    const isElectricAppliance = normalizedResult.category === 'gadgets' ||
+      /ấm|kettle|nồi cơm|rice cooker|máy sấy|dryer|bàn ủi|iron|lò nướng|t-fal|tfal|zojirushi|tiger|panasonic/i.test(textCorpus);
+
+    if (isElectricAppliance) {
+      normalizedResult.voltageWarning = true;
+      if (!normalizedResult.riskNotes.includes('100V')) {
+        normalizedResult.riskNotes = `⚠️ Thiết bị điện gia dụng nội địa Nhật dùng nguồn điện 100V. Cần sử dụng qua biến áp đổi nguồn Lioa (từ 1500VA - 2000VA) tại Việt Nam, tuyệt đối không cắm trực tiếp vào điện 220V. ${normalizedResult.riskNotes}`.trim();
+      }
+    }
+
+    // Tự động dịch từ khóa và tạo link tìm kiếm sàn Nhật (Amazon JP, Mercari JP, Rakuten)
+    const searchTarget = normalizedResult.nameJp || normalizedResult.nameVi || (normalizedResult.searchKeywords && normalizedResult.searchKeywords[0]) || question || '';
+    const translated = translateToJapaneseKeywords(searchTarget);
+    const effectiveKeywordsJa = normalizedResult.nameJp || translated.keywordsJa;
+    const marketplaceLinks = buildMarketplaceSearchLinks(effectiveKeywordsJa, undefined, normalizedResult.visiblePriceJpy ? Math.round(normalizedResult.visiblePriceJpy * 1.2) : undefined);
+
     return NextResponse.json({
       success: true,
-      analysis: { ...normalizedResult, catalogMatches }
+      analysis: {
+        ...normalizedResult,
+        catalogMatches,
+        marketplaceLinks,
+        keywordsJa: effectiveKeywordsJa,
+      }
     });
 
   } catch (error) {

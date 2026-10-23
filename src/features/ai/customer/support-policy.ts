@@ -85,8 +85,8 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
   const orderStatus = Boolean(orderCode) || /\b(don hang|ma don|theo doi don|tinh trang don)\b/.test(normalized);
   const quote = hasScrapedProduct || /\b(tinh gia|bao gia|uoc tinh|tong chi phi|gia ve viet nam|tinh bill|gia bao nhieu|bao nhieu tien)\b/.test(normalized);
   const shipping = /\b(van chuyen|cuoc|phi ship|shipping|gop don|group buy|thoi gian giao|bao lau nhan|phi mua ho|phi dich vu|bieu phi|cach tinh phi|cach tinh gia|cong thuc tinh|dat coc)\b/.test(normalized);
-  const compatibility = /\b(tuong thich|dien ap|100v|220v|bien ap|cong suat|dung o viet nam|cam truc tiep)\b/.test(normalized);
-  const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may)\b/.test(normalized);
+  const compatibility = /\b(tuong thich|dien ap|100v|220v|bien ap|cong suat|dung o viet nam|cam truc tiep|am dun|noi com|may say)\b/.test(normalized);
+  const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may|giay|gucci|t-fal|tfal|am dun|noi com|dong ho|tui|vi|ao|khoac|sneaker|shoes|kettle|figure|gundam|jpy|yen|trieu)\b/.test(normalized);
 
   return { catalog, quote, orderStatus, shipping, compatibility, category, orderCode };
 }

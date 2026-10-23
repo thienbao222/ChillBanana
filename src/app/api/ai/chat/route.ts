@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGeminiAgent } from "@/features/ai/customer/assistant";
 import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
+import { translateToJapaneseKeywords, parseBudgetAndCurrency } from "@/features/ai/customer/japanese-translator";
 import { prisma } from "@/lib/prisma";
 import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
@@ -116,30 +117,57 @@ export async function POST(req: NextRequest) {
       isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");
     }
 
-    // 3. Trích xuất metadata từ tin nhắn để phục vụ thống kê xu hướng
+    // 3. Phân loại chủ đề đa chiều (Intent & Topic Classifier)
     const msgLower = message.toLowerCase();
-    const keywordMap: Record<string, string> = {
-      "mỹ phẩm": "cosmetics", "kem chống nắng": "cosmetics", "sữa rửa mặt": "cosmetics", "tẩy trang": "cosmetics", "son": "cosmetics", "serum": "cosmetics",
-      "thực phẩm": "health", "tảo": "health", "vitamin": "health", "bổ não": "health", "collagen": "health",
-      "nồi cơm": "gadgets", "điện tử": "gadgets", "máy cạo": "gadgets", "đồng hồ": "gadgets", "tai nghe": "gadgets", "100v": "gadgets", "biến áp": "gadgets",
-      "gundam": "anime", "figure": "anime", "anime": "anime", "mô hình": "anime", "manga": "anime", "bandai": "anime",
-      "vận chuyển": "shipping", "cước": "shipping", "ship": "shipping", "gộp đơn": "shipping",
-      "tỷ giá": "exchange", "giá": "pricing", "bao nhiêu": "pricing",
-      "size": "sizing", "quần áo": "sizing", "giày": "sizing",
-    };
+    const budgetInfo = parseBudgetAndCurrency(message);
+    const translated = translateToJapaneseKeywords(message);
+
     const detectedKeywords: string[] = [];
-    let topic = "Khác";
+    if (translated.detectedBrand) detectedKeywords.push(translated.detectedBrand);
+    if (budgetInfo.rawJpyText) detectedKeywords.push(budgetInfo.rawJpyText);
+    if (budgetInfo.rawVndText) detectedKeywords.push(budgetInfo.rawVndText);
+
+    let topic = "Tư vấn chung";
+
     if (isVnJpRegistration) {
       topic = "Gửi hàng VN -> Nhật";
       detectedKeywords.push("gửi hàng vn -> nhật", "tuyến vn-jp");
-    } else {
-      for (const [kw, cat] of Object.entries(keywordMap)) {
-        if (msgLower.includes(kw)) {
-          detectedKeywords.push(kw);
-          if (topic === "Khác") topic = cat;
-        }
-      }
+    } else if (/\b(cb-\d|vnjp-\d|mã đơn|tra cứu đơn|tình trạng đơn|kiểm tra đơn)\b/i.test(msgLower)) {
+      topic = "Tra cứu đơn hàng";
+      detectedKeywords.push("tra cứu đơn");
+    } else if (/\b(ảnh|hình ảnh|image|chụp ảnh)\b/i.test(msgLower) && msgLower.includes("tìm")) {
+      topic = "Tìm kiếm từ ảnh (Vision)";
+      detectedKeywords.push("tìm bằng ảnh");
+    } else if (/\b(100v|220v|biến áp|đổi nguồn|cháy máy|cắm điện|điện áp)\b/i.test(msgLower)) {
+      topic = "Tư vấn điện áp 100V";
+      detectedKeywords.push("điện 100v", "biến áp");
+    } else if (/\b(bảng size|chọn size|vừa không|size mấy|chiều dài chân|hướng dẫn size)\b/i.test(msgLower)) {
+      topic = "Tư vấn kích cỡ (Sizing)";
+      detectedKeywords.push("tư vấn size");
+    } else if (
+      budgetInfo.minJpy || budgetInfo.rawVndText ||
+      /\b(tìm|mua|order|săn|giá|báo giá|bao nhiêu|gucci|t-fal|tfal|zojirushi|anessa|gundam|uniqlo|giày|túi|nồi cơm|ấm đun|tai nghe|đồng hồ)\b/i.test(msgLower)
+    ) {
+      topic = "Tìm mua sản phẩm (Buying Lead)";
+      if (msgLower.includes("giày")) detectedKeywords.push("giày");
+      if (msgLower.includes("gucci")) detectedKeywords.push("gucci");
+      if (msgLower.includes("ấm đun") || msgLower.includes("t-fal")) detectedKeywords.push("ấm đun t-fal");
+      if (msgLower.includes("nồi cơm")) detectedKeywords.push("nồi cơm");
+      if (msgLower.includes("gundam")) detectedKeywords.push("gundam");
+      if (msgLower.includes("anessa")) detectedKeywords.push("anessa");
+    } else if (/\b(vận chuyển|cước|ship|gộp đơn|thời gian giao)\b/i.test(msgLower)) {
+      topic = "Chính sách vận chuyển";
+      detectedKeywords.push("vận chuyển");
+    } else if (/\b(đặt cọc|50%|100%|tính giá|tỷ giá|báo giá)\b/i.test(msgLower)) {
+      topic = "Báo giá & Đặt cọc";
+      detectedKeywords.push("báo giá");
     }
+
+    const hasStrongBuyingIntent = Boolean(
+      budgetInfo.minJpy || budgetInfo.rawVndText || body.scrapedProduct ||
+      /\b(gucci|t-fal|zojirushi|nike|adidas|panasonic|sony)\b/i.test(msgLower)
+    );
+
     const sentiment = isVnJpRegistration
       ? "inquiry"
       : (msgLower.includes("không") || msgLower.includes("lỗi") || msgLower.includes("sai") ? "complaint"
@@ -147,7 +175,9 @@ export async function POST(req: NextRequest) {
       : "positive");
 
     let customerId = customerSession?.id || null;
-    let customerType = customerId ? "REGISTERED" : (isVnJpRegistration ? "CHAT_LEAD" : "ANONYMOUS_GUEST");
+    let customerType = customerId
+      ? "REGISTERED"
+      : (isVnJpRegistration || hasStrongBuyingIntent ? "CHAT_LEAD" : "ANONYMOUS_GUEST");
     let customerName: string | null = null;
     let customerEmail: string | null = customerSession?.email || null;
     let customerPhone: string | null = null;
