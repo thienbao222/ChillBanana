@@ -159,12 +159,21 @@ export async function GET(req: NextRequest) {
           }
 
           if (response.ok) {
-            const resData = await response.json();
+            const responseBody = await response.text();
+            let resData: any;
+            try {
+              resData = JSON.parse(responseBody);
+            } catch {
+              console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+              adminKeyPool.markError(apiKey, 503, model);
+              continue;
+            }
             const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
             if (text) {
               aiSummary = text;
               break;
             }
+            console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
           } else {
             const errorBody = await response.text().catch(() => "");
             console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);

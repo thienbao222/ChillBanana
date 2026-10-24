@@ -144,13 +144,22 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
             continue;
           }
 
-          const data = await response.json();
+          const responseBody = await response.text();
+          let data: any;
+          try {
+            data = JSON.parse(responseBody);
+          } catch {
+            console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+            adminKeyPool.markError(apiKey, 503, model);
+            continue;
+          }
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const text = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
           if (text) {
             answer = text;
             break;
           }
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
         } catch (error) {
           adminKeyPool.markError(apiKey, 503, model);
           console.warn(`[AdminAssistant] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);

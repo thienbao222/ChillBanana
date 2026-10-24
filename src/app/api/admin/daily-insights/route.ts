@@ -277,7 +277,15 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
             continue;
           }
 
-          const data = await response.json();
+          const responseBody = await response.text();
+          let data: any;
+          try {
+            data = JSON.parse(responseBody);
+          } catch {
+            console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+            adminKeyPool.markError(apiKey, 503, model);
+            continue;
+          }
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const text = parts
             .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
@@ -287,6 +295,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
             insight = text;
             break;
           }
+          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
         } catch (error) {
           adminKeyPool.markError(apiKey, 503, model);
           console.warn(`[DailyInsight] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
