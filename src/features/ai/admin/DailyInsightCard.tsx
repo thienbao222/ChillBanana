@@ -1,7 +1,9 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { RefreshCw, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { RefreshCw, Sparkles, AlertCircle, ArrowUpRight, CheckCircle2 } from "lucide-react";
+import type { ActionItem } from "./action-items";
 
 type DailyReport = {
   businessDate: string;
@@ -13,6 +15,7 @@ type DailyReport = {
     complaints24h?: number;
     stuckOrders?: number;
     lowStockCount?: number;
+    actionItems?: ActionItem[];
   };
 };
 
@@ -54,6 +57,8 @@ export default function DailyInsightCard() {
     }
   };
 
+  const actionItems = report?.snapshotSummary?.actionItems || [];
+
   return (
     <section className="rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-5 shadow-sm sm:p-6" aria-labelledby="daily-ai-title">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -79,6 +84,7 @@ export default function DailyInsightCard() {
             <span>Ngày nghiệp vụ: <strong>{report.businessDate}</strong></span>
             <span>Dữ liệu đến: <strong>{new Date(report.generatedAt).toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" })}</strong></span>
           </div>
+
           <div className="mt-3 flex flex-wrap gap-2">
             {[
               ["Đơn mới", report.snapshotSummary?.orders24h],
@@ -88,8 +94,87 @@ export default function DailyInsightCard() {
               ["Suất đặt thấp", report.snapshotSummary?.lowStockCount],
             ].map(([label, value]) => <span key={String(label)} className="rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700">{label}: <strong>{value ?? 0}</strong></span>)}
           </div>
-          <div className="mt-4 rounded-2xl border border-amber-100 bg-white p-4 text-sm leading-6 text-slate-800">
-            <pre className="whitespace-pre-wrap font-sans">{report.insight}</pre>
+
+          {/* Việc cần làm hôm nay — Tính toán bằng quy tắc xác định */}
+          {actionItems.length > 0 && (
+            <div className="mt-5 rounded-2xl border border-amber-200/80 bg-amber-50/50 p-4">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-4 w-4 text-amber-700" />
+                <h3 className="text-sm font-bold text-slate-900">Việc cần làm hôm nay ({actionItems.length} việc)</h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-600">Được tính tự động bằng quy tắc hệ thống; AI cung cấp gợi ý xử lý ngắn gọn.</p>
+
+              <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                {actionItems.map((item) => {
+                  const isHigh = item.priority === "high";
+                  return (
+                    <div
+                      key={item.id}
+                      className={`rounded-xl border p-3.5 flex flex-col justify-between bg-white shadow-sm transition hover:shadow ${
+                        isHigh ? "border-rose-300 ring-1 ring-rose-100" : "border-amber-200"
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                              isHigh
+                                ? "bg-rose-100 text-rose-800"
+                                : item.priority === "medium"
+                                ? "bg-amber-100 text-amber-800"
+                                : "bg-sky-100 text-sky-800"
+                            }`}
+                          >
+                            {isHigh ? "Khẩn cấp" : item.priority === "medium" ? "Cần xử lý" : "Theo dõi"}
+                          </span>
+                          <span className="text-xs font-semibold text-slate-500">{item.itemCount} đơn/mục</span>
+                        </div>
+
+                        <h4 className="mt-2 text-sm font-bold text-slate-900">{item.title}</h4>
+                        <p className="mt-1 text-xs text-slate-600">{item.reason}</p>
+
+                        {item.aiExplanation && (
+                          <div className="mt-2 rounded-lg bg-slate-50 border border-slate-100 p-2 text-xs text-slate-700">
+                            <span className="font-semibold text-amber-800">💡 Gợi ý AI: </span>
+                            {item.aiExplanation}
+                          </div>
+                        )}
+
+                        {item.orderCodes.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {item.orderCodes.slice(0, 5).map((code) => (
+                              <span key={code} className="font-mono rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700">
+                                {code}
+                              </span>
+                            ))}
+                            {item.orderCodes.length > 5 && (
+                              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                                +{item.orderCodes.length - 5}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 pt-2 border-t border-slate-100">
+                        <Link
+                          href={item.deepLink}
+                          className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 hover:text-amber-900 transition"
+                        >
+                          Mở xử lý ngay <ArrowUpRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Báo cáo văn bản hiện có */}
+          <div className="mt-5 rounded-2xl border border-amber-100 bg-white p-4 text-sm leading-6 text-slate-800">
+            <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500">Báo cáo phân tích chuyên sâu</h3>
+            <pre className="whitespace-pre-wrap font-sans text-xs leading-5 text-slate-700">{report.insight}</pre>
           </div>
         </>
       ) : (

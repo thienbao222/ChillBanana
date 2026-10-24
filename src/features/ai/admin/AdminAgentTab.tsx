@@ -3,6 +3,7 @@
 import React, { FormEvent, useEffect, useRef, useState } from "react";
 import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles, CheckCheck, Truck, CreditCard, Mail } from "lucide-react";
 import { ADMIN_AI_MODULES, AdminAiModuleId } from "./definitions";
+import type { ActionItem } from "./action-items";
 
 type AgentMessage = {
   id: string;
@@ -59,6 +60,7 @@ export default function AdminAgentTab({ initialModule = "auto", initialQuestion 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [operationalData, setOperationalData] = useState<any>(null);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -66,6 +68,13 @@ export default function AdminAgentTab({ initialModule = "auto", initialQuestion 
       .then((res) => res.json())
       .then((data) => {
         if (data.overview) setOperationalData(data);
+      })
+      .catch(() => { /* silent fallback */ });
+
+    fetch("/api/admin/action-items")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.actionItems)) setActionItems(data.actionItems);
       })
       .catch(() => { /* silent fallback */ });
   }, []);
@@ -177,6 +186,76 @@ export default function AdminAgentTab({ initialModule = "auto", initialQuestion 
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
             {messages.length === 0 ? (
               <div className="mx-auto max-w-4xl py-4 space-y-6">
+                {/* Việc cần làm hôm nay — Tính toán bằng quy tắc xác định */}
+                {actionItems.length > 0 && (
+                  <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/70 to-orange-50/50 p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-amber-500 text-white font-bold text-xs">
+                          !
+                        </span>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                          Việc cần làm hôm nay ({actionItems.length} việc)
+                        </h4>
+                      </div>
+                      <span className="text-[10px] text-amber-800 font-medium">Quy tắc xác định · AI giải thích</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                      {actionItems.map((item) => (
+                        <div key={item.id} className="rounded-xl border border-amber-200/90 bg-white p-3.5 shadow-sm flex flex-col justify-between hover:shadow transition">
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                item.priority === "high" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"
+                              }`}>
+                                {item.priority === "high" ? "Khẩn cấp" : "Cần xử lý"}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-semibold">{item.itemCount} đơn/mục</span>
+                            </div>
+                            <h5 className="text-xs font-bold text-slate-900">{item.title}</h5>
+                            <p className="mt-1 text-[11px] text-slate-600">{item.reason}</p>
+                            {item.aiExplanation && (
+                              <p className="mt-1.5 text-[11px] text-amber-900 bg-amber-50/80 rounded p-1.5 border border-amber-100 font-medium">
+                                💡 {item.aiExplanation}
+                              </p>
+                            )}
+                            {item.orderCodes.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {item.orderCodes.slice(0, 4).map((c) => (
+                                  <span key={c} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                                    {c}
+                                  </span>
+                                ))}
+                                {item.orderCodes.length > 4 && (
+                                  <span className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-500">
+                                    +{item.orderCodes.length - 4}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <a
+                              href={item.deepLink}
+                              className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 transition"
+                            >
+                              Mở xử lý ngay →
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => executePrompt(`Phân tích và hướng dẫn xử lý cho đầu việc: "${item.title}". Danh sách mã: ${item.orderCodes.join(", ")}`)}
+                              className="text-[11px] text-slate-500 hover:text-navy-900 transition underline"
+                            >
+                              Hỏi trợ lý
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Active AI Ops: Live Operational Cards */}
                 <div>
                   <div className="flex items-center justify-between mb-3 px-1">
