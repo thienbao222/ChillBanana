@@ -134,8 +134,40 @@ async function evaluateReadOnlyTools() {
     updatedAt: new Date("2026-01-02T00:00:00.000Z"),
     trackingLogs: [{ title: "Đang vận chuyển quốc tế", createdAt: new Date("2026-01-02T00:00:00.000Z") }],
   };
+  const mockCatalog = [
+    product,
+    {
+      id: "eval-gunpla",
+      name: "Mô hình Bandai Gunpla RG 1/144 Wing Zero",
+      category: "anime",
+      categoryName: "Anime & Mô hình",
+      priceJpy: 4500,
+      weightKg: 0.5,
+      stockSlots: 2,
+      description: "Mô hình Bandai chính hãng",
+      voltageNote: null,
+      imageUrl: "/gunpla.jpg",
+      originalStore: "Amazon JP",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+    {
+      id: "eval-shaver",
+      name: "Máy cạo râu Panasonic Lamdash 5 lưỡi",
+      category: "gadgets",
+      categoryName: "Gia dụng & Thiết bị",
+      priceJpy: 18000,
+      weightKg: 0.4,
+      stockSlots: 3,
+      description: "Máy cạo râu nội địa Nhật",
+      voltageNote: "Dùng điện 100V-240V",
+      imageUrl: "/shaver.jpg",
+      originalStore: "Bic Camera",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    },
+  ];
+  let customCatalogReturn = null;
   const mockPrisma = {
-    product: { findMany: async () => [product] },
+    product: { findMany: async () => customCatalogReturn ?? mockCatalog },
     order: { findUnique: async ({ where }) => where.orderCode === orderCode ? order : null },
   };
   const currentRate = {
@@ -239,6 +271,48 @@ async function evaluateReadOnlyTools() {
     scrapedProduct: null,
   });
   assert.equal(guest.evidence.find((item) => item.toolId === "order_status").status, "ok");
+
+  // BƯỚC 7: Kiểm thử bổ sung theo yêu cầu
+  // (a) "tranh errormusk có kèm khung không? thêm sản phẩm đó vào giỏ hàng" không trả Gunpla/máy cạo râu
+  const tranhQuery = "tranh errormusk có kèm khung không? thêm sản phẩm đó vào giỏ hàng";
+  const tranhRun = await tools.runCustomerSupportTools({
+    message: tranhQuery,
+    customerId: null,
+    guestOrderAccessToken: null,
+    scrapedProduct: null,
+  });
+  const tranhCatalog = tranhRun.evidence.find((item) => item.toolId === "catalog_search");
+  assert.equal(tranhCatalog.status, "ok");
+  assert.equal(tranhCatalog.known.inCatalog, false);
+  assert.equal(tranhCatalog.known.products.length, 0);
+  assert.ok(
+    !tranhCatalog.known.products.some((p) => /gunpla|cạo râu|shaver/i.test(p.name)),
+    "unrelated Gunpla/shaver must not be returned"
+  );
+  assert.deepEqual(tranhRun.productCards, [], "no product cards should be produced for uncataloged item");
+
+  // (b) "thực phẩm chức năng thì sao" gửi sau một tin khác KHÔNG bị gộp
+  const unmerged = tools.resolveEffectiveSupportMessage("thực phẩm chức năng thì sao", [
+    { role: "user", text: "Tìm máy cạo râu Panasonic giúp mình" },
+    { role: "assistant", text: "Dạ có máy cạo râu Panasonic" },
+  ]);
+  assert.equal(unmerged, "thực phẩm chức năng thì sao", "standalone follow-up query with 2+ keywords must not merge");
+
+  // (c) catalog rỗng thì không có sản phẩm kèm giá bịa
+  customCatalogReturn = [];
+  const emptyCatalog = await tools.searchCatalog("quần áo thời trang mùa đông", null);
+  assert.equal(emptyCatalog.known.inCatalog, false);
+  assert.equal(emptyCatalog.known.matchCount, 0);
+  assert.deepEqual(emptyCatalog.known.products, [], "empty catalog must not contain any fabricated products or prices");
+  assert.ok(emptyCatalog.unknown.includes("Sản phẩm không có trong catalog ChillBanana"));
+  customCatalogReturn = null;
+
+  // (d) stop words tiếng Việt bị loại khỏi từ khóa
+  const stopWordsSentence = "có không kèm thêm sản phẩm đó này vào giỏ hàng của tôi mình cho thì sao nào gì muốn cần xem giúp với và hay hoặc bao nhiêu";
+  assert.deepEqual(policy.extractCatalogSearchTerms(stopWordsSentence), [], "all Vietnamese stop words must be filtered out");
+  const mixedTerms = policy.extractCatalogSearchTerms("Tôi muốn xem thêm sản phẩm tai nghe Sony này vào giỏ hàng giúp mình với thì giá bao nhiêu");
+  assert.ok(mixedTerms.includes("tai") && mixedTerms.includes("nghe") && mixedTerms.includes("Sony"));
+  assert.ok(!mixedTerms.includes("toi") && !mixedTerms.includes("muon") && !mixedTerms.includes("gio") && !mixedTerms.includes("hang"));
 
   assert.deepEqual(Object.keys(mockPrisma.product), ["findMany"], "customer tools expose no catalog write method");
   assert.deepEqual(Object.keys(mockPrisma.order), ["findUnique"], "customer tools expose no order write method");

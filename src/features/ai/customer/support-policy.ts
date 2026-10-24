@@ -99,7 +99,7 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
   const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may|giay|gucci|t-fal|tfal|am dun|noi com|dong ho|tui|vi|ao|khoac|sneaker|shoes|kettle|figure|gundam|jpy|yen|trieu)\b/.test(normalized);
 
   const addToCart =
-    /\b(them|cho|bo|dat)\s+(vao\s+)?(gio|gio\s+hang|cart)\b/i.test(normalized) ||
+    /\b(them|cho|bo|dat)\s+(?:[\w\s]{0,30}\s+)?(vao\s+gio|gio\s+hang|vao\s+cart|cart)\b/i.test(normalized) ||
     /\b(add\s+to\s+cart|mua\s+ngay|dat\s+mon\s+nay|mua\s+mon\s+nay|lay\s+mon\s+nay)\b/i.test(normalized);
 
   return { catalog, quote, orderStatus, shipping, compatibility, addToCart, category, orderCode };

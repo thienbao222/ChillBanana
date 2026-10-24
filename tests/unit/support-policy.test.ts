@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   canReadOrder,
   detectSupportIntents,
@@ -9,7 +9,56 @@ import {
   isValidOrderCode,
   isValidQuotePrice,
   normalizeSupportText,
+  SEARCH_STOP_WORDS,
 } from "@/features/ai/customer/support-policy";
+import {
+  searchCatalog,
+  resolveEffectiveSupportMessage,
+} from "@/features/ai/customer/support-tools";
+import { prisma } from "@/lib/prisma";
+
+vi.mock("@/features/pricing/config", () => ({
+  getCurrentPricingConfig: vi.fn(async () => ({
+    version: 1,
+    values: {
+      flatWeightThresholdKg: 0.5,
+      flatShippingFeeVnd: 50000,
+      perKgShippingRateVnd: 185000,
+      fxSpreadPercent: 2,
+      tier1MaxJpy: 10000,
+      tier1ServiceFeePercent: 8,
+      tier2MaxJpy: 50000,
+      tier2ServiceFeePercent: 6,
+      tier3ServiceFeePercent: 5,
+      minServiceFeeVnd: 20000,
+      baseInsurancePercent: 3,
+      highValueInsurancePercent: 5,
+    },
+    changedBy: "test",
+    changeReason: null,
+    createdAt: new Date(),
+  })),
+}));
+
+vi.mock("@/features/pricing/exchange-rate", () => ({
+  fetchLiveExchangeRate: vi.fn(async () => ({
+    rate: 165,
+    roundedRate: 165,
+    previousRate: 165,
+    changePercent: 0,
+    updatedAt: "2026-01-01T00:00:00Z",
+    source: "mock",
+    isFallback: false,
+    isStale: false,
+  })),
+}));
+
+vi.mock("@/lib/api-key-manager", () => ({
+  chatKeyPool: {
+    getNextKey: vi.fn(() => null),
+    markError: vi.fn(),
+  },
+}));
 
 describe("support-policy unit tests", () => {
   describe("normalizeSupportText", () => {
@@ -145,6 +194,147 @@ describe("support-policy unit tests", () => {
     it("trả về nhãn suất tiếp nhận yêu cầu mua hộ", () => {
       expect(getRequestSlotLabel(5)).toBe("Còn 5 suất tiếp nhận yêu cầu mua hộ");
       expect(getRequestSlotLabel(0)).toBe("Hiện chưa có suất tiếp nhận yêu cầu mua hộ");
+    });
+  });
+
+  describe("BƯỚC 7: Kiểm thử chính sách AI & công cụ hỗ trợ khách hàng", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    describe('(a) "tranh errormusk có kèm khung không? thêm sản phẩm đó vào giỏ hàng" không trả Gunpla/máy cạo râu', () => {
+      it("trích xuất từ khóa loại bỏ sạch stop words và nhận diện đúng intent add_to_cart", () => {
+        const query = "tranh errormusk có kèm khung không? thêm sản phẩm đó vào giỏ hàng";
+        const terms = extractCatalogSearchTerms(query);
+        expect(terms).toContain("tranh");
+        expect(terms).toContain("errormusk");
+        expect(terms).toContain("khung");
+        expect(terms).not.toContain("co");
+        expect(terms).not.toContain("kem");
+        expect(terms).not.toContain("khong");
+        expect(terms).not.toContain("them");
+        expect(terms).not.toContain("san");
+        expect(terms).not.toContain("pham");
+        expect(terms).not.toContain("do");
+        expect(terms).not.toContain("vao");
+        expect(terms).not.toContain("gio");
+        expect(terms).not.toContain("hang");
+
+        const intents = detectSupportIntents(query);
+        expect(intents.addToCart).toBe(true);
+      });
+
+      it("không trả về Gunpla hoặc máy cạo râu khi tìm kiếm tranh errormusk", async () => {
+        const catalogData = [
+          {
+            id: "prod-gunpla",
+            name: "Mô hình Bandai Gunpla RG 1/144 Wing Zero",
+            category: "anime",
+            categoryName: "Anime & Mô hình",
+            priceJpy: 4500,
+            weightKg: 0.5,
+            stockSlots: 2,
+            description: "Mô hình Bandai Gundam chính hãng",
+            voltageNote: null,
+            imageUrl: "/gunpla.jpg",
+            originalStore: "Amazon JP",
+            createdAt: new Date("2026-01-01"),
+          },
+          {
+            id: "prod-shaver",
+            name: "Máy cạo râu Panasonic Lamdash 5 lưỡi",
+            category: "gadgets",
+            categoryName: "Gia dụng & Thiết bị",
+            priceJpy: 18000,
+            weightKg: 0.4,
+            stockSlots: 3,
+            description: "Máy cạo râu nội địa Nhật",
+            voltageNote: "100V-240V",
+            imageUrl: "/shaver.jpg",
+            originalStore: "Bic Camera",
+            createdAt: new Date("2026-01-01"),
+          },
+        ];
+
+        vi.spyOn(prisma.product, "findMany").mockResolvedValueOnce(catalogData as any);
+
+        const evidence = await searchCatalog(
+          "tranh errormusk có kèm khung không? thêm sản phẩm đó vào giỏ hàng",
+          null
+        );
+        const products = (evidence.known.products as any[]) || [];
+
+        expect(products.some((p) => /gunpla|gundam/i.test(p.name))).toBe(false);
+        expect(products.some((p) => /cạo râu|shaver|panasonic/i.test(p.name))).toBe(false);
+        expect(products).toHaveLength(0);
+        expect(evidence.known.inCatalog).toBe(false);
+      });
+    });
+
+    describe('(b) "thực phẩm chức năng thì sao" gửi sau một tin khác KHÔNG bị gộp', () => {
+      it("giữ nguyên câu hỏi nối tiếp độc lập có từ 2 từ khóa trở lên, không gộp lịch sử trước đó", () => {
+        const history = [
+          { role: "user", text: "Tìm máy cạo râu Panasonic giúp mình" },
+          { role: "assistant", text: "Dạ đây là các mẫu máy cạo râu Panasonic..." },
+        ];
+
+        const terms = extractCatalogSearchTerms("thực phẩm chức năng thì sao");
+        expect(terms.length).toBeGreaterThanOrEqual(2);
+
+        const resolved = resolveEffectiveSupportMessage("thực phẩm chức năng thì sao", history);
+        expect(resolved).toBe("thực phẩm chức năng thì sao");
+        expect(resolved).not.toContain("Panasonic");
+        expect(resolved).not.toContain("cạo râu");
+      });
+    });
+
+    describe("(c) catalog rỗng thì không có sản phẩm kèm giá bịa", () => {
+      it("trả về inCatalog = false, danh sách sản phẩm rỗng và không bịa giá", async () => {
+        vi.spyOn(prisma.product, "findMany").mockResolvedValueOnce([]);
+
+        const evidence = await searchCatalog("sản phẩm hoàn toàn không tồn tại xyz999", null);
+        expect(evidence.known.inCatalog).toBe(false);
+        expect(evidence.known.matchCount).toBe(0);
+        expect(evidence.known.products).toEqual([]);
+        expect(evidence.unknown).toContain("Sản phẩm không có trong catalog ChillBanana");
+      });
+    });
+
+    describe("(d) stop words tiếng Việt bị loại khỏi từ khóa", () => {
+      it("loại bỏ toàn bộ các stop words tiếng Việt phổ thông khỏi từ khóa tìm kiếm", () => {
+        const stopWordsList = [
+          "có", "không", "kèm", "thêm", "sản phẩm", "đó", "này", "vào",
+          "giỏ", "hàng", "của", "tôi", "mình", "cho", "thì", "sao",
+          "nào", "gì", "muốn", "cần", "xem", "giúp", "với", "và",
+          "hay", "hoặc", "bao nhiêu",
+        ];
+
+        for (const phrase of stopWordsList) {
+          const terms = extractCatalogSearchTerms(phrase);
+          expect(terms, `Stop word '${phrase}' không được phép tạo search term`).toEqual([]);
+        }
+
+        const allTogether =
+          "có không kèm thêm sản phẩm đó này vào giỏ hàng của tôi mình cho thì sao nào gì muốn cần xem giúp với và hay hoặc bao nhiêu";
+        expect(extractCatalogSearchTerms(allTogether)).toEqual([]);
+      });
+
+      it("giữ lại đúng từ khóa sản phẩm thực tế và lọc bỏ sạch các stop words đi kèm", () => {
+        const query = "Tôi muốn xem thêm sản phẩm tai nghe Sony này vào giỏ hàng giúp mình với thì giá bao nhiêu";
+        const terms = extractCatalogSearchTerms(query);
+        expect(terms).toContain("tai");
+        expect(terms).toContain("nghe");
+        expect(terms).toContain("Sony");
+
+        const normalizedTerms = terms.map((t) => normalizeSupportText(t));
+        const forbidden = [
+          "toi", "muon", "xem", "them", "san", "pham", "nay", "vao",
+          "gio", "hang", "giup", "minh", "voi", "thi", "gia", "bao", "nhieu",
+        ];
+        for (const stop of forbidden) {
+          expect(normalizedTerms).not.toContain(stop);
+        }
+      });
     });
   });
 });
