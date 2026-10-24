@@ -21,6 +21,7 @@ import {
   type SupportEvidence,
   type SupportSourceLink,
 } from "./support-policy";
+import { routeSupportIntent, type RoutedSupportIntent } from "./intent-router";
 
 export interface TranslatedQuery {
   keywordsJa: string;
@@ -525,8 +526,12 @@ export function matchesWholePhraseOrWord(
   return regex.test(haystackNorm);
 }
 
-export async function searchCatalog(message: string, category: string | null): Promise<SupportEvidence> {
-  const terms = extractCatalogSearchTerms(message);
+export async function searchCatalog(
+  message: string,
+  category: string | null,
+  routedSearchTerms: string[] = []
+): Promise<SupportEvidence> {
+  const terms = [...new Set([...extractCatalogSearchTerms(message), ...routedSearchTerms])].slice(0, 12);
   const [rate, pricingConfig] = await Promise.all([
     fetchLiveExchangeRate().catch(() => null),
     getCurrentPricingConfig().catch(() => null),
@@ -1251,7 +1256,49 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   const effectiveMessage = resolveEffectiveSupportMessage(input.message, input.history);
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
-  const intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+  let intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+  let intentRoute: RoutedSupportIntent | null = null;
+  let routedSearchTerms: string[] = [];
+
+  const applyIntentRoute = async () => {
+    if (intentRoute) return intentRoute;
+    const route = await routeSupportIntent(effectiveMessage, input.history);
+    intentRoute = route;
+    if (!route) return null;
+    routedSearchTerms = route.searchTerms;
+    intents = {
+      catalog: intents.catalog || route.intents.catalog,
+      quote: intents.quote || route.intents.quote,
+      orderStatus: intents.orderStatus || route.intents.orderStatus,
+      shipping: intents.shipping || route.intents.shipping,
+      compatibility: intents.compatibility || route.intents.compatibility,
+      addToCart: intents.addToCart || route.intents.addToCart,
+      category: intents.category || route.category,
+      orderCode: intents.orderCode,
+    };
+    return route;
+  };
+
+  if (!Object.values(intents).some((value) => value === true)) await applyIntentRoute();
+
+  const searchCatalogWithRouterFallback = async (message: string) => {
+    let catalogEvidence = await searchCatalog(message, intents.category, routedSearchTerms);
+    if (
+      !intentRoute && catalogEvidence.status === "ok" &&
+      Array.isArray(catalogEvidence.known.products) && catalogEvidence.known.products.length === 0
+    ) {
+      const route = await applyIntentRoute();
+      if (route?.searchTerms.length) {
+        catalogEvidence = await searchCatalog(message, intents.category, routedSearchTerms);
+      }
+    }
+    return catalogEvidence;
+  };
+
+  let catalogEvidenceForRun: SupportEvidence | null = null;
+  if (!intents.addToCart && (intents.catalog || intents.compatibility)) {
+    catalogEvidenceForRun = await searchCatalogWithRouterFallback(effectiveMessage);
+  }
 
   let productCards: ProductCardData[] = [];
   let cartReply: string | undefined;
@@ -1262,7 +1309,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
     if (currentTerms.length > 0) {
       // 1. Khách có tên sản phẩm trong tin nhắn hiện tại -> tìm trong catalog theo các từ khóa đó
-      addToCartCatalogEvidence = await searchCatalog(input.message, intents.category);
+      addToCartCatalogEvidence = catalogEvidenceForRun || await searchCatalogWithRouterFallback(input.message);
       const matchedProducts = (addToCartCatalogEvidence.known.products as any[]) || [];
 
       if (matchedProducts.length === 1) {
@@ -1386,7 +1433,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const catalogPromise =
     (intents.catalog || intents.compatibility) && !intents.addToCart
-      ? searchCatalog(effectiveMessage, intents.category)
+      ? Promise.resolve(catalogEvidenceForRun || searchCatalog(effectiveMessage, intents.category, routedSearchTerms))
       : null;
   if (intents.catalog && !intents.addToCart && catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
