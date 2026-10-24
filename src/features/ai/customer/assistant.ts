@@ -79,9 +79,60 @@ function pruneEvidenceForPrompt(evidence: SupportEvidence[] = []): unknown[] {
   });
 }
 
+export function formatSessionPreferencesContext(
+  detectedKeywords?: string | null,
+  topic?: string | null
+): string | null {
+  if (!detectedKeywords && (!topic || topic === "Tư vấn chung")) return null;
+
+  const items = (detectedKeywords || "")
+    .split(",")
+    .map((k) => k.trim())
+    .filter(Boolean);
+
+  let budget: string | null = null;
+  let brand: string | null = null;
+  let category: string | null = null;
+
+  for (const item of items) {
+    if (/^ngân sách:\s*/i.test(item)) {
+      budget = item.replace(/^ngân sách:\s*/i, "").trim();
+    } else if (/\b(?:\d+[\d.,]*\s*(?:triệu|tr|k|nghìn|đ|vnd|yên|jpy|yen))\b/i.test(item)) {
+      budget = item;
+    } else if (/^thương hiệu:\s*/i.test(item)) {
+      brand = item.replace(/^thương hiệu:\s*/i, "").trim();
+    } else if (/\b(anessa|hada labo|hadalabo|dhc|sony|panasonic|uniqlo|zojirushi|gundam|bandai|tiger|citizen|casio|seiko|shiseido|sk-ii|gucci)\b/i.test(item)) {
+      brand = item;
+    } else if (/^nhóm hàng:\s*/i.test(item)) {
+      category = item.replace(/^nhóm hàng:\s*/i, "").trim();
+    } else if (/\b(mỹ phẩm|thực phẩm chức năng|gia dụng|đồ điện|mô hình|anime|thời trang|đồng hồ|gadgets|fashion|cosmetics|health)\b/i.test(item)) {
+      category = item;
+    }
+  }
+
+  if (!category && topic && topic !== "Tư vấn chung" && topic !== "Tra cứu đơn hàng") {
+    category = topic;
+  }
+
+  const parts: string[] = [];
+  if (budget) parts.push(`ngân sách: ${budget}`);
+  if (brand) parts.push(`thương hiệu: ${brand}`);
+  if (category) parts.push(`nhóm hàng: ${category}`);
+
+  if (parts.length === 0) {
+    if (items.length > 0) {
+      return `Sở thích khách đã nêu: ${items.slice(0, 3).join(", ")}`;
+    }
+    return null;
+  }
+
+  return `Sở thích khách đã nêu: ${parts.join(", ")}`;
+}
+
 export function buildSystemInstruction(
   evidence: SupportEvidence[] = [],
-  customerLang: "vi" | "en" | "ja" = "vi"
+  customerLang: "vi" | "en" | "ja" = "vi",
+  sessionPreferences?: string | null
 ): string {
   const evidencePayload = JSON.stringify(pruneEvidenceForPrompt(evidence));
   const langRule =
@@ -96,7 +147,7 @@ Bạn là Trợ lý Mua sắm AI của ChillBanana (Chill果) — nền tảng m
 
 NGÔN NGỮ PHẢN HỒI:
 - ${langRule}
-
+${sessionPreferences ? `\nSỞ THÍCH KHÁCH ĐÃ NÊU TRONG PHIÊN:\n- ${sessionPreferences}\nHãy ưu tiên ghi nhớ và tư vấn các sản phẩm phù hợp với ngân sách, thương hiệu hoặc nhóm hàng này.\n` : ""}
 HÌNH TƯỢNG VÀ VĂN PHONG:
 - Trả lời ngắn gọn, súc tích trong khoảng 3 đến 6 dòng. Đi thẳng vào trọng tâm, không lan man, không viết dài dòng.
 - Chỉ dựa trên dữ liệu bằng chứng công cụ máy chủ cung cấp bên dưới. Tuyệt đối không tự bịa đặt thông tin.
@@ -377,7 +428,8 @@ export async function askGeminiAgentDetailed(
   userQuery: string,
   personality: AIPersonality,
   conversationHistory: { role: string; text: string }[] = [],
-  evidence: SupportEvidence[] = []
+  evidence: SupportEvidence[] = [],
+  sessionPreferences?: string | null
 ): Promise<{ text: string; mode: "gemini" | "offline"; model?: string }> {
   const isOmo = personality === "omotenashi";
   const customerLang = detectCustomerLanguage(userQuery);
@@ -394,7 +446,7 @@ export async function askGeminiAgentDetailed(
   const personalityPrompt = isOmo
     ? "Phong cách Omotenashi: Lễ phép, chu đáo, ân cần, xưng ChillBanana hoặc Mình và gọi Quý khách. Giải thích rõ ràng chi phí, tỷ giá live, quyền lợi cọc 50% hoặc thanh toán 100%, và lưu ý hàng Nhật."
     : "Phong cách Chill: Thân thiện, tự nhiên, súc tích, xưng Neo hoặc Mình và gọi Bạn. Báo giá nhanh, mách deal hời, không rườm rà.";
-  const systemInstruction = buildSystemInstruction(evidence, customerLang);
+  const systemInstruction = buildSystemInstruction(evidence, customerLang, sessionPreferences);
   const contents = conversationHistory.slice(-8).map((message) => ({
     role: message.role === "user" ? "user" : "model",
     parts: [{ text: message.text }],
@@ -405,9 +457,10 @@ export async function askGeminiAgentDetailed(
       : customerLang === "ja"
       ? "[お客様は日本語で質問されています。日本語で回答してください。]\n"
       : "";
+  const prefPrompt = sessionPreferences ? `[${sessionPreferences}]\n` : "";
   contents.push({
     role: "user",
-    parts: [{ text: `${langPrompt}[${personalityPrompt}]\n\nCâu hỏi hiện tại của khách:\n${userQuery}` }],
+    parts: [{ text: `${prefPrompt}${langPrompt}[${personalityPrompt}]\n\nCâu hỏi hiện tại của khách:\n${userQuery}` }],
   });
 
   let lastAttemptedModel: string | undefined;

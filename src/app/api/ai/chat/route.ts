@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent, askGeminiAgentDetailed, ensureCatalogFactsInReply } from "@/features/ai/customer/assistant";
+import { askGeminiAgent, askGeminiAgentDetailed, ensureCatalogFactsInReply, formatSessionPreferencesContext } from "@/features/ai/customer/assistant";
 import { runCustomerSupportTools, type ProductCardData } from "@/features/ai/customer/support-tools";
 import { translateToJapaneseKeywords, parseBudgetAndCurrency } from "@/features/ai/customer/japanese-translator";
 import { prisma } from "@/lib/prisma";
@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
     // server-issued cookie to its owner and rotate it if another account uses it.
     const existingChatSession = await prisma.chatSession.findUnique({
       where: { sessionId: resolvedSessionId },
-      select: { customerId: true },
+      select: { customerId: true, topic: true, detectedKeywords: true },
     });
     if (existingChatSession?.customerId && existingChatSession.customerId !== customerSession?.id) {
       resolvedSessionId = `cbchat_${randomUUID()}`;
@@ -133,11 +133,16 @@ export async function POST(req: NextRequest) {
         modelUsed = "guarded";
       } else {
         const geminiStart = Date.now();
+        const sessionPreferences = formatSessionPreferencesContext(
+          existingChatSession?.detectedKeywords,
+          existingChatSession?.topic
+        );
         const agentResult = await askGeminiAgentDetailed(
           message,
           selectedPersonality,
           validHistory,
-          supportRun.evidence
+          supportRun.evidence,
+          sessionPreferences
         );
         geminiMs = Date.now() - geminiStart;
         generatedReply = agentResult.text;
@@ -166,9 +171,26 @@ export async function POST(req: NextRequest) {
     const translated = await translateToJapaneseKeywords(message);
 
     const detectedKeywords: string[] = [];
-    if (translated.detectedBrand) detectedKeywords.push(translated.detectedBrand);
-    if (budgetInfo.rawJpyText) detectedKeywords.push(budgetInfo.rawJpyText);
-    if (budgetInfo.rawVndText) detectedKeywords.push(budgetInfo.rawVndText);
+    if (translated.detectedBrand) {
+      detectedKeywords.push(`thương hiệu: ${translated.detectedBrand}`, translated.detectedBrand);
+    }
+    if (budgetInfo.rawVndText) {
+      detectedKeywords.push(`ngân sách: ${budgetInfo.rawVndText}`, budgetInfo.rawVndText);
+    } else if (budgetInfo.rawJpyText) {
+      detectedKeywords.push(`ngân sách: ${budgetInfo.rawJpyText}`, budgetInfo.rawJpyText);
+    }
+    if (translated.category && translated.category !== "other") {
+      const catLabels: Record<string, string> = {
+        cosmetics: "mỹ phẩm",
+        health: "thực phẩm chức năng",
+        gadgets: "đồ điện gia dụng",
+        anime: "mô hình anime",
+        fashion: "thời trang",
+        luxury: "hàng hiệu",
+      };
+      const catName = catLabels[translated.category] || translated.category;
+      detectedKeywords.push(`nhóm hàng: ${catName}`);
+    }
 
     let topic = "Tư vấn chung";
 
