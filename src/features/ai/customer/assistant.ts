@@ -41,7 +41,7 @@ function pruneEvidenceForPrompt(evidence: SupportEvidence[] = []): unknown[] {
       }
     }
     return {
-      tool: ev.toolId,
+      toolId: ev.toolId,
       status: ev.status,
       known: prunedKnown,
       unknown: ev.unknown && ev.unknown.length ? ev.unknown : undefined,
@@ -258,13 +258,8 @@ export async function askGeminiAgentDetailed(
   });
 
   let lastAttemptedModel: string | undefined;
-  let attemptCount = 0;
-  const maxAttempts = 2;
-  while (attemptCount < maxAttempts) {
-    attemptCount++;
-    const activeKey = chatKeyPool.getNextKey();
-    if (!activeKey) break;
-
+  const activeKey = chatKeyPool.getNextKey();
+  if (activeKey) {
     const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
       ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
       : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
@@ -295,7 +290,8 @@ export async function askGeminiAgentDetailed(
         if (response.status === 500 || response.status === 503) {
           const errStatus = response.status;
           console.warn(`[Assistant] Model ${model} lỗi HTTP ${errStatus}. Đang thử lại cùng model sau 600-1200ms...`);
-          const jitterMs = 600 + Math.floor(Math.random() * 600);
+          const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+          const jitterMs = isTestEnv ? 10 : 600 + Math.floor(Math.random() * 600);
           await new Promise((r) => setTimeout(r, jitterMs));
           try {
             const retryRes = await fetch(
