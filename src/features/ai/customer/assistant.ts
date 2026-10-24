@@ -232,7 +232,7 @@ export async function askGeminiAgentDetailed(
   personality: AIPersonality,
   conversationHistory: { role: string; text: string }[] = [],
   evidence: SupportEvidence[] = []
-): Promise<{ text: string; mode: "gemini" | "offline" }> {
+): Promise<{ text: string; mode: "gemini" | "offline"; model?: string }> {
   const isOmo = personality === "omotenashi";
 
   if (isSensitiveTopic(userQuery)) {
@@ -257,6 +257,7 @@ export async function askGeminiAgentDetailed(
     parts: [{ text: `[${personalityPrompt}]\n\nCâu hỏi hiện tại của khách:\n${userQuery}` }],
   });
 
+  let lastAttemptedModel: string | undefined;
   let attemptCount = 0;
   const maxAttempts = 2;
   while (attemptCount < maxAttempts) {
@@ -270,6 +271,7 @@ export async function askGeminiAgentDetailed(
     const models = Array.from(new Set(candidateModels));
 
     for (const model of models) {
+      lastAttemptedModel = model;
       try {
         let response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
@@ -380,7 +382,7 @@ export async function askGeminiAgentDetailed(
               .replace(/\*\*Công cụ đang chạy:\*\*.*?(?:\n|$)/gi, "")
               .replace(/\[(?:Công cụ đang chạy|Tool running):.*?\](?:\n|$)/gi, "")
               .trim();
-            if (sanitized) return { text: sanitized, mode: "gemini" };
+            if (sanitized) return { text: sanitized, mode: "gemini", model };
           }
           continue;
         }
@@ -418,6 +420,7 @@ export async function askGeminiAgentDetailed(
   return {
     text: buildOfflineEvidenceReply(userQuery, evidence, isOmo),
     mode: "offline",
+    model: lastAttemptedModel,
   };
 }
 

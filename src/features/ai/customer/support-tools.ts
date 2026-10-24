@@ -450,6 +450,7 @@ export interface CustomerSupportToolRun {
   guardedReply?: string;
   quoteFooter?: string;
   productCards?: ProductCardData[];
+  timing?: { routerMs: number; toolsMs: number };
 }
 
 function nowIso(): string {
@@ -1261,6 +1262,8 @@ export function resolveEffectiveSupportMessage(
 }
 
 export async function runCustomerSupportTools(input: CustomerSupportToolInput): Promise<CustomerSupportToolRun> {
+  const toolsStart = Date.now();
+  let routerMs = 0;
   const effectiveMessage = resolveEffectiveSupportMessage(input.message, input.history);
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
@@ -1271,7 +1274,9 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const applyIntentRoute = async () => {
     if (intentRoute) return intentRoute;
+    const rStart = Date.now();
     const route = await routeSupportIntent(effectiveMessage, input.history);
+    routerMs += Date.now() - rStart;
     intentRoute = route;
     if (!route) return null;
     routedSearchTerms = route.searchTerms;
@@ -1522,6 +1527,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   );
   const quoteNeedsInput = evidence.some((item) => item.toolId === "quote_estimate" && item.status === "needs_input");
   const guardedReply = cartReply ?? orderReply ?? (catalogHasProducts && quoteNeedsInput ? undefined : quoteReply);
+  const toolsMs = Math.max(0, Date.now() - toolsStart - routerMs);
 
-  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards };
+  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards, timing: { routerMs, toolsMs } };
 }

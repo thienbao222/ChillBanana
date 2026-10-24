@@ -78,6 +78,12 @@ export async function POST(req: NextRequest) {
 
     const isVnJpRegistration = message.startsWith("[ĐĂNG KÝ GỬI HÀNG VN -> NHẬT]");
 
+    const chatStart = Date.now();
+    let routerMs = 0;
+    let toolsMs = 0;
+    let geminiMs = 0;
+    let modelUsed = "none";
+
     let reply = "";
     let supportSources: unknown[] = [];
     let isGuardrailTriggered = false;
@@ -86,6 +92,7 @@ export async function POST(req: NextRequest) {
 
     if (isVnJpRegistration) {
       aiMode = "offline";
+      modelUsed = "vn-jp";
       const codeMatch = message.match(/Mã\s*phiếu:\s*([^-\n]+)/i);
       const dispatchCode = codeMatch ? codeMatch[1].trim() : "";
 
@@ -108,21 +115,28 @@ export async function POST(req: NextRequest) {
         history: validHistory,
       });
 
+      routerMs = supportRun.timing?.routerMs ?? 0;
+      toolsMs = supportRun.timing?.toolsMs ?? 0;
+
       // Order privacy and missing quote inputs use deterministic replies; never ask the model
       // to infer private order state or invent the missing price/rate.
       let generatedReply = "";
       if (supportRun.guardedReply) {
         generatedReply = supportRun.guardedReply;
         aiMode = "offline";
+        modelUsed = "guarded";
       } else {
+        const geminiStart = Date.now();
         const agentResult = await askGeminiAgentDetailed(
           message,
           selectedPersonality,
           validHistory,
           supportRun.evidence
         );
+        geminiMs = Date.now() - geminiStart;
         generatedReply = agentResult.text;
         aiMode = agentResult.mode;
+        modelUsed = agentResult.model || "none";
       }
 
       generatedReply = ensureCatalogFactsInReply(
@@ -136,7 +150,8 @@ export async function POST(req: NextRequest) {
       productCards = supportRun.productCards || [];
     }
 
-    console.log(`[AI Chat] Session: ${resolvedSessionId} | Mode: ${aiMode}`);
+    const totalMs = Date.now() - chatStart;
+    console.log(`[AI Chat] router=${routerMs}ms tools=${toolsMs}ms model=${modelUsed} gemini=${geminiMs}ms total=${totalMs}ms mode=${aiMode}`);
 
     // 3. Phân loại chủ đề đa chiều (Intent & Topic Classifier)
     const msgLower = message.toLowerCase();
