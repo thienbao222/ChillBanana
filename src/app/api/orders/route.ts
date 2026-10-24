@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendOrderCreatedEmail } from "@/lib/mailer";
+import { sendOrderCreatedEmail, sendAdminNewOrderEmail } from "@/lib/mailer";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import {
   createGuestOrderAccessToken,
@@ -460,12 +460,22 @@ export async function POST(req: NextRequest) {
               ],
             },
           },
-          include: { trackingLogs: true, orderItems: true },
+          include: {
+            trackingLogs: true,
+            orderItems: {
+              include: {
+                product: {
+                  select: { name: true, imageUrl: true, originalStore: true },
+                },
+              },
+            },
+          },
         });
       });
 
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
+      sendAdminNewOrderEmail(createdDbOrder as any).catch((err) => console.warn(err));
 
       const guestAccessToken = (!customerId && customerEmail)
         ? createGuestOrderAccessToken(orderCode, customerEmail)

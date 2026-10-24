@@ -32,6 +32,8 @@ vi.mock("@/lib/mailer", async (importOriginal) => {
     sendOrderStatusUpdateEmail: vi.fn().mockResolvedValue(true),
     sendZaloTrackingNotification: vi.fn().mockResolvedValue(true),
     sendPasswordResetEmail: vi.fn().mockResolvedValue(undefined),
+    sendAdminNewOrderEmail: vi.fn().mockResolvedValue(true),
+    sendOrderRollbackEmail: vi.fn().mockResolvedValue(true),
     retryEmailLog: vi.fn().mockResolvedValue(true),
   };
 });

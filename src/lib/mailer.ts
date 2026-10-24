@@ -3,6 +3,7 @@ import { createCustomerEmailVerificationToken, createGuestOrderAccessToken } fro
 import { deliverLoggedEmail } from "@/features/notifications/email-delivery";
 import { resolvePaymentMode } from "@/features/payments/provider";
 import { prisma } from "@/lib/prisma";
+import { parseOrderItemSource } from "@/features/orders/item-source";
 
 export function getBaseUrl(): string {
   // 1. Ưu tiên APP_URL do người dùng cài đặt
@@ -91,7 +92,7 @@ export interface SentEmailRecord {
   to: string;
   subject: string;
   html: string;
-  type: "ORDER_CREATED" | "PAYMENT_SUCCESS" | "TRACKING_UPDATE" | "VERIFY_EMAIL" | "RESET_PASSWORD" | "PRICE_APPROVED" | "ZALO_NOTIFICATION";
+  type: "ORDER_CREATED" | "PAYMENT_SUCCESS" | "TRACKING_UPDATE" | "VERIFY_EMAIL" | "RESET_PASSWORD" | "PRICE_APPROVED" | "ZALO_NOTIFICATION" | "ADMIN_NEW_ORDER" | "ORDER_ROLLBACK";
   sentAt: string; // ISO string
   isSimulated: boolean; // true nếu chưa cấu hình SMTP thật
 }
@@ -255,6 +256,198 @@ export async function sendOrderCreatedEmail(order: any, logId?: string): Promise
     orderId: order.id,
     logId,
     to: order.customerEmail,
+    subject,
+    html,
+  }, getTransporter());
+}
+
+/**
+ * 1b. Email thông báo đơn hàng mới cho Ban Quản Trị
+ */
+export async function sendAdminNewOrderEmail(order: any, logId?: string): Promise<boolean> {
+  const adminEmailsRaw = (process.env.ADMIN_NOTIFY_EMAIL || "").trim();
+  const adminEmails = adminEmailsRaw
+    .split(",")
+    .map((e) => e.trim())
+    .filter((e) => e.length > 0 && e.includes("@"));
+
+  if (adminEmails.length === 0) {
+    return false;
+  }
+
+  // Dùng EmailLog tránh gửi trùng cho cùng một đơn
+  if (!logId && order.id) {
+    const existing = await prisma.emailLog.findFirst({
+      where: {
+        orderId: order.id,
+        emailType: "admin-new-order",
+        status: { in: ["SENT", "SIMULATED", "PENDING"] },
+      },
+    });
+    if (existing) {
+      return false;
+    }
+  }
+
+  const orderCode = escapeHtml(String(order.orderCode || ""));
+  const isPriceVerified = order.isPriceVerified === true;
+  const subject = isPriceVerified
+    ? `[Đơn mới] ${order.orderCode}`
+    : `[CẦN DUYỆT GIÁ] Đơn ${order.orderCode}`;
+
+  const orderCreatedAt = order.createdAt ? new Date(order.createdAt) : new Date();
+  const createdTimeVn = escapeHtml(
+    new Intl.DateTimeFormat("vi-VN", {
+      timeZone: "Asia/Ho_Chi_Minh",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(orderCreatedAt)
+  );
+
+  const customerName = escapeHtml(String(order.customerName || ""));
+  const customerPhone = escapeHtml(String(order.customerPhone || ""));
+  const customerEmail = escapeHtml(String(order.customerEmail || ""));
+  const customerAddress = escapeHtml(String(order.customerAddress || ""));
+  const customerNote = escapeHtml(String(order.customerNote || "Không có"));
+  const totalVndStr = escapeHtml(Number(order.totalVnd || 0).toLocaleString("vi-VN") + " đ");
+
+  // Lấy danh sách sản phẩm
+  let orderItems: any[] = Array.isArray(order.orderItems) && order.orderItems.length > 0 ? order.orderItems : [];
+  if (orderItems.length === 0 && order.id) {
+    try {
+      const dbOrder = await prisma.order.findUnique({
+        where: { id: order.id },
+        include: {
+          orderItems: {
+            include: {
+              product: {
+                select: { name: true, imageUrl: true, originalStore: true },
+              },
+            },
+          },
+        },
+      });
+      if (dbOrder?.orderItems?.length) {
+        orderItems = dbOrder.orderItems;
+      }
+    } catch {
+      // Bỏ qua lỗi query phụ
+    }
+  }
+
+  if (orderItems.length === 0) {
+    orderItems = [
+      {
+        productName: order.productName,
+        quantity: 1,
+        priceJpy: order.priceJpy,
+        weightKg: order.weightKg,
+        itemType: "EXTERNAL",
+      },
+    ];
+  }
+
+  const tableRows = orderItems.map((item: any) => {
+    const parsed = parseOrderItemSource(item, order);
+    const cleanName = escapeHtml(parsed.cleanName);
+    const quantity = Number(item.quantity || 1);
+    const priceJpyStr = Number(item.priceJpy || 0).toLocaleString() + " ¥";
+    const weightStr = item.weightKg ? `${escapeHtml(String(item.weightKg))} kg` : "Chưa cân";
+
+    let sourceCell = "";
+    let linkCell = "";
+    if (parsed.itemType === "CATALOG") {
+      sourceCell = `Catalog (${escapeHtml(parsed.originalStore || "Kho nội địa")})`;
+      linkCell = `<span style="color:#64748b;font-style:italic">Hàng Catalog</span>`;
+    } else {
+      sourceCell = escapeHtml(parsed.marketplace);
+      if (parsed.url && parsed.url.startsWith("https://")) {
+        const safeUrl = escapeHtml(parsed.url);
+        linkCell = `<a href="${safeUrl}" target="_blank" rel="noopener noreferrer" style="color:#2563eb;text-decoration:underline;font-weight:600">Xem link ↗</a>`;
+      } else {
+        linkCell = `<span style="color:#dc2626;font-style:italic">Không có link</span>`;
+      }
+    }
+
+    return `
+      <tr style="border-bottom:1px solid #e2e8f0;">
+        <td style="padding:10px 12px;font-size:13px;color:#1e293b;">${cleanName}</td>
+        <td style="padding:10px 12px;font-size:13px;text-align:center;color:#1e293b;">${quantity}</td>
+        <td style="padding:10px 12px;font-size:13px;text-align:right;color:#1e293b;font-family:monospace;">${priceJpyStr}</td>
+        <td style="padding:10px 12px;font-size:13px;text-align:center;color:#64748b;">${weightStr}</td>
+        <td style="padding:10px 12px;font-size:13px;color:#1e293b;"><span style="background:#f1f5f9;padding:2px 8px;border-radius:6px;font-size:12px;">${sourceCell}</span></td>
+        <td style="padding:10px 12px;font-size:13px;text-align:center;">${linkCell}</td>
+      </tr>`;
+  }).join("");
+
+  const adminUrl = `${getBaseUrl()}/admin`;
+
+  const html = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:650px;margin:0 auto;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;background:#ffffff;">
+      <div style="background:#0f172a;color:#ffffff;padding:24px 28px;text-align:center;">
+        <h2 style="margin:0;font-size:22px;color:#fbbf24;">🍌 Thông Báo Đơn Hàng Mới Cho Quản Trị</h2>
+        <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;">${isPriceVerified ? "Đơn hàng mới đã được xác minh giá" : "Đơn hàng ngoài catalog — CẦN DUYỆT GIÁ"}</p>
+      </div>
+
+      <div style="padding:24px 28px;color:#1e293b;line-height:1.6;">
+        <div style="background:${isPriceVerified ? "#ecfdf5" : "#fff7ed"};border-left:4px solid ${isPriceVerified ? "#10b981" : "#f59e0b"};padding:14px 18px;margin-bottom:20px;border-radius:8px;">
+          <p style="margin:4px 0;font-size:14px;"><strong>Mã đơn hàng:</strong> <span style="font-family:monospace;font-weight:bold;color:#b45309;font-size:15px;">#${orderCode}</span></p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Thời gian tạo:</strong> ${createdTimeVn} (Giờ Việt Nam)</p>
+          <p style="margin:4px 0;font-size:14px;"><strong>Tổng tạm tính:</strong> <strong style="color:#b45309;font-size:16px;">${totalVndStr}</strong></p>
+        </div>
+
+        <h3 style="font-size:15px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin:20px 0 12px;">👤 Thông tin khách hàng</h3>
+        <p style="margin:4px 0;font-size:14px;"><strong>Họ và tên:</strong> ${customerName}</p>
+        <p style="margin:4px 0;font-size:14px;"><strong>Số điện thoại:</strong> ${customerPhone}</p>
+        <p style="margin:4px 0;font-size:14px;"><strong>Email:</strong> ${customerEmail}</p>
+        <p style="margin:4px 0;font-size:14px;"><strong>Địa chỉ nhận hàng:</strong> ${customerAddress}</p>
+        <p style="margin:4px 0;font-size:14px;"><strong>Ghi chú của khách:</strong> <em style="color:#475569;">${customerNote}</em></p>
+
+        <h3 style="font-size:15px;color:#0f172a;border-bottom:2px solid #e2e8f0;padding-bottom:6px;margin:24px 0 12px;">📦 Danh sách sản phẩm</h3>
+        <table style="width:100%;border-collapse:collapse;margin:12px 0 20px;">
+          <thead>
+            <tr style="background:#f8fafc;border-bottom:2px solid #cbd5e1;text-align:left;">
+              <th style="padding:8px 12px;font-size:12px;color:#475569;">Tên sản phẩm</th>
+              <th style="padding:8px 12px;font-size:12px;color:#475569;text-align:center;">SL</th>
+              <th style="padding:8px 12px;font-size:12px;color:#475569;text-align:right;">Giá gốc</th>
+              <th style="padding:8px 12px;font-size:12px;color:#475569;text-align:center;">Cân nặng</th>
+              <th style="padding:8px 12px;font-size:12px;color:#475569;">Nguồn / Sàn</th>
+              <th style="padding:8px 12px;font-size:12px;color:#475569;text-align:center;">Link</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${tableRows}
+          </tbody>
+        </table>
+
+        <div style="text-align:center;margin:30px 0 10px;">
+          <a href="${escapeHtml(adminUrl)}" target="_blank" rel="noopener noreferrer" style="background:#0f172a;color:#fbbf24;padding:12px 28px;text-decoration:none;border-radius:10px;font-weight:bold;font-size:14px;display:inline-block;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+            Mở bảng duyệt giá ↗
+          </a>
+        </div>
+      </div>
+    </div>`;
+
+  const recipients = adminEmails.join(", ");
+
+  recordSentEmail({
+    to: recipients,
+    subject,
+    html,
+    type: "ADMIN_NEW_ORDER",
+    isSimulated: !Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+  });
+
+  return deliverLoggedEmail({
+    emailType: "admin-new-order",
+    orderId: order.id,
+    logId,
+    to: recipients,
     subject,
     html,
   }, getTransporter());
@@ -478,6 +671,8 @@ export async function retryEmailLog(logId: string): Promise<boolean> {
       return sendGuestOrderAccessEmail(log.order, log.id);
     case "order-created":
       return sendOrderCreatedEmail(log.order, log.id);
+    case "admin-new-order":
+      return sendAdminNewOrderEmail(log.order, log.id);
     case "price-approved":
       return sendPriceApprovedEmail(log.order, log.id);
     case "payment-success":
