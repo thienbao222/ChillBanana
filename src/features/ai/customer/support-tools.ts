@@ -12,6 +12,7 @@ import {
   canReadOrder,
   detectSupportIntents,
   extractCatalogSearchTerms,
+  extractOrderCode,
   getOrderStatusLabel,
   getRequestSlotLabel,
   isSupportedMarketplaceUrl,
@@ -1280,6 +1281,20 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   };
 
   if (!Object.values(intents).some((value) => value === true)) await applyIntentRoute();
+
+  const normalizedMessage = normalizeSupportText(effectiveMessage)
+    .replace(/[.!?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const isGreetingOrThanks = /^(?:(?:da\s+)?(?:xin\s+)?chao(?:\s+(?:shop|neo|ban|anh|chi|em))?|(?:da\s+)?cam on(?:\s+(?:shop|neo|ban|anh|chi|em))?|hello|hi|hey|thanks|thank you|good morning|good afternoon)$/.test(normalizedMessage);
+  if (
+    !Object.values(intents).some((value) => value === true) &&
+    extractCatalogSearchTerms(effectiveMessage).length > 0 &&
+    !extractOrderCode(effectiveMessage) &&
+    !isGreetingOrThanks
+  ) {
+    intents.catalog = true;
+  }
 
   const searchCatalogWithRouterFallback = async (message: string) => {
     let catalogEvidence = await searchCatalog(message, intents.category, routedSearchTerms);

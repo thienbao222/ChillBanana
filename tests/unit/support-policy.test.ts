@@ -13,6 +13,7 @@ import {
 } from "@/features/ai/customer/support-policy";
 import {
   searchCatalog,
+  runCustomerSupportTools,
   resolveEffectiveSupportMessage,
 } from "@/features/ai/customer/support-tools";
 import { prisma } from "@/lib/prisma";
@@ -176,6 +177,36 @@ describe("support-policy unit tests", () => {
       const intent = detectSupportIntents("Cước bay Narita về Sài Gòn tính thế nào? Gom đơn được giảm không?");
       expect(intent.shipping).toBe(true);
     });
+  });
+
+  it("vẫn tìm catalog khi router không có API key và regex không nhận ra câu hỏi sản phẩm", async () => {
+    const hadaProduct = {
+      id: "hada-labo-cleanser",
+      name: "Sữa Rửa Mặt Hada Labo Gokujyun",
+      category: "cosmetics",
+      categoryName: "Mỹ phẩm & Chăm sóc da",
+      priceJpy: 900,
+      weightKg: 0.2,
+      stockSlots: 2,
+      description: "Sữa rửa mặt làm sạch da Hada Labo",
+      voltageNote: null,
+      imageUrl: "/hada-labo.jpg",
+      originalStore: "Amazon JP",
+      createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValueOnce([hadaProduct as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "sữa rửa mặt hada còn hàng sẵn không",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products).toEqual(
+      expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })])
+    );
+    expect(prisma.product.findMany).toHaveBeenCalledTimes(1);
   });
 
   describe("Nhãn hiển thị trạng thái và suất mua", () => {
