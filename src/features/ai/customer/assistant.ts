@@ -7,6 +7,10 @@ import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type Support
 let neoPrimaryUnavailable = false;
 let neoPrimaryCooldownUntil = 0;
 
+export const CHAT_TIMEOUT_MS = Number(process.env.CHAT_TIMEOUT_MS) > 0
+  ? Number(process.env.CHAT_TIMEOUT_MS)
+  : 25_000;
+
 const SENSITIVE_KEYWORDS = [
   "chính trị", "chinh tri", "bầu cử", "biểu tình", "bạo động",
   "khiêu dâm", "sex", "đồi trụy", "người lớn 18+", "phim sex", "gái gọi",
@@ -255,7 +259,7 @@ export async function askGeminiAgentDetailed(
                 thinkingConfig: { thinkingLevel: "low" },
               },
             }),
-            signal: AbortSignal.timeout(12_000),
+            signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
           }
         );
 
@@ -275,7 +279,7 @@ export async function askGeminiAgentDetailed(
                   temperature: 0.4,
                 },
               }),
-              signal: AbortSignal.timeout(12_000),
+              signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
             }
           );
           if (retryRes.ok) {
