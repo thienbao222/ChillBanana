@@ -78,7 +78,24 @@ export function normalizeSupportText(value: string): string {
 export function extractCatalogSearchTerms(message: string): string[] {
   const rawTokens =
     message.match(/[\p{L}\p{N}]+(?:[-_][\p{L}\p{N}]+)*/gu)?.filter((t) => t.length >= 2 || /^\p{N}+$/u.test(t)) ?? [];
-  const tokens = rawTokens.filter((token) => !SEARCH_STOP_WORDS.has(normalizeSupportText(token)));
+  const normalizedTokens = rawTokens.map(normalizeSupportText);
+  const tokens = rawTokens.filter((token, index) => {
+    const normalized = normalizedTokens[index];
+    if (!SEARCH_STOP_WORDS.has(normalized)) return true;
+    if (["kem", "may", "do"].includes(normalized)) {
+      const previous = normalizedTokens[index - 1];
+      const next = normalizedTokens[index + 1];
+      const inProductPhrase =
+        (normalized === "do" && (next === "dien" || (next === "gia" && normalizedTokens[index + 2] === "dung"))) ||
+        (normalized === "dien" && previous === "do") ||
+        (normalized === "gia" && previous === "do" && normalizedTokens[index + 1] === "dung") ||
+        (normalized === "dung" && previous === "gia" && normalizedTokens[index - 2] === "do") ||
+        (previous && !SEARCH_STOP_WORDS.has(previous)) ||
+        (next && !SEARCH_STOP_WORDS.has(next));
+      return Boolean(inProductPhrase);
+    }
+    return false;
+  });
   return [...new Set(tokens.map((token) => token.slice(0, 60)))].slice(0, 6);
 }
 

@@ -194,19 +194,53 @@ describe("support-policy unit tests", () => {
       originalStore: "Amazon JP",
       createdAt: new Date("2026-01-01"),
     };
-    vi.spyOn(prisma.product, "findMany").mockResolvedValueOnce([hadaProduct as any]);
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([hadaProduct as any]);
 
-    const result = await runCustomerSupportTools({
-      message: "sữa rửa mặt hada còn hàng sẵn không",
-      customerId: null,
-      guestOrderAccessToken: null,
-      scrapedProduct: null,
-    });
+    for (const message of ["sữa rửa mặt hada còn hàng sẵn không", "sua rua mat hada con hang khong"]) {
+      const result = await runCustomerSupportTools({
+        message,
+        customerId: null,
+        guestOrderAccessToken: null,
+        scrapedProduct: null,
+      });
 
-    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })])
-    );
-    expect(prisma.product.findMany).toHaveBeenCalledTimes(1);
+      expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })])
+      );
+    }
+    expect(prisma.product.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("matches accent-free queries against the small catalog and keeps product-type terms", async () => {
+    const products = [
+      {
+        id: "hada-labo-cleanser", name: "Sữa Rửa Mặt Hada Labo Gokujyun", category: "cosmetics",
+        categoryName: "Mỹ phẩm & Chăm sóc da", priceJpy: 900, weightKg: 0.2, stockSlots: 2,
+        description: "Sữa rửa mặt làm sạch da Hada Labo", voltageNote: null, imageUrl: null,
+        originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+      },
+      {
+        id: "zojirushi-bottle", name: "Bình giữ nhiệt Zojirushi SM-SF48", category: "gadgets",
+        categoryName: "Gia dụng & Thiết bị", priceJpy: 2800, weightKg: 0.3, stockSlots: 2,
+        description: "Bình giữ nhiệt inox Zojirushi", voltageNote: null, imageUrl: null,
+        originalStore: "Amazon JP", createdAt: new Date("2026-01-02"),
+      },
+    ];
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue(products as any);
+
+    for (const [query, productId] of [
+      ["sua rua mat hada con hang khong", "hada-labo-cleanser"],
+      ["bình giữ nhiệt zojirushi có sẵn không", "zojirushi-bottle"],
+    ]) {
+      const evidence = await searchCatalog(query, null);
+      expect(evidence.known.products).toEqual(expect.arrayContaining([expect.objectContaining({ id: productId })]));
+    }
+
+    expect(extractCatalogSearchTerms("kem chống nắng")).toContain("kem");
+    expect(extractCatalogSearchTerms("máy cạo râu")).toContain("máy");
+    expect(extractCatalogSearchTerms("kem")).toEqual([]);
+    expect(extractCatalogSearchTerms("may")).toEqual([]);
+    expect(extractCatalogSearchTerms("do")).toEqual([]);
   });
 
   describe("Nhãn hiển thị trạng thái và suất mua", () => {
@@ -365,6 +399,11 @@ describe("support-policy unit tests", () => {
         for (const stop of forbidden) {
           expect(normalizedTerms).not.toContain(stop);
         }
+      });
+
+      it("giữ các từ loại hàng khi nằm trong cụm sản phẩm", () => {
+        expect(extractCatalogSearchTerms("kem chống nắng")).toContain("kem");
+        expect(extractCatalogSearchTerms("máy cạo râu")).toContain("máy");
       });
     });
   });

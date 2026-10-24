@@ -561,14 +561,16 @@ export async function searchCatalog(
   }
 
   const allSearchTerms = [...new Set([...terms, ...(translated.detectedBrand ? [translated.detectedBrand] : [])])];
-  const termFilters = allSearchTerms.map((term) => ({
-    OR: [
-      { name: { contains: term, mode: "insensitive" as const } },
-      { description: { contains: term, mode: "insensitive" as const } },
-      { categoryName: { contains: term, mode: "insensitive" as const } },
-      { voltageNote: { contains: term, mode: "insensitive" as const } },
-    ],
-  }));
+  const termFilters = allSearchTerms.flatMap((term) =>
+    [...new Set([term, normalizeSupportText(term)])].map((variant) => ({
+      OR: [
+        { name: { contains: variant, mode: "insensitive" as const } },
+        { description: { contains: variant, mode: "insensitive" as const } },
+        { categoryName: { contains: variant, mode: "insensitive" as const } },
+        { voltageNote: { contains: variant, mode: "insensitive" as const } },
+      ],
+    }))
+  );
   const targetCategory = category || (translated.category !== "other" ? translated.category : null);
   const where = {
     ...(targetCategory ? { category: targetCategory } : {}),
@@ -576,25 +578,28 @@ export async function searchCatalog(
   };
 
   try {
-    const rows = await prisma.product.findMany({
-      where,
+    const select = {
+      id: true,
+      name: true,
+      category: true,
+      categoryName: true,
+      priceJpy: true,
+      weightKg: true,
+      stockSlots: true,
+      description: true,
+      voltageNote: true,
+      imageUrl: true,
+      originalStore: true,
+      createdAt: true,
+    };
+    const catalogPreview = await prisma.product.findMany({
       orderBy: { createdAt: "desc" },
-      take: 60,
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        categoryName: true,
-        priceJpy: true,
-        weightKg: true,
-        stockSlots: true,
-        description: true,
-        voltageNote: true,
-        imageUrl: true,
-        originalStore: true,
-        createdAt: true,
-      },
+      take: 501,
+      select,
     });
+    const rows = catalogPreview.length > 500
+      ? await prisma.product.findMany({ where, orderBy: { createdAt: "desc" }, take: 60, select })
+      : catalogPreview.filter((product) => !targetCategory || product.category === targetCategory);
 
     const msgNorm = normalizeSupportText(message);
     const msgWords = new Set(tokenizeNormalizedWords(message));
