@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent } from "@/features/ai/customer/assistant";
+import { askGeminiAgent, askGeminiAgentDetailed } from "@/features/ai/customer/assistant";
 import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
 import { translateToJapaneseKeywords, parseBudgetAndCurrency } from "@/features/ai/customer/japanese-translator";
 import { prisma } from "@/lib/prisma";
@@ -81,8 +81,10 @@ export async function POST(req: NextRequest) {
     let reply = "";
     let supportSources: unknown[] = [];
     let isGuardrailTriggered = false;
+    let aiMode: "gemini" | "offline" = "offline";
 
     if (isVnJpRegistration) {
+      aiMode = "offline";
       const codeMatch = message.match(/Mã\s*phiếu:\s*([^-\n]+)/i);
       const dispatchCode = codeMatch ? codeMatch[1].trim() : "";
 
@@ -107,16 +109,27 @@ export async function POST(req: NextRequest) {
 
       // Order privacy and missing quote inputs use deterministic replies; never ask the model
       // to infer private order state or invent the missing price/rate.
-      const generatedReply = supportRun.guardedReply ?? await askGeminiAgent(
-        message,
-        selectedPersonality,
-        validHistory,
-        supportRun.evidence
-      );
+      let generatedReply = "";
+      if (supportRun.guardedReply) {
+        generatedReply = supportRun.guardedReply;
+        aiMode = "offline";
+      } else {
+        const agentResult = await askGeminiAgentDetailed(
+          message,
+          selectedPersonality,
+          validHistory,
+          supportRun.evidence
+        );
+        generatedReply = agentResult.text;
+        aiMode = agentResult.mode;
+      }
+
       reply = generatedReply + (supportRun.quoteFooter ?? "");
       supportSources = supportRun.sources;
       isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");
     }
+
+    console.log(`[AI Chat] Session: ${resolvedSessionId} | Mode: ${aiMode}`);
 
     // 3. Phân loại chủ đề đa chiều (Intent & Topic Classifier)
     const msgLower = message.toLowerCase();
@@ -264,7 +277,7 @@ export async function POST(req: NextRequest) {
           messages: {
             create: [
               { role: "user", content: message, categoryTag: finalTopic },
-              { role: "assistant", content: reply },
+              { role: "assistant", content: reply, categoryTag: aiMode === "offline" ? "AI_OFFLINE" : "AI_GEMINI" },
             ],
           },
         },
@@ -283,7 +296,7 @@ export async function POST(req: NextRequest) {
           messages: {
             create: [
               { role: "user", content: message, categoryTag: topic },
-              { role: "assistant", content: reply },
+              { role: "assistant", content: reply, categoryTag: aiMode === "offline" ? "AI_OFFLINE" : "AI_GEMINI" },
             ],
           },
         },
@@ -299,6 +312,7 @@ export async function POST(req: NextRequest) {
       sessionId: resolvedSessionId,
       sources: supportSources,
       isGuardrailTriggered,
+      aiMode,
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {
       httpOnly: true,

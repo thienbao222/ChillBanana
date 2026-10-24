@@ -449,6 +449,14 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
           /kết quả đâu|vẫn chưa có|sao lâu thế|lỗi|chưa có/i.test(m.content)
         );
 
+        const isOfflineSession = selectedAiSession.messages?.some((m: any) =>
+          m.role === "assistant" && (
+            m.categoryTag === "AI_OFFLINE" ||
+            m.content?.includes("kết nối AI đang tạm gián đoạn") ||
+            m.content?.includes("thông tin tra cứu trực tiếp từ hệ thống")
+          )
+        );
+
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 relative my-8 flex flex-col max-h-[90vh]">
@@ -501,10 +509,15 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                       <span>AI cần hỗ trợ (Khách thúc giục/chờ kết quả)</span>
                     </span>
+                  ) : isOfflineSession ? (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-300">
+                      <span className="w-2 h-2 rounded-full bg-slate-500"></span>
+                      <span>Chế độ Offline (Dữ liệu tĩnh từ hệ thống)</span>
+                    </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>AI phản hồi bình thường</span>
+                      <span>AI phản hồi bình thường (Gemini Online)</span>
                     </span>
                   )}
                 </div>

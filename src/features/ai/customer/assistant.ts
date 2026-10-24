@@ -161,18 +161,21 @@ export function buildOfflineEvidenceReply(
   return lines.join("\n");
 }
 
-export async function askGeminiAgent(
+export async function askGeminiAgentDetailed(
   userQuery: string,
   personality: AIPersonality,
   conversationHistory: { role: string; text: string }[] = [],
   evidence: SupportEvidence[] = []
-): Promise<string> {
+): Promise<{ text: string; mode: "gemini" | "offline" }> {
   const isOmo = personality === "omotenashi";
 
   if (isSensitiveTopic(userQuery)) {
-    return isOmo
-      ? "Dạ, Neo xin phép từ chối chủ đề này. Neo có thể hỗ trợ tìm sản phẩm Nhật, ước tính chi phí, chính sách vận chuyển và tra cứu đơn đã xác minh ạ."
-      : "Neo xin phép không hỗ trợ nội dung này nha. Mình có thể giúp tìm hàng Nhật, ước tính giá, giải thích vận chuyển hoặc hướng dẫn tra cứu đơn đã xác minh nhé. 🍌";
+    return {
+      text: isOmo
+        ? "Dạ, Neo xin phép từ chối chủ đề này. Neo có thể hỗ trợ tìm sản phẩm Nhật, ước tính chi phí, chính sách vận chuyển và tra cứu đơn đã xác minh ạ."
+        : "Neo xin phép không hỗ trợ nội dung này nha. Mình có thể giúp tìm hàng Nhật, ước tính giá, giải thích vận chuyển hoặc hướng dẫn tra cứu đơn đã xác minh nhé. 🍌",
+      mode: "offline",
+    };
   }
 
   const personalityPrompt = isOmo
@@ -221,6 +224,8 @@ export async function askGeminiAgent(
         );
 
         if (response.status === 400) {
+          const err400 = await response.text().catch(() => "");
+          console.warn(`[Assistant] Model ${model} lỗi HTTP 400: ${err400.slice(0, 200)}`);
           const retryRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
             {
@@ -239,6 +244,10 @@ export async function askGeminiAgent(
           );
           if (retryRes.ok) {
             response = retryRes;
+          } else {
+            const retryErrText = await retryRes.text().catch(() => "");
+            console.warn(`[Assistant] Model ${model} retry lỗi HTTP ${retryRes.status}: ${retryErrText.slice(0, 200)}`);
+            response = retryRes;
           }
         }
 
@@ -254,16 +263,22 @@ export async function askGeminiAgent(
               rawText.toLowerCase().includes("trạm quan sát") ||
               rawText.toLowerCase().includes("đang chờ dữ liệu")
             ) {
-              return buildOfflineEvidenceReply(userQuery, evidence, isOmo);
+              return {
+                text: buildOfflineEvidenceReply(userQuery, evidence, isOmo),
+                mode: "offline",
+              };
             }
             const sanitized = textPart.text
               .replace(/\*\*Công cụ đang chạy:\*\*.*?(?:\n|$)/gi, "")
               .replace(/\[(?:Công cụ đang chạy|Tool running):.*?\](?:\n|$)/gi, "")
               .trim();
-            if (sanitized) return sanitized;
+            if (sanitized) return { text: sanitized, mode: "gemini" };
           }
           continue;
         }
+
+        const errText = await response.text().catch(() => "");
+        console.warn(`[Assistant] Model ${model} lỗi HTTP ${response.status}: ${errText.slice(0, 200)}`);
 
         chatKeyPool.markError(activeKey, response.status, model);
 
@@ -274,7 +289,8 @@ export async function askGeminiAgent(
         }
 
         continue;
-      } catch {
+      } catch (err: any) {
+        console.warn(`[Assistant] Model ${model} error:`, err?.message || String(err));
         chatKeyPool.markError(activeKey, 503, model);
         if (model === GEMINI_MODELS.neo) {
           neoPrimaryCooldownUntil = Date.now() + 60_000;
@@ -284,5 +300,18 @@ export async function askGeminiAgent(
     }
   }
 
-  return buildOfflineEvidenceReply(userQuery, evidence, isOmo);
+  return {
+    text: buildOfflineEvidenceReply(userQuery, evidence, isOmo),
+    mode: "offline",
+  };
+}
+
+export async function askGeminiAgent(
+  userQuery: string,
+  personality: AIPersonality,
+  conversationHistory: { role: string; text: string }[] = [],
+  evidence: SupportEvidence[] = []
+): Promise<string> {
+  const result = await askGeminiAgentDetailed(userQuery, personality, conversationHistory, evidence);
+  return result.text;
 }

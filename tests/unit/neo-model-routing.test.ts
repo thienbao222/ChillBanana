@@ -51,4 +51,23 @@ describe("Neo model routing", () => {
     expect(reply).toContain("Khuyến cáo an toàn điện áp");
     expect(reply).toContain("không cắm trực tiếp vào nguồn 220V");
   });
+
+  it("askGeminiAgentDetailed returns mode gemini when successful and mode offline on fallback", async () => {
+    vi.resetModules();
+    vi.stubEnv("GEMINI_CHAT_KEYS", "test-chat-key");
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: "Phản hồi trực tiếp từ Gemini" }] } }],
+    }), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { askGeminiAgentDetailed } = await import("@/features/ai/customer/assistant");
+    const res = await askGeminiAgentDetailed("Tư vấn nồi cơm", "omotenashi");
+    expect(res.mode).toBe("gemini");
+    expect(res.text).toBe("Phản hồi trực tiếp từ Gemini");
+
+    // Khi fetch fail thì trả về offline
+    fetchMock.mockResolvedValue(new Response("error 500", { status: 500 }));
+    const offlineRes = await askGeminiAgentDetailed("Tư vấn nồi cơm", "omotenashi");
+    expect(offlineRes.mode).toBe("offline");
+  });
 });
