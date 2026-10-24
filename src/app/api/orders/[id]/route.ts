@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail } from "@/lib/mailer";
+import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail, sendOrderRollbackEmail } from "@/lib/mailer";
 import {
   hasGuestOrderAccessForEmail,
   getAdminUsernameFromRequest,
@@ -9,8 +9,8 @@ import {
   verifySameOrigin,
 } from "@/lib/auth-session";
 import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
-import { isVerifiedAdmin } from "@/lib/admin-guard";
-import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
+import { isVerifiedAdmin, requireAdmin } from "@/lib/admin-guard";
+import { isNextOrderStatus, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
 import { getDepositAmount } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
@@ -241,19 +241,47 @@ export async function PATCH(
 
     // Hỗ trợ hành động HOÀN TÁC / LÙI 1 BƯỚC (chỉ dành cho Quản trị viên)
     if (action === "rollback") {
-      if (!isAdminUser) {
-        return NextResponse.json({ error: "Chỉ quản trị viên mới có quyền hoàn tác trạng thái đơn hàng." }, { status: 401 });
+      const adminGuard = await requireAdmin(req);
+      if (!adminGuard.ok) {
+        return adminGuard.response;
       }
+
+      const rollbackReason = typeof body.reason === "string" ? body.reason.trim() : "";
+      if (rollbackReason.length < 5) {
+        return NextResponse.json(
+          { error: "Vui lòng cung cấp lý do hoàn tác (tối thiểu 5 ký tự)." },
+          { status: 400 }
+        );
+      }
+
       if (existingOrder.status === "PENDING_DEPOSIT" || existingOrder.status === "CANCELLED") {
         return NextResponse.json({ error: `Đơn hàng ở trạng thái "${existingOrder.status}" không thể hoàn tác lùi bước.` }, { status: 400 });
       }
+
+      if (existingOrder.status === "COMPLETED" && adminGuard.role !== "SUPER_ADMIN") {
+        return NextResponse.json(
+          { error: "Chỉ Quản trị viên cấp cao (SUPER_ADMIN) mới có quyền hoàn tác đơn hàng đã hoàn tất (COMPLETED)." },
+          { status: 403 }
+        );
+      }
+
       const prevStatus = getPreviousOrderStatus(existingOrder.status);
       if (!prevStatus) {
         return NextResponse.json({ error: "Không tìm thấy trạng thái trước đó để hoàn tác." }, { status: 400 });
       }
 
-      const rollbackTitle = "Hoàn tác trạng thái đơn hàng";
-      const rollbackDesc = `Quản trị viên hoàn tác trạng thái từ "${existingOrder.status}" về "${prevStatus}" (Thao tác điều chỉnh vận hành).`;
+      if (prevStatus === "PENDING_DEPOSIT" && existingOrder.paymentStatus !== "UNPAID") {
+        return NextResponse.json(
+          { error: "Không thể hoàn tác về trạng thái Chờ cọc (PENDING_DEPOSIT) khi khách đã thanh toán/đặt cọc. Vui lòng dùng chức năng hủy/hoàn tiền." },
+          { status: 400 }
+        );
+      }
+
+      const fromLabel = ORDER_STATUS_LABELS_VI[existingOrder.status] || existingOrder.status;
+      const toLabel = ORDER_STATUS_LABELS_VI[prevStatus] || prevStatus;
+
+      const rollbackTitle = "Điều chỉnh tiến độ đơn hàng";
+      const rollbackDesc = `Chúng tôi vừa điều chỉnh lại tiến độ đơn hàng (${fromLabel} → ${toLabel}) do cập nhật nhầm: ${rollbackReason}`;
       const rollbackLocation = "Hệ thống Quản trị ChillBanana";
 
       const rollbackUpdateData: any = {
@@ -268,6 +296,13 @@ export async function PATCH(
         },
       };
 
+      let deletedCodTransactions: Array<{
+        id: string;
+        amountVnd: number;
+        provider: string;
+        createdAt: Date;
+      }> = [];
+
       // Nếu lùi từ COMPLETED về LOCAL_DELIVERY
       if (existingOrder.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
         if (existingOrder.depositPercent === 50) {
@@ -277,6 +312,18 @@ export async function PATCH(
             50
           );
         }
+        deletedCodTransactions = await prisma.paymentTransaction.findMany({
+          where: {
+            orderId: existingOrder.id,
+            provider: "COD_SETTLEMENT",
+          },
+          select: {
+            id: true,
+            amountVnd: true,
+            provider: true,
+            createdAt: true,
+          },
+        });
       }
 
       const rolledBackOrder = await prisma.$transaction(async (tx) => {
@@ -310,20 +357,46 @@ export async function PATCH(
         });
       });
 
+      if (!rolledBackOrder) {
+        throw new Error("ORDER_ROLLBACK_FAILED");
+      }
+
       await writeAuditLog({
-        actor: getAdminUsernameFromRequest(req) ?? "admin",
+        actor: adminGuard.username || getAdminUsernameFromRequest(req) || "admin",
         action: "ORDER_STATUS_ROLLBACK",
         entityType: "Order",
         entityId: existingOrder.orderCode,
-        summary: `Hoàn tác trạng thái đơn ${existingOrder.orderCode} từ ${existingOrder.status} về ${prevStatus}.`,
+        summary: `Hoàn tác trạng thái đơn ${existingOrder.orderCode} từ ${fromLabel} (${existingOrder.status}) về ${toLabel} (${prevStatus}). Lý do: ${rollbackReason}`,
         metadata: {
           fromStatus: existingOrder.status,
           toStatus: prevStatus,
+          fromLabel,
+          toLabel,
+          reason: rollbackReason,
+          deletedCodTransactions: deletedCodTransactions.map((tx) => ({
+            id: tx.id,
+            amountVnd: tx.amountVnd,
+            provider: tx.provider,
+            createdAt: tx.createdAt.toISOString(),
+          })),
         },
         req,
       });
 
-      return NextResponse.json({ success: true, order: rolledBackOrder });
+      const isFromCompleted = existingOrder.status === "COMPLETED";
+      let emailQueued = false;
+      try {
+        emailQueued = await sendOrderRollbackEmail(rolledBackOrder, {
+          fromLabel,
+          toLabel,
+          reason: rollbackReason,
+          isFromCompleted,
+        });
+      } catch (emailErr) {
+        console.error("[Mailer] Lỗi gửi email hoàn tác trạng thái:", emailErr);
+      }
+
+      return NextResponse.json({ success: true, order: rolledBackOrder, emailQueued });
     }
 
     // Không cho phép thay đổi nếu đơn hàng đã hoàn tất hoặc đã hủy

@@ -659,6 +659,113 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
   }, getTransporter());
 }
 
+/**
+ * 3b. Email thông báo hoàn tác / điều chỉnh trạng thái đơn hàng gửi khách
+ */
+export async function sendOrderRollbackEmail(
+  order: any,
+  params: {
+    fromLabel: string;
+    toLabel: string;
+    reason: string;
+    isFromCompleted?: boolean;
+  },
+  logId?: string
+): Promise<boolean> {
+  if (!order.customerEmail) {
+    return false;
+  }
+
+  const orderCode = escapeHtml(String(order.orderCode || ""));
+  const customerName = escapeHtml(String(order.customerName || "Quý khách"));
+  const fromLabel = escapeHtml(params.fromLabel);
+  const toLabel = escapeHtml(params.toLabel);
+  const reason = escapeHtml(params.reason);
+  const isFromCompleted = Boolean(params.isFromCompleted);
+
+  const subject = isFromCompleted
+    ? `[ChillBanana] Điều chỉnh: đơn ${order.orderCode} CHƯA hoàn tất`
+    : `[ChillBanana] Thông báo điều chỉnh trạng thái đơn hàng #${order.orderCode}`;
+
+  const trackingUrl = escapeHtml(buildGuestOrderTrackingUrl(order));
+
+  const explanation = isFromCompleted
+    ? `<div style="background-color:#FFF7ED;border-left:4px solid #F59E0B;padding:16px;margin:20px 0;border-radius:8px;">
+        <p style="margin:0 0 6px;font-weight:bold;color:#B45309;">⚠️ Đính chính thông tin hoàn tất đơn hàng</p>
+        <p style="margin:0;font-size:14px;color:#78350F;">
+          ChillBanana xin chân thành cáo lỗi cùng Quý khách: Email thông báo hoàn tất đơn hàng gửi trước đó là <strong>nhầm lẫn trong khâu cập nhật vận hành</strong>. Đơn hàng của Quý khách <strong>hiện tại vẫn đang trong quá trình xử lý/giao hàng</strong> (trạng thái: <strong>${toLabel}</strong>).
+        </p>
+      </div>`
+    : `<div style="background-color:#F8FAFC;border-left:4px solid #64748B;padding:16px;margin:20px 0;border-radius:8px;">
+        <p style="margin:0 0 6px;font-weight:bold;color:#334155;">Thông tin điều chỉnh tiến độ</p>
+        <p style="margin:0;font-size:14px;color:#475569;">
+          Do cập nhật nhầm trạng thái trong quá trình vận hành, chúng tôi xin phép điều chỉnh lại trạng thái đơn hàng từ <strong>${fromLabel}</strong> về <strong>${toLabel}</strong>.
+        </p>
+      </div>`;
+
+  const html = `
+    <div style="font-family:'Segoe UI',Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;background:#ffffff;">
+      <div style="background:#0f172a;color:#ffffff;padding:24px 28px;text-align:center;">
+        <h2 style="margin:0;font-size:22px;color:#fbbf24;">🍌 ChillBanana</h2>
+        <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;">Thông báo điều chỉnh tiến độ đơn hàng</p>
+      </div>
+
+      <div style="padding:28px;color:#1e293b;line-height:1.6;">
+        <p style="font-size:15px;">Kính chào <strong>${customerName}</strong>,</p>
+        <p style="font-size:14px;color:#334155;">
+          ChillBanana rất tiếc phải thông báo và xin chân thành cáo lỗi với Quý khách về sự bất tiện này:
+        </p>
+
+        ${explanation}
+
+        <div style="background-color:#F1F5F9;padding:16px;border-radius:10px;margin:20px 0;font-size:14px;">
+          <p style="margin:4px 0;"><strong>Mã đơn hàng:</strong> <span style="font-family:monospace;font-weight:bold;color:#0F172A;">#${orderCode}</span></p>
+          <p style="margin:4px 0;"><strong>Trạng thái hiện tại:</strong> <span style="color:#2563EB;font-weight:bold;">${toLabel}</span></p>
+          <p style="margin:4px 0;"><strong>Lý do điều chỉnh:</strong> ${reason}</p>
+        </div>
+
+        <p style="font-size:14px;color:#475569;">
+          Đội ngũ ChillBanana đang tiếp tục theo dõi sát sao kiện hàng và sẽ cập nhật tiến độ chính xác nhất tới Quý khách ngay khi có thông tin mới.
+        </p>
+
+        <div style="text-align:center;margin:30px 0;">
+          <a href="${trackingUrl}" target="_blank" rel="noopener noreferrer" style="background:#0f172a;color:#fbbf24;padding:12px 28px;text-decoration:none;border-radius:10px;font-weight:bold;font-size:14px;display:inline-block;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1);">
+            🔍 Tra cứu tiến độ đơn hàng
+          </a>
+        </div>
+
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+        <p style="font-size:12px;color:#94a3b8;text-align:center;margin:0;">
+          Một lần nữa, ChillBanana thành thật xin lỗi Quý khách về sự bất tiện này.<br/>
+          Hotline hỗ trợ: 1900 6868 | Email: support@chillbanana.vn
+        </p>
+      </div>
+    </div>`;
+
+  recordSentEmail({
+    to: order.customerEmail,
+    subject,
+    html,
+    type: "ORDER_ROLLBACK",
+    isSimulated: !Boolean(process.env.SMTP_USER && process.env.SMTP_PASS),
+  });
+
+  return deliverLoggedEmail({
+    emailType: "order-rollback",
+    orderId: order.id,
+    payload: {
+      fromLabel: params.fromLabel,
+      toLabel: params.toLabel,
+      reason: params.reason,
+      isFromCompleted: Boolean(isFromCompleted),
+    },
+    logId,
+    to: order.customerEmail,
+    subject,
+    html,
+  }, getTransporter());
+}
+
 /** Retry a failed transactional email by re-rendering its template from the current order snapshot. */
 export async function retryEmailLog(logId: string): Promise<boolean> {
   const log = await prisma.emailLog.findUnique({ where: { id: logId }, include: { order: true } });
@@ -679,6 +786,17 @@ export async function retryEmailLog(logId: string): Promise<boolean> {
       return sendPaymentSuccessEmail(log.order, log.id);
     case "order-status-update":
       return sendOrderStatusUpdateEmail(log.order, String(payload.title || "Cập nhật trạng thái"), "Đơn hàng đã có cập nhật mới.", log.id);
+    case "order-rollback":
+      return sendOrderRollbackEmail(
+        log.order,
+        {
+          fromLabel: String(payload.fromLabel || "Trước điều chỉnh"),
+          toLabel: String(payload.toLabel || "Sau điều chỉnh"),
+          reason: String(payload.reason || "Điều chỉnh vận hành"),
+          isFromCompleted: Boolean(payload.isFromCompleted),
+        },
+        log.id
+      );
     default:
       return false;
   }

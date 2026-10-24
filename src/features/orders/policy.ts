@@ -12,6 +12,17 @@ export const ORDER_STATUS_FLOW = [
 
 export type ActiveOrderStatus = (typeof ORDER_STATUS_FLOW)[number];
 
+export const ORDER_STATUS_LABELS_VI: Record<string, string> = {
+  PENDING_DEPOSIT: "Chờ cọc",
+  PURCHASING_JP: "Đang mua tại Nhật",
+  WAREHOUSE_JP: "Đã nhập kho Nhật",
+  IN_TRANSIT_AIR: "Đang vận chuyển quốc tế",
+  WAREHOUSE_VN: "Đã nhập kho Việt Nam",
+  LOCAL_DELIVERY: "Đang giao chặng cuối",
+  COMPLETED: "Giao hàng thành công",
+  CANCELLED: "Đã hủy",
+};
+
 export function isNextOrderStatus(current: string, next: string): boolean {
   const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
   return currentIndex >= 0 && ORDER_STATUS_FLOW[currentIndex + 1] === next;

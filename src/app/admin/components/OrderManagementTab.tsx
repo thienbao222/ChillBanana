@@ -22,18 +22,18 @@ import {
 import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
-import { ORDER_STATUS_FLOW } from "@/features/orders/policy";
+import { ORDER_STATUS_FLOW, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { parseOrderItemSource } from "@/features/orders/item-source";
 
 const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
-  PENDING_DEPOSIT: "1. Chờ cọc",
-  PURCHASING_JP: "2. Đang mua hàng tại Nhật",
-  WAREHOUSE_JP: "3. Đã nhập kho Nhật",
-  IN_TRANSIT_AIR: "4. Đang vận chuyển quốc tế",
-  WAREHOUSE_VN: "5. Đã nhập kho Việt Nam",
-  LOCAL_DELIVERY: "6. Đang giao chặng cuối",
-  COMPLETED: "7. Giao hàng thành công",
+  PENDING_DEPOSIT: `1. ${ORDER_STATUS_LABELS_VI.PENDING_DEPOSIT}`,
+  PURCHASING_JP: `2. ${ORDER_STATUS_LABELS_VI.PURCHASING_JP}`,
+  WAREHOUSE_JP: `3. ${ORDER_STATUS_LABELS_VI.WAREHOUSE_JP}`,
+  IN_TRANSIT_AIR: `4. ${ORDER_STATUS_LABELS_VI.IN_TRANSIT_AIR}`,
+  WAREHOUSE_VN: `5. ${ORDER_STATUS_LABELS_VI.WAREHOUSE_VN}`,
+  LOCAL_DELIVERY: `6. ${ORDER_STATUS_LABELS_VI.LOCAL_DELIVERY}`,
+  COMPLETED: `7. ${ORDER_STATUS_LABELS_VI.COMPLETED}`,
 };
 
 interface OrderManagementTabProps {
@@ -74,6 +74,10 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [paymentReference, setPaymentReference] = useState("");
   const [isRecordingPayment, setIsRecordingPayment] = useState(false);
   const [pricingConfig, setPricingConfig] = useState<PricingConfigValues>(DEFAULT_PRICING_CONFIG);
+  const [rollbackModalOrder, setRollbackModalOrder] = useState<StoredOrder | null>(null);
+  const [rollbackReason, setRollbackReason] = useState("");
+  const [rollbackConfirmedCompleted, setRollbackConfirmedCompleted] = useState(false);
+  const [isRollingBack, setIsRollingBack] = useState(false);
 
   // Sync external search term
   useEffect(() => {
@@ -350,23 +354,47 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     }
   };
 
-  const handleRollbackStatus = async (order: StoredOrder) => {
-    if (!confirm(`Bạn có chắc chắn muốn hoàn tác lùi 1 bước trạng thái của đơn #${order.orderCode}?`)) return;
+  const handleRollbackStatus = (order: StoredOrder) => {
+    setRollbackModalOrder(order);
+    setRollbackReason("");
+    setRollbackConfirmedCompleted(false);
+  };
+
+  const handleConfirmRollback = async () => {
+    if (!rollbackModalOrder) return;
+    const reason = rollbackReason.trim();
+    if (reason.length < 5) {
+      adminToast.error("Vui lòng nhập lý do hoàn tác (tối thiểu 5 ký tự).");
+      return;
+    }
+    if (rollbackModalOrder.status === "COMPLETED" && !rollbackConfirmedCompleted) {
+      adminToast.error("Vui lòng xác nhận thông báo gửi email cải chính trước khi hoàn tác đơn hoàn tất.");
+      return;
+    }
+
+    setIsRollingBack(true);
     try {
-      const res = await fetch(`/api/orders/${order.orderCode}`, {
+      const res = await fetch(`/api/orders/${rollbackModalOrder.orderCode}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "rollback" }),
+        body: JSON.stringify({ action: "rollback", reason }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
-        adminToast.success(`Đã hoàn tác lùi 1 bước đơn #${order.orderCode}!`);
+        if (data.emailQueued) {
+          adminToast.success("Đã hoàn tác và gửi email báo khách");
+        } else {
+          adminToast.warning("Đã hoàn tác nhưng gửi email thất bại (xem Nhật ký email để gửi lại)");
+        }
+        setRollbackModalOrder(null);
         fetchOrders();
       } else {
         adminToast.error("Lỗi hoàn tác: " + (data.error || "Không thể thực hiện"));
       }
     } catch {
       adminToast.error("Lỗi kết nối máy chủ");
+    } finally {
+      setIsRollingBack(false);
     }
   };
 
@@ -1822,6 +1850,122 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
           </div>
         </div>
       )}
+
+      {/* MODAL: HOÀN TÁC TRẠNG THÁI ĐƠN HÀNG */}
+      {rollbackModalOrder && (() => {
+        const currentLabel = ORDER_STATUS_LABELS_VI[rollbackModalOrder.status] || rollbackModalOrder.status;
+        const prevStatus = getPreviousOrderStatus(rollbackModalOrder.status);
+        const prevLabel = prevStatus ? (ORDER_STATUS_LABELS_VI[prevStatus] || prevStatus) : "Không xác định";
+        const isFromCompleted = rollbackModalOrder.status === "COMPLETED";
+        const isFormValid = rollbackReason.trim().length >= 5 && (!isFromCompleted || rollbackConfirmedCompleted);
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200 relative my-8">
+              <button
+                onClick={() => setRollbackModalOrder(null)}
+                disabled={isRollingBack}
+                className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="flex items-center space-x-2 text-amber-600 mb-2">
+                <span className="text-xl">⏪</span>
+                <h3 className="text-lg font-bold text-navy-900">
+                  Hoàn tác trạng thái đơn hàng
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">
+                Đơn <strong>#{rollbackModalOrder.orderCode}</strong> · Khách: <strong>{rollbackModalOrder.customerName}</strong> ({rollbackModalOrder.customerPhone})
+              </p>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4 text-xs space-y-2">
+                <div className="font-bold text-amber-900 flex items-center space-x-1.5">
+                  <span>Điều chỉnh tiến độ:</span>
+                </div>
+                <div className="flex items-center space-x-2 font-medium text-slate-700 bg-white p-2.5 rounded-xl border border-amber-200">
+                  <span className="line-through text-slate-400 font-bold">{currentLabel}</span>
+                  <span className="text-amber-600 font-bold">➔</span>
+                  <span className="text-emerald-700 font-bold">{prevLabel}</span>
+                </div>
+              </div>
+
+              {isFromCompleted && (
+                <div className="bg-rose-50 border border-rose-300 rounded-2xl p-4 mb-4 text-xs space-y-3">
+                  <div className="font-bold text-rose-900 flex items-center space-x-1.5">
+                    <span className="text-base">⚠️</span>
+                    <span>Cảnh báo hoàn tác đơn hoàn tất</span>
+                  </div>
+                  <p className="text-rose-800 leading-relaxed">
+                    Khách hàng đã nhận được email thông báo đơn hàng hoàn tất. Việc hoàn tác sẽ tự động gửi email <strong>cải chính</strong> tới khách hàng để thông báo email trước đó gửi nhầm và đơn hàng thực tế chưa hoàn tất. Thao tác này chỉ dành cho Quản trị viên cấp cao (SUPER_ADMIN).
+                  </p>
+                  <label className="flex items-start space-x-2.5 pt-1 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rollbackConfirmedCompleted}
+                      onChange={(e) => setRollbackConfirmedCompleted(e.target.checked)}
+                      className="mt-0.5 rounded border-rose-300 text-rose-600 focus:ring-rose-500"
+                    />
+                    <span className="font-semibold text-rose-950">
+                      Khách đã nhận email hoàn tất. Hoàn tác sẽ gửi email cải chính. Tiếp tục?
+                    </span>
+                  </label>
+                </div>
+              )}
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleConfirmRollback();
+                }}
+                className="space-y-4 text-xs"
+              >
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <label className="block font-bold text-slate-700">
+                      Lý do hoàn tác (tối thiểu 5 ký tự) <span className="text-rose-500">*</span>
+                    </label>
+                    <span className={`text-[11px] font-mono ${rollbackReason.trim().length >= 5 ? "text-emerald-600" : "text-slate-400"}`}>
+                      {rollbackReason.trim().length}/5
+                    </span>
+                  </div>
+                  <textarea
+                    rows={3}
+                    required
+                    value={rollbackReason}
+                    onChange={(e) => setRollbackReason(e.target.value)}
+                    disabled={isRollingBack}
+                    placeholder="Ví dụ: Bấm nhầm bước giao hàng, kiện hàng thực tế vẫn đang ở kho Việt Nam..."
+                    className="w-full p-3 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-amber-500 focus:bg-white text-slate-800"
+                  />
+                  <p className="text-[11px] text-slate-500 mt-1">
+                    Lý do này sẽ hiển thị công khai trong nhật ký đơn hàng và được gửi trong email xin lỗi / giải thích tới khách hàng.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-2 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setRollbackModalOrder(null)}
+                    disabled={isRollingBack}
+                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-all disabled:opacity-50"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!isFormValid || isRollingBack}
+                    className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold shadow transition-all disabled:opacity-50 flex items-center space-x-1.5"
+                  >
+                    <span>{isRollingBack ? "Đang xử lý..." : "Xác nhận hoàn tác & Báo khách"}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
 
     </div>
   );
