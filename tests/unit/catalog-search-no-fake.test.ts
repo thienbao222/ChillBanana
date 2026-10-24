@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOfflineEvidenceReply } from "@/features/ai/customer/assistant";
+import { buildOfflineEvidenceReply, ensureCatalogFactsInReply } from "@/features/ai/customer/assistant";
 import type { SupportEvidence } from "@/features/ai/customer/support-policy";
 
 describe("Bỏ sản phẩm và giá tự bịa", () => {
@@ -52,6 +52,38 @@ describe("Bỏ sản phẩm và giá tự bịa", () => {
 
     expect(reply).not.toContain("chưa có sản phẩm này trong catalog");
     expect(reply).toContain("thương hiệu hoặc model");
+    expect(ensureCatalogFactsInReply(reply, [notSearchedEvidence], true)).toBe(reply);
+  });
+
+  it("bổ sung tên sản phẩm đã khớp nếu Gemini bỏ sót trong câu trả lời", () => {
+    const evidence: SupportEvidence = {
+      toolId: "catalog_search",
+      status: "ok",
+      source: { label: "Catalog", observedAt: "2026-10-24T00:00:00Z" },
+      known: { searched: true, resultCount: 1, products: [{ name: "Dầu tẩy trang DHC Deep Cleansing Oil" }] },
+      unknown: [],
+      links: [],
+    };
+
+    const reply = ensureCatalogFactsInReply("Quý khách bấm nút Thêm vào giỏ bên dưới nhé.", [evidence], true);
+
+    expect(reply).toContain("Dầu tẩy trang DHC Deep Cleansing Oil");
+  });
+
+  it("bổ sung câu hỏi làm rõ và yêu cầu link khi catalog đã tìm thành công nhưng không có kết quả", () => {
+    const evidence: SupportEvidence = {
+      toolId: "catalog_search",
+      status: "ok",
+      source: { label: "Catalog", observedAt: "2026-10-24T00:00:00Z" },
+      known: { searched: true, resultCount: 0, products: [] },
+      unknown: [],
+      links: [],
+    };
+
+    const reply = ensureCatalogFactsInReply("Neo có thể tìm thêm giúp bạn.", [evidence], false);
+
+    expect(reply).toContain("chưa có mẫu khớp trong catalog");
+    expect(reply).toContain("dán link");
   });
 
   it("buildOfflineEvidenceReply khi có sản phẩm catalog thực tế thì hiển thị đầy đủ thông tin", () => {

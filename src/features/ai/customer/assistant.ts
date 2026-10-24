@@ -54,6 +54,32 @@ ${evidencePayload}
 `;
 }
 
+export function ensureCatalogFactsInReply(
+  reply: string,
+  evidence: SupportEvidence[],
+  isOmo: boolean
+): string {
+  const catalog = evidence.find((item) => item.toolId === "catalog_search");
+  if (!catalog || catalog.known.searched !== true) return reply;
+
+  const products = Array.isArray(catalog.known.products) ? catalog.known.products as Array<{ name?: unknown }> : [];
+  const names = products.slice(0, 3).flatMap((product) =>
+    typeof product?.name === "string" && product.name.trim() ? [product.name.trim()] : []
+  );
+  if (names.length) {
+    const lowerReply = reply.toLocaleLowerCase();
+    const missingNames = names.filter((name) => !lowerReply.includes(name.toLocaleLowerCase()));
+    return missingNames.length ? `${reply}\n\n📦 Trong catalog có: ${missingNames.join("; ")}.` : reply;
+  }
+
+  if (catalog.known.resultCount !== 0) return reply;
+  const saysNotFound = /(?:chưa có|không có|không tìm thấy).{0,80}(?:catalog|mẫu|sản phẩm)|(?:catalog|mẫu|sản phẩm).{0,80}(?:chưa có|không có|không tìm thấy)/i.test(reply);
+  const asksForLink = /(?:link|đường dẫn|dán link)/i.test(reply);
+  const asksForDetails = /\?/.test(reply) && /\b(model|màu|phiên bản|tình trạng|mẫu cụ thể)\b/i.test(reply);
+  if (saysNotFound && asksForLink && asksForDetails) return reply;
+  return `${reply}\n\nChillBanana chưa có mẫu khớp trong catalog. ${isOmo ? "Quý khách" : "Bạn"} muốn tìm model hoặc màu sắc nào? Có thể dán link sản phẩm từ sàn Nhật để Neo kiểm tra tiếp.`;
+}
+
 export function buildOfflineEvidenceReply(
   userQuery: string,
   evidence: SupportEvidence[] = [],

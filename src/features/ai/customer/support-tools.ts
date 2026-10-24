@@ -1265,6 +1265,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
   let intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+  const explicitOrderLookup = Boolean(intents.orderCode) || /\b(order status|check (?:my )?order|track (?:my )?order|where is my order|order tracking|shipment status|kiem tra don|tra cuu don)\b/i.test(normalizeSupportText(effectiveMessage));
   let intentRoute: RoutedSupportIntent | null = null;
   let routedSearchTerms: string[] = [];
 
@@ -1275,9 +1276,9 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
     if (!route) return null;
     routedSearchTerms = route.searchTerms;
     intents = {
-      catalog: intents.catalog || route.intents.catalog,
+      catalog: intents.catalog || route.intents.catalog || route.searchTerms.length > 0,
       quote: intents.quote || route.intents.quote,
-      orderStatus: intents.orderStatus || route.intents.orderStatus,
+      orderStatus: intents.orderStatus || (route.intents.orderStatus && explicitOrderLookup),
       shipping: intents.shipping || route.intents.shipping,
       compatibility: intents.compatibility || route.intents.compatibility,
       addToCart: intents.addToCart || route.intents.addToCart,
@@ -1294,6 +1295,13 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
     .replace(/\s+/g, " ")
     .trim();
   const isGreetingOrThanks = /^(?:(?:da\s+)?(?:xin\s+)?chao(?:\s+(?:cac ban|shop|neo|ban|anh|chi|em))?|(?:da\s+)?neo oi|(?:(?:da\s+)?rat\s+)?cam on(?:\s+(?:shop|neo|ban|anh|chi|em|rat|nhieu|nhe|nha|a))*|hello|hi|hey|thanks(?:\s+you)?|thank you|good morning|good afternoon)$/.test(normalizedMessage);
+  if (
+    translateToJapaneseKeywordsFromDictionary(effectiveMessage).matched &&
+    !extractOrderCode(effectiveMessage) &&
+    !isGreetingOrThanks
+  ) {
+    intents.catalog = true;
+  }
   if (
     !Object.values(intents).some((value) => value === true) &&
     extractCatalogSearchTerms(effectiveMessage).length > 0 &&
@@ -1351,7 +1359,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
             category: p.category,
           },
         ];
-        cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
+        cartReply = `Quý khách bấm nút Thêm vào giỏ bên dưới để thêm **${p.name}** nhé.`;
       } else if (matchedProducts.length >= 2) {
         // 4. Có 2-3 sản phẩm khớp -> trả tối đa 3 thẻ và hỏi "Quý khách muốn thêm món nào?". KHÔNG chọn thay khách
         productCards = matchedProducts.slice(0, 3).map((p: any) => ({
@@ -1508,7 +1516,11 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   // Never let model-generated prose reinterpret private order details or quote arithmetic.
   // A combined request can be split by the customer into separate messages afterward.
-  const guardedReply = cartReply ?? orderReply ?? quoteReply;
+  const catalogHasProducts = evidence.some((item) =>
+    item.toolId === "catalog_search" && Array.isArray(item.known.products) && item.known.products.length > 0
+  );
+  const quoteNeedsInput = evidence.some((item) => item.toolId === "quote_estimate" && item.status === "needs_input");
+  const guardedReply = cartReply ?? orderReply ?? (catalogHasProducts && quoteNeedsInput ? undefined : quoteReply);
 
   return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards };
 }
