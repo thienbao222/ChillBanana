@@ -23,8 +23,34 @@ export function isSensitiveTopic(text: string): boolean {
   return SENSITIVE_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
+function pruneEvidenceForPrompt(evidence: SupportEvidence[] = []): unknown[] {
+  return evidence.map((ev) => {
+    const prunedKnown: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(ev.known || {})) {
+      if (k === "products" && Array.isArray(v)) {
+        prunedKnown.products = v.slice(0, 3).map((p: any) => ({
+          name: p.name,
+          priceJpy: p.priceJpy,
+          estimatedProductPriceVnd: p.estimatedProductPriceVnd,
+          estimatedWeightKg: p.estimatedWeightKg,
+          voltageNote: p.voltageNote,
+          inStock: p.inStock,
+        }));
+      } else if (k !== "raw" && k !== "debug") {
+        prunedKnown[k] = v;
+      }
+    }
+    return {
+      tool: ev.toolId,
+      status: ev.status,
+      known: prunedKnown,
+      unknown: ev.unknown && ev.unknown.length ? ev.unknown : undefined,
+    };
+  });
+}
+
 export function buildSystemInstruction(evidence: SupportEvidence[] = []): string {
-  const evidencePayload = JSON.stringify(evidence);
+  const evidencePayload = JSON.stringify(pruneEvidenceForPrompt(evidence));
   return `
 Bạn là Trợ lý Mua sắm AI của ChillBanana (Chill果) — nền tảng mua hộ và vận chuyển hàng nội địa Nhật Bản chuyên nghiệp (Tokyo/Narita ⇄ Việt Nam hỏa tốc).
 
@@ -254,7 +280,7 @@ export async function askGeminiAgentDetailed(
               system_instruction: { parts: [{ text: systemInstruction }] },
               contents,
               generationConfig: {
-                maxOutputTokens: 2200,
+                maxOutputTokens: 700,
                 temperature: 0.4,
                 thinkingConfig: { thinkingLevel: "low" },
               },
@@ -279,7 +305,7 @@ export async function askGeminiAgentDetailed(
                   system_instruction: { parts: [{ text: systemInstruction }] },
                   contents,
                   generationConfig: {
-                    maxOutputTokens: 2200,
+                    maxOutputTokens: 700,
                     temperature: 0.4,
                     thinkingConfig: { thinkingLevel: "low" },
                   },
@@ -317,7 +343,7 @@ export async function askGeminiAgentDetailed(
                 system_instruction: { parts: [{ text: systemInstruction }] },
                 contents,
                 generationConfig: {
-                  maxOutputTokens: 2200,
+                  maxOutputTokens: 700,
                   temperature: 0.4,
                 },
               }),
