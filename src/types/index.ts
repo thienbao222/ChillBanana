@@ -150,4 +150,18 @@ export interface StoredOrder {
   isPriceVerified?: boolean;
   reservationExpiresAt?: string | null;
   canCancel?: boolean;
+  items?: {
+    id: string;
+    itemType: string;
+    productName: string;
+    quantity: number;
+    priceJpy: number;
+    weightKg?: number | null;
+    product?: {
+      name?: string | null;
+      imageUrl?: string | null;
+      originalStore?: string | null;
+    } | null;
+  }[];
+  orderItems?: any[];
 }

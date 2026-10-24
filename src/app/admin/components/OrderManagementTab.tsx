@@ -9,6 +9,8 @@ import {
   CheckCircle,
   CheckCircle2,
   AlertCircle,
+  AlertTriangle,
+  Copy,
   Printer,
   Search,
   Filter,
@@ -22,6 +24,7 @@ import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
 import { ORDER_STATUS_FLOW } from "@/features/orders/policy";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
+import { parseOrderItemSource } from "@/features/orders/item-source";
 
 const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
   PENDING_DEPOSIT: "1. Chờ cọc",
@@ -64,6 +67,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [priceApprovalOrder, setPriceApprovalOrder] = useState<StoredOrder | null>(null);
   const [priceApprovalJpy, setPriceApprovalJpy] = useState("");
   const [priceApprovalWeight, setPriceApprovalWeight] = useState("");
+  const [hasManualVerifiedNoLink, setHasManualVerifiedNoLink] = useState(false);
   const [isApprovingPrice, setIsApprovingPrice] = useState(false);
   const [paymentRecordOrder, setPaymentRecordOrder] = useState<StoredOrder | null>(null);
   const [paymentAmountVnd, setPaymentAmountVnd] = useState("");
@@ -233,6 +237,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     setPriceApprovalOrder(order);
     setPriceApprovalJpy(String(order.priceJpy || ""));
     setPriceApprovalWeight(String(order.weightKg || "0"));
+    setHasManualVerifiedNoLink(false);
   };
 
   const handleVerifyPrice = async (e: React.FormEvent) => {
@@ -702,14 +707,34 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                 <div className="space-y-3 flex-1 overflow-y-auto max-h-[70vh]">
                   {orders
                     .filter((o) => o.status === "PENDING_DEPOSIT")
-                    .map((ord) => (
-                      <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
-                        <div className="flex justify-between items-start">
-                          <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
-                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ord.paymentStatus === "UNPAID" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
-                            {ord.paymentStatus === "PAID_100" ? "Đã thanh toán 100%" : ord.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : ord.paymentStatus === "REFUNDED" ? "Đã hoàn tiền" : "Chưa thanh toán"}
-                          </span>
-                        </div>
+                    .map((ord) => {
+                      const cardSource = parseOrderItemSource(
+                        ord.items?.[0] || ord.orderItems?.[0] || { productName: ord.productName },
+                        ord
+                      );
+                      return (
+                        <div key={ord.id} className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all text-xs space-y-2">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                              {cardSource.url && (
+                                <a
+                                  href={cardSource.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title={`Mở link nguồn (${cardSource.marketplace}): ${cardSource.url}`}
+                                  className="p-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-600 hover:text-blue-800 transition-colors inline-flex items-center gap-0.5 border border-blue-200"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <span className="text-[10px] font-bold">🔗 {cardSource.marketplace}</span>
+                                  <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
+                              )}
+                            </div>
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ord.paymentStatus === "UNPAID" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
+                              {ord.paymentStatus === "PAID_100" ? "Đã thanh toán 100%" : ord.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : ord.paymentStatus === "REFUNDED" ? "Đã hoàn tiền" : "Chưa thanh toán"}
+                            </span>
+                          </div>
                         <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
                         <div className="text-[11px] text-slate-500">📞 {ord.customerPhone}</div>
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
@@ -786,7 +811,8 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                           </div>
                         </div>
                       </div>
-                    ))}
+                    );
+                  })}
                   {orders.filter((o) => o.status === "PENDING_DEPOSIT").length === 0 && (
                     <div className="text-center py-10 text-slate-400 text-xs">
                       Không có đơn chờ cọc
@@ -1196,90 +1222,219 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
 
 
       {/* MODAL: DUYỆT VÀ CHỐT BÁO GIÁ */}
-      {priceApprovalOrder && (
-        <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 relative my-6 overflow-hidden">
-            <div className="bg-gradient-to-r from-emerald-700 to-teal-600 px-6 py-5 text-white">
-              <button
-                type="button"
-                onClick={() => setPriceApprovalOrder(null)}
-                disabled={isApprovingPrice}
-                aria-label="Đóng"
-                className="absolute right-4 top-4 p-1 rounded-full text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-50"
-              ><X className="w-5 h-5" /></button>
-              <div className="flex items-center gap-2 text-emerald-100 text-xs font-semibold uppercase tracking-wide">
-                <CheckCircle2 className="w-4 h-4" /> Xác nhận báo giá
-              </div>
-              <h3 className="mt-1 text-xl font-bold">Đơn #{priceApprovalOrder.orderCode}</h3>
-              <p className="text-sm text-white/80 mt-1">{priceApprovalOrder.customerName} · {priceApprovalOrder.productName}</p>
-            </div>
+      {priceApprovalOrder && (() => {
+        const approvalItems = (priceApprovalOrder.items && priceApprovalOrder.items.length > 0)
+          ? priceApprovalOrder.items
+          : (priceApprovalOrder.orderItems && priceApprovalOrder.orderItems.length > 0)
+          ? priceApprovalOrder.orderItems
+          : [{ productName: priceApprovalOrder.productName, priceJpy: priceApprovalOrder.priceJpy, quantity: 1, itemType: "EXTERNAL" }];
 
-            <form onSubmit={handleVerifyPrice} className="p-6 space-y-5">
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label htmlFor="approval-jpy" className="block text-sm font-bold text-slate-700 mb-1.5">Giá chốt tại Nhật (JPY)</label>
-                  <div className="relative">
-                    <input id="approval-jpy" type="number" inputMode="numeric" min="100" step="1" required
-                      value={priceApprovalJpy} onChange={(e) => setPriceApprovalJpy(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 pr-12 text-base font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                      placeholder="Ví dụ: 5000" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">¥</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">Nhập số nguyên, tối thiểu 100 ¥.</p>
+        const hasExternalWithoutLink = approvalItems.some((item) => {
+          const parsed = parseOrderItemSource(item, priceApprovalOrder);
+          return parsed.itemType === "EXTERNAL" && !parsed.hasUrl;
+        });
+
+        return (
+          <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-200 relative my-6 overflow-hidden">
+              <div className="bg-gradient-to-r from-emerald-700 to-teal-600 px-6 py-5 text-white">
+                <button
+                  type="button"
+                  onClick={() => setPriceApprovalOrder(null)}
+                  disabled={isApprovingPrice}
+                  aria-label="Đóng"
+                  className="absolute right-4 top-4 p-1 rounded-full text-white/80 hover:bg-white/15 hover:text-white disabled:opacity-50"
+                ><X className="w-5 h-5" /></button>
+                <div className="flex items-center gap-2 text-emerald-100 text-xs font-semibold uppercase tracking-wide">
+                  <CheckCircle2 className="w-4 h-4" /> Xác nhận báo giá
                 </div>
-                <div>
-                  <label htmlFor="approval-weight" className="block text-sm font-bold text-slate-700 mb-1.5">Cân nặng dự kiến (kg)</label>
-                  <div className="relative">
-                    <input id="approval-weight" type="number" min="0" max="100" step="0.01" required
-                      value={priceApprovalWeight} onChange={(e) => setPriceApprovalWeight(e.target.value)}
-                      className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 pr-12 text-base font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
-                      placeholder="0" />
-                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">kg</span>
-                  </div>
-                  <p className="mt-1 text-xs text-slate-500">Nhập 0 nếu sẽ cân tại kho (phí ship chưa tính).</p>
-                </div>
+                <h3 className="mt-1 text-xl font-bold">Đơn #{priceApprovalOrder.orderCode}</h3>
+                <p className="text-sm text-white/90 mt-1 font-medium">Khách: {priceApprovalOrder.customerName} · {priceApprovalOrder.customerPhone}</p>
               </div>
 
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex items-center justify-between gap-3 mb-3">
+              <form onSubmit={handleVerifyPrice} className="p-6 space-y-5">
+                {/* Danh sách sản phẩm chi tiết */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-500">
+                    Sản phẩm trong đơn ({approvalItems.length})
+                  </label>
+                  <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                    {approvalItems.map((item, idx) => {
+                      const parsed = parseOrderItemSource(item, priceApprovalOrder);
+                      const itemPriceJpy = Number(item.priceJpy || priceApprovalOrder.priceJpy || 0);
+                      const itemQty = Number(item.quantity || 1);
+
+                      return (
+                        <div key={idx} className="p-3 rounded-2xl border border-slate-200 bg-slate-50/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            {parsed.imageUrl ? (
+                              <img
+                                src={parsed.imageUrl}
+                                alt={parsed.cleanName}
+                                className="w-14 h-14 rounded-xl object-cover border border-slate-200 bg-white shrink-0"
+                              />
+                            ) : (
+                              <div className="w-14 h-14 rounded-xl bg-slate-200 text-slate-500 flex items-center justify-center text-xl shrink-0">
+                                📦
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-1.5 mb-1">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-white border border-slate-300 text-slate-700 shadow-sm">
+                                  {parsed.marketplace}
+                                </span>
+                                <span className="text-[11px] text-slate-500 font-medium">
+                                  SL: <strong className="text-slate-800">{itemQty}</strong>
+                                </span>
+                              </div>
+                              <h5 className="text-xs font-bold text-slate-900 line-clamp-2" title={parsed.cleanName}>
+                                {parsed.cleanName}
+                              </h5>
+                              <div className="mt-1 text-xs text-slate-600 font-mono">
+                                Giá lúc đặt: <strong className="text-amber-700">{itemPriceJpy.toLocaleString()} ¥</strong>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                            {parsed.url ? (
+                              <>
+                                <a
+                                  href={parsed.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-blue-600 hover:text-blue-700 border border-slate-200 text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-sm"
+                                >
+                                  <span>Mở link</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(parsed.url!);
+                                    adminToast.success("Đã sao chép link sản phẩm!");
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 text-xs font-bold transition-colors inline-flex items-center gap-1 shadow-sm"
+                                >
+                                  <Copy className="w-3.5 h-3.5" />
+                                  <span>Sao chép link</span>
+                                </button>
+                              </>
+                            ) : (
+                              <span className="text-xs text-rose-600 font-semibold italic bg-rose-50 px-2 py-1 rounded-lg border border-rose-200">
+                                {parsed.itemType === "CATALOG" ? "Hàng Catalog" : "Không có link"}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* CẢNH BÁO KHI SẢN PHẨM NGOÀI CATALOG KHÔNG CÓ LINK */}
+                {hasExternalWithoutLink && (
+                  <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-950 space-y-2">
+                    <div className="flex items-center gap-2 font-bold text-rose-800 text-sm">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Không có link - không thể kiểm giá</span>
+                    </div>
+                    <p className="text-xs text-rose-900 leading-relaxed">
+                      Sản phẩm không có link gốc để đối chiếu giá thị trường. Vui lòng liên hệ khách theo SĐT:{" "}
+                      <a href={`tel:${priceApprovalOrder.customerPhone}`} className="font-bold underline text-rose-900 hover:text-rose-950">
+                        {priceApprovalOrder.customerPhone}
+                      </a>{" "}
+                      để xác nhận nguồn mua chính xác.
+                    </p>
+                    <label className="flex items-center gap-2.5 pt-1 cursor-pointer text-xs font-bold text-rose-900">
+                      <input
+                        type="checkbox"
+                        checked={hasManualVerifiedNoLink}
+                        onChange={(e) => setHasManualVerifiedNoLink(e.target.checked)}
+                        className="w-4 h-4 rounded border-rose-300 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                      />
+                      <span>Tôi đã xác minh sản phẩm bằng cách khác</span>
+                    </label>
+                  </div>
+                )}
+
+                <div className="grid sm:grid-cols-2 gap-4">
                   <div>
-                    <h4 className="font-bold text-slate-800">Tạm tính cho khách</h4>
-                    <p className="text-xs text-slate-500 mt-0.5">Tỷ giá đơn hàng: {priceApprovalOrder.exchangeRate.toLocaleString("vi-VN")} đ/¥</p>
+                    <label htmlFor="approval-jpy" className="block text-sm font-bold text-slate-700 mb-1.5">Giá chốt tại Nhật (JPY)</label>
+                    <div className="relative">
+                      <input id="approval-jpy" type="number" inputMode="numeric" min="100" step="1" required
+                        value={priceApprovalJpy} onChange={(e) => setPriceApprovalJpy(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 pr-12 text-base font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="Ví dụ: 5000" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">¥</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Nhập số nguyên, tối thiểu 100 ¥.</p>
                   </div>
-                  {priceApprovalOrder.isGroupBuy && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">Đơn gom</span>}
+                  <div>
+                    <label htmlFor="approval-weight" className="block text-sm font-bold text-slate-700 mb-1.5">Cân nặng dự kiến (kg)</label>
+                    <div className="relative">
+                      <input id="approval-weight" type="number" min="0" max="100" step="0.01" required
+                        value={priceApprovalWeight} onChange={(e) => setPriceApprovalWeight(e.target.value)}
+                        className="w-full rounded-xl border border-slate-300 bg-white px-3 py-3 pr-12 text-base font-semibold text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-100"
+                        placeholder="0" />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 font-semibold">kg</span>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">Nhập 0 nếu sẽ cân tại kho (phí ship chưa tính).</p>
+                  </div>
                 </div>
-                <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                  <div className="flex justify-between gap-3 text-slate-600"><span>Tiền hàng</span><strong className="text-slate-800">{approvalProductVnd.toLocaleString("vi-VN")} đ</strong></div>
-                  <div className="flex justify-between gap-3 text-slate-600"><span>Phí dịch vụ</span><strong className="text-slate-800">{approvalServiceVnd.toLocaleString("vi-VN")} đ</strong></div>
-                  <div className="flex justify-between gap-3 text-slate-600"><span>Vận chuyển{approvalWeight === 0 ? " (chưa cân)" : ""}</span><strong className="text-slate-800">{approvalShippingVnd.toLocaleString("vi-VN")} đ</strong></div>
-                  <div className="flex justify-between gap-3 font-bold text-slate-900"><span>Tổng tạm tính</span><span>{approvalTotalVnd.toLocaleString("vi-VN")} đ</span></div>
-                </div>
-                <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
-                  <span className="text-sm font-bold text-amber-800">{priceApprovalOrder.depositPercent === 100 ? "Thanh toán ngay (100% tiền hàng + phí dịch vụ)" : "Tiền cọc (50% tiền hàng + phí dịch vụ)"}</span>
-                  <strong className="text-lg text-amber-700">{(priceApprovalOrder.depositPercent === 100 ? approvalProductVnd + approvalServiceVnd : Math.round((approvalProductVnd + approvalServiceVnd) * 0.5)).toLocaleString("vi-VN")} đ</strong>
-                </div>
-              </div>
 
-              <div className={`rounded-xl border p-3 flex gap-2.5 text-sm ${priceApprovalOrder.customerEmail ? "border-sky-200 bg-sky-50 text-sky-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
-                <Mail className="w-5 h-5 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-bold">{priceApprovalOrder.customerEmail ? "Email xác nhận báo giá" : "Đơn chưa có email khách hàng"}</p>
-                  <p className="text-xs mt-0.5 break-all">{priceApprovalOrder.customerEmail || "Khách sẽ không nhận được email. Bạn vẫn có thể duyệt và thông báo qua kênh khác."}</p>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3 mb-3">
+                    <div>
+                      <h4 className="font-bold text-slate-800">Tạm tính cho khách</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">Tỷ giá đơn hàng: {priceApprovalOrder.exchangeRate.toLocaleString("vi-VN")} đ/¥</p>
+                    </div>
+                    {priceApprovalOrder.isGroupBuy && <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-bold text-amber-800">Đơn gom</span>}
+                  </div>
+                  <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <div className="flex justify-between gap-3 text-slate-600"><span>Tiền hàng</span><strong className="text-slate-800">{approvalProductVnd.toLocaleString("vi-VN")} đ</strong></div>
+                    <div className="flex justify-between gap-3 text-slate-600"><span>Phí dịch vụ</span><strong className="text-slate-800">{approvalServiceVnd.toLocaleString("vi-VN")} đ</strong></div>
+                    <div className="flex justify-between gap-3 text-slate-600"><span>Vận chuyển{approvalWeight === 0 ? " (chưa cân)" : ""}</span><strong className="text-slate-800">{approvalShippingVnd.toLocaleString("vi-VN")} đ</strong></div>
+                    <div className="flex justify-between gap-3 font-bold text-slate-900"><span>Tổng tạm tính</span><span>{approvalTotalVnd.toLocaleString("vi-VN")} đ</span></div>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
+                    <span className="text-sm font-bold text-amber-800">{priceApprovalOrder.depositPercent === 100 ? "Thanh toán ngay (100% tiền hàng + phí dịch vụ)" : "Tiền cọc (50% tiền hàng + phí dịch vụ)"}</span>
+                    <strong className="text-lg text-amber-700">{(priceApprovalOrder.depositPercent === 100 ? approvalProductVnd + approvalServiceVnd : Math.round((approvalProductVnd + approvalServiceVnd) * 0.5)).toLocaleString("vi-VN")} đ</strong>
+                  </div>
                 </div>
-              </div>
 
-              <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
-                <button type="button" disabled={isApprovingPrice} onClick={() => setPriceApprovalOrder(null)}
-                  className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-50">Để sau</button>
-                <button type="submit" disabled={isApprovingPrice || !Number.isSafeInteger(approvalJpy) || approvalJpy < 100 || !Number.isFinite(approvalWeight) || approvalWeight < 0 || approvalWeight > 100}
-                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50">
-                  <CheckCircle2 className="w-4 h-4" />{isApprovingPrice ? "Đang duyệt và gửi email..." : "Duyệt giá & gửi xác nhận"}
-                </button>
-              </div>
-            </form>
+                <div className={`rounded-xl border p-3 flex gap-2.5 text-sm ${priceApprovalOrder.customerEmail ? "border-sky-200 bg-sky-50 text-sky-900" : "border-amber-200 bg-amber-50 text-amber-900"}`}>
+                  <Mail className="w-5 h-5 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold">{priceApprovalOrder.customerEmail ? "Email xác nhận báo giá" : "Đơn chưa có email khách hàng"}</p>
+                    <p className="text-xs mt-0.5 break-all">{priceApprovalOrder.customerEmail || "Khách sẽ không nhận được email. Bạn vẫn có thể duyệt và thông báo qua kênh khác."}</p>
+                  </div>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-1">
+                  <button type="button" disabled={isApprovingPrice} onClick={() => setPriceApprovalOrder(null)}
+                    className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold disabled:opacity-50">Để sau</button>
+                  <button
+                    type="submit"
+                    disabled={
+                      isApprovingPrice ||
+                      !Number.isSafeInteger(approvalJpy) ||
+                      approvalJpy < 100 ||
+                      !Number.isFinite(approvalWeight) ||
+                      approvalWeight < 0 ||
+                      approvalWeight > 100 ||
+                      (hasExternalWithoutLink && !hasManualVerifiedNoLink)
+                    }
+                    className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />{isApprovingPrice ? "Đang duyệt và gửi email..." : "Duyệt giá & gửi xác nhận"}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {paymentRecordOrder && (
         <div className="fixed inset-0 z-[60] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-4">

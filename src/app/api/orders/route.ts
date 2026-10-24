@@ -71,6 +71,13 @@ export async function GET(req: NextRequest) {
         trackingLogs: {
           orderBy: { createdAt: "desc" },
         },
+        orderItems: {
+          include: {
+            product: {
+              select: { name: true, imageUrl: true, originalStore: true },
+            },
+          },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -78,6 +85,7 @@ export async function GET(req: NextRequest) {
     const customerId = customerSession?.id;
     const visibleOrders = orders.map((order) => ({
       ...order,
+      items: order.orderItems,
       canCancel: Boolean(customerId && order.customerId === customerId && order.status === "PENDING_DEPOSIT" && order.paymentStatus === "UNPAID"),
     }));
     return NextResponse.json({ success: true, orders: visibleOrders });
