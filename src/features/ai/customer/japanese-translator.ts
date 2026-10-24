@@ -5,5 +5,9 @@ export {
   type TranslatedQuery,
   parseBudgetAndCurrency,
   translateToJapaneseKeywords,
+  translateToJapaneseKeywordsFromDictionary,
+  translateToJapaneseKeywordsSync,
+  extractKeywordsWithGemini,
+  isValidJapaneseSearchKeyword,
   buildMarketplaceSearchLinks,
 } from "./support-tools";

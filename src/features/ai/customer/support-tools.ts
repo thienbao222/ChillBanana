@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
+import { chatKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 import {
   hasGuestOrderAccessForEmail,
   verifyGuestOrderAccessToken,
@@ -14,6 +16,7 @@ import {
   getRequestSlotLabel,
   isSupportedMarketplaceUrl,
   isValidQuotePrice,
+  normalizeSupportText,
   type SupportEvidence,
   type SupportSourceLink,
 } from "./support-policy";
@@ -183,8 +186,105 @@ export function parseBudgetAndCurrency(
   return {};
 }
 
-export function translateToJapaneseKeywords(text: string, currentRate = 165): TranslatedQuery {
-  const norm = text.toLowerCase();
+export function isValidJapaneseSearchKeyword(text: string): boolean {
+  if (!text || typeof text !== "string") return false;
+  const trimmed = text.trim();
+  if (trimmed.length < 2) return false;
+
+  // Chứa ký tự tiếng Nhật (Kanji, Hiragana, Katakana)
+  const hasJapaneseChar = /[\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]/.test(trimmed);
+  if (hasJapaneseChar) return true;
+
+  // Nếu chứa ký tự có dấu tiếng Việt (à, á, ả, ã, ạ, ê, ơ, ư, ô, đ...) -> KHÔNG phải từ khóa Nhật hợp lệ
+  const hasVietnameseAccents = /[àáảãạâầấẩẫậăằắẳẵặèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]/i.test(trimmed);
+  if (hasVietnameseAccents) return false;
+
+  // Nếu là chữ La-tinh không dấu nhưng chỉ gồm các từ giao tiếp / từ tiếng Việt cắt dấu -> KHÔNG hợp lệ
+  const commonVietnameseStopwords = new Set([
+    "tim", "kiem", "giup", "toi", "muon", "mua", "ban", "cho", "hoi", "gia", "bao", "nhieu", "co", "khong", "nao", "tot", "re", "hang", "san", "pham", "do", "cai", "chiec", "quan", "ao", "giay", "dep", "tui", "xach", "dong", "ho", "may", "noi", "com", "dien", "shop", "ad", "admin", "em", "anh", "chi", "o", "dau", "nao", "the", "vay", "a", "oi", "nhe", "nha", "chao", "xin", "cam", "on"
+  ]);
+  const words = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length > 0 && words.every((w) => commonVietnameseStopwords.has(w))) {
+    return false;
+  }
+
+  // Nếu là tên thương hiệu quốc tế hoặc model number hợp lệ (chữ La-tinh không dấu từ 3 ký tự)
+  const isRecognizedBrandOrModel = Boolean(
+    Object.keys(BRAND_DICTIONARY).some((brand) => trimmed.toLowerCase().includes(brand)) ||
+    (/^[A-Za-z0-9\s._+-]+$/.test(trimmed) && trimmed.length >= 3 && /[A-Z0-9]/.test(trimmed))
+  );
+
+  return isRecognizedBrandOrModel;
+}
+
+export async function extractKeywordsWithGemini(
+  text: string
+): Promise<{ keywordsJa: string; keywordsVi: string; category?: string; brand?: string } | null> {
+  const activeKey = chatKeyPool.getNextKey();
+  if (!activeKey) return null;
+
+  try {
+    const prompt = `Bạn là trợ lý AI chuyên trích xuất và dịch từ khóa tìm kiếm sản phẩm sang tiếng Nhật chuẩn để tìm kiếm trên các sàn thương mại điện tử Nhật Bản (Amazon JP, Rakuten, Mercari).
+Nếu người dùng tìm kiếm sản phẩm hoặc hỏi mua một món đồ, hãy dịch tên sản phẩm và thương hiệu sang tiếng Nhật (Kanji/Katakana/Romaji) thông dụng nhất mà người Nhật dùng để tìm kiếm trên sàn TMĐT.
+Nếu câu hỏi của người dùng KHÔNG phải là tìm kiếm/hỏi mua sản phẩm (ví dụ: chào hỏi, hỏi chính sách, hỏi địa chỉ, cảm ơn...), keywordsJa PHẢI là chuỗi rỗng "".
+Trả về đúng định dạng JSON:
+{
+  "keywordsJa": "từ khóa tiếng Nhật chuẩn hoặc rỗng nếu không phải tìm sản phẩm",
+  "keywordsVi": "tên sản phẩm tiếng Việt tóm tắt",
+  "category": "cosmetics" | "health" | "gadgets" | "anime" | "fashion" | "luxury" | "other",
+  "brand": "tên thương hiệu nếu có"
+}`;
+
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${activeKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: prompt }] },
+          contents: [{ role: "user", parts: [{ text: text.slice(0, 300) }] }],
+          generationConfig: {
+            maxOutputTokens: 256,
+            temperature: 0.1,
+            responseMimeType: "application/json",
+          },
+        }),
+        signal: AbortSignal.timeout(6000),
+      }
+    );
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      console.warn(`[GeminiExtractKeywords] Model ${GEMINI_MODELS.lightweight} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      chatKeyPool.markError(activeKey, res.status, GEMINI_MODELS.lightweight);
+      return null;
+    }
+
+    const data = await res.json();
+    const parts = data?.candidates?.[0]?.content?.parts || [];
+    const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
+    const rawJson = textPart?.text;
+    if (!rawJson) return null;
+
+    const parsed = JSON.parse(rawJson);
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return {
+      keywordsJa: typeof parsed.keywordsJa === "string" ? parsed.keywordsJa.trim() : "",
+      keywordsVi: typeof parsed.keywordsVi === "string" ? parsed.keywordsVi.trim() : "",
+      category: typeof parsed.category === "string" ? parsed.category : undefined,
+      brand: typeof parsed.brand === "string" ? parsed.brand : undefined,
+    };
+  } catch (error: any) {
+    console.warn(`[GeminiExtractKeywords] Error:`, error?.message || String(error));
+    chatKeyPool.markError(activeKey, 503, GEMINI_MODELS.lightweight);
+    return null;
+  }
+}
+
+export function translateToJapaneseKeywordsFromDictionary(text: string, currentRate = 165): TranslatedQuery & { matched: boolean } {
+  const norm = normalizeSupportText(text);
+  const rawLower = text.toLowerCase();
   const tokens = norm.split(/[\s,]+/);
 
   let detectedBrand: string | undefined;
@@ -192,7 +292,7 @@ export function translateToJapaneseKeywords(text: string, currentRate = 165): Tr
   let brandCategory: any;
 
   for (const [key, val] of Object.entries(BRAND_DICTIONARY)) {
-    if (tokens.includes(key) || norm.includes(key)) {
+    if (tokens.includes(key) || norm.includes(key) || rawLower.includes(key)) {
       detectedBrand = key;
       brandJa = val.ja;
       if (val.category) brandCategory = val.category;
@@ -205,7 +305,7 @@ export function translateToJapaneseKeywords(text: string, currentRate = 165): Tr
   let termCategory: any;
 
   for (const item of PRODUCT_TERMS) {
-    if (item.match.test(norm)) {
+    if (item.match.test(norm) || item.match.test(rawLower)) {
       productJa = item.ja;
       if (item.category) termCategory = item.category;
       if (item.is100v) is100vAppliance = true;
@@ -220,9 +320,11 @@ export function translateToJapaneseKeywords(text: string, currentRate = 165): Tr
     keywordsJa = brandJa;
   } else if (productJa) {
     keywordsJa = productJa;
-  } else {
-    const alphanumeric = text.match(/[A-Za-z0-9+-]{2,}/g) || [];
-    keywordsJa = alphanumeric.slice(0, 4).join(" ");
+  }
+
+  const matched = Boolean(keywordsJa);
+  if (!isValidJapaneseSearchKeyword(keywordsJa)) {
+    keywordsJa = "";
   }
 
   const category = (brandCategory || termCategory || "other") as TranslatedQuery["category"];
@@ -233,17 +335,55 @@ export function translateToJapaneseKeywords(text: string, currentRate = 165): Tr
     : undefined;
 
   return {
-    keywordsJa: keywordsJa.trim() || text.slice(0, 60),
+    keywordsJa,
     keywordsVi: text.slice(0, 80),
     detectedBrand,
     category,
     is100vAppliance,
     voltageWarning,
     budget: Object.keys(budget).length > 0 ? budget : undefined,
+    matched,
   };
 }
 
+export const translateToJapaneseKeywordsSync = translateToJapaneseKeywordsFromDictionary;
+
+export async function translateToJapaneseKeywords(text: string, currentRate = 165): Promise<TranslatedQuery> {
+  const dictionaryResult = translateToJapaneseKeywordsFromDictionary(text, currentRate);
+
+  // Chỉ gọi khi từ điển BRAND_DICTIONARY/PRODUCT_TERMS không khớp
+  if (dictionaryResult.matched) {
+    return dictionaryResult;
+  }
+
+  // Gọi Gemini trích xuất từ khóa tiếng Nhật
+  const geminiResult = await extractKeywordsWithGemini(text).catch(() => null);
+
+  if (geminiResult && geminiResult.keywordsJa && isValidJapaneseSearchKeyword(geminiResult.keywordsJa)) {
+    const budget = parseBudgetAndCurrency(text, currentRate);
+    const validCategory = (["cosmetics", "health", "gadgets", "anime", "fashion", "luxury", "other"].includes(geminiResult.category || "")
+      ? geminiResult.category
+      : "other") as TranslatedQuery["category"];
+
+    return {
+      keywordsJa: geminiResult.keywordsJa,
+      keywordsVi: geminiResult.keywordsVi || text.slice(0, 80),
+      detectedBrand: geminiResult.brand || undefined,
+      category: validCategory,
+      is100vAppliance: false,
+      voltageWarning: undefined,
+      budget: Object.keys(budget).length > 0 ? budget : undefined,
+    };
+  }
+
+  // Nếu Gemini lỗi hoặc không trả keywordsJa hợp lệ thì dùng kết quả từ điển (không link, không regex)
+  return dictionaryResult;
+}
+
 export function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy?: number) {
+  if (!keywordsJa || !keywordsJa.trim() || !isValidJapaneseSearchKeyword(keywordsJa)) {
+    return null;
+  }
   const encoded = encodeURIComponent(keywordsJa.trim());
   const amazonUrl = `https://www.amazon.co.jp/s?k=${encoded}`;
   let mercariUrl = `https://jp.mercari.com/search?keyword=${encoded}`;
@@ -354,12 +494,14 @@ async function searchCatalog(message: string, category: string | null): Promise<
 
   const hasCurrentRate = Boolean(rate && !rate.isStale && rate.roundedRate > 0);
   const effectiveRate = hasCurrentRate ? rate!.roundedRate : 165;
-  const translated = translateToJapaneseKeywords(message, effectiveRate);
-  const marketplaceLinks = buildMarketplaceSearchLinks(
-    translated.keywordsJa,
-    translated.budget?.minJpy,
-    translated.budget?.maxJpy
-  );
+  const translated = await translateToJapaneseKeywords(message, effectiveRate);
+  const marketplaceLinks = translated.keywordsJa
+    ? buildMarketplaceSearchLinks(
+        translated.keywordsJa,
+        translated.budget?.minJpy,
+        translated.budget?.maxJpy
+      )
+    : null;
 
   if (!category && terms.length === 0 && !translated.detectedBrand && !translated.keywordsJa) {
     return createEvidence(
@@ -447,7 +589,7 @@ async function searchCatalog(message: string, category: string | null): Promise<
 
     const dynamicLinks: SupportSourceLink[] = [
       ...CATALOG_LINKS,
-      ...(translated.keywordsJa
+      ...(marketplaceLinks
         ? [
             { label: `Tìm "${translated.keywordsJa}" trên Amazon JP`, href: marketplaceLinks.amazon.url },
             { label: `Săn "${translated.keywordsJa}" trên Mercari JP`, href: marketplaceLinks.mercari.url },
@@ -482,16 +624,20 @@ async function searchCatalog(message: string, category: string | null): Promise<
         budgetAnalysis: translated.budget || null,
         budgetEstimate,
         voltageWarning: translated.voltageWarning || null,
-        marketplaceLinks: {
-          amazon: marketplaceLinks.amazon.url,
-          mercari: marketplaceLinks.mercari.url,
-          rakuten: marketplaceLinks.rakuten.url,
-        },
-        marketplaceSearchSuggestions: [
-          { label: "Amazon JP", url: marketplaceLinks.amazon.url },
-          { label: "Mercari JP (Săn đồ lướt/hiếm)", url: marketplaceLinks.mercari.url },
-          { label: "Rakuten Ichiba", url: marketplaceLinks.rakuten.url },
-        ],
+        marketplaceLinks: marketplaceLinks
+          ? {
+              amazon: marketplaceLinks.amazon.url,
+              mercari: marketplaceLinks.mercari.url,
+              rakuten: marketplaceLinks.rakuten.url,
+            }
+          : null,
+        marketplaceSearchSuggestions: marketplaceLinks
+          ? [
+              { label: "Amazon JP", url: marketplaceLinks.amazon.url },
+              { label: "Mercari JP (Săn đồ lướt/hiếm)", url: marketplaceLinks.mercari.url },
+              { label: "Rakuten Ichiba", url: marketplaceLinks.rakuten.url },
+            ]
+          : [],
         exchangeRate: rate
           ? { vndPerJpy: effectiveRate, provider: rate.source, updatedAt: rate.updatedAt || null, stale: rate.isStale }
           : { vndPerJpy: 165, provider: "Vietcombank Live Cache", updatedAt: null, stale: false },

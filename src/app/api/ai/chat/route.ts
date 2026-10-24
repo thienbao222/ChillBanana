@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
     // 3. Phân loại chủ đề đa chiều (Intent & Topic Classifier)
     const msgLower = message.toLowerCase();
     const budgetInfo = parseBudgetAndCurrency(message);
-    const translated = translateToJapaneseKeywords(message);
+    const translated = await translateToJapaneseKeywords(message);
 
     const detectedKeywords: string[] = [];
     if (translated.detectedBrand) detectedKeywords.push(translated.detectedBrand);
