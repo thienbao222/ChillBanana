@@ -47,11 +47,13 @@ describe("Deterministic Quick Replies (Gợi ý trả lời nhanh)", () => {
       {
         toolId: "catalog_search",
         status: "ok",
-        message: "No products found",
+        source: { label: "Catalog", observedAt: new Date().toISOString() },
         known: {
           searched: true,
           resultCount: 0,
         },
+        unknown: [],
+        links: [],
       },
     ];
 
@@ -66,11 +68,13 @@ describe("Deterministic Quick Replies (Gợi ý trả lời nhanh)", () => {
       {
         toolId: "order_status",
         status: "ok",
-        message: "Order found",
+        source: { label: "Order", observedAt: new Date().toISOString() },
         known: {
           code: "CB-2026-TEST-0001",
           status: "IN_TRANSIT_AIR",
         },
+        unknown: [],
+        links: [],
       },
     ];
 

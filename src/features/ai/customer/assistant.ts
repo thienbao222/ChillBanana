@@ -74,9 +74,12 @@ QUY TẮC CỐT LÕI VỀ BẰNG CHỨNG VÀ BÁO GIÁ:
    - Nêu ngắn gọn 1-3 sản phẩm từ catalog thật (Tên, Giá ¥ và Giá VND ước tính có trong bằng chứng).
    - Nếu là đồ điện gia dụng nội địa Nhật, nhắc ngắn gọn lưu ý dùng điện 100V.
    - Hướng dẫn khách bấm nút "Thêm vào giỏ" ngay trên thẻ sản phẩm bên dưới nếu muốn đặt mua. Không bao giờ khẳng định bản thân "đã thêm vào giỏ".
-5. Phạm vi an toàn:
+7. Phạm vi an toàn:
    - Phân tích hình ảnh chỉ nêu dấu hiệu nhìn thấy. Không tuyên bố đã reverse-image-search, không khẳng định đúng model, giá hiện tại, hàng thật/giả hay còn hàng nếu công cụ không xác nhận.
    - Không đưa ra khẳng định y tế, pháp lý hay tài chính ngoài nghiệp vụ mua hộ; từ chối lịch sự các chủ đề nhạy cảm không liên quan.
+8. Khi so sánh sản phẩm (có dữ liệu product_comparison hoặc khách yêu cầu so sánh):
+   - Nêu rõ 4 yếu tố: Giá tiền (¥ và VND ước tính), Cân nặng, Điện áp (lưu ý điện 100V nếu có đồ gia dụng), và Tình trạng tồn kho.
+   - Trả lời khách quan, súc tích, dựa đúng số liệu từ bằng chứng.
 
 KẾT QUẢ CÔNG CỤ TỪ MÁY CHỦ (JSON):
 Các công cụ đã được máy chủ chạy đồng bộ: ${CUSTOMER_SUPPORT_TOOL_REGISTRY.map((tool) => `${tool.id} (${tool.access})`).join(", ")}.
@@ -116,6 +119,7 @@ export function buildOfflineEvidenceReply(
   isOmo: boolean
 ): string {
   const catalogEv = evidence.find((e) => e.toolId === "catalog_search");
+  const compareEv = evidence.find((e) => e.toolId === "product_comparison");
   const shippingEv = evidence.find((e) => e.toolId === "shipping_policy");
   const compatEv = evidence.find((e) => e.toolId === "product_compatibility");
   const quoteEv = evidence.find((e) => e.toolId === "quote_estimate");
@@ -129,6 +133,19 @@ export function buildOfflineEvidenceReply(
     lines.push("Dạ, Neo xin phép gửi Quý khách thông tin tra cứu trực tiếp từ hệ thống ChillBanana:");
   } else {
     lines.push("Neo gửi bạn thông tin tra cứu trực tiếp từ hệ thống ChillBanana nhé 🍌:");
+  }
+
+  // 0. Product Comparison
+  if (compareEv && compareEv.status === "ok" && compareEv.known.compared) {
+    const pA = compareEv.known.productA as any;
+    const pB = compareEv.known.productB as any;
+    if (pA && pB) {
+      lines.push(`\n⚖️ **So sánh thông số giữa ${pA.name} và ${pB.name}:**`);
+      lines.push(`• **Giá**: ${pA.name} khoảng ${Number(pA.priceJpy).toLocaleString("ja-JP")} ¥ (${pA.priceVnd ? `${Number(pA.priceVnd).toLocaleString("vi-VN")} đ` : "đang cập nhật"}) vs ${pB.name} khoảng ${Number(pB.priceJpy).toLocaleString("ja-JP")} ¥ (${pB.priceVnd ? `${Number(pB.priceVnd).toLocaleString("vi-VN")} đ` : "đang cập nhật"}).`);
+      lines.push(`• **Cân nặng**: ${pA.weightKg ? `${pA.weightKg} kg` : "khoảng 0.5 kg"} vs ${pB.weightKg ? `${pB.weightKg} kg` : "khoảng 0.5 kg"}.`);
+      lines.push(`• **Điện áp**: ${pA.voltage} vs ${pB.voltage}.`);
+      lines.push(`• **Tồn kho**: ${pA.inStock ? `Sẵn sàng đặt mua (${pA.stockSlots} suất)` : "Tạm hết suất"} vs ${pB.inStock ? `Sẵn sàng đặt mua (${pB.stockSlots} suất)` : "Tạm hết suất"}.`);
+    }
   }
 
   // 1. Catalog Search

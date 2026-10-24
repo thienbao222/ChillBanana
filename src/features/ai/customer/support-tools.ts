@@ -891,10 +891,16 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
       getCurrentPricingConfig().catch(() => null),
     ]);
     const cfg = pricingConfig?.values;
+    const minFee = cfg?.serviceFeeMinimumVnd ?? (cfg as any)?.minServiceFeeVnd ?? 20000;
+    const feePercent = cfg?.serviceFeePercent ?? (cfg as any)?.tier1ServiceFeePercent ?? 4;
+    const airRate = cfg?.airShippingPerKgVnd ?? (cfg as any)?.perKgShippingRateVnd ?? 185000;
+    const discount = cfg?.groupBuyShippingDiscountPercent ?? 25;
+    const maxWeight = cfg?.groupBuyMaxWeightKg ?? 2;
+
     const rateText = rate && !rate.isStale && rate.roundedRate > 0 ? `1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} đ` : "theo tỷ giá thực tế";
-    const feePct = cfg ? `${cfg.serviceFeePercent}% (tối thiểu ${cfg.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ)` : "4% (tối thiểu 20.000 đ)";
-    const shipRate = cfg ? `${cfg.airShippingPerKgVnd.toLocaleString("vi-VN")} đ/kg` : "185.000 đ/kg";
-    const discountPct = cfg ? `${cfg.groupBuyShippingDiscountPercent}% (cho kiện ≤ ${cfg.groupBuyMaxWeightKg}kg)` : "25%";
+    const feePct = cfg ? `${feePercent}% (tối thiểu ${minFee.toLocaleString("vi-VN")} đ)` : "4% (tối thiểu 20.000 đ)";
+    const shipRate = cfg ? `${airRate.toLocaleString("vi-VN")} đ/kg` : "185.000 đ/kg";
+    const discountPct = cfg ? `${discount}% (cho kiện ≤ ${maxWeight}kg)` : "25%";
     return {
       evidence: createEvidence(
         "quote_estimate",
@@ -1330,6 +1336,42 @@ export function resolveEffectiveSupportMessage(
   return effectiveMessage;
 }
 
+export function extractComparisonQueries(message: string): { queryA: string; queryB: string } | null {
+  const norm = normalizeSupportText(message);
+
+  // Pattern 1: so sánh A và/với/hay/hoặc B
+  const match1 = norm.match(/(?:so\s+sanh|compare)\s+(.+?)\s+(?:va|voi|hay|hoac|and|with|vs|versus)\s+(.+)/i);
+  if (match1) {
+    const rawA = match1[1].replace(/\b(giua|hai\s+san\s+pham|2\s+san\s+pham)\b/gi, "").trim();
+    const rawB = match1[2].replace(/\b(cai\s+nao|mon\s+nao|tot\s+hon|re\s+hon|hon)\b/gi, "").trim();
+    if (rawA.length >= 2 && rawB.length >= 2) {
+      return { queryA: rawA, queryB: rawB };
+    }
+  }
+
+  // Pattern 2: nên chọn/mua A hay/hoặc B
+  const match2 = norm.match(/(?:nen\s+(?:mua|chon))\s+(.+?)\s+(?:hay|hoac|va)\s+(.+)/i);
+  if (match2) {
+    const rawA = match2[1].trim();
+    const rawB = match2[2].replace(/\b(hon|cai\s+nao)\b/gi, "").trim();
+    if (rawA.length >= 2 && rawB.length >= 2) {
+      return { queryA: rawA, queryB: rawB };
+    }
+  }
+
+  // Pattern 3: A và/với B khác nhau gì
+  const match3 = norm.match(/(.+?)\s+(?:va|voi)\s+(.+?)\s+(?:khac\s+nhau|khac\s+gi)/i);
+  if (match3) {
+    const rawA = match3[1].replace(/^(?:cho\s+hoi|lam\s+on\s+cho\s+hoi|neo\s+oi)\s+/i, "").trim();
+    const rawB = match3[2].trim();
+    if (rawA.length >= 2 && rawB.length >= 2) {
+      return { queryA: rawA, queryB: rawB };
+    }
+  }
+
+  return null;
+}
+
 export async function runCustomerSupportTools(input: CustomerSupportToolInput): Promise<CustomerSupportToolRun> {
   const toolsStart = Date.now();
   let routerMs = 0;
@@ -1401,13 +1443,114 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   };
 
   let catalogEvidenceForRun: SupportEvidence | null = null;
-  if (!intents.addToCart && (intents.catalog || intents.compatibility)) {
-    catalogEvidenceForRun = await searchCatalogWithRouterFallback(effectiveMessage);
-  }
-
+  let comparisonEvidence: SupportEvidence | null = null;
   let productCards: ProductCardData[] = [];
   let cartReply: string | undefined;
   let addToCartCatalogEvidence: SupportEvidence | null = null;
+
+  // Xử lý ý định so sánh 2 sản phẩm catalog
+  const compQueries = (intents.comparison || /\b(so\s+sanh|compare)\b/i.test(normalizeSupportText(effectiveMessage)))
+    ? extractComparisonQueries(effectiveMessage)
+    : null;
+
+  if (compQueries) {
+    const [searchA, searchB] = await Promise.all([
+      searchCatalogWithRouterFallback(compQueries.queryA),
+      searchCatalogWithRouterFallback(compQueries.queryB),
+    ]);
+
+    const prodsA = (searchA.known.products as any[]) || [];
+    const prodsB = (searchB.known.products as any[]) || [];
+    const productA = prodsA[0];
+    const productB = prodsB.find((p) => !productA || p.id !== productA.id) || prodsB[0];
+
+    if (productA && productB && productA.id !== productB.id) {
+      const formatVoltage = (product: any): string => {
+        if (product.voltageNote && typeof product.voltageNote === "string") {
+          return product.voltageNote;
+        }
+        if (product.category === "gadgets" || /nồi cơm|máy cạo râu|ấm|panasonic|zojirushi|tiger/i.test(product.name)) {
+          return "100V (cần lưu ý biến áp nếu cắm tại VN)";
+        }
+        return "Không dùng điện (hoặc dùng pin tiêu chuẩn)";
+      };
+
+      comparisonEvidence = createEvidence(
+        "product_comparison",
+        "ok",
+        `Bằng chứng so sánh giữa ${productA.name} và ${productB.name}`,
+        {
+          compared: true,
+          productA: {
+            id: productA.id,
+            name: productA.name,
+            priceJpy: productA.priceJpy,
+            priceVnd: productA.estimatedProductPriceVnd ?? null,
+            weightKg: productA.estimatedWeightKg ?? 0.5,
+            voltage: formatVoltage(productA),
+            stockSlots: typeof productA.requestSlots === "number" ? productA.requestSlots : (productA.stockSlots ?? 5),
+            inStock: Boolean(productA.inStock ?? (productA.requestSlots > 0 || (productA.stockSlots ?? 0) > 0)),
+          },
+          productB: {
+            id: productB.id,
+            name: productB.name,
+            priceJpy: productB.priceJpy,
+            priceVnd: productB.estimatedProductPriceVnd ?? null,
+            weightKg: productB.estimatedWeightKg ?? 0.5,
+            voltage: formatVoltage(productB),
+            stockSlots: typeof productB.requestSlots === "number" ? productB.requestSlots : (productB.stockSlots ?? 5),
+            inStock: Boolean(productB.inStock ?? (productB.requestSlots > 0 || (productB.stockSlots ?? 0) > 0)),
+          },
+        },
+        [],
+        CATALOG_LINKS
+      );
+
+      productCards = [
+        {
+          id: productA.id,
+          name: productA.name,
+          imageUrl: productA.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+          priceJpy: productA.priceJpy,
+          priceVnd: productA.estimatedProductPriceVnd ?? null,
+          inStock: Boolean(productA.inStock ?? (productA.requestSlots > 0)),
+          stockSlots: typeof productA.requestSlots === "number" ? productA.requestSlots : (productA.stockSlots ?? 5),
+          weightKg: productA.estimatedWeightKg,
+          originalStore: productA.originalStore,
+          category: productA.category,
+        },
+        {
+          id: productB.id,
+          name: productB.name,
+          imageUrl: productB.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+          priceJpy: productB.priceJpy,
+          priceVnd: productB.estimatedProductPriceVnd ?? null,
+          inStock: Boolean(productB.inStock ?? (productB.requestSlots > 0)),
+          stockSlots: typeof productB.requestSlots === "number" ? productB.requestSlots : (productB.stockSlots ?? 5),
+          weightKg: productB.estimatedWeightKg,
+          originalStore: productB.originalStore,
+          category: productB.category,
+        },
+      ];
+
+      catalogEvidenceForRun = createEvidence(
+        "catalog_search",
+        "ok",
+        "Tìm thấy 2 sản phẩm so sánh",
+        {
+          searched: true,
+          resultCount: 2,
+          products: [productA, productB],
+        },
+        [],
+        CATALOG_LINKS
+      );
+    }
+  }
+
+  if (!catalogEvidenceForRun && (intents.catalog || intents.compatibility || (intents.addToCart && intents.quote))) {
+    catalogEvidenceForRun = await searchCatalogWithRouterFallback(effectiveMessage);
+  }
 
   if (intents.addToCart) {
     const currentTerms = extractCatalogSearchTerms(input.message);
@@ -1416,6 +1559,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
       // 1. Khách có tên sản phẩm trong tin nhắn hiện tại -> tìm trong catalog theo các từ khóa đó
       addToCartCatalogEvidence = catalogEvidenceForRun || await searchCatalogWithRouterFallback(input.message);
       const matchedProducts = (addToCartCatalogEvidence.known.products as any[]) || [];
+      const isAskingPrice = intents.quote || /\b(gia|bao nhieu|nhieu tien|price|cost)\b/i.test(normalizeSupportText(input.message));
 
       if (matchedProducts.length === 1) {
         // 3. Đúng 1 sản phẩm khớp chắc chắn -> trả productCards chỉ với sản phẩm đó
@@ -1434,7 +1578,12 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
             category: p.category,
           },
         ];
-        cartReply = `Quý khách bấm nút Thêm vào giỏ bên dưới để thêm **${p.name}** nhé.`;
+        if (isAskingPrice) {
+          const priceText = `${Number(p.priceJpy).toLocaleString("vi-VN")} ¥${p.estimatedProductPriceVnd ? ` (khoảng ${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ)` : ""}`;
+          cartReply = `Sản phẩm **${p.name}** có giá ${priceText}. Quý khách bấm nút Thêm vào giỏ bên dưới để thêm vào giỏ hàng nhé.`;
+        } else {
+          cartReply = `Quý khách bấm nút Thêm vào giỏ bên dưới để thêm **${p.name}** nhé.`;
+        }
       } else if (matchedProducts.length >= 2) {
         // 4. Có 2-3 sản phẩm khớp -> trả tối đa 3 thẻ và hỏi "Quý khách muốn thêm món nào?". KHÔNG chọn thay khách
         productCards = matchedProducts.slice(0, 3).map((p: any) => ({
@@ -1449,7 +1598,9 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
           originalStore: p.originalStore,
           category: p.category,
         }));
-        cartReply = "ChillBanana tìm thấy một số sản phẩm phù hợp. Quý khách muốn thêm món nào vào giỏ hàng ạ?";
+        cartReply = isAskingPrice
+          ? "ChillBanana tìm thấy một số sản phẩm phù hợp kèm giá ước tính bên dưới. Quý khách muốn thêm món nào vào giỏ hàng ạ?"
+          : "ChillBanana tìm thấy một số sản phẩm phù hợp. Quý khách muốn thêm món nào vào giỏ hàng ạ?";
       } else {
         // 5. Không khớp sản phẩm nào -> nói chưa tìm thấy trong catalog, không lấy sản phẩm cũ trong lịch sử để thay thế.
         // Tuyệt đối không bao giờ trả thẻ của một sản phẩm khác với sản phẩm khách vừa gọi tên.
@@ -1536,11 +1687,11 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const jobs: Array<Promise<SupportEvidence | { evidence: SupportEvidence; guardedReply?: string; quoteFooter?: string }>> = [];
 
-  const catalogPromise =
-    (intents.catalog || intents.compatibility) && !intents.addToCart
-      ? Promise.resolve(catalogEvidenceForRun || searchCatalog(effectiveMessage, intents.category, routedSearchTerms))
-      : null;
-  if (intents.catalog && !intents.addToCart && catalogPromise) jobs.push(catalogPromise);
+  const shouldRunCatalogJob = (intents.catalog || intents.compatibility || (intents.addToCart && intents.quote)) && (!intents.addToCart || intents.quote);
+  const catalogPromise = shouldRunCatalogJob
+    ? Promise.resolve(catalogEvidenceForRun || searchCatalog(effectiveMessage, intents.category, routedSearchTerms))
+    : null;
+  if (catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
   if (intents.orderStatus) jobs.push(lookupOrderStatus(intents.orderCode, input.customerId, input.guestOrderAccessToken));
   if (intents.shipping) jobs.push(getShippingPolicyEvidence());
@@ -1550,7 +1701,10 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const results = await Promise.all(jobs);
   const evidence: SupportEvidence[] = [];
-  if (addToCartCatalogEvidence) {
+  if (comparisonEvidence) {
+    evidence.push(comparisonEvidence);
+  }
+  if (addToCartCatalogEvidence && !evidence.some((e) => e.toolId === "catalog_search")) {
     evidence.push(addToCartCatalogEvidence);
   }
   let orderReply: string | undefined;
