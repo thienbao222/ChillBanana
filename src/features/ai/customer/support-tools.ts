@@ -1288,7 +1288,8 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
     return route;
   };
 
-  if (!Object.values(intents).some((value) => value === true)) await applyIntentRoute();
+  // Không chạy router khi regex đã ra intent catalog (chỉ chạy khi regex không ra intent hoặc tìm lần đầu ra 0 sản phẩm)
+  if (!intents.catalog && !Object.values(intents).some((value) => value === true)) await applyIntentRoute();
 
   const normalizedMessage = normalizeSupportText(effectiveMessage)
     .replace(/[.!?]+/g, " ")

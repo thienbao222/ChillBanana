@@ -67,7 +67,7 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
     })),
     { role: "user", parts: [{ text: message.slice(0, 500) }] },
   ];
-  const deadline = Date.now() + 4_000;
+  const deadline = Date.now() + 8_000;
 
   for (const model of [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback]) {
     const remaining = deadline - Date.now();
@@ -91,14 +91,14 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
               thinkingConfig: { thinkingLevel: "low" },
             },
           }),
-          signal: AbortSignal.timeout(remaining),
+          signal: AbortSignal.timeout(Math.min(8_000, remaining)),
         }
       );
 
       if (!response.ok) {
         const body = await response.text().catch(() => "");
         console.warn(`[SupportIntentRouter] Model ${model} HTTP ${response.status}: ${body.slice(0, 200)}`);
-        chatKeyPool.markError(activeKey, response.status, model);
+        // Lỗi của router tuyệt đối không gọi markError của chatKeyPool
         continue;
       }
 
@@ -114,9 +114,14 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
         }
       }
       console.warn(`[SupportIntentRouter] Model ${model} returned invalid intent JSON`);
-    } catch (error) {
-      console.warn(`[SupportIntentRouter] Model ${model} failed: ${error instanceof Error ? error.message : String(error)}`);
-      chatKeyPool.markError(activeKey, 503, model);
+    } catch (error: any) {
+      const isTimeout = error?.name === "AbortError" || error?.name === "TimeoutError" || /timeout|abort/i.test(error?.message || "");
+      if (isTimeout) {
+        console.warn(`[SupportIntentRouter] Model ${model} timeout`);
+      } else {
+        console.warn(`[SupportIntentRouter] Model ${model} failed: ${error instanceof Error ? error.message : String(error)}`);
+      }
+      // Lỗi hoặc timeout của router tuyệt đối không gọi markError của chatKeyPool
     }
   }
 
