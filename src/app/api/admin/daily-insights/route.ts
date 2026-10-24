@@ -218,7 +218,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
     let insight: string | null = null;
-    const models = Array.from(new Set([GEMINI_MODELS.admin, "gemini-2.0-flash", "gemini-2.5-flash-lite"]));
+    const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const apiKey = adminKeyPool.getNextKey();
@@ -226,15 +226,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
 
       for (const model of models) {
         try {
-          const isGemini2 = model.startsWith("gemini-2.");
-          const generationConfig = isGemini2
-            ? { maxOutputTokens: 2000, temperature: 0.2 }
-            : {
-                maxOutputTokens: 2000,
-                thinkingConfig: { thinkingLevel: "low" },
-              };
-
-          const response = await fetch(
+          let response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
               method: "POST",
@@ -242,16 +234,40 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
               body: JSON.stringify({
                 system_instruction: { parts: [{ text: systemInstruction }] },
                 contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-                generationConfig,
+                generationConfig: {
+                  maxOutputTokens: 2000,
+                  temperature: 0.2,
+                  thinkingConfig: { thinkingLevel: "low" },
+                },
               }),
               signal: AbortSignal.timeout(30000),
             }
           );
 
-          if (!response.ok) {
-            if ([401, 403, 429, 500, 503].includes(response.status)) {
-              adminKeyPool.markError(apiKey, response.status);
+          if (response.status === 400) {
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: systemInstruction }] },
+                  contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                  generationConfig: {
+                    maxOutputTokens: 2000,
+                    temperature: 0.2,
+                  },
+                }),
+                signal: AbortSignal.timeout(30000),
+              }
+            );
+            if (retryRes.ok) {
+              response = retryRes;
             }
+          }
+
+          if (!response.ok) {
+            adminKeyPool.markError(apiKey, response.status, model);
             continue;
           }
 

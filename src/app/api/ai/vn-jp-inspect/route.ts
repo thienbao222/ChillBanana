@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { chatKeyPool, adminKeyPool } from "@/lib/api-key-manager";
 import { inspectVnJpCargoDeterministic } from "@/features/ai/vn-jp/maff-inspector";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 
 export const dynamic = "force-dynamic";
 
@@ -58,48 +59,76 @@ export async function POST(req: NextRequest) {
     const apiKey = activePool.getAvailableKey();
 
     if (apiKey) {
-      try {
-        const prompt =
-          mode === "ADMIN"
-            ? `Bạn là Chuyên gia Khai báo Hải quan Hàng không Việt - Nhật. Hãy dịch chính xác danh mục hàng hóa sau sang tiếng Anh và tiếng Nhật dùng cho tờ khai CN23 (chỉ trả về JSON {"invoiceEn": "...", "invoiceJp": "..."}): "${cargoDetails}"`
-            : `Bạn là linh vật Neo Universe (phong cách Kuudere thông thái, ấm áp, dùng ẩn dụ vũ trụ ngắn gọn 2 câu). Hãy nhận xét kiện hàng gửi đi Nhật gồm "${cargoDetails}" với kết quả kiểm dịch MAFF hiện tại là ${baseResult.overallRisk} (chỉ trả về JSON {"neoComment": "..."}).`;
+      const prompt =
+        mode === "ADMIN"
+          ? `Bạn là Chuyên gia Khai báo Hải quan Hàng không Việt - Nhật. Hãy dịch chính xác danh mục hàng hóa sau sang tiếng Anh và tiếng Nhật dùng cho tờ khai CN23 (chỉ trả về JSON {"invoiceEn": "...", "invoiceJp": "..."}): "${cargoDetails}"`
+          : `Bạn là linh vật Neo Universe (phong cách Kuudere thông thái, ấm áp, dùng ẩn dụ vũ trụ ngắn gọn 2 câu). Hãy nhận xét kiện hàng gửi đi Nhật gồm "${cargoDetails}" với kết quả kiểm dịch MAFF hiện tại là ${baseResult.overallRisk} (chỉ trả về JSON {"neoComment": "..."}).`;
 
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: { responseMimeType: "application/json" },
-            }),
-            signal: AbortSignal.timeout(10000),
-          }
-        );
+      const models =
+        mode === "ADMIN"
+          ? [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
+          : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
 
-        if (response.ok) {
-          const data = await response.json();
-          const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (text) {
-            const parsed = JSON.parse(text);
-            if (mode === "ADMIN" && baseResult.adminCustomsDeclaration) {
-              if (typeof parsed.invoiceEn === "string" && parsed.invoiceEn.trim()) {
-                baseResult.adminCustomsDeclaration.invoiceSummaryEn = parsed.invoiceEn.trim();
+      for (const model of models) {
+        try {
+          let response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  responseMimeType: "application/json",
+                  thinkingConfig: { thinkingLevel: "low" },
+                },
+              }),
+              signal: AbortSignal.timeout(10000),
+            }
+          );
+
+          if (response.status === 400) {
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: { responseMimeType: "application/json" },
+                }),
+                signal: AbortSignal.timeout(10000),
               }
-              if (typeof parsed.invoiceJp === "string" && parsed.invoiceJp.trim()) {
-                baseResult.adminCustomsDeclaration.invoiceSummaryJp = parsed.invoiceJp.trim();
-              }
-            } else if (typeof parsed.neoComment === "string" && parsed.neoComment.trim()) {
-              baseResult.neoKuudereComment = parsed.neoComment.trim();
+            );
+            if (retryRes.ok) {
+              response = retryRes;
             }
           }
-        } else {
-          if ([401, 403, 429, 500, 503].includes(response.status)) {
-            activePool.markError(apiKey, response.status);
+
+          if (response.ok) {
+            const data = await response.json();
+            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (text) {
+              const parsed = JSON.parse(text);
+              if (mode === "ADMIN" && baseResult.adminCustomsDeclaration) {
+                if (typeof parsed.invoiceEn === "string" && parsed.invoiceEn.trim()) {
+                  baseResult.adminCustomsDeclaration.invoiceSummaryEn = parsed.invoiceEn.trim();
+                }
+                if (typeof parsed.invoiceJp === "string" && parsed.invoiceJp.trim()) {
+                  baseResult.adminCustomsDeclaration.invoiceSummaryJp = parsed.invoiceJp.trim();
+                }
+              } else if (typeof parsed.neoComment === "string" && parsed.neoComment.trim()) {
+                baseResult.neoKuudereComment = parsed.neoComment.trim();
+              }
+            }
+            break;
+          } else {
+            activePool.markError(apiKey, response.status, model);
           }
+        } catch {
+          activePool.markError(apiKey, 503, model);
+          // Fallback an toàn về kết quả Deterministic nếu Gemini quá tải hoặc mất mạng
         }
-      } catch {
-        // Fallback an toàn về kết quả Deterministic nếu Gemini quá tải hoặc mất mạng
       }
     }
 

@@ -259,7 +259,15 @@ async function evaluateImageAnalysisRoute() {
       checkAndRecordHit: async () => 0,
       getClientIp: () => "127.0.0.1",
     },
-    "@/lib/gemini-models": { GEMINI_MODELS: { lightweight: "gemini-2.5-flash-lite" } },
+    "@/lib/gemini-models": {
+      GEMINI_MODELS: {
+        neo: "gemini-3.5-flash",
+        neoFallback: "gemini-3.1-flash-lite",
+        lightweight: "gemini-3.5-flash-lite",
+        vision: "gemini-3.5-flash",
+        admin: "gemini-3.5-flash",
+      },
+    },
     "@/lib/prisma": {
       prisma: {
         product: {

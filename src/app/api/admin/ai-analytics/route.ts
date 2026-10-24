@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
 import { adminKeyPool } from "@/lib/api-key-manager";
+import { GEMINI_MODELS } from "@/lib/gemini-models";
 
 export const dynamic = "force-dynamic";
 
@@ -116,26 +117,57 @@ export async function GET(req: NextRequest) {
 
     const apiKey = adminKeyPool.getAvailableKey();
     if (apiKey) {
-      try {
-        const prompt = `Bạn là Trợ lý Giám đốc Vận hành ChillBanana. Hãy nhận xét ngắn gọn (3-4 gạch đầu dòng) về bức tranh vận hành logistics 2 chiều Việt - Nhật dựa trên số liệu sau:\n${JSON.stringify(analyticsData, null, 2)}`;
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-            }),
-            signal: AbortSignal.timeout(8000),
+      const prompt = `Bạn là Trợ lý Giám đốc Vận hành ChillBanana. Hãy nhận xét ngắn gọn (3-4 gạch đầu dòng) về bức tranh vận hành logistics 2 chiều Việt - Nhật dựa trên số liệu sau:\n${JSON.stringify(analyticsData, null, 2)}`;
+      const models = [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+
+      for (const model of models) {
+        try {
+          let response = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: {
+                  thinkingConfig: { thinkingLevel: "low" },
+                },
+              }),
+              signal: AbortSignal.timeout(8000),
+            }
+          );
+
+          if (response.status === 400) {
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [{ text: prompt }] }],
+                }),
+                signal: AbortSignal.timeout(8000),
+              }
+            );
+            if (retryRes.ok) {
+              response = retryRes;
+            }
           }
-        );
-        if (response.ok) {
-          const resData = await response.json();
-          const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-          if (text) aiSummary = text;
+
+          if (response.ok) {
+            const resData = await response.json();
+            const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+            if (text) {
+              aiSummary = text;
+              break;
+            }
+          } else {
+            adminKeyPool.markError(apiKey, response.status, model);
+          }
+        } catch {
+          adminKeyPool.markError(apiKey, 503, model);
+          // Fallback giữ nguyên tóm tắt deterministic
         }
-      } catch {
-        // Fallback giữ nguyên tóm tắt deterministic
       }
     }
 

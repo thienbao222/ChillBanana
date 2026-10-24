@@ -4,36 +4,69 @@ import { chatKeyPool, scrapeKeyPool, visionKeyPool, adminKeyPool } from "@/lib/a
 
 export const dynamic = "force-dynamic";
 
-
 export async function GET(req: NextRequest) {
   const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   try {
-    const chatKeys = chatKeyPool.getStatus();
-    const scrapeKeys = scrapeKeyPool.getStatus();
-    const visionKeys = visionKeyPool.getStatus();
-    const adminKeys = adminKeyPool.getStatus();
-
-    const allKeys = [...chatKeys, ...scrapeKeys, ...visionKeys, ...adminKeys];
-    
-    // Group keys logically for the UI to display them unified
-    // For simplicity, we just return the chatKeys right now since UI expects a single array
-    // Wait, the UI expects { keys: [...], activeKeys, rateLimitedKeys }.
-    // Let's combine them and give them unique index names
-    const combinedKeys = [
-      ...chatKeys.map((k, i) => ({ ...k, index: `Chat-${i+1}` })),
-      ...scrapeKeys.map((k, i) => ({ ...k, index: `Scrape-${i+1}` })),
-      ...visionKeys.map((k, i) => ({ ...k, index: `Vision-${i+1}` })),
-      ...adminKeys.map((k, i) => ({ ...k, index: `Admin-${i+1}` }))
+    const poolEntries = [
+      { name: "Chat", keys: chatKeyPool.getStatus() },
+      { name: "Scrape", keys: scrapeKeyPool.getStatus() },
+      { name: "Vision", keys: visionKeyPool.getStatus() },
+      { name: "Admin", keys: adminKeyPool.getStatus() },
     ];
+
+    // Deduplicate actual unique keys across pools so admin displays real distinct keys count
+    const uniqueMap = new Map<string, {
+      keyPreview: string;
+      status: "ACTIVE" | "RATE_LIMITED" | "DEAD";
+      cooldownUntil: number;
+      requestCount: number;
+      errorCount: number;
+      pools: string[];
+    }>();
+
+    for (const pool of poolEntries) {
+      for (const k of pool.keys) {
+        const existing = uniqueMap.get(k.keyPreview);
+        if (!existing) {
+          uniqueMap.set(k.keyPreview, {
+            keyPreview: k.keyPreview,
+            status: k.status,
+            cooldownUntil: k.cooldownUntil,
+            requestCount: k.requestCount,
+            errorCount: k.errorCount,
+            pools: [pool.name],
+          });
+        } else {
+          if (!existing.pools.includes(pool.name)) existing.pools.push(pool.name);
+          existing.requestCount += k.requestCount;
+          existing.errorCount += k.errorCount;
+          if (k.status === "DEAD") {
+            existing.status = "DEAD";
+          } else if (k.status === "RATE_LIMITED" && existing.status !== "DEAD") {
+            existing.status = "RATE_LIMITED";
+          }
+          existing.cooldownUntil = Math.max(existing.cooldownUntil, k.cooldownUntil);
+        }
+      }
+    }
+
+    const uniqueKeys = Array.from(uniqueMap.values()).map((k, i) => {
+      const cooldownRemainingSec = Math.max(0, Math.ceil((k.cooldownUntil - Date.now()) / 1000));
+      return {
+        ...k,
+        index: i + 1,
+        cooldownRemainingSec,
+      };
+    });
 
     return NextResponse.json({
       success: true,
-      keys: combinedKeys,
-      totalKeys: combinedKeys.length,
-      activeKeys: combinedKeys.filter(k => k.status === "ACTIVE").length,
-      rateLimitedKeys: combinedKeys.filter(k => k.status === "RATE_LIMITED").length,
+      keys: uniqueKeys,
+      totalKeys: uniqueKeys.length,
+      activeKeys: uniqueKeys.filter(k => k.status === "ACTIVE").length,
+      rateLimitedKeys: uniqueKeys.filter(k => k.status === "RATE_LIMITED").length,
     });
   } catch (error) {
     console.error("Lỗi lấy trạng thái API Keys:", error);

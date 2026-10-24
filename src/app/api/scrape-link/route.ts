@@ -771,16 +771,15 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
 
   const models = Array.from(
     new Set([
-      GEMINI_MODELS?.lightweight || "gemini-2.5-flash-lite",
-      GEMINI_MODELS?.neoFallback || "gemini-2.0-flash",
-      GEMINI_MODELS?.neo || "gemini-2.5-flash",
+      GEMINI_MODELS.lightweight,
+      GEMINI_MODELS.neoFallback,
+      GEMINI_MODELS.neo,
     ])
   );
 
   for (const modelName of models) {
     try {
-      const isGemini25 = modelName.includes("2.5");
-      const response = await fetch(
+      let response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
         {
           method: "POST",
@@ -791,14 +790,39 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
               maxOutputTokens: 1536,
               temperature: 0.1,
               responseMimeType: "application/json",
-              ...(isGemini25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+              thinkingConfig: { thinkingLevel: "low" },
             },
           }),
           signal: AbortSignal.timeout(12000),
         }
       );
 
-      if (!response.ok) continue;
+      if (response.status === 400) {
+        const retryRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                maxOutputTokens: 1536,
+                temperature: 0.1,
+                responseMimeType: "application/json",
+              },
+            }),
+            signal: AbortSignal.timeout(12000),
+          }
+        );
+        if (retryRes.ok) {
+          response = retryRes;
+        }
+      }
+
+      if (!response.ok) {
+        scrapeKeyPool.markError(apiKey, response.status, modelName);
+        continue;
+      }
 
       const data = await response.json();
       const rawText: string =

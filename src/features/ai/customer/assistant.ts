@@ -196,21 +196,13 @@ export async function askGeminiAgent(
     if (!activeKey) break;
 
     const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback, "gemini-2.0-flash-lite"]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, "gemini-2.0-flash-lite"];
+      ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
+      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
     const models = Array.from(new Set(candidateModels));
 
     for (const model of models) {
       try {
-        const isStandardFlash = model.startsWith("gemini-2.");
-        const generationConfig = isStandardFlash
-          ? { maxOutputTokens: 2200, temperature: 0.4 }
-          : {
-              maxOutputTokens: 2200,
-              thinkingConfig: { thinkingLevel: "low" },
-            };
-
-        const response = await fetch(
+        let response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
           {
             method: "POST",
@@ -218,11 +210,37 @@ export async function askGeminiAgent(
             body: JSON.stringify({
               system_instruction: { parts: [{ text: systemInstruction }] },
               contents,
-              generationConfig,
+              generationConfig: {
+                maxOutputTokens: 2200,
+                temperature: 0.4,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
             }),
             signal: AbortSignal.timeout(12_000),
           }
         );
+
+        if (response.status === 400) {
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: {
+                  maxOutputTokens: 2200,
+                  temperature: 0.4,
+                },
+              }),
+              signal: AbortSignal.timeout(12_000),
+            }
+          );
+          if (retryRes.ok) {
+            response = retryRes;
+          }
+        }
 
         if (response.ok) {
           const data = await response.json();
@@ -247,10 +265,7 @@ export async function askGeminiAgent(
           continue;
         }
 
-        // BẢO MẬT & ĐỘ TIN CẬY: Chỉ phạt key khi lỗi hạn ngạch/máy chủ, không phạt khi lỗi 404 model
-        if (response.status !== 404) {
-          chatKeyPool.markError(activeKey, response.status);
-        }
+        chatKeyPool.markError(activeKey, response.status, model);
 
         if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
           if (response.status === 403 || response.status === 404) neoPrimaryUnavailable = true;
@@ -260,7 +275,7 @@ export async function askGeminiAgent(
 
         continue;
       } catch {
-        chatKeyPool.markError(activeKey, 503);
+        chatKeyPool.markError(activeKey, 503, model);
         if (model === GEMINI_MODELS.neo) {
           neoPrimaryCooldownUntil = Date.now() + 60_000;
         }

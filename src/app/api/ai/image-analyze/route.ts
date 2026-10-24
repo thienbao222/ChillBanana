@@ -262,11 +262,11 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
   "description": "mô tả ngắn gọn đặc điểm nhận diện sản phẩm trong ảnh"
 }`;
 
-    // ── BƯỚC 2: Gọi Gemini Vision với cơ chế Fallback 3 Model (Ưu tiên gemini-2.0-flash 1500 RPD) & Tắt Thinking Budget ──
+    // ── BƯỚC 2: Gọi Gemini Vision với cơ chế Fallback 3 Model (vision, neoFallback, lightweight) & thinkingLevel: low ──
     const candidateModels = [
-      (GEMINI_MODELS as any)?.vision || GEMINI_MODELS?.neoFallback || "gemini-2.0-flash",
-      GEMINI_MODELS?.lightweight || "gemini-2.5-flash-lite",
-      GEMINI_MODELS?.neo || "gemini-2.5-flash",
+      GEMINI_MODELS.vision,
+      GEMINI_MODELS.neoFallback,
+      GEMINI_MODELS.lightweight,
     ];
     const uniqueModels = Array.from(new Set(candidateModels));
 
@@ -274,7 +274,6 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
     let lastStatus = 500;
 
     for (const modelName of uniqueModels) {
-      const isGemini25 = modelName.includes("2.5");
       const requestBody = {
         contents: [
           {
@@ -295,12 +294,12 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
           maxOutputTokens: 2048,
           temperature: 0.15,
           responseMimeType: "application/json",
-          ...(isGemini25 ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
+          thinkingConfig: { thinkingLevel: "low" },
         },
       };
 
       try {
-        const res = await fetch(
+        let res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
           {
             method: "POST",
@@ -312,8 +311,12 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
 
         lastStatus = res.status;
         if (!res.ok) {
-          // Nếu model 2.5 không nhận tham số thinkingConfig ở một số endpoint v1beta, thử gọi lại không có thinkingConfig
-          if (res.status === 400 && isGemini25) {
+          const errText = await res.text().catch(() => "");
+          console.warn(`[ImageAnalyze] Model ${modelName} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
+          visionKeyPool?.markError?.(apiKey, res.status, modelName);
+
+          // Nếu model trả 400 vì thinkingConfig, thử lại một lần không có thinkingConfig
+          if (res.status === 400) {
             const retryBody = {
               contents: requestBody.contents,
               generationConfig: {
@@ -337,6 +340,11 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
               const textPart = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop();
               parsedResult = safeParseVisionJson(textPart?.text || "");
               if (parsedResult) break;
+            } else {
+              const retryErrText = await retryRes.text().catch(() => "");
+              console.warn(`[ImageAnalyze] Model ${modelName} retry lỗi HTTP ${retryRes.status}: ${retryErrText.slice(0, 200)}`);
+              visionKeyPool?.markError?.(apiKey, retryRes.status, modelName);
+              lastStatus = retryRes.status;
             }
           }
           continue;
@@ -351,6 +359,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         if (parsedResult) break;
       } catch (err) {
         console.warn(`[ImageAnalyze] Model ${modelName} error:`, err);
+        visionKeyPool?.markError?.(apiKey, 503, modelName);
       }
     }
 

@@ -70,9 +70,14 @@ export class ApiKeyPool {
     return this.getNextKey();
   }
 
-  public markError(key: string, statusCode: number): void {
+  public markError(key: string, statusCode: number, modelName?: string): void {
     const stats = this.keyStats.get(key);
     if (!stats) return;
+
+    if (statusCode === 404 || statusCode === 400) {
+      console.warn(`[ApiKeyPool:${this.envVarName}] model không khả dụng: ${modelName || "không xác định"}`);
+      return;
+    }
 
     stats.errorCount++;
 

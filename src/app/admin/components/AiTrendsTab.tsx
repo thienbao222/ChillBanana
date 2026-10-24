@@ -154,7 +154,7 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Hệ Thống API Key Pool (Gemini)</span>
                   </h3>
-                  <p className="text-xs text-slate-500 mt-1">Tự động chuyển đổi khóa khi bị quá tải (HTTP 429/503). Đang có {apiKeyStatus.activeKeys} khóa sẵn sàng.</p>
+                  <p className="text-xs text-slate-500 mt-1">Tự động chuyển đổi khóa khi bị quá tải (HTTP 429/503). Đang có {apiKeyStatus.activeKeys}/{apiKeyStatus.totalKeys} khóa thực tế sẵn sàng.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {apiKeyStatus.keys?.map((k: any) => (
@@ -164,6 +164,9 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
                         : "bg-rose-50 border-rose-200 text-rose-700"
                     }`}>
                       <span>Key {k.index}: {k.keyPreview}</span>
+                      {k.pools && k.pools.length > 0 && (
+                        <span className="text-[10px] opacity-70 font-sans">({k.pools.join(", ")})</span>
+                      )}
                       {k.status === "ACTIVE" ? (
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
                       ) : (

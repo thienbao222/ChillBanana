@@ -90,7 +90,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
   return parts.join("\n");
 }
 
-    const models = Array.from(new Set([GEMINI_MODELS.admin, "gemini-2.0-flash", "gemini-2.5-flash-lite"]));
+    const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
     let answer: string | null = null;
 
     for (let attempt = 0; attempt < 2; attempt++) {
@@ -99,29 +99,42 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
 
       for (const model of models) {
         try {
-          const isGemini2 = model.startsWith("gemini-2.");
-          const generationConfig = isGemini2
-            ? { maxOutputTokens: 1800, temperature: 0.2 }
-            : {
-                maxOutputTokens: 1800,
-                thinkingConfig: { thinkingLevel: "low" },
-              };
-
-          const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               system_instruction: { parts: [{ text: systemInstruction }] },
               contents,
-              generationConfig,
+              generationConfig: {
+                maxOutputTokens: 1800,
+                temperature: 0.2,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
             }),
             signal: AbortSignal.timeout(18000),
           });
 
-          if (!response.ok) {
-            if ([401, 403, 429, 500, 503].includes(response.status)) {
-              adminKeyPool.markError(apiKey, response.status);
+          if (response.status === 400) {
+            const retryRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents,
+                generationConfig: {
+                  maxOutputTokens: 1800,
+                  temperature: 0.2,
+                },
+              }),
+              signal: AbortSignal.timeout(18000),
+            });
+            if (retryRes.ok) {
+              response = retryRes;
             }
+          }
+
+          if (!response.ok) {
+            adminKeyPool.markError(apiKey, response.status, model);
             continue;
           }
 
