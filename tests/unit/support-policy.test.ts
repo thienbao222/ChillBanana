@@ -32,6 +32,11 @@ vi.mock("@/features/pricing/config", () => ({
       tier2ServiceFeePercent: 6,
       tier3ServiceFeePercent: 5,
       minServiceFeeVnd: 20000,
+      serviceFeePercent: 8,
+      serviceFeeMinimumVnd: 20000,
+      airShippingPerKgVnd: 185000,
+      groupBuyShippingDiscountPercent: 25,
+      groupBuyMaxWeightKg: 0.5,
       baseInsurancePercent: 3,
       highValueInsurancePercent: 5,
     },
@@ -209,6 +214,43 @@ describe("support-policy unit tests", () => {
       );
     }
     expect(prisma.product.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("không chạy catalog cho câu chào hỏi hoặc cảm ơn thuần túy", async () => {
+    vi.restoreAllMocks();
+    const findMany = vi.spyOn(prisma.product, "findMany");
+
+    const result = await runCustomerSupportTools({
+      message: "Dạ Neo ơi, cảm ơn bạn nhiều",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(result.evidence).toEqual([]);
+  });
+
+  it("activates every registered support tool from a representative customer message", async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([]);
+    const cases = [
+      ["catalog_search", "Tìm sữa rửa mặt Hada"],
+      ["quote_estimate", "Tính giá về Việt Nam cho món này bao nhiêu tiền?"],
+      ["order_status", "Tình trạng đơn CB-2026-ABCD-123456"],
+      ["shipping_policy", "Cước bay Narita về Sài Gòn tính thế nào? Gom đơn được giảm không?"],
+      ["product_compatibility", "Nồi cơm điện Nhật 100V có cắm được điện 220V ở nhà không?"],
+    ] as const;
+
+    for (const [toolId, message] of cases) {
+      const result = await runCustomerSupportTools({
+        message,
+        customerId: null,
+        guestOrderAccessToken: null,
+        scrapedProduct: null,
+      });
+      expect(result.evidence.some((item) => item.toolId === toolId), `${message} should activate ${toolId}`).toBe(true);
+    }
   });
 
   it("matches accent-free queries against the small catalog and keeps product-type terms", async () => {

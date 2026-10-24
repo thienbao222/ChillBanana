@@ -1293,7 +1293,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
     .replace(/[.!?]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
-  const isGreetingOrThanks = /^(?:(?:da\s+)?(?:xin\s+)?chao(?:\s+(?:shop|neo|ban|anh|chi|em))?|(?:da\s+)?cam on(?:\s+(?:shop|neo|ban|anh|chi|em))?|hello|hi|hey|thanks|thank you|good morning|good afternoon)$/.test(normalizedMessage);
+  const isGreetingOrThanks = /^(?:(?:da\s+)?(?:xin\s+)?chao(?:\s+(?:cac ban|shop|neo|ban|anh|chi|em))?|(?:da\s+)?neo oi|(?:(?:da\s+)?rat\s+)?cam on(?:\s+(?:shop|neo|ban|anh|chi|em|rat|nhieu|nhe|nha|a))*|hello|hi|hey|thanks(?:\s+you)?|thank you|good morning|good afternoon)$/.test(normalizedMessage);
   if (
     !Object.values(intents).some((value) => value === true) &&
     extractCatalogSearchTerms(effectiveMessage).length > 0 &&

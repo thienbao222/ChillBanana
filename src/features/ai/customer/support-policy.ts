@@ -51,7 +51,7 @@ export const SEARCH_STOP_WORDS = new Set([
   "cua", "cho", "thi", "sao", "nao", "gi", "muon", "can", "xem", "giup", "voi", "va",
   "hay", "hoac", "bao", "nhieu", "la", "nhu", "nhat", "tu", "van", "xin", "y", "de",
   "dang", "mot", "cac", "nhung", "tren", "duoi", "trong", "ngoai", "the", "vay",
-  "a", "oi", "nhe", "nha", "chao", "hoi", "cam", "on", "duoc", "bi", "lai", "di",
+  "a", "oi", "nhe", "nha", "chao", "hoi", "cam", "on", "da", "rat", "duoc", "bi", "lai", "di",
   "den", "toi", "ve", "theo", "chiec", "cai", "con", "size", "mau", "vua", "roi", "khoang",
   // Thuật ngữ mua bán chung chung / website
   "website", "chillbanana", "san", "pham", "mua", "ban", "loai", "tim", "kiem",

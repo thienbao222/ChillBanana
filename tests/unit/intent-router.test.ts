@@ -77,4 +77,11 @@ describe("routeSupportIntent", () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(responseWithText("{}")));
     expect(await routeSupportIntent("sữa rửa mặt Hada")).toBeNull();
   });
+
+  it("returns null after router request timeouts so the catalog safety net can take over", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+
+    expect(await routeSupportIntent("sữa rửa mặt Hada")).toBeNull();
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2);
+  });
 });
