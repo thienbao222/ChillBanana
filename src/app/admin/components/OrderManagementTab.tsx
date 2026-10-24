@@ -25,6 +25,7 @@ import { useAdminToast } from "@/context/AdminToastContext";
 import { ORDER_STATUS_FLOW, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { parseOrderItemSource } from "@/features/orders/item-source";
+import ControlledEmailModal from "./ControlledEmailModal";
 
 const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
   PENDING_DEPOSIT: `1. ${ORDER_STATUS_LABELS_VI.PENDING_DEPOSIT}`,
@@ -58,6 +59,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [vnTrack, setVnTrack] = useState("");
   const [updateWeightKg, setUpdateWeightKg] = useState("");
   const [isUpdating, setIsUpdating] = useState(false);
+  const [emailModalOrder, setEmailModalOrder] = useState<StoredOrder | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<StoredOrder | null>(null);
   const [cancelReason, setCancelReason] = useState("Sản phẩm hết hàng tại Nhật / Người bán hủy bán");
   const [cancelCustomReason, setCancelCustomReason] = useState("");
@@ -657,6 +659,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                                     <span>Tiến độ</span>
                                   </button>
                                   <button
+                                    onClick={() => setEmailModalOrder(ord)}
+                                    title="Soạn email cho khách (AI hỗ trợ)"
+                                    className="px-2.5 py-1.5 bg-sky-50 hover:bg-sky-100 text-sky-800 border border-sky-200 font-bold text-xs rounded-xl transition-all flex items-center space-x-1"
+                                  >
+                                    <Mail className="w-3.5 h-3.5 text-sky-600" />
+                                    <span>Email</span>
+                                  </button>
+                                  <button
                                     onClick={() => openCancelModal(ord)}
                                     title="Hủy đơn hàng"
                                     className="px-2.5 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold text-xs rounded-xl transition-all flex items-center space-x-1"
@@ -829,6 +839,13 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                                 Chi Tiết
                               </button>
                             )}
+                            <button
+                              onClick={() => setEmailModalOrder(ord)}
+                              title="Soạn email cho khách"
+                              className="px-2 py-1 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-lg text-[10px] flex items-center justify-center"
+                            >
+                              <Mail className="w-3 h-3 text-sky-600" />
+                            </button>
                             <button
                               onClick={() => openCancelModal(ord)}
                               title="Hủy đơn"
@@ -1966,6 +1983,14 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
           </div>
         );
       })()}
+
+      {emailModalOrder && (
+        <ControlledEmailModal
+          order={emailModalOrder}
+          onClose={() => setEmailModalOrder(null)}
+          onSuccess={fetchOrders}
+        />
+      )}
 
     </div>
   );
