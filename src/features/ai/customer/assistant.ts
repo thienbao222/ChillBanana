@@ -239,8 +239,8 @@ export async function askGeminiAgentDetailed(
     if (!activeKey) break;
 
     const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+      ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
+      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
     const models = Array.from(new Set(candidateModels));
 
     for (const model of models) {
