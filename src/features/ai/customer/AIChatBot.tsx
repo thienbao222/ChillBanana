@@ -214,13 +214,13 @@ export default function AIChatBot() {
     const added = addToCart({
       id: product.id,
       name: product.name,
-      priceJpy: product.priceJpy,
-      priceVnd: effectiveVnd,
-      weightKg: product.weightKg ?? 0.5,
+      priceJpy: Math.max(0, Math.round(Number(product.priceJpy) || 0)),
+      priceVnd: Math.max(0, Math.round(Number(effectiveVnd) || 0)),
+      weightKg: Number(product.weightKg) > 0 ? Number(product.weightKg) : 0.5,
       imageUrl: product.imageUrl,
       originalStore: product.originalStore || "Catalog ChillBanana",
       category: product.category,
-      stockSlots: product.inStock ? 5 : 0,
+      stockSlots: typeof product.stockSlots === "number" ? product.stockSlots : (product.inStock ? 5 : 0),
     });
     if (added) {
       toast.success(`Đã thêm "${product.name}" vào giỏ hàng.`);
@@ -737,13 +737,13 @@ export default function AIChatBot() {
           const added = addToCart({
             id: target.id,
             name: target.name,
-            priceJpy: target.priceJpy,
-            priceVnd: effectiveVnd,
-            weightKg: target.weightKg ?? 0.5,
+            priceJpy: Math.max(0, Math.round(Number(target.priceJpy) || 0)),
+            priceVnd: Math.max(0, Math.round(Number(effectiveVnd) || 0)),
+            weightKg: Number(target.weightKg) > 0 ? Number(target.weightKg) : 0.5,
             imageUrl: target.imageUrl,
             originalStore: target.originalStore || "Catalog ChillBanana",
             category: target.category,
-            stockSlots: target.inStock ? 5 : 0,
+            stockSlots: typeof target.stockSlots === "number" ? target.stockSlots : (target.inStock ? 5 : 0),
           });
           if (added) {
             autoAddedProduct = target;

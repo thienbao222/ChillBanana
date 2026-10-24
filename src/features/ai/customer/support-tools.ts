@@ -428,6 +428,7 @@ export interface ProductCardData {
   priceJpy: number;
   priceVnd: number | null;
   inStock: boolean;
+  stockSlots?: number;
   weightKg?: number;
   originalStore?: string;
   category?: string;
@@ -1275,6 +1276,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
             priceJpy: p.priceJpy,
             priceVnd: p.estimatedProductPriceVnd ?? null,
             inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+            stockSlots: typeof p.requestSlots === "number" ? p.requestSlots : (typeof p.stockSlots === "number" ? p.stockSlots : 5),
             weightKg: p.estimatedWeightKg,
             originalStore: p.originalStore,
             category: p.category,
@@ -1290,6 +1292,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
           priceJpy: p.priceJpy,
           priceVnd: p.estimatedProductPriceVnd ?? null,
           inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+          stockSlots: typeof p.requestSlots === "number" ? p.requestSlots : (typeof p.stockSlots === "number" ? p.stockSlots : 5),
           weightKg: p.estimatedWeightKg,
           originalStore: p.originalStore,
           category: p.category,
@@ -1354,6 +1357,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
                     priceJpy: matched.priceJpy,
                     priceVnd: hasLiveRate ? Math.round(matched.priceJpy * liveRateData!.roundedRate) : null,
                     inStock: matched.stockSlots > 0,
+                    stockSlots: matched.stockSlots,
                     weightKg: matched.weightKg,
                     originalStore: matched.originalStore,
                     category: matched.category,
@@ -1425,6 +1429,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
           priceJpy: p.priceJpy,
           priceVnd: typeof p.estimatedProductPriceVnd === "number" ? p.estimatedProductPriceVnd : null,
           inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+          stockSlots: typeof p.requestSlots === "number" ? p.requestSlots : (typeof p.stockSlots === "number" ? p.stockSlots : 5),
           weightKg: p.estimatedWeightKg,
           originalStore: p.originalStore,
           category: p.category,

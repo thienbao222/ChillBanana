@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef } from "react";
 import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { useToast } from "@/context/ToastContext";
@@ -63,6 +63,11 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
+  const toastRef = useRef(toast);
+  useEffect(() => {
+    toastRef.current = toast;
+  }, [toast]);
+
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -102,29 +107,51 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       .catch((err) => console.warn("Could not load pricing config:", err));
   }, []);
 
-  // Khôi phục giỏ hàng từ localStorage
+  // Khôi phục giỏ hàng từ localStorage (chỉ chạy duy nhất 1 lần khi mount)
   useEffect(() => {
     try {
       const saved = localStorage.getItem("cb_shopping_cart");
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          const validItems = parsed.filter((item): item is CartItem =>
-            item &&
-            typeof item === "object" &&
-            typeof item.id === "string" &&
-            typeof item.name === "string" &&
-            Number.isSafeInteger(item.quantity) && item.quantity > 0 &&
-            Number.isSafeInteger(item.priceJpy) && item.priceJpy >= 0 &&
-            Number.isFinite(item.weightKg) && item.weightKg >= 0
-          );
+          const validItems = parsed
+            .filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+            .map((item) => {
+              const id = typeof item.id === "string" && item.id.trim() ? item.id : `item-${Date.now()}`;
+              const name = typeof item.name === "string" && item.name.trim() ? item.name : "Sản phẩm mua hộ";
+              const quantity = Number.isSafeInteger(item.quantity) && (item.quantity as number) > 0 ? (item.quantity as number) : 1;
+              const priceJpy = Math.max(0, Math.round(Number(item.priceJpy) || 0));
+              const priceVnd = Math.max(0, Math.round(Number(item.priceVnd) || 0));
+              const weightKg = Number.isFinite(Number(item.weightKg)) && Number(item.weightKg) >= 0 ? Number(item.weightKg) : 0.5;
+              const imageUrl = typeof item.imageUrl === "string" && item.imageUrl ? item.imageUrl : "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
+              const originalStore = typeof item.originalStore === "string" ? item.originalStore : "Catalog ChillBanana";
+              const originalUrl = typeof item.originalUrl === "string" ? item.originalUrl : undefined;
+              const category = typeof item.category === "string" ? item.category : undefined;
+              const stockSlots = typeof item.stockSlots === "number" ? item.stockSlots : undefined;
+
+              return {
+                id,
+                name,
+                quantity,
+                priceJpy,
+                priceVnd,
+                weightKg,
+                imageUrl,
+                originalStore,
+                originalUrl,
+                category,
+                stockSlots,
+              } as CartItem;
+            })
+            .filter((item) => item.quantity > 0 && item.priceJpy >= 0);
+
           setItems(validItems);
           if (validItems.length !== parsed.length) {
-            toast.info("Giỏ hàng cũ có dữ liệu không hợp lệ và đã được làm sạch.");
+            toastRef.current.info("Giỏ hàng cũ có dữ liệu không hợp lệ và đã được làm sạch.");
           }
         } else {
           localStorage.removeItem("cb_shopping_cart");
-          toast.info("Giỏ hàng cũ không hợp lệ và đã được làm mới.");
+          toastRef.current.info("Giỏ hàng cũ không hợp lệ và đã được làm mới.");
         }
       }
     } catch (err) {
@@ -132,7 +159,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setIsLoaded(true);
     }
-  }, [toast]);
+  }, []);
 
   // Lưu giỏ hàng mỗi khi thay đổi
   useEffect(() => {
@@ -162,40 +189,83 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toast.info("Sản phẩm Mercari/Đấu giá Nhật Bản là hàng độc bản 1 món duy nhất.");
       quantity = 1;
     }
-    const existingItem = items.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
-    const availableSlots = isSingle ? 1 : (product.stockSlots ?? existingItem?.stockSlots ?? 99);
-    if (existingItem && existingItem.quantity >= availableSlots) {
-      if (existingItem.quantity > availableSlots) {
-        setItems((prev) => prev.map((item) => item.id === existingItem.id
-          ? { ...item, stockSlots: availableSlots, quantity: availableSlots }
-          : item
-        ));
-      }
-      toast.warning(isSingle ? "Sản phẩm Mercari/Đấu giá là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${availableSlots} sản phẩm trong kho.`);
-      return false;
-    }
+
+    const safePriceJpy = Math.max(0, Math.round(Number(product.priceJpy) || 0));
+    const safePriceVnd = Math.max(0, Math.round(Number(product.priceVnd) || 0));
+    const safeWeightKg = Number.isFinite(Number(product.weightKg)) && Number(product.weightKg) >= 0
+      ? Number(product.weightKg)
+      : 0.5;
+
+    const safeProduct: Omit<CartItem, "quantity"> = {
+      ...product,
+      id: String(product.id || `item-${Date.now()}`),
+      name: String(product.name || "Sản phẩm mua hộ Nhật"),
+      priceJpy: safePriceJpy,
+      priceVnd: safePriceVnd,
+      weightKg: safeWeightKg,
+      imageUrl: product.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+      originalStore: product.originalStore || "Catalog ChillBanana",
+    };
+
+    let wasAdded = false;
 
     setItems((prev) => {
-      const existing = prev.find((item) => item.id === product.id || (product.originalUrl && item.originalUrl === product.originalUrl));
+      const existing = prev.find((item) => item.id === safeProduct.id || (safeProduct.originalUrl && item.originalUrl === safeProduct.originalUrl));
+      const availableSlots = isSingle ? 1 : (safeProduct.stockSlots ?? existing?.stockSlots ?? 99);
+      if (existing && existing.quantity >= availableSlots) {
+        if (existing.quantity > availableSlots) {
+          const next = prev.map((item) => item.id === existing.id
+            ? { ...item, stockSlots: availableSlots, quantity: availableSlots }
+            : item
+          );
+          try { localStorage.setItem("cb_shopping_cart", JSON.stringify(next)); } catch {}
+          return next;
+        }
+        toast.warning(isSingle ? "Sản phẩm Mercari/Đấu giá là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${availableSlots} sản phẩm trong kho.`);
+        return prev;
+      }
+
+      wasAdded = true;
+      let nextItems: CartItem[];
       if (existing) {
-        const maxQ = isSingle ? 1 : (product.stockSlots ?? existing.stockSlots ?? 99);
+        const maxQ = isSingle ? 1 : (safeProduct.stockSlots ?? existing.stockSlots ?? 99);
         const newQ = Math.min(existing.quantity + quantity, maxQ);
-        return prev.map((item) =>
+        nextItems = prev.map((item) =>
           item.id === existing.id
-            ? { ...item, ...product, stockSlots: maxQ, quantity: newQ }
+            ? { ...item, ...safeProduct, stockSlots: maxQ, quantity: newQ }
             : item
         );
+      } else {
+        const maxQ = isSingle ? 1 : (safeProduct.stockSlots ?? 99);
+        const initialQ = Math.min(quantity, maxQ);
+        nextItems = [...prev, { ...safeProduct, quantity: initialQ }];
       }
-      const maxQ = isSingle ? 1 : (product.stockSlots ?? 99);
-      const initialQ = Math.min(quantity, maxQ);
-      return [...prev, { ...product, quantity: initialQ }];
+
+      try {
+        localStorage.setItem("cb_shopping_cart", JSON.stringify(nextItems));
+      } catch (err) {
+        console.warn("Could not save cart to localStorage:", err);
+      }
+      return nextItems;
     });
-    setIsCartOpen(true);
-    return true;
+
+    if (wasAdded) {
+      setIsCartOpen(true);
+      return true;
+    }
+    return false;
   };
 
   const removeFromCart = (id: string) => {
-    setItems((prev) => prev.filter((item) => item.id !== id));
+    setItems((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      try {
+        localStorage.setItem("cb_shopping_cart", JSON.stringify(next));
+      } catch (err) {
+        console.warn("Could not save cart to localStorage:", err);
+      }
+      return next;
+    });
   };
 
   const updateQuantity = (id: string, quantity: number) => {
@@ -207,33 +277,41 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toast.warning("Số lượng cần là số nguyên dương.");
       return;
     }
-    const currentItem = items.find((item) => item.id === id);
-    const isSingle = isSingleItemStore(currentItem?.originalStore);
-    if (isSingle && quantity > 1) {
-      toast.info("Hàng Mercari Nhật là sản phẩm độc bản 1 món duy nhất.");
-      quantity = 1;
-    }
-    const maxQ = isSingle ? 1 : (currentItem?.stockSlots ?? 99);
-    if (currentItem && maxQ < 1) {
-      removeFromCart(id);
-      toast.warning("Sản phẩm đã hết hàng và được xóa khỏi giỏ hàng.");
-      return;
-    }
-    if (currentItem && quantity > maxQ) {
-      toast.warning(isSingle ? "Sản phẩm Mercari là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${maxQ} sản phẩm trong kho.`);
-    }
-    setItems((prev) =>
-      prev.map((item) => {
+    setItems((prev) => {
+      const currentItem = prev.find((item) => item.id === id);
+      const isSingle = isSingleItemStore(currentItem?.originalStore);
+      if (isSingle && quantity > 1) {
+        toast.info("Hàng Mercari Nhật là sản phẩm độc bản 1 món duy nhất.");
+        quantity = 1;
+      }
+      const maxQ = isSingle ? 1 : (currentItem?.stockSlots ?? 99);
+      if (currentItem && maxQ < 1) {
+        toast.warning("Sản phẩm đã hết hàng và được xóa khỏi giỏ hàng.");
+        const next = prev.filter((item) => item.id !== id);
+        try { localStorage.setItem("cb_shopping_cart", JSON.stringify(next)); } catch {}
+        return next;
+      }
+      if (currentItem && quantity > maxQ) {
+        toast.warning(isSingle ? "Sản phẩm Mercari là hàng độc bản 1 món duy nhất." : `Chỉ còn tối đa ${maxQ} sản phẩm trong kho.`);
+      }
+      const next = prev.map((item) => {
         if (item.id === id) {
           return { ...item, quantity: Math.min(quantity, maxQ) };
         }
         return item;
-      })
-    );
+      });
+      try { localStorage.setItem("cb_shopping_cart", JSON.stringify(next)); } catch {}
+      return next;
+    });
   };
 
   const clearCart = () => {
     setItems([]);
+    try {
+      localStorage.removeItem("cb_shopping_cart");
+    } catch (err) {
+      console.warn("Could not clear cart in localStorage:", err);
+    }
   };
 
   // Tính toán các chỉ số đơn hàng dựa trên tỷ giá live thực tế theo thời điểm
