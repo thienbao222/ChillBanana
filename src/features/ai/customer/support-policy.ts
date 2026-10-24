@@ -42,13 +42,22 @@ const CATEGORY_PATTERNS: Array<[SupportIntents["category"], RegExp]> = [
   ["anime", /\b(gundam|gunpla|figure|anime|manga|mo hinh|bandai)\b/],
 ];
 
-const SEARCH_STOP_WORDS = new Set([
-  "anh", "ban", "bao", "biet", "co", "cho", "gi", "giup", "hay", "la", "loai", "mua",
-  "nao", "nhat", "nhu", "san", "pham", "toi", "tim", "tu", "van", "voi", "xin", "y",
-  "de", "dang", "can", "muon", "mot", "cac", "nhung", "tren", "website", "chillbanana",
-  "my", "thuc", "chuc", "nang", "do", "dien", "gia", "dung", "noi", "com", "choi",
-  "trong", "tam", "gia", "trieu", "xem", "dong", "nhan", "loi", "bao", "nhieu",
-  "neo", "the", "khong", "may", "nhatban", "noidia",
+export const SEARCH_STOP_WORDS = new Set([
+  // Đại từ, xưng hô
+  "anh", "chi", "em", "bac", "ban", "toi", "minh", "ben", "shop", "ad", "admin",
+  // Trợ từ, hư từ, liên từ tiếng Việt phổ biến
+  "co", "khong", "kem", "them", "do", "nay", "kia", "vao", "ra", "gio", "hang",
+  "cua", "cho", "thi", "sao", "nao", "gi", "muon", "can", "xem", "giup", "voi", "va",
+  "hay", "hoac", "bao", "nhieu", "la", "nhu", "nhat", "tu", "van", "xin", "y", "de",
+  "dang", "mot", "cac", "nhung", "tren", "duoi", "trong", "ngoai", "the", "vay",
+  "a", "oi", "nhe", "nha", "chao", "hoi", "cam", "on", "duoc", "bi", "lai", "di",
+  "den", "toi", "ve", "theo", "chiec", "cai",
+  // Thuật ngữ mua bán chung chung / website
+  "website", "chillbanana", "san", "pham", "mua", "ban", "loai", "tim", "kiem",
+  "gia", "tam", "trieu", "dong", "nhan", "loi", "neo", "nhatban", "noidia",
+  "tot", "re", "dep", "chuan",
+  // Từ khóa danh mục chung cũ đã có
+  "biet", "my", "thuc", "chuc", "nang", "do", "dien", "gia", "dung", "noi", "com", "choi", "may",
 ]);
 
 const SUPPORTED_MARKETPLACE_DOMAINS = [
@@ -66,7 +75,7 @@ export function normalizeSupportText(value: string): string {
 }
 
 export function extractCatalogSearchTerms(message: string): string[] {
-  const rawTokens = message.match(/[\p{L}\p{N}]{2,}/gu) ?? [];
+  const rawTokens = message.match(/[\p{L}\p{N}]+(?:[-_][\p{L}\p{N}]+)*/gu)?.filter((t) => t.length >= 2) ?? [];
   const tokens = rawTokens.filter((token) => !SEARCH_STOP_WORDS.has(normalizeSupportText(token)));
   return [...new Set(tokens.map((token) => token.slice(0, 60)))].slice(0, 6);
 }

@@ -17,6 +17,7 @@ import {
   isSupportedMarketplaceUrl,
   isValidQuotePrice,
   normalizeSupportText,
+  SEARCH_STOP_WORDS,
   type SupportEvidence,
   type SupportSourceLink,
 } from "./support-policy";
@@ -481,11 +482,36 @@ function createEvidence(
   };
 }
 
-function normalizeForMatching(value: string): string {
-  return value.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/gi, "d").toLowerCase();
+export function tokenizeNormalizedWords(text: string): string[] {
+  if (!text) return [];
+  return normalizeSupportText(text)
+    .split(/[\s,./\\_!@#$%^&*()+=~`{}[\]|:;"'<>?]+/u)
+    .filter(Boolean);
 }
 
-async function searchCatalog(message: string, category: string | null): Promise<SupportEvidence> {
+export function matchesWholePhraseOrWord(
+  haystackNorm: string,
+  haystackWords: Set<string>,
+  term: string
+): boolean {
+  const normTerm = normalizeSupportText(term).trim();
+  if (!normTerm) return false;
+
+  // Nếu term là 1 từ đơn không có dấu cách
+  if (!normTerm.includes(" ")) {
+    if (haystackWords.has(normTerm)) return true;
+    const escaped = normTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+    return regex.test(haystackNorm);
+  }
+
+  // Nếu term là cụm nhiều từ
+  const escaped = normTerm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i");
+  return regex.test(haystackNorm);
+}
+
+export async function searchCatalog(message: string, category: string | null): Promise<SupportEvidence> {
   const terms = extractCatalogSearchTerms(message);
   const [rate, pricingConfig] = await Promise.all([
     fetchLiveExchangeRate().catch(() => null),
@@ -533,7 +559,7 @@ async function searchCatalog(message: string, category: string | null): Promise<
     const rows = await prisma.product.findMany({
       where,
       orderBy: { createdAt: "desc" },
-      take: 40,
+      take: 60,
       select: {
         id: true,
         name: true,
@@ -548,13 +574,80 @@ async function searchCatalog(message: string, category: string | null): Promise<
       },
     });
 
+    const msgNorm = normalizeSupportText(message);
+    const msgWords = new Set(tokenizeNormalizedWords(message));
+    const detectedBrandNorm = translated.detectedBrand ? normalizeSupportText(translated.detectedBrand) : null;
+
     const ranked = rows
       .map((product) => {
-        const text = normalizeForMatching(`${product.name} ${product.description} ${product.categoryName} ${product.voltageNote ?? ""}`);
-        const score = terms.reduce((sum, term) => sum + (text.includes(normalizeForMatching(term)) ? 1 : 0), 0);
-        return { product, score };
+        const nameNorm = normalizeSupportText(product.name);
+        const nameWords = new Set(tokenizeNormalizedWords(product.name));
+        const fullTextNorm = normalizeSupportText(
+          `${product.name} ${product.description} ${product.categoryName} ${product.voltageNote ?? ""}`
+        );
+        const fullTextWords = new Set(tokenizeNormalizedWords(fullTextNorm));
+
+        let nameMatchedCount = 0;
+        let otherMatchedCount = 0;
+
+        for (const term of terms) {
+          if (matchesWholePhraseOrWord(nameNorm, nameWords, term)) {
+            nameMatchedCount++;
+          } else if (matchesWholePhraseOrWord(fullTextNorm, fullTextWords, term)) {
+            otherMatchedCount++;
+          }
+        }
+
+        const matchedTermsCount = nameMatchedCount + otherMatchedCount;
+
+        // Khớp trọn tên thương hiệu (nếu phát hiện được thương hiệu và sản phẩm khớp đúng thương hiệu đó)
+        const isFullBrandMatch = Boolean(
+          detectedBrandNorm &&
+          matchesWholePhraseOrWord(fullTextNorm, fullTextWords, detectedBrandNorm)
+        );
+
+        // Khớp trọn tên sản phẩm (nếu câu hỏi của khách chứa toàn bộ tên sản phẩm hoặc mọi từ khóa chính của tên sản phẩm)
+        const isFullProductNameMatch = Boolean(
+          (nameNorm.length >= 4 && msgNorm.includes(nameNorm)) ||
+          (() => {
+            const significantNameWords = Array.from(nameWords).filter((w) => !SEARCH_STOP_WORDS.has(w));
+            if (significantNameWords.length === 0) return false;
+            return significantNameWords.every((w) => msgWords.has(w));
+          })()
+        );
+
+        // Điểm xếp hạng:
+        // - Khớp trong tên sản phẩm có trọng số cao hơn (2 điểm mỗi từ)
+        // - Khớp trong mô tả / thuộc tính (1 điểm)
+        // - Khớp trọn thương hiệu (+3 điểm)
+        // - Khớp trọn tên sản phẩm (+5 điểm)
+        const score =
+          nameMatchedCount * 2 +
+          otherMatchedCount +
+          (isFullBrandMatch ? 3 : 0) +
+          (isFullProductNameMatch ? 5 : 0);
+
+        return {
+          product,
+          score,
+          matchedTermsCount,
+          isFullBrandMatch,
+          isFullProductNameMatch,
+        };
       })
-      .filter(({ score }) => terms.length === 0 || score > 0)
+      .filter(({ matchedTermsCount, isFullBrandMatch, isFullProductNameMatch }) => {
+        // Nếu không có từ khóa tìm kiếm (tìm theo danh mục), giữ lại các sản phẩm cùng danh mục
+        if (terms.length === 0) {
+          return true;
+        }
+        // Nếu chỉ có 1 từ khóa: sản phẩm phải khớp ít nhất từ khóa đó hoặc khớp trọn thương hiệu/sản phẩm
+        if (terms.length === 1) {
+          return matchedTermsCount >= 1 || isFullBrandMatch || isFullProductNameMatch;
+        }
+        // Nếu có từ 2 từ khóa trở lên: sản phẩm phải khớp ít nhất 2 từ
+        // (hoặc khớp trọn tên thương hiệu/sản phẩm). Không hiển thị sản phẩm chỉ khớp 1 từ chung chung.
+        return matchedTermsCount >= 2 || isFullBrandMatch || isFullProductNameMatch;
+      })
       .sort((a, b) => b.score - a.score || b.product.createdAt.getTime() - a.product.createdAt.getTime())
       .slice(0, 5);
 

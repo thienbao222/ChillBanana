@@ -170,6 +170,12 @@ async function evaluateReadOnlyTools() {
       hasGuestOrderAccessForEmail: (token, code, email) =>
         token === "valid-guest" && code === orderCode && email === "owner@example.com",
     },
+    "@/lib/api-key-manager": {
+      chatKeyPool: { getNextKey: () => null, markError: () => {} },
+    },
+    "@/lib/gemini-models": {
+      GEMINI_MODELS: { lightweight: "gemini-3.5-flash-lite" },
+    },
   });
 
   const catalogRun = await tools.runCustomerSupportTools({
