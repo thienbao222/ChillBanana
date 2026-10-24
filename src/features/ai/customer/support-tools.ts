@@ -1104,26 +1104,110 @@ function getCompatibilityEvidence(catalog: SupportEvidence): SupportEvidence {
   );
 }
 
-export async function runCustomerSupportTools(input: CustomerSupportToolInput): Promise<CustomerSupportToolRun> {
-  let effectiveMessage = input.message;
+export function isCommandOrConversationalMessage(text: string): boolean {
+  if (!text) return true;
+  const norm = normalizeSupportText(text).trim();
+  if (!norm) return true;
 
-  // Ghép tối đa 2 tin nhắn `user` gần nhất từ `history` khi khách hỏi câu ngắn / bổ sung ngân sách
-  if (input.history && input.history.length > 0) {
-    const trimmed = effectiveMessage.trim();
-    const isShortOrBudget = trimmed.length < 35 ||
-      /^(khoảng|tầm|dưới|trên)?\s*(\d+[\d.,]*)\s*(k|nghìn|triệu|tr|jpy|yen|yên|¥|đ|vnd)?\b/i.test(trimmed) ||
-      /\b(kết quả đâu|đâu rồi|xem đi|tìm đi|báo giá đi|chi phí sao)\b/i.test(trimmed);
+  // Lệnh thêm vào giỏ / đặt hàng
+  const isCartCommand =
+    /\b(them|cho|bo|dat)\s+(vao\s+)?(gio|gio\s+hang|cart)\b/i.test(norm) ||
+    /\b(add\s+to\s+cart|mua\s+ngay|order\s+luon|chot\s+don|tao\s+don)\b/i.test(norm);
+  if (isCartCommand) return true;
 
-    if (isShortOrBudget) {
-      const pastUserMessages = input.history
+  const terms = extractCatalogSearchTerms(text);
+
+  // Cảm ơn (bỏ qua nếu câu chỉ gồm từ cảm ơn)
+  const isThanks = /\b(cam\s+on|thank|thanks|tks|ty)\b/i.test(norm);
+  if (isThanks) {
+    const nonThanksTerms = terms.filter((t) => !/^(thank|thanks|tks|ty|cam|on)$/i.test(normalizeSupportText(t)));
+    if (nonThanksTerms.length === 0) return true;
+  }
+
+  // Chào hỏi (bỏ qua nếu câu chỉ gồm từ chào hỏi)
+  const isGreeting = /\b(chao|xin\s+chao|hello|hi|alo|hey|shop\s+oi|ad\s+oi|admin\s+oi)\b/i.test(norm);
+  if (isGreeting) {
+    const nonGreetingTerms = terms.filter((t) => !/^(chao|xin|hello|hi|alo|hey|shop|ad|admin)$/i.test(normalizeSupportText(t)));
+    if (nonGreetingTerms.length === 0) return true;
+  }
+
+  // Nếu toàn bộ từ là stop words hoặc chỉ có lời cảm ơn / chào hỏi
+  if (terms.length === 0 && (isThanks || /\b(chao|hello|hi|shop|ad)\b/i.test(norm))) {
+    return true;
+  }
+
+  return false;
+}
+
+export function isFollowupQuery(message: string, currentTerms: string[]): boolean {
+  // Nếu tin nhắn hiện tại tự nó đã có từ 2 từ khóa trở lên -> KHÔNG gộp
+  if (currentTerms.length >= 2) {
+    return false;
+  }
+  const trimmed = message.trim();
+  const norm = normalizeSupportText(trimmed);
+
+  // Bỏ qua tin mang tính lệnh hoặc chào hỏi
+  if (isCommandOrConversationalMessage(message)) {
+    return false;
+  }
+
+  // Hỏi bổ sung ngân sách / khoảng giá
+  const isBudgetFollowup =
+    /^(khoảng|tầm|dưới|trên)?\s*(\d+[\d.,]*)\s*(k|nghìn|triệu|tr|jpy|yen|yên|¥|đ|vnd|man)?\b/i.test(trimmed);
+
+  // Cụm hỏi tiếp / kết quả
+  const isContinuationPhrase =
+    /\b(kết quả đâu|đâu rồi|xem đi|tìm đi|báo giá đi|chi phí sao|giá sao|thế nào|sao rồi|hết chưa|còn không|loại nào khác|loại khác|mẫu khác|bản khác|màu khác|size khác)\b/i.test(trimmed);
+
+  // Bắt đầu bằng từ nối tiếp câu
+  const isConnector =
+    /^(thế còn|còn|vậy|vậy thì|thế thì|thế|nếu|xem thêm|tìm thêm|cho xem|thêm|bản|mẫu|loại)\b/i.test(trimmed);
+
+  // Câu hỏi về giá, phí, mua tiếp
+  const isFollowupQuestion =
+    /\b(gia bao nhieu|bao nhieu tien|bao nhieu|nhieu tien|tinh gia|bao gia|phi ship|cuoc|mua duoc khong|co khong|ship duoc khong)\b/i.test(norm);
+
+  return isBudgetFollowup || isContinuationPhrase || isConnector || isFollowupQuestion || (trimmed.length < 35 && currentTerms.length <= 1);
+}
+
+export function resolveEffectiveSupportMessage(
+  message: string,
+  history?: Array<{ role: string; text: string }>
+): string {
+  let effectiveMessage = message;
+
+  if (history && history.length > 0) {
+    const currentTerms = extractCatalogSearchTerms(effectiveMessage);
+
+    // Chỉ gộp tin trước khi tin hiện tại là câu hỏi nối tiếp và tự nó có ít hơn 2 từ khóa có nghĩa sau khi bỏ stop words.
+    // Nếu tin hiện tại đã có từ 2 từ khóa trở lên (ví dụ "thực phẩm chức năng thì sao") thì KHÔNG gộp.
+    if (isFollowupQuery(effectiveMessage, currentTerms)) {
+      const pastUserMessages = history
         .filter((h) => h.role === "user" && typeof h.text === "string" && h.text.trim())
         .map((h) => h.text.trim());
-      const recentQueries = pastUserMessages.slice(-2);
-      if (recentQueries.length > 0) {
-        effectiveMessage = `${recentQueries.join(" ")} ${effectiveMessage}`;
+
+      // Chỉ lấy 1 tin user gần nhất, và bỏ qua tin mang tính lệnh (thêm vào giỏ, cảm ơn, chào hỏi) khi gộp.
+      let candidateMessage: string | null = null;
+      for (let i = pastUserMessages.length - 1; i >= 0; i--) {
+        const pastText = pastUserMessages[i];
+        if (!isCommandOrConversationalMessage(pastText)) {
+          candidateMessage = pastText;
+          break;
+        }
+      }
+
+      if (candidateMessage) {
+        effectiveMessage = `${candidateMessage} ${effectiveMessage}`;
       }
     }
   }
+
+  return effectiveMessage;
+}
+
+export async function runCustomerSupportTools(input: CustomerSupportToolInput): Promise<CustomerSupportToolRun> {
+  const effectiveMessage = resolveEffectiveSupportMessage(input.message, input.history);
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
   const intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);

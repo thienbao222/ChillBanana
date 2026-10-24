@@ -51,13 +51,13 @@ export const SEARCH_STOP_WORDS = new Set([
   "hay", "hoac", "bao", "nhieu", "la", "nhu", "nhat", "tu", "van", "xin", "y", "de",
   "dang", "mot", "cac", "nhung", "tren", "duoi", "trong", "ngoai", "the", "vay",
   "a", "oi", "nhe", "nha", "chao", "hoi", "cam", "on", "duoc", "bi", "lai", "di",
-  "den", "toi", "ve", "theo", "chiec", "cai",
+  "den", "toi", "ve", "theo", "chiec", "cai", "con", "size", "mau",
   // Thuật ngữ mua bán chung chung / website
   "website", "chillbanana", "san", "pham", "mua", "ban", "loai", "tim", "kiem",
   "gia", "tam", "trieu", "dong", "nhan", "loi", "neo", "nhatban", "noidia",
   "tot", "re", "dep", "chuan",
   // Từ khóa danh mục chung cũ đã có
-  "biet", "my", "thuc", "chuc", "nang", "do", "dien", "gia", "dung", "noi", "com", "choi", "may",
+  "biet", "my", "do", "dien", "gia", "dung", "noi", "com", "choi", "may",
 ]);
 
 const SUPPORTED_MARKETPLACE_DOMAINS = [
