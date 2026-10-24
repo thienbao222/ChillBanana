@@ -263,6 +263,48 @@ export async function askGeminiAgentDetailed(
           }
         );
 
+        // HTTP 500/503: lỗi tạm thời của model, KHÔNG cooldown khóa. Thử lại cùng model 1 lần sau 600-1200ms (có jitter), nếu vẫn lỗi thì chuyển model kế tiếp.
+        if (response.status === 500 || response.status === 503) {
+          const errStatus = response.status;
+          console.warn(`[Assistant] Model ${model} lỗi HTTP ${errStatus}. Đang thử lại cùng model sau 600-1200ms...`);
+          const jitterMs = 600 + Math.floor(Math.random() * 600);
+          await new Promise((r) => setTimeout(r, jitterMs));
+          try {
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  system_instruction: { parts: [{ text: systemInstruction }] },
+                  contents,
+                  generationConfig: {
+                    maxOutputTokens: 2200,
+                    temperature: 0.4,
+                    thinkingConfig: { thinkingLevel: "low" },
+                  },
+                }),
+                signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+              }
+            );
+            if (retryRes.ok) {
+              response = retryRes;
+            } else {
+              console.warn(`[Assistant] Model ${model} retry lỗi HTTP ${retryRes.status}`);
+              chatKeyPool.markError(activeKey, retryRes.status, model);
+              continue;
+            }
+          } catch (retryErr: any) {
+            const isRetryTimeout = retryErr?.name === "AbortError" || retryErr?.name === "TimeoutError" || /timeout|abort/i.test(retryErr?.message || "");
+            if (isRetryTimeout) {
+              console.warn(`[Assistant] Model ${model} timeout`);
+            } else {
+              console.warn(`[Assistant] Model ${model} retry error: ${retryErr?.message || String(retryErr)}`);
+            }
+            continue;
+          }
+        }
+
         if (response.status === 400) {
           const err400 = await response.text().catch(() => "");
           console.warn(`[Assistant] Model ${model} lỗi HTTP 400: ${err400.slice(0, 200)}`);
@@ -320,21 +362,28 @@ export async function askGeminiAgentDetailed(
         const errText = await response.text().catch(() => "");
         console.warn(`[Assistant] Model ${model} lỗi HTTP ${response.status}: ${errText.slice(0, 200)}`);
 
-        chatKeyPool.markError(activeKey, response.status, model);
+        if (response.status === 429) {
+          const retryAfter = response.headers.get("retry-after");
+          const retryAfterSec = retryAfter ? parseInt(retryAfter, 10) : undefined;
+          chatKeyPool.markError(activeKey, 429, model, retryAfterSec);
+        } else {
+          chatKeyPool.markError(activeKey, response.status, model);
+        }
 
-        if (model === GEMINI_MODELS.neo && [403, 404, 429, 500, 503].includes(response.status)) {
-          if (response.status === 403 || response.status === 404) neoPrimaryUnavailable = true;
-          else neoPrimaryCooldownUntil = Date.now() + 60_000;
+        if (model === GEMINI_MODELS.neo && (response.status === 403 || response.status === 404)) {
+          neoPrimaryUnavailable = true;
           continue;
         }
 
         continue;
       } catch (err: any) {
+        const isTimeout = err?.name === "AbortError" || err?.name === "TimeoutError" || /timeout|abort/i.test(err?.message || "");
+        if (isTimeout) {
+          console.warn(`[Assistant] Model ${model} timeout`);
+          continue;
+        }
         console.warn(`[Assistant] Model ${model} error:`, err?.message || String(err));
         chatKeyPool.markError(activeKey, 503, model);
-        if (model === GEMINI_MODELS.neo) {
-          neoPrimaryCooldownUntil = Date.now() + 60_000;
-        }
         continue;
       }
     }
