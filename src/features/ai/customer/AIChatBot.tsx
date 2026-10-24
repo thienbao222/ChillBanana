@@ -132,19 +132,26 @@ function ChatProductCardList({
                 <h4 className="text-xs font-bold text-navy-950 line-clamp-2 leading-snug">
                   {product.name}
                 </h4>
-                <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
-                  {product.priceVnd !== null && product.priceVnd !== undefined ? (
-                    <>
+                <div className="mt-1 flex flex-col gap-0.5">
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    {product.priceVnd !== null && product.priceVnd !== undefined ? (
+                      <>
+                        <span className="text-xs font-extrabold text-banana-700">
+                          {product.priceVnd.toLocaleString("vi-VN")} đ
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          ({product.priceJpy.toLocaleString("vi-VN")} ¥)
+                        </span>
+                      </>
+                    ) : (
                       <span className="text-xs font-extrabold text-banana-700">
-                        {product.priceVnd.toLocaleString("vi-VN")} đ
+                        {product.priceJpy.toLocaleString("vi-VN")} ¥
                       </span>
-                      <span className="text-[10px] text-slate-400">
-                        ({product.priceJpy.toLocaleString("vi-VN")} ¥)
-                      </span>
-                    </>
-                  ) : (
-                    <span className="text-xs font-extrabold text-banana-700">
-                      {product.priceJpy.toLocaleString("vi-VN")} ¥
+                    )}
+                  </div>
+                  {product.priceVnd !== null && product.priceVnd !== undefined && (
+                    <span className="text-[9.5px] text-slate-400 italic">
+                      Giá ước tính theo tỷ giá hôm nay
                     </span>
                   )}
                 </div>
@@ -193,7 +200,7 @@ function ChatProductCardList({
 }
 
 export default function AIChatBot() {
-  const { addToCart } = useCart();
+  const { addToCart, openCart, exchangeRate } = useCart();
   const { toast } = useToast();
 
   const handleAddProductToCart = (product: ProductCardData) => {
@@ -201,11 +208,12 @@ export default function AIChatBot() {
       toast.error("Sản phẩm hiện đã hết hàng.");
       return;
     }
+    const effectiveVnd = product.priceVnd ?? Math.round(product.priceJpy * (exchangeRate || 172));
     const added = addToCart({
       id: product.id,
       name: product.name,
       priceJpy: product.priceJpy,
-      priceVnd: product.priceVnd || Math.round(product.priceJpy * 165),
+      priceVnd: effectiveVnd,
       weightKg: product.weightKg ?? 0.5,
       imageUrl: product.imageUrl,
       originalStore: product.originalStore || "Catalog ChillBanana",

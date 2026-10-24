@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { calculateOrderPrice, DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import { chatKeyPool } from "@/lib/api-key-manager";
@@ -100,7 +100,7 @@ const PRODUCT_TERMS: Array<{ match: RegExp; ja: string; category?: string; is100
 
 export function parseBudgetAndCurrency(
   text: string,
-  rate = 165
+  rate = DEFAULT_EXCHANGE_RATE
 ): {
   minJpy?: number;
   maxJpy?: number;
@@ -283,7 +283,7 @@ Trả về đúng định dạng JSON:
   }
 }
 
-export function translateToJapaneseKeywordsFromDictionary(text: string, currentRate = 165): TranslatedQuery & { matched: boolean } {
+export function translateToJapaneseKeywordsFromDictionary(text: string, currentRate = DEFAULT_EXCHANGE_RATE): TranslatedQuery & { matched: boolean } {
   const norm = normalizeSupportText(text);
   const rawLower = text.toLowerCase();
   const tokens = norm.split(/[\s,]+/);
@@ -349,7 +349,7 @@ export function translateToJapaneseKeywordsFromDictionary(text: string, currentR
 
 export const translateToJapaneseKeywordsSync = translateToJapaneseKeywordsFromDictionary;
 
-export async function translateToJapaneseKeywords(text: string, currentRate = 165): Promise<TranslatedQuery> {
+export async function translateToJapaneseKeywords(text: string, currentRate = DEFAULT_EXCHANGE_RATE): Promise<TranslatedQuery> {
   const dictionaryResult = translateToJapaneseKeywordsFromDictionary(text, currentRate);
 
   // Chỉ gọi khi từ điển BRAND_DICTIONARY/PRODUCT_TERMS không khớp
@@ -532,7 +532,7 @@ export async function searchCatalog(message: string, category: string | null): P
   ]);
 
   const hasCurrentRate = Boolean(rate && !rate.isStale && rate.roundedRate > 0);
-  const effectiveRate = hasCurrentRate ? rate!.roundedRate : 165;
+  const effectiveRate = hasCurrentRate ? rate!.roundedRate : DEFAULT_EXCHANGE_RATE;
   const translated = await translateToJapaneseKeywords(message, effectiveRate);
   const marketplaceLinks = translated.keywordsJa
     ? buildMarketplaceSearchLinks(
@@ -768,7 +768,7 @@ export async function searchCatalog(message: string, category: string | null): P
           : [],
         exchangeRate: rate
           ? { vndPerJpy: effectiveRate, provider: rate.source, updatedAt: rate.updatedAt || null, stale: rate.isStale }
-          : { vndPerJpy: 165, provider: "Vietcombank Live Cache", updatedAt: null, stale: false },
+          : { vndPerJpy: DEFAULT_EXCHANGE_RATE, provider: "Vietcombank Live Cache", updatedAt: null, stale: false },
         products: productResults,
       },
       [
@@ -1345,12 +1345,14 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
                   return textNorm.includes(pNameNorm) || (pNameNorm.length >= 6 && textNorm.includes(pNameNorm.slice(0, 20)));
                 });
                 if (matched) {
+                  const liveRateData = await fetchLiveExchangeRate().catch(() => null);
+                  const hasLiveRate = Boolean(liveRateData && !liveRateData.isStale && liveRateData.roundedRate > 0);
                   recentProduct = {
                     id: matched.id,
                     name: matched.name,
                     imageUrl: matched.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
                     priceJpy: matched.priceJpy,
-                    priceVnd: matched.priceVnd || null,
+                    priceVnd: hasLiveRate ? Math.round(matched.priceJpy * liveRateData!.roundedRate) : null,
                     inStock: matched.stockSlots > 0,
                     weightKg: matched.weightKg,
                     originalStore: matched.originalStore,
@@ -1421,7 +1423,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
           name: p.name,
           imageUrl: p.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
           priceJpy: p.priceJpy,
-          priceVnd: p.estimatedProductPriceVnd || Math.round(p.priceJpy * 165),
+          priceVnd: typeof p.estimatedProductPriceVnd === "number" ? p.estimatedProductPriceVnd : null,
           inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
           weightKg: p.estimatedWeightKg,
           originalStore: p.originalStore,
