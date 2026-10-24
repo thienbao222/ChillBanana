@@ -554,7 +554,7 @@ export async function searchCatalog(
       "catalog_search",
       "needs_input",
       "Danh mục sản phẩm ChillBanana",
-      {},
+      { searched: false, resultCount: 0, products: [] },
       ["Từ khóa hoặc nhóm sản phẩm cần tìm"],
       CATALOG_LINKS
     );
@@ -755,6 +755,8 @@ export async function searchCatalog(
         ? "Danh mục ChillBanana, tỷ giá live và công cụ tìm kiếm sàn Nhật (Amazon, Mercari, Rakuten)"
         : "Không có trong catalog ChillBanana (cung cấp công cụ tìm kiếm sàn Nhật)",
       {
+        searched: true,
+        resultCount: productResults.length,
         category: targetCategory,
         matchCount: productResults.length,
         inCatalog: hasCatalogMatches,
@@ -799,7 +801,7 @@ export async function searchCatalog(
       "catalog_search",
       "unavailable",
       "Danh mục sản phẩm ChillBanana",
-      {},
+      { searched: false, resultCount: null, products: [] },
       ["Kết quả tìm kiếm danh mục hiện tại"],
       CATALOG_LINKS
     );

@@ -11,6 +11,8 @@ describe("Bỏ sản phẩm và giá tự bịa", () => {
       unknown: ["Sản phẩm không có trong catalog ChillBanana"],
       links: [],
       known: {
+        searched: true,
+        resultCount: 0,
         category: "fashion",
         matchCount: 0,
         inCatalog: false,
@@ -36,6 +38,22 @@ describe("Bỏ sản phẩm và giá tự bịa", () => {
     expect(replyOmo).not.toContain("kg)");
   });
 
+  it("không khẳng định không có hàng khi catalog chưa được tìm", () => {
+    const notSearchedEvidence: SupportEvidence = {
+      toolId: "catalog_search",
+      status: "unavailable",
+      source: { label: "Danh mục sản phẩm", observedAt: "2026-10-24T00:00:00Z" },
+      unknown: [],
+      links: [],
+      known: { searched: false, resultCount: null, inCatalog: false, matchCount: 0, products: [] },
+    };
+
+    const reply = buildOfflineEvidenceReply("sữa rửa mặt hada còn hàng sẵn không", [notSearchedEvidence], true);
+
+    expect(reply).not.toContain("chưa có sản phẩm này trong catalog");
+    expect(reply).toContain("thương hiệu hoặc model");
+  });
+
   it("buildOfflineEvidenceReply khi có sản phẩm catalog thực tế thì hiển thị đầy đủ thông tin", () => {
     const matchedEvidence: SupportEvidence = {
       toolId: "catalog_search",
@@ -44,6 +62,8 @@ describe("Bỏ sản phẩm và giá tự bịa", () => {
       unknown: [],
       links: [],
       known: {
+        searched: true,
+        resultCount: 1,
         category: "electronics",
         matchCount: 1,
         inCatalog: true,
