@@ -89,10 +89,16 @@ export async function POST(req: NextRequest) {
     let isGuardrailTriggered = false;
     let aiMode: "gemini" | "offline" = "offline";
     let productCards: ProductCardData[] = [];
+    let quickReplies: string[] = [];
 
     if (isVnJpRegistration) {
       aiMode = "offline";
       modelUsed = "vn-jp";
+      quickReplies = [
+        "Tra cứu tiến độ phiếu gửi",
+        "Bảng giá gửi hàng VN - Nhật",
+        "Quy định đóng gói & cấm gửi",
+      ];
       const codeMatch = message.match(/Mã\s*phiếu:\s*([^-\n]+)/i);
       const dispatchCode = codeMatch ? codeMatch[1].trim() : "";
 
@@ -148,6 +154,7 @@ export async function POST(req: NextRequest) {
       supportSources = supportRun.sources;
       isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");
       productCards = supportRun.productCards || [];
+      quickReplies = supportRun.quickReplies || [];
     }
 
     const totalMs = Date.now() - chatStart;
@@ -330,6 +337,7 @@ export async function POST(req: NextRequest) {
     const response = NextResponse.json({
       success: true,
       reply,
+      quickReplies,
       personality: selectedPersonality,
       sessionId: resolvedSessionId,
       sources: supportSources,

@@ -450,7 +450,76 @@ export interface CustomerSupportToolRun {
   guardedReply?: string;
   quoteFooter?: string;
   productCards?: ProductCardData[];
+  quickReplies?: string[];
   timing?: { routerMs: number; toolsMs: number };
+}
+
+export function generateQuickReplies(options: {
+  evidence?: SupportEvidence[];
+  productCards?: ProductCardData[];
+  message?: string;
+}): string[] {
+  const { evidence = [], productCards = [] } = options;
+  const suggestions: string[] = [];
+
+  // 1. Sau thẻ sản phẩm
+  if (productCards.length > 0) {
+    const hasGadgets = productCards.some(
+      (c) => c.category === "gadgets" || /nồi cơm|máy cạo râu|ấm|tai nghe|đồng hồ|panasonic|zojirushi|tiger/i.test(c.name)
+    );
+    const hasCosmetics = productCards.some(
+      (c) => c.category === "cosmetics" || /kem|son|serum|sữa rửa mặt|anessa|hada/i.test(c.name)
+    );
+    const hasFashion = productCards.some(
+      (c) => c.category === "fashion" || /giày|áo|quần|túi|uniqlo/i.test(c.name)
+    );
+
+    suggestions.push("Tính tổng chi phí về VN");
+    if (hasGadgets) {
+      suggestions.push("Món này dùng điện Việt Nam được không?");
+    } else if (hasCosmetics) {
+      suggestions.push("Tư vấn cách sử dụng món này");
+    } else if (hasFashion) {
+      suggestions.push("Tư vấn chọn size phù hợp");
+    } else {
+      suggestions.push("Món này dùng điện Việt Nam được không?");
+    }
+    suggestions.push("Xem sản phẩm tương tự");
+    return suggestions.slice(0, 3);
+  }
+
+  // 2. Khi tìm catalog nhưng không có sản phẩm (resultCount === 0)
+  const catalogEv = evidence.find((e) => e.toolId === "catalog_search");
+  if (
+    catalogEv &&
+    catalogEv.status === "ok" &&
+    catalogEv.known.searched === true &&
+    catalogEv.known.resultCount === 0
+  ) {
+    return [
+      "Báo giá hàng ngoài catalog",
+      "Gửi link sản phẩm để báo giá",
+      "Xem danh mục sản phẩm có sẵn",
+    ];
+  }
+
+  // 3. Tra cứu đơn hàng hoặc chính sách vận chuyển
+  const hasOrder = evidence.some((e) => e.toolId === "order_status");
+  const hasShipping = evidence.some((e) => e.toolId === "shipping_policy");
+  if (hasOrder || hasShipping) {
+    return [
+      "Thời gian giao hàng dự kiến",
+      "Phí mua hộ tính thế nào?",
+      "Chính sách bảo hiểm hàng hóa",
+    ];
+  }
+
+  // 4. Mặc định / chào hỏi chung
+  return [
+    "Sản phẩm bán chạy nhất",
+    "Tư vấn mỹ phẩm Nhật",
+    "Phí mua hộ tính thế nào?",
+  ];
 }
 
 function nowIso(): string {
@@ -1529,5 +1598,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   const guardedReply = cartReply ?? orderReply ?? (catalogHasProducts && quoteNeedsInput ? undefined : quoteReply);
   const toolsMs = Math.max(0, Date.now() - toolsStart - routerMs);
 
-  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards, timing: { routerMs, toolsMs } };
+  const quickReplies = generateQuickReplies({ evidence, productCards, message: input.message });
+
+  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards, quickReplies, timing: { routerMs, toolsMs } };
 }
