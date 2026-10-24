@@ -445,70 +445,15 @@ async function searchCatalog(message: string, category: string | null): Promise<
       directSearchUrl: null as string | null,
     }));
 
-    // Nếu catalog chưa có hoặc ít kết quả, tự động bổ sung mẫu tham khảo đa sàn thật
-    if (productResults.length === 0 && (translated.keywordsJa || translated.detectedBrand)) {
-      const minJ = translated.budget?.minJpy || (translated.category === "luxury" ? 22000 : 3500);
-      const maxJ = translated.budget?.maxJpy || (translated.category === "luxury" ? 30000 : 12000);
-      const midJ = Math.round((minJ + maxJ) / 2);
-
-      const items = [
-        {
-          name: `${translated.keywordsVi || message.slice(0, 50)} (Mẫu chọn lọc trên Amazon JP)`,
-          priceJpy: minJ,
-          weightKg: translated.is100vAppliance ? 1.2 : 0.8,
-          slots: 10,
-          slotLabel: "Sẵn sàng tiếp nhận mua hộ từ Amazon JP",
-          source: "Amazon JP",
-          url: marketplaceLinks.amazon.url,
-        },
-        {
-          name: `${translated.keywordsVi || message.slice(0, 50)} (Săn đồ lướt/mới trên Mercari JP)`,
-          priceJpy: midJ,
-          weightKg: translated.is100vAppliance ? 1.2 : 0.8,
-          slots: 1,
-          slotLabel: "Độc bản 1 món trên Mercari JP (Khuyên cọc 100% để giữ hàng)",
-          source: "Mercari JP",
-          url: marketplaceLinks.mercari.url,
-        },
-      ];
-
-      productResults = items.map((it) => {
-        const est = pricingConfig
-          ? calculateOrderPrice(it.priceJpy, it.weightKg, effectiveRate, false, pricingConfig.values)
-          : null;
-        return {
-          name: it.name,
-          category: CATEGORY_LABELS[targetCategory || "other"] || "Hàng Nhật nội địa",
-          priceJpy: it.priceJpy,
-          estimatedProductPriceVnd: Math.round(it.priceJpy * effectiveRate),
-          estimatedWeightKg: it.weightKg,
-          requestSlots: it.slots,
-          requestSlotLabel: it.slotLabel,
-          voltageNote: translated.voltageWarning || null,
-          estimatedQuote: est
-            ? {
-                serviceFeeVnd: est.serviceFeeVnd,
-                subtotalVnd: est.baseOrderCostVnd,
-                shippingFeeVnd: est.shippingFeeVnd,
-                totalVnd: est.totalVnd,
-                deposit50Vnd: est.deposit50Vnd,
-                payment100Vnd: est.totalVnd,
-                usesEstimatedCatalogWeight: true,
-                finalQuote: false,
-              }
-            : null,
-          recordCreatedAt: new Date().toISOString(),
-          sourceMarketplace: it.source,
-          directSearchUrl: it.url,
-        };
-      });
-    }
-
     const dynamicLinks: SupportSourceLink[] = [
       ...CATALOG_LINKS,
-      { label: `Tìm "${translated.keywordsJa}" trên Amazon JP`, href: marketplaceLinks.amazon.url },
-      { label: `Săn "${translated.keywordsJa}" trên Mercari JP`, href: marketplaceLinks.mercari.url },
-      { label: `Tìm trên Rakuten JP`, href: marketplaceLinks.rakuten.url },
+      ...(translated.keywordsJa
+        ? [
+            { label: `Tìm "${translated.keywordsJa}" trên Amazon JP`, href: marketplaceLinks.amazon.url },
+            { label: `Săn "${translated.keywordsJa}" trên Mercari JP`, href: marketplaceLinks.mercari.url },
+            { label: `Tìm trên Rakuten JP`, href: marketplaceLinks.rakuten.url },
+          ]
+        : []),
     ];
 
     const budgetEstimate = translated.budget?.approxVndEquivalent
@@ -519,13 +464,19 @@ async function searchCatalog(message: string, category: string | null): Promise<
         }
       : null;
 
+    const hasCatalogMatches = productResults.length > 0;
+
     return createEvidence(
       "catalog_search",
       "ok",
-      "Danh mục ChillBanana, tỷ giá live và công cụ tìm kiếm sàn Nhật (Amazon, Mercari, Rakuten)",
+      hasCatalogMatches
+        ? "Danh mục ChillBanana, tỷ giá live và công cụ tìm kiếm sàn Nhật (Amazon, Mercari, Rakuten)"
+        : "Không có trong catalog ChillBanana (cung cấp công cụ tìm kiếm sàn Nhật)",
       {
         category: targetCategory,
         matchCount: productResults.length,
+        inCatalog: hasCatalogMatches,
+        catalogStatus: hasCatalogMatches ? "found" : "not_found",
         keywordsJa: translated.keywordsJa,
         keywordsVi: translated.keywordsVi,
         budgetAnalysis: translated.budget || null,
@@ -547,6 +498,7 @@ async function searchCatalog(message: string, category: string | null): Promise<
         products: productResults,
       },
       [
+        ...(hasCatalogMatches ? [] : ["Sản phẩm không có trong catalog ChillBanana"]),
         "Tồn kho thực tế tại sàn Nhật",
         "Giá hiện hành tại sàn Nhật",
         "Tình trạng hàng hiện tại ngoài website",

@@ -92,11 +92,18 @@ export function buildOfflineEvidenceReply(
         const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
         lines.push("\n🔗 **Đường dẫn tra cứu trực tiếp trên sàn Nhật:**");
         if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
-        if (ml.mercari) lines.push(`• [Săn đồ lướt trên Mercari JP](${ml.mercari})`);
+        if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
         if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
       }
-    } else if (catalogEv.known.category) {
-      lines.push("\n📦 Hiện tại danh mục chưa có sản phẩm mẫu trùng khớp. Bạn có thể gửi link sản phẩm hoặc ảnh từ sàn Nhật để ChillBanana hỗ trợ kiểm tra và báo giá ngay nhé.");
+    } else {
+      lines.push("\n📦 ChillBanana chưa có sản phẩm này trong catalog. Quý khách dán link sản phẩm từ sàn Nhật để được báo giá, hoặc dùng các đường dẫn tìm kiếm bên dưới.");
+      if (catalogEv.known.marketplaceLinks) {
+        const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
+        lines.push("\n🔗 **Đường dẫn tìm kiếm trên sàn Nhật:**");
+        if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
+        if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
+        if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
+      }
     }
   }
 
