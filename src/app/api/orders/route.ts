@@ -483,7 +483,9 @@ export async function POST(req: NextRequest) {
 
       // Gửi email xác nhận
       sendOrderCreatedEmail(createdDbOrder as any).catch((err) => console.warn(err));
-      sendAdminNewOrderEmail(createdDbOrder as any).catch((err) => console.warn(err));
+      if (process.env.ADMIN_NOTIFY_EMAIL && process.env.ADMIN_NOTIFY_EMAIL.trim()) {
+        sendAdminNewOrderEmail(createdDbOrder as any).catch((err) => console.warn(err));
+      }
 
       const guestAccessToken = (!customerId && customerEmail)
         ? createGuestOrderAccessToken(orderCode, customerEmail)
