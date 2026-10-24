@@ -421,12 +421,24 @@ export interface ScrapedProductInput {
   url?: unknown;
 }
 
+export interface ProductCardData {
+  id: string;
+  name: string;
+  imageUrl: string;
+  priceJpy: number;
+  priceVnd: number;
+  inStock: boolean;
+  weightKg?: number;
+  originalStore?: string;
+  category?: string;
+}
+
 export interface CustomerSupportToolInput {
   message: string;
   customerId: string | null;
   guestOrderAccessToken: string | null;
   scrapedProduct: ScrapedProductInput | null;
-  history?: Array<{ role: string; text: string }>;
+  history?: Array<{ role: string; text: string; productCards?: ProductCardData[] }>;
 }
 
 export interface CustomerSupportToolRun {
@@ -434,6 +446,7 @@ export interface CustomerSupportToolRun {
   sources: Array<{ label: string; href: string; checkedAt: string }>;
   guardedReply?: string;
   quoteFooter?: string;
+  productCards?: ProductCardData[];
 }
 
 function nowIso(): string {
@@ -570,6 +583,8 @@ export async function searchCatalog(message: string, category: string | null): P
         stockSlots: true,
         description: true,
         voltageNote: true,
+        imageUrl: true,
+        originalStore: true,
         createdAt: true,
       },
     });
@@ -652,12 +667,16 @@ export async function searchCatalog(message: string, category: string | null): P
       .slice(0, 5);
 
     let productResults = ranked.map(({ product }) => ({
+      id: product.id,
       name: cleanSingleLine(product.name, "Sản phẩm ChillBanana", 120),
       category: CATEGORY_LABELS[product.category] ?? "Sản phẩm Nhật",
       priceJpy: product.priceJpy,
       estimatedProductPriceVnd: hasCurrentRate ? Math.round(product.priceJpy * effectiveRate) : null,
       estimatedWeightKg: product.weightKg,
       requestSlots: product.stockSlots,
+      inStock: product.stockSlots > 0,
+      imageUrl: product.imageUrl,
+      originalStore: product.originalStore,
       requestSlotLabel: getRequestSlotLabel(product.stockSlots),
       voltageNote: product.voltageNote ? cleanSingleLine(product.voltageNote, "", 160) : null,
       estimatedQuote: hasCurrentRate && pricingConfig
@@ -1211,6 +1230,84 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
   const intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+
+  let productCards: ProductCardData[] = [];
+  let cartReply: string | undefined;
+
+  if (intents.addToCart) {
+    // Tìm sản phẩm Catalog xuất hiện gần nhất trong lịch sử
+    let recentProduct: ProductCardData | null = null;
+
+    if (input.history && input.history.length > 0) {
+      // 1. Kiểm tra nếu trong history có tin nhắn đã đính kèm productCards
+      for (let i = input.history.length - 1; i >= 0; i--) {
+        const item = input.history[i];
+        if (item.productCards && Array.isArray(item.productCards) && item.productCards.length > 0) {
+          recentProduct = item.productCards[0];
+          break;
+        }
+      }
+
+      // 2. Nếu không có sẵn productCards, tìm trong catalog theo nội dung tin nhắn trước đó
+      if (!recentProduct) {
+        const pastTexts = input.history
+          .map((h) => (typeof h.text === "string" ? h.text : ""))
+          .filter(Boolean);
+
+        if (pastTexts.length > 0) {
+          try {
+            const allProducts = await prisma.product.findMany({
+              take: 50,
+              orderBy: { createdAt: "desc" },
+              select: {
+                id: true,
+                name: true,
+                imageUrl: true,
+                priceJpy: true,
+                priceVnd: true,
+                weightKg: true,
+                originalStore: true,
+                category: true,
+                stockSlots: true,
+              },
+            });
+
+            for (let i = pastTexts.length - 1; i >= 0; i--) {
+              const textNorm = normalizeSupportText(pastTexts[i]);
+              const matched = allProducts.find((p) => {
+                const pNameNorm = normalizeSupportText(p.name);
+                return textNorm.includes(pNameNorm) || (pNameNorm.length >= 6 && textNorm.includes(pNameNorm.slice(0, 20)));
+              });
+              if (matched) {
+                recentProduct = {
+                  id: matched.id,
+                  name: matched.name,
+                  imageUrl: matched.imageUrl,
+                  priceJpy: matched.priceJpy,
+                  priceVnd: matched.priceVnd || Math.round(matched.priceJpy * 165),
+                  inStock: matched.stockSlots > 0,
+                  weightKg: matched.weightKg,
+                  originalStore: matched.originalStore,
+                  category: matched.category,
+                };
+                break;
+              }
+            }
+          } catch {
+            // bỏ qua nếu lỗi DB
+          }
+        }
+      }
+    }
+
+    if (recentProduct) {
+      productCards = [recentProduct];
+      cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
+    } else {
+      cartReply = "ChillBanana chưa tìm thấy sản phẩm Quý khách vừa xem để thêm vào giỏ. Quý khách vui lòng chọn hoặc tìm kiếm sản phẩm trước nhé.";
+    }
+  }
+
   const jobs: Array<Promise<SupportEvidence | { evidence: SupportEvidence; guardedReply?: string; quoteFooter?: string }>> = [];
 
   const catalogPromise = intents.catalog || intents.compatibility
@@ -1240,9 +1337,30 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
     }
   }
 
+  // Nếu chưa có productCards từ add_to_cart, lấy danh sách sản phẩm Catalog từ catalog_search
+  if (productCards.length === 0) {
+    const catalogEvidence = evidence.find((e) => e.toolId === "catalog_search");
+    const rawProducts = catalogEvidence?.known?.products;
+    if (Array.isArray(rawProducts) && rawProducts.length > 0) {
+      productCards = rawProducts
+        .filter((p: any) => p && typeof p.id === "string" && typeof p.name === "string")
+        .map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          imageUrl: p.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+          priceJpy: p.priceJpy,
+          priceVnd: p.estimatedProductPriceVnd || Math.round(p.priceJpy * 165),
+          inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+          weightKg: p.estimatedWeightKg,
+          originalStore: p.originalStore,
+          category: p.category,
+        }));
+    }
+  }
+
   // Never let model-generated prose reinterpret private order details or quote arithmetic.
   // A combined request can be split by the customer into separate messages afterward.
-  const guardedReply = orderReply ?? quoteReply;
+  const guardedReply = cartReply ?? orderReply ?? quoteReply;
 
-  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter };
+  return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards };
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { askGeminiAgent, askGeminiAgentDetailed } from "@/features/ai/customer/assistant";
-import { runCustomerSupportTools } from "@/features/ai/customer/support-tools";
+import { runCustomerSupportTools, type ProductCardData } from "@/features/ai/customer/support-tools";
 import { translateToJapaneseKeywords, parseBudgetAndCurrency } from "@/features/ai/customer/japanese-translator";
 import { prisma } from "@/lib/prisma";
 import { getCustomerFromRequest, ORDER_ACCESS_COOKIE_NAME } from "@/lib/auth-session";
@@ -82,6 +82,7 @@ export async function POST(req: NextRequest) {
     let supportSources: unknown[] = [];
     let isGuardrailTriggered = false;
     let aiMode: "gemini" | "offline" = "offline";
+    let productCards: ProductCardData[] = [];
 
     if (isVnJpRegistration) {
       aiMode = "offline";
@@ -127,6 +128,7 @@ export async function POST(req: NextRequest) {
       reply = generatedReply + (supportRun.quoteFooter ?? "");
       supportSources = supportRun.sources;
       isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");
+      productCards = supportRun.productCards || [];
     }
 
     console.log(`[AI Chat] Session: ${resolvedSessionId} | Mode: ${aiMode}`);
@@ -313,6 +315,7 @@ export async function POST(req: NextRequest) {
       sources: supportSources,
       isGuardrailTriggered,
       aiMode,
+      productCards,
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {
       httpOnly: true,

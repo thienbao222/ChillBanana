@@ -31,6 +31,7 @@ export interface SupportIntents {
   orderStatus: boolean;
   shipping: boolean;
   compatibility: boolean;
+  addToCart: boolean;
   category: "cosmetics" | "health" | "gadgets" | "anime" | null;
   orderCode: string | null;
 }
@@ -97,7 +98,11 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
   const compatibility = /\b(tuong thich|dien ap|100v|220v|bien ap|cong suat|dung o viet nam|cam truc tiep|am dun|noi com|may say)\b/.test(normalized);
   const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may|giay|gucci|t-fal|tfal|am dun|noi com|dong ho|tui|vi|ao|khoac|sneaker|shoes|kettle|figure|gundam|jpy|yen|trieu)\b/.test(normalized);
 
-  return { catalog, quote, orderStatus, shipping, compatibility, category, orderCode };
+  const addToCart =
+    /\b(them|cho|bo|dat)\s+(vao\s+)?(gio|gio\s+hang|cart)\b/i.test(normalized) ||
+    /\b(add\s+to\s+cart|mua\s+ngay|dat\s+mon\s+nay|mua\s+mon\s+nay|lay\s+mon\s+nay)\b/i.test(normalized);
+
+  return { catalog, quote, orderStatus, shipping, compatibility, addToCart, category, orderCode };
 }
 
 export function isValidOrderCode(value: string): boolean {

@@ -8,9 +8,14 @@ import {
   ShieldAlert,
   ImagePlus,
   Loader2,
+  ShoppingCart,
+  ExternalLink,
 } from "lucide-react";
 import { AIPersonality } from "@/types";
 import NeoUniverseSprite, { NeoUniverseAnimation } from "@/components/NeoUniverseSprite";
+import { useCart } from "@/context/CartContext";
+import { useToast } from "@/context/ToastContext";
+import type { ProductCardData } from "@/features/ai/customer/support-tools";
 
 interface Message {
   id: string;
@@ -19,6 +24,7 @@ interface Message {
   isGuardrail?: boolean;
   imagePreviewUrl?: string;
   sources?: MessageSource[];
+  productCards?: ProductCardData[];
   time: string;
 }
 
@@ -90,7 +96,139 @@ function ChatImage({ url, alt }: { url: string; alt: string }) {
   );
 }
 
+function ChatProductCardList({
+  cards,
+  onAddToCart,
+  onViewDetails,
+}: {
+  cards: ProductCardData[];
+  onAddToCart: (p: ProductCardData) => void;
+  onViewDetails: (p: ProductCardData) => void;
+}) {
+  if (!cards || cards.length === 0) return null;
+
+  return (
+    <div className="mt-2.5 space-y-2">
+      {cards.map((product) => {
+        const inStock = Boolean(product.inStock);
+        return (
+          <div
+            key={product.id}
+            className="rounded-2xl border border-slate-200 bg-white p-2.5 shadow-sm hover:shadow-md transition-all flex flex-col gap-2"
+          >
+            <div className="flex gap-2.5 items-start">
+              <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-100 relative">
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.currentTarget.src =
+                      "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80";
+                  }}
+                />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-xs font-bold text-navy-950 line-clamp-2 leading-snug">
+                  {product.name}
+                </h4>
+                <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
+                  <span className="text-xs font-extrabold text-banana-700">
+                    {product.priceVnd.toLocaleString("vi-VN")} đ
+                  </span>
+                  <span className="text-[10px] text-slate-400">
+                    ({product.priceJpy.toLocaleString("vi-VN")} ¥)
+                  </span>
+                </div>
+                <div className="mt-0.5">
+                  {inStock ? (
+                    <span className="inline-flex items-center text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                      ● Còn hàng
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded-full">
+                      ● Hết hàng
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 pt-1 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={!inStock}
+                onClick={() => onAddToCart(product)}
+                className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-xl text-[11px] font-bold transition-all bg-banana-500 hover:bg-banana-400 text-navy-950 shadow-sm disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-banana-500"
+                title={inStock ? "Thêm vào giỏ hàng" : "Sản phẩm tạm hết hàng"}
+              >
+                <ShoppingCart className="w-3.5 h-3.5" />
+                <span>Thêm vào giỏ</span>
+              </button>
+
+              <button
+                type="button"
+                disabled={!inStock}
+                onClick={() => onViewDetails(product)}
+                className="inline-flex items-center justify-center gap-1 py-1.5 px-2.5 rounded-xl text-[11px] font-semibold transition-all border border-slate-200 hover:bg-slate-100 text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                title="Xem chi tiết và tính giá"
+              >
+                <ExternalLink className="w-3 h-3" />
+                <span>Xem chi tiết</span>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function AIChatBot() {
+  const { addToCart } = useCart();
+  const { toast } = useToast();
+
+  const handleAddProductToCart = (product: ProductCardData) => {
+    if (!product.inStock) {
+      toast.error("Sản phẩm hiện đã hết hàng.");
+      return;
+    }
+    const added = addToCart({
+      id: product.id,
+      name: product.name,
+      priceJpy: product.priceJpy,
+      priceVnd: product.priceVnd || Math.round(product.priceJpy * 165),
+      weightKg: product.weightKg ?? 0.5,
+      imageUrl: product.imageUrl,
+      originalStore: product.originalStore || "Catalog ChillBanana",
+      category: product.category,
+      stockSlots: product.inStock ? 5 : 0,
+    });
+    if (added) {
+      toast.success(`Đã thêm "${product.name}" vào giỏ hàng.`);
+    }
+  };
+
+  const handleViewProductDetails = (product: ProductCardData) => {
+    window.dispatchEvent(
+      new CustomEvent("chillbanana:select_product", {
+        detail: {
+          id: product.id,
+          name: product.name,
+          priceJpy: product.priceJpy,
+          weightKg: product.weightKg ?? 0.5,
+          imageUrl: product.imageUrl,
+          originalStore: product.originalStore || "Catalog ChillBanana",
+          category: product.category,
+        },
+      })
+    );
+    const calcSection = document.getElementById("calculator");
+    if (calcSection) {
+      calcSection.scrollIntoView({ behavior: "smooth" });
+    }
+  };
+
   const [isOpen, setIsOpen] = useState(false);
   const [personality, setPersonality] = useState<AIPersonality>("omotenashi");
   const [inputMessage, setInputMessage] = useState("");
@@ -536,6 +674,7 @@ export default function AIChatBot() {
         .map((m) => ({
           role: m.sender === "user" ? "user" : "model",
           text: m.text,
+          productCards: m.productCards,
         }));
 
       const res = await fetch("/api/ai/chat", {
@@ -563,12 +702,14 @@ export default function AIChatBot() {
               return [{ label: item.label.slice(0, 80), href: item.href, checkedAt: item.checkedAt }];
             })
           : [];
+        const productCards: ProductCardData[] = Array.isArray(data.productCards) ? data.productCards : [];
         const botMsg: Message = {
           id: "bot-" + Date.now(),
           sender: "bot",
           text: data.reply,
           isGuardrail: data.isGuardrailTriggered,
           sources,
+          productCards,
           time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         };
         setMessages((prev) => [...prev, botMsg]);
@@ -1079,6 +1220,13 @@ export default function AIChatBot() {
                     <div className={`max-w-[88%] overflow-hidden rounded-2xl px-3 py-2 ${message.sender === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
                       {message.imagePreviewUrl && <img src={message.imagePreviewUrl} alt="Ảnh sản phẩm người dùng gửi" className="mb-2 max-h-36 max-w-full rounded-lg object-contain" />}
                       <div className="break-words">{renderMessageContent(message)}</div>
+                      {message.productCards && message.productCards.length > 0 && (
+                        <ChatProductCardList
+                          cards={message.productCards}
+                          onAddToCart={handleAddProductToCart}
+                          onViewDetails={handleViewProductDetails}
+                        />
+                      )}
                       {message.sender === "bot" && message.sources?.length ? (
                         <div className="mt-2 border-t border-slate-100 pt-1.5 text-[9px] text-slate-500">
                           Kiểm tra lúc {formatSourceTime(message.sources[0].checkedAt)} · {message.sources.map((source, index) => (
@@ -1221,6 +1369,13 @@ export default function AIChatBot() {
                   <div className="whitespace-pre-line space-y-2 leading-relaxed">
                     {renderMessageContent(msg)}
                   </div>
+                  {msg.productCards && msg.productCards.length > 0 && (
+                    <ChatProductCardList
+                      cards={msg.productCards}
+                      onAddToCart={handleAddProductToCart}
+                      onViewDetails={handleViewProductDetails}
+                    />
+                  )}
                   {msg.sender === "bot" && msg.sources?.length ? (
                     <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] leading-relaxed text-slate-500">
                       <span className="font-semibold">Nguồn đã kiểm tra lúc {formatSourceTime(msg.sources[0].checkedAt)}:</span>{" "}
