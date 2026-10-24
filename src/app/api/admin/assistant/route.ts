@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
-import { getAdminAiModuleSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
+import { getAdminAiModuleSnapshot, getAdminAiMergedSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
+import { resolveAutoModules, ConcreteAdminModuleId } from "@/features/ai/admin/module-router";
 import { requireAdmin } from "@/lib/admin-guard";
 
 export const dynamic = "force-dynamic";
@@ -29,10 +30,23 @@ export async function POST(req: NextRequest) {
       .filter((item: any) => (item?.role === "user" || item?.role === "assistant") && typeof item?.content === "string")
       .map((item: any) => ({ role: item.role, content: item.content.slice(0, 1200) }));
 
-    const snapshot = await getAdminAiModuleSnapshot(moduleId);
+    let resolvedModules: ConcreteAdminModuleId[] | null = null;
+    let snapshot: any;
+
+    if (moduleId === "auto") {
+      resolvedModules = await resolveAutoModules(question);
+      snapshot = await getAdminAiMergedSnapshot(resolvedModules);
+    } else {
+      snapshot = await getAdminAiModuleSnapshot(moduleId);
+    }
+
     const dataAsOf = (snapshot as { dataAsOf?: string }).dataAsOf || new Date().toISOString();
+    const activeScopeDescription = moduleId === "auto"
+      ? `Tự động (hệ thống đã chọn 1-3 module phù hợp nhất: ${(resolvedModules || []).join(", ")})`
+      : moduleId;
+
     const systemInstruction = `Bạn là Trợ lý AI nội bộ của ChillBanana, hỗ trợ quản trị viên đọc dữ liệu website.
-Phạm vi hiện tại: ${moduleId}.
+Phạm vi hiện tại: ${activeScopeDescription}.
 Quy tắc bắt buộc:
 - Snapshot JSON là nguồn dữ liệu duy nhất. Không dùng kiến thức bên ngoài, không tự thêm tên sản phẩm, số liệu, nguyên nhân, xu hướng thị trường hoặc sự kiện.
 - Phân biệt rõ số liệu quan sát được với nhận xét/đề xuất. Mọi đề xuất phải được gọi là gợi ý, không phải sự thật đã xảy ra.
@@ -52,65 +66,79 @@ Trả lời bằng tiếng Việt ngắn gọn, dễ quét. Nêu căn cứ bằn
 
 function buildOfflineAdminReply(moduleId: string, question: string, snapshot: any, dataAsOf: string): string {
   const parts: string[] = [];
-  parts.push(`### 📊 Phân tích dữ liệu Quản trị [${moduleId.toUpperCase()}]`);
+  const headerScope = moduleId === "auto" && snapshot.selectedModules
+    ? `TỰ ĐỘNG (${snapshot.selectedModules.join(", ")})`
+    : moduleId.toUpperCase();
+  parts.push(`### 📊 Phân tích dữ liệu Quản trị [${headerScope}]`);
   parts.push(`*Dữ liệu tổng hợp từ hệ thống lúc: ${new Date(dataAsOf).toLocaleString("vi-VN")}*\n`);
 
-  if (snapshot.kpis || snapshot.scope === "overview") {
-    const kpis = snapshot.kpis || snapshot;
-    if (kpis.orderCount !== undefined) {
-      parts.push(`- **Tổng số đơn hàng ghi nhận:** **${kpis.orderCount}** đơn.`);
+  function appendModuleMetrics(modSnap: any) {
+    if (!modSnap) return;
+    if (modSnap.kpis || modSnap.scope === "overview") {
+      const kpis = modSnap.kpis || modSnap;
+      if (kpis.orderCount !== undefined) {
+        parts.push(`- **Tổng số đơn hàng ghi nhận:** **${kpis.orderCount}** đơn.`);
+      }
+      if (kpis.paidOrderCount !== undefined) {
+        parts.push(`- **Đơn đã xác nhận thanh toán/cọc:** **${kpis.paidOrderCount}** đơn.`);
+      }
+      if (kpis.actualRevenueVnd !== undefined) {
+        parts.push(`- **Tổng tiền cọc thực thu:** **${Number(kpis.actualRevenueVnd).toLocaleString("vi-VN")} đ**.`);
+      }
     }
-    if (kpis.paidOrderCount !== undefined) {
-      parts.push(`- **Đơn đã xác nhận thanh toán/cọc:** **${kpis.paidOrderCount}** đơn.`);
+
+    if (modSnap.stuckOrdersCount !== undefined) {
+      parts.push(`- **Đơn hàng cần chú ý (chậm tiến độ/chưa có tracking mới):** **${modSnap.stuckOrdersCount}** đơn.`);
     }
-    if (kpis.actualRevenueVnd !== undefined) {
-      parts.push(`- **Tổng tiền cọc thực thu:** **${Number(kpis.actualRevenueVnd).toLocaleString("vi-VN")} đ**.`);
+
+    if (modSnap.scope === "approvals" || modSnap.unverifiedPriceCount !== undefined) {
+      parts.push(`- **Đơn chờ duyệt giá:** **${modSnap.unverifiedPriceCount ?? 0}** đơn (trong đó **${modSnap.unverifiedOver4HoursCount ?? 0}** đơn chờ > 4 giờ).`);
+      parts.push(`- **Đơn chờ cọc sắp hết hạn giữ chỗ:** **${modSnap.expiringReservationsCount ?? 0}** đơn.`);
     }
-  }
 
-  if (snapshot.stuckOrdersCount !== undefined) {
-    parts.push(`- **Đơn hàng cần chú ý (chậm tiến độ/chưa có tracking mới):** **${snapshot.stuckOrdersCount}** đơn.`);
-  }
-
-  if (snapshot.scope === "approvals" || snapshot.unverifiedPriceCount !== undefined) {
-    parts.push(`- **Đơn chờ duyệt giá:** **${snapshot.unverifiedPriceCount ?? 0}** đơn (trong đó **${snapshot.unverifiedOver4HoursCount ?? 0}** đơn chờ > 4 giờ).`);
-    parts.push(`- **Đơn chờ cọc sắp hết hạn giữ chỗ:** **${snapshot.expiringReservationsCount ?? 0}** đơn.`);
-  }
-
-  if (snapshot.scope === "logistics" || snapshot.stalledCountsByStatus !== undefined) {
-    const stalledTotal = Object.values(snapshot.stalledCountsByStatus || {}).reduce((a: number, b: any) => a + Number(b), 0);
-    parts.push(`- **Đơn đứng yên ≥ 3 ngày:** **${stalledTotal}** đơn trên các chặng.`);
-    if (snapshot.maffQuarantineAlerts?.length) {
-      parts.push(`- **Vận đơn VN→JP cảnh báo kiểm dịch MAFF:** **${snapshot.maffQuarantineAlerts.length}** kiện.`);
+    if (modSnap.scope === "logistics" || modSnap.stalledCountsByStatus !== undefined) {
+      const stalledTotal = Object.values(modSnap.stalledCountsByStatus || {}).reduce((a: number, b: any) => a + Number(b), 0);
+      parts.push(`- **Đơn đứng yên ≥ 3 ngày:** **${stalledTotal}** đơn trên các chặng.`);
+      if (modSnap.maffQuarantineAlerts?.length) {
+        parts.push(`- **Vận đơn VN→JP cảnh báo kiểm dịch MAFF:** **${modSnap.maffQuarantineAlerts.length}** kiện.`);
+      }
     }
-  }
 
-  if (snapshot.scope === "payments" || snapshot.mismatchedDepositCount !== undefined) {
-    parts.push(`- **Đơn đã nhận cọc nhưng chưa chuyển trạng thái:** **${snapshot.mismatchedDepositCount ?? 0}** đơn.`);
-    if (snapshot.exchangeRate) {
-      parts.push(`- **Tỷ giá hiện hành:** 1 JPY = **${snapshot.exchangeRate.roundedRate} VND** (${snapshot.exchangeRate.source}, cập nhật ${snapshot.exchangeRate.stalenessMinutes} phút trước).`);
+    if (modSnap.scope === "payments" || modSnap.mismatchedDepositCount !== undefined) {
+      parts.push(`- **Đơn đã nhận cọc nhưng chưa chuyển trạng thái:** **${modSnap.mismatchedDepositCount ?? 0}** đơn.`);
+      if (modSnap.exchangeRate) {
+        parts.push(`- **Tỷ giá hiện hành:** 1 JPY = **${modSnap.exchangeRate.roundedRate} VND** (${modSnap.exchangeRate.source}, cập nhật ${modSnap.exchangeRate.stalenessMinutes} phút trước).`);
+      }
     }
-  }
 
-  if (snapshot.scope === "emails" || snapshot.failedCount !== undefined) {
-    parts.push(`- **Email gửi thất bại:** **${snapshot.failedCount ?? 0}** thư.`);
-    parts.push(`- **Email đang chờ thử lại:** **${snapshot.pendingRetryCount ?? 0}** thư.`);
-  }
+    if (modSnap.scope === "emails" || modSnap.failedCount !== undefined) {
+      parts.push(`- **Email gửi thất bại:** **${modSnap.failedCount ?? 0}** thư.`);
+      parts.push(`- **Email đang chờ thử lại:** **${modSnap.pendingRetryCount ?? 0}** thư.`);
+    }
 
-  if (snapshot.catalog) {
-    const total = snapshot.catalog.totalProducts ?? (Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0);
-    parts.push(`- **Tổng sản phẩm mẫu Catalog:** **${total}** món.`);
-  }
+    if (modSnap.catalog) {
+      const total = modSnap.catalog.totalProducts ?? (Array.isArray(modSnap.catalog) ? modSnap.catalog.length : 0);
+      parts.push(`- **Tổng sản phẩm mẫu Catalog:** **${total}** món.`);
+    }
 
-  if (snapshot.chatTags || snapshot.topKeywords) {
-    const kw = snapshot.topKeywords || snapshot.chatTags?.recordedKeywords || [];
-    if (kw.length > 0) {
-      const kwStr = kw.slice(0, 5).map((k: any) => Array.isArray(k) ? `${k[0]} (${k[1]})` : `${k.keyword || k} (${k.count || 1})`).join(", ");
-      parts.push(`- **Từ khóa khách quan tâm nhiều:** ${kwStr}.`);
+    if (modSnap.chatTags || modSnap.topKeywords || modSnap.recordedKeywords) {
+      const kw = modSnap.topKeywords || modSnap.recordedKeywords || modSnap.chatTags?.recordedKeywords || [];
+      if (kw.length > 0) {
+        const kwStr = kw.slice(0, 5).map((k: any) => Array.isArray(k) ? `${k[0]} (${k[1]})` : `${k.keyword || k} (${k.count || 1})`).join(", ");
+        parts.push(`- **Từ khóa khách quan tâm nhiều:** ${kwStr}.`);
+      }
     }
   }
 
-  parts.push(`\n**Gợi ý vận hành:** Để xử lý chuyên sâu cho câu hỏi "*${question.slice(0, 60)}*", bạn có thể mở trực tiếp bảng chi tiết của module \`${moduleId}\` trên thanh điều hướng Admin.`);
+  if (moduleId === "auto" && snapshot.modules) {
+    for (const mod of snapshot.selectedModules || []) {
+      appendModuleMetrics(snapshot.modules[mod]);
+    }
+  } else {
+    appendModuleMetrics(snapshot);
+  }
+
+  parts.push(`\n**Gợi ý vận hành:** Để xử lý chuyên sâu cho câu hỏi "*${question.slice(0, 60)}*", bạn có thể mở trực tiếp bảng chi tiết của các module tương ứng trên thanh điều hướng Admin.`);
 
   return parts.join("\n");
 }
@@ -199,7 +227,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
       answer = buildOfflineAdminReply(moduleId, question, snapshot, dataAsOf);
     }
 
-    return NextResponse.json({ success: true, answer, module: moduleId, dataAsOf });
+    return NextResponse.json({ success: true, answer, module: moduleId, resolvedModules, dataAsOf });
   } catch (error) {
     console.error("[AdminAssistant] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
     return NextResponse.json({ error: "Không thể đọc snapshot quản trị hoặc tạo phản hồi. Vui lòng thử lại." }, { status: 500 });

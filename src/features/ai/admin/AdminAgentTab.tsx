@@ -9,9 +9,11 @@ type AgentMessage = {
   role: "user" | "assistant";
   content: string;
   dataAsOf?: string;
+  resolvedModules?: string[];
 };
 
 const moduleIcons: Record<AdminAiModuleId, React.ReactNode> = {
+  auto: <Sparkles className="h-4 w-4 text-amber-500" />,
   overview: <Sparkles className="h-4 w-4" />,
   reports: <BarChart3 className="h-4 w-4" />,
   trends: <MessageSquareText className="h-4 w-4" />,
@@ -25,6 +27,7 @@ const moduleIcons: Record<AdminAiModuleId, React.ReactNode> = {
 };
 
 const quickPrompts: Record<AdminAiModuleId, string[]> = {
+  auto: ["Hôm nay có những vấn đề gì cần ưu tiên xử lý?", "Tình hình đơn hàng chờ duyệt giá và thanh toán?", "Có đơn hàng nào đứng yên hoặc email gửi lỗi không?"],
   overview: ["Tóm tắt tình hình hiện tại và các điểm cần chú ý.", "Có số liệu nào tăng hoặc giảm đáng chú ý?"],
   reports: ["So sánh 30 ngày gần nhất với 30 ngày trước đó.", "Giải thích doanh thu thực thu và giá trị đơn ước tính."],
   trends: ["Các chủ đề nào được ghi nhận nhiều nhất trong 30 ngày?", "Dữ liệu chat có giới hạn gì trước khi dùng để ra quyết định?"],
@@ -49,7 +52,7 @@ function renderAnswer(content: string) {
   });
 }
 
-export default function AdminAgentTab({ initialModule = "overview", initialQuestion = "" }: { initialModule?: AdminAiModuleId; initialQuestion?: string }) {
+export default function AdminAgentTab({ initialModule = "auto", initialQuestion = "" }: { initialModule?: AdminAiModuleId; initialQuestion?: string }) {
   const [moduleId, setModuleId] = useState<AdminAiModuleId>(initialModule);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [question, setQuestion] = useState(initialQuestion);
@@ -108,6 +111,7 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
         role: "assistant",
         content: data.answer,
         dataAsOf: data.dataAsOf,
+        resolvedModules: data.resolvedModules,
       }]);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Có lỗi khi kết nối trợ lý AI.";
@@ -403,6 +407,14 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
             ) : messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[92%] rounded-2xl px-4 py-3 sm:max-w-[82%] ${message.role === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
+                  {message.role === "assistant" && message.resolvedModules && message.resolvedModules.length > 0 && (
+                    <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                        <Sparkles className="h-3 w-3 text-amber-600" />
+                        Tự động chọn: {message.resolvedModules.join(", ")}
+                      </span>
+                    </div>
+                  )}
                   <div className="break-words text-sm leading-relaxed">{message.role === "assistant" ? renderAnswer(message.content) : <div className="whitespace-pre-wrap">{message.content}</div>}</div>
                   {message.dataAsOf && <div className="mt-2 border-t border-slate-100 pt-1.5 text-[10px] text-slate-400">Snapshot dữ liệu: {new Date(message.dataAsOf).toLocaleString("vi-VN")}</div>}
                 </div>

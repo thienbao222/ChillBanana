@@ -3,6 +3,7 @@ import { recentVietnamDateKeys, vietnamDateKey, vietnamDayStart } from "@/lib/vi
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import { ADMIN_AI_MODULES } from "./definitions";
 import type { AdminAiModuleId } from "./definitions";
+import type { ConcreteAdminModuleId } from "./module-router";
 export { ADMIN_AI_MODULES } from "./definitions";
 export type { AdminAiModuleId } from "./definitions";
 
@@ -658,7 +659,31 @@ async function buildEmailsSnapshot() {
   };
 }
 
+export async function getAdminAiMergedSnapshot(modules: ConcreteAdminModuleId[]) {
+  const targetModules = modules.length > 0 ? modules : (["overview"] as ConcreteAdminModuleId[]);
+  const snapshots = await Promise.all(
+    targetModules.map(async (m) => ({
+      module: m,
+      data: await moduleBuilders[m](),
+    }))
+  );
+
+  const mergedModules: Record<string, unknown> = {};
+  for (const s of snapshots) {
+    mergedModules[s.module] = s.data;
+  }
+
+  return {
+    scope: "auto",
+    dataAsOf: new Date().toISOString(),
+    selectedModules: targetModules,
+    modules: mergedModules,
+    note: "Snapshot được tự động tổng hợp từ các module liên quan nhất tới câu hỏi của quản trị viên.",
+  };
+}
+
 const moduleBuilders: Record<AdminAiModuleId, () => Promise<unknown>> = {
+  auto: () => getAdminAiMergedSnapshot(["overview"]),
   overview: buildOverviewSnapshot,
   reports: buildReportsSnapshot,
   trends: buildTrendsSnapshot,
