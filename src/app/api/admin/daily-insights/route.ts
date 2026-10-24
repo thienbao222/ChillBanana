@@ -225,6 +225,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
       if (!apiKey) break;
 
       for (const model of models) {
+        let responseStatus: number | null = null;
         try {
           let response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -244,7 +245,10 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
             }
           );
 
+          responseStatus = response.status;
           if (response.status === 400) {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[DailyInsight] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
@@ -256,17 +260,19 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
                   generationConfig: {
                     maxOutputTokens: 2000,
                     temperature: 0.2,
+                    thinkingConfig: { thinkingLevel: "low" },
                   },
                 }),
                 signal: AbortSignal.timeout(30000),
               }
             );
-            if (retryRes.ok) {
-              response = retryRes;
-            }
+            responseStatus = retryRes.status;
+            response = retryRes;
           }
 
           if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
             adminKeyPool.markError(apiKey, response.status, model);
             continue;
           }
@@ -281,8 +287,9 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
             insight = text;
             break;
           }
-        } catch {
-          adminKeyPool.markError(apiKey, 503);
+        } catch (error) {
+          adminKeyPool.markError(apiKey, 503, model);
+          console.warn(`[DailyInsight] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
           continue;
         }
       }
@@ -328,8 +335,8 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     console.log(`[DailyInsight] Đã lưu báo cáo AI cho ngày ${businessDate} (giờ Việt Nam).`);
     return NextResponse.json({ success: true, report });
   } catch (err) {
-    console.error("[DailyInsight] Error:", err);
-    return NextResponse.json({ error: "Lỗi tạo báo cáo AI." }, { status: 500 });
+    console.error("[DailyInsight] HTTP n/a:", err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200));
+    return NextResponse.json({ error: "Không thể tạo báo cáo insight từ dữ liệu hiện tại. Vui lòng thử lại." }, { status: 500 });
   }
 }
 

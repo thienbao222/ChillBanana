@@ -121,6 +121,7 @@ export async function GET(req: NextRequest) {
       const models = [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
 
       for (const model of models) {
+        let responseStatus: number | null = null;
         try {
           let response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
@@ -136,8 +137,11 @@ export async function GET(req: NextRequest) {
               signal: AbortSignal.timeout(8000),
             }
           );
+          responseStatus = response.status;
 
           if (response.status === 400) {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[AIAnalytics] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
@@ -145,13 +149,13 @@ export async function GET(req: NextRequest) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   contents: [{ parts: [{ text: prompt }] }],
+                  generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
                 }),
                 signal: AbortSignal.timeout(8000),
               }
             );
-            if (retryRes.ok) {
-              response = retryRes;
-            }
+            responseStatus = retryRes.status;
+            response = retryRes;
           }
 
           if (response.ok) {
@@ -162,10 +166,13 @@ export async function GET(req: NextRequest) {
               break;
             }
           } else {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
             adminKeyPool.markError(apiKey, response.status, model);
           }
-        } catch {
+        } catch (error) {
           adminKeyPool.markError(apiKey, 503, model);
+          console.warn(`[AIAnalytics] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
           // Fallback giữ nguyên tóm tắt deterministic
         }
       }
@@ -177,9 +184,9 @@ export async function GET(req: NextRequest) {
       aiSummary,
     });
   } catch (error) {
-    console.error("[API Admin AI Analytics] Lỗi:", error);
+    console.error("[AIAnalytics] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
     return NextResponse.json(
-      { success: false, error: "Lỗi máy chủ khi tạo báo cáo phân tích AI." },
+      { success: false, error: "Không thể tổng hợp báo cáo phân tích từ dữ liệu hệ thống. Vui lòng thử lại." },
       { status: 500 }
     );
   }

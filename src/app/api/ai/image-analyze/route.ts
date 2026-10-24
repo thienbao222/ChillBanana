@@ -272,6 +272,28 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
 
     let parsedResult: Record<string, unknown> | null = null;
     let lastStatus = 500;
+    const readResponseBody = async (response: Response) =>
+      typeof response.text === "function"
+        ? response.text().catch(() => "")
+        : JSON.stringify(await response.json().catch(() => ({})));
+    const parseVisionResponse = async (response: Response, modelName: string) => {
+      const body = await readResponseBody(response);
+      let data: any;
+      try {
+        data = JSON.parse(body);
+      } catch {
+        console.warn(`[ImageAnalyze] Model ${modelName} HTTP ${response.status}: ${body.slice(0, 200)}`);
+        return null;
+      }
+      const parts = data.candidates?.[0]?.content?.parts || [];
+      const textPart = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop();
+      const textOutput = textPart?.text || "";
+      const parsed = safeParseVisionJson(textOutput);
+      if (!parsed) {
+        console.warn(`[ImageAnalyze] Model ${modelName} HTTP ${response.status}, malformed JSON: ${(textOutput || body).slice(0, 200)}`);
+      }
+      return parsed;
+    };
 
     for (const modelName of uniqueModels) {
       const requestBody = {
@@ -298,6 +320,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         },
       };
 
+      let responseStatus: number | null = null;
       try {
         let res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
@@ -310,56 +333,81 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         );
 
         lastStatus = res.status;
+        responseStatus = res.status;
         if (!res.ok) {
-          const errText = await res.text().catch(() => "");
+          const errText = await readResponseBody(res);
           console.warn(`[ImageAnalyze] Model ${modelName} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
           visionKeyPool?.markError?.(apiKey, res.status, modelName);
 
-          // Nếu model trả 400 vì thinkingConfig, thử lại một lần không có thinkingConfig
+          // Retry lỗi request một lần; giữ cấu hình thinking như yêu cầu ban đầu.
           if (res.status === 400) {
-            const retryBody = {
-              contents: requestBody.contents,
-              generationConfig: {
-                maxOutputTokens: 2048,
-                temperature: 0.15,
-                responseMimeType: "application/json",
-              },
-            };
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(retryBody),
+                body: JSON.stringify(requestBody),
                 signal: AbortSignal.timeout(18000),
               }
             );
+            lastStatus = retryRes.status;
+            responseStatus = retryRes.status;
             if (retryRes.ok) {
-              const retryData = await retryRes.json();
-              const parts = retryData.candidates?.[0]?.content?.parts || [];
-              const textPart = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop();
-              parsedResult = safeParseVisionJson(textPart?.text || "");
+              parsedResult = await parseVisionResponse(retryRes, modelName);
               if (parsedResult) break;
+              const malformedJsonRetry = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(requestBody),
+                  signal: AbortSignal.timeout(18000),
+                }
+              );
+              lastStatus = malformedJsonRetry.status;
+              responseStatus = malformedJsonRetry.status;
+              if (malformedJsonRetry.ok) {
+                parsedResult = await parseVisionResponse(malformedJsonRetry, modelName);
+                if (parsedResult) break;
+              } else {
+                const retryErrText = await readResponseBody(malformedJsonRetry);
+                console.warn(`[ImageAnalyze] Model ${modelName} JSON retry HTTP ${malformedJsonRetry.status}: ${retryErrText.slice(0, 200)}`);
+                visionKeyPool?.markError?.(apiKey, malformedJsonRetry.status, modelName);
+              }
             } else {
-              const retryErrText = await retryRes.text().catch(() => "");
+              const retryErrText = await readResponseBody(retryRes);
               console.warn(`[ImageAnalyze] Model ${modelName} retry lỗi HTTP ${retryRes.status}: ${retryErrText.slice(0, 200)}`);
               visionKeyPool?.markError?.(apiKey, retryRes.status, modelName);
-              lastStatus = retryRes.status;
             }
           }
           continue;
         }
 
-        const data = await res.json();
-        const parts = data.candidates?.[0]?.content?.parts || [];
-        const textPart = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop();
-        const textOutput = textPart?.text || "";
-
-        parsedResult = safeParseVisionJson(textOutput);
+        parsedResult = await parseVisionResponse(res, modelName);
+        if (parsedResult) break;
+        const retryRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+            signal: AbortSignal.timeout(18000),
+          }
+        );
+        lastStatus = retryRes.status;
+        responseStatus = retryRes.status;
+        if (!retryRes.ok) {
+          const retryErrText = await readResponseBody(retryRes);
+          console.warn(`[ImageAnalyze] Model ${modelName} retry lỗi HTTP ${retryRes.status}: ${retryErrText.slice(0, 200)}`);
+          visionKeyPool?.markError?.(apiKey, retryRes.status, modelName);
+          continue;
+        }
+        parsedResult = await parseVisionResponse(retryRes, modelName);
         if (parsedResult) break;
       } catch (err) {
-        console.warn(`[ImageAnalyze] Model ${modelName} error:`, err);
+        console.warn(`[ImageAnalyze] Model ${modelName} HTTP ${responseStatus ?? "n/a"}: ${err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)}`);
         visionKeyPool?.markError?.(apiKey, 503, modelName);
+        lastStatus = 503;
       }
     }
 
@@ -374,7 +422,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         );
       }
       return NextResponse.json(
-        { success: false, error: "AI Vision chưa xử lý được ảnh này. Vui lòng thử lại." },
+        { success: false, error: "AI chưa phân tích được ảnh này. Hãy gửi ảnh rõ, chụp thẳng vào sản phẩm hoặc thử lại sau." },
         { status: 502 }
       );
     }
@@ -518,7 +566,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
       },
     });
   } catch (error) {
-    console.error("Image analysis error:", error);
-    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 });
+    console.error("[ImageAnalyze] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
+    return NextResponse.json({ success: false, error: "Không thể xử lý yêu cầu phân tích ảnh. Hãy kiểm tra định dạng ảnh rồi thử lại." }, { status: 500 });
   }
 }

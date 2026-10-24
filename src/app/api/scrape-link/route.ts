@@ -776,68 +776,104 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
       GEMINI_MODELS.neo,
     ])
   );
+  const requestBody = {
+    contents: [{ parts: [{ text: prompt }] }],
+    generationConfig: {
+      maxOutputTokens: 1536,
+      temperature: 0.1,
+      responseMimeType: "application/json",
+      thinkingConfig: { thinkingLevel: "low" },
+    },
+  };
+  const readResponseBody = async (response: Response) =>
+    typeof response.text === "function"
+      ? response.text().catch(() => "")
+      : JSON.stringify(await response.json().catch(() => ({})));
 
   for (const modelName of models) {
+    for (let jsonAttempt = 0; jsonAttempt < 2; jsonAttempt++) {
+      let responseStatus: number | null = null;
     try {
       let response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              maxOutputTokens: 1536,
-              temperature: 0.1,
-              responseMimeType: "application/json",
-              thinkingConfig: { thinkingLevel: "low" },
-            },
-          }),
+          body: JSON.stringify(requestBody),
           signal: AbortSignal.timeout(12000),
         }
       );
+      responseStatus = response.status;
 
       if (response.status === 400) {
+        const errorBody = await readResponseBody(response);
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP 400: ${errorBody.slice(0, 200)}`);
         const retryRes = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                maxOutputTokens: 1536,
-                temperature: 0.1,
-                responseMimeType: "application/json",
-              },
-            }),
+            body: JSON.stringify(requestBody),
             signal: AbortSignal.timeout(12000),
           }
         );
+        responseStatus = retryRes.status;
         if (retryRes.ok) {
           response = retryRes;
+        } else {
+          const retryBody = await readResponseBody(retryRes);
+          console.warn(`[ScrapeLink] Model ${modelName} retry HTTP ${retryRes.status}: ${retryBody.slice(0, 200)}`);
+          scrapeKeyPool.markError(apiKey, retryRes.status, modelName);
+          break;
         }
       }
 
       if (!response.ok) {
+        const errorBody = await readResponseBody(response);
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
         scrapeKeyPool.markError(apiKey, response.status, modelName);
-        continue;
+        break;
       }
 
-      const data = await response.json();
+      const responseBody = await readResponseBody(response);
+      let data: any;
+      try {
+        data = JSON.parse(responseBody);
+      } catch {
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+        if (jsonAttempt === 0) continue;
+        break;
+      }
       const rawText: string =
         data?.candidates?.[0]?.content?.parts
           ?.filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
           ?.pop()?.text ?? "";
 
-      if (!rawText) continue;
+      if (!rawText) {
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: empty model JSON`);
+        if (jsonAttempt === 0) continue;
+        break;
+      }
 
       const cleaned = rawText.replace(/```(?:json)?\s*/gi, "").replace(/```/g, "").trim();
       const jsonStart = cleaned.indexOf("{");
       const jsonEnd = cleaned.lastIndexOf("}");
-      if (jsonStart === -1 || jsonEnd === -1) continue;
+      if (jsonStart === -1 || jsonEnd === -1) {
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}, malformed JSON: ${rawText.slice(0, 200)}`);
+        if (jsonAttempt === 0) continue;
+        break;
+      }
 
-      const parsed = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+      let parsed: Record<string, unknown>;
+      try {
+        const value = JSON.parse(cleaned.slice(jsonStart, jsonEnd + 1));
+        if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Expected JSON object");
+        parsed = value as Record<string, unknown>;
+      } catch {
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}, malformed JSON: ${rawText.slice(0, 200)}`);
+        if (jsonAttempt === 0) continue;
+        break;
+      }
       const categoryVal = typeof parsed.category === "string" ? parsed.category.toLowerCase().trim() : "";
       const validatedCategory = (VALID_JP_VN_CATEGORIES as string[]).includes(categoryVal)
         ? (categoryVal as JpVnProductCategory)
@@ -900,8 +936,11 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
               })()
             : "",
       };
-    } catch (err) {
-      console.warn(`[ScrapeLink] Gemini (${modelName}) extraction error:`, err);
+      } catch (err) {
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${responseStatus ?? "n/a"}: ${err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)}`);
+        scrapeKeyPool.markError(apiKey, 503, modelName);
+        break;
+      }
     }
   }
 
@@ -1175,7 +1214,7 @@ export async function POST(req: NextRequest) {
       data: result,
     });
   } catch (error) {
-    console.error("[ScrapeLink] Lỗi xử lý URL:", error);
-    return NextResponse.json({ error: "Lỗi xử lý đường dẫn." }, { status: 500 });
+    console.error("[ScrapeLink] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
+    return NextResponse.json({ error: "Không thể đọc thông tin sản phẩm từ trang này. Hãy kiểm tra link sàn Nhật rồi thử lại." }, { status: 500 });
   }
 }

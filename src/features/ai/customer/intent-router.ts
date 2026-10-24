@@ -22,7 +22,7 @@ const CATEGORIES = new Set(["cosmetics", "health", "gadgets", "anime"]);
 
 function cleanTerms(value: unknown, japanese = false): string[] {
   if (!Array.isArray(value)) return [];
-  return [...new Set(value.flatMap((item) => {
+  return [...new Set(value.slice(0, 12).flatMap((item) => {
     if (typeof item !== "string") return [];
     const text = item
       .replace(japanese ? /[^\p{L}\p{N}\sー々ヶ・-]/gu : /[^\p{L}\p{N}\s-]/gu, " ")
