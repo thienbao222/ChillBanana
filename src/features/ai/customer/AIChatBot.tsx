@@ -16,6 +16,7 @@ import NeoUniverseSprite, { NeoUniverseAnimation } from "@/components/NeoUnivers
 import { useCart } from "@/context/CartContext";
 import { useToast } from "@/context/ToastContext";
 import type { ProductCardData } from "@/features/ai/customer/support-tools";
+import { normalizeSupportText } from "@/features/ai/customer/support-policy";
 
 interface Message {
   id: string;
@@ -25,6 +26,7 @@ interface Message {
   imagePreviewUrl?: string;
   sources?: MessageSource[];
   productCards?: ProductCardData[];
+  autoAddedProduct?: ProductCardData;
   time: string;
 }
 
@@ -719,6 +721,36 @@ export default function AIChatBot() {
             })
           : [];
         const productCards: ProductCardData[] = Array.isArray(data.productCards) ? data.productCards : [];
+        let autoAddedProduct: ProductCardData | undefined;
+
+        // BƯỚC C: Khi khách yêu cầu rõ ràng VÀ chỉ có đúng 1 sản phẩm khớp chắc chắn VÀ còn hàng
+        const normUserQuery = normalizeSupportText(query);
+        const isExplicitAutoAdd =
+          /\b(tu\s+them|tu\s+cho|tu\s+bo|tu\s+dat)\b/i.test(normUserQuery) ||
+          (/\b(them|cho|bo|dat)\b/i.test(normUserQuery) &&
+            /\b(vao\s+gio|gio\s+hang|cart)\b/i.test(normUserQuery) &&
+            /\b(giup|ho|cho)\s+(toi|minh|em|anh|chi)\b/i.test(normUserQuery));
+
+        if (isExplicitAutoAdd && productCards.length === 1 && productCards[0].inStock) {
+          const target = productCards[0];
+          const effectiveVnd = target.priceVnd ?? Math.round(target.priceJpy * (exchangeRate || 172));
+          const added = addToCart({
+            id: target.id,
+            name: target.name,
+            priceJpy: target.priceJpy,
+            priceVnd: effectiveVnd,
+            weightKg: target.weightKg ?? 0.5,
+            imageUrl: target.imageUrl,
+            originalStore: target.originalStore || "Catalog ChillBanana",
+            category: target.category,
+            stockSlots: target.inStock ? 5 : 0,
+          });
+          if (added) {
+            autoAddedProduct = target;
+            toast.success(`Đã thêm "${target.name}" vào giỏ hàng.`);
+          }
+        }
+
         const botMsg: Message = {
           id: "bot-" + Date.now(),
           sender: "bot",
@@ -726,6 +758,7 @@ export default function AIChatBot() {
           isGuardrail: data.isGuardrailTriggered,
           sources,
           productCards,
+          autoAddedProduct,
           time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
         };
         setMessages((prev) => [...prev, botMsg]);
@@ -1243,6 +1276,20 @@ export default function AIChatBot() {
                           onViewDetails={handleViewProductDetails}
                         />
                       )}
+                      {message.autoAddedProduct && (
+                        <div className="mt-2 p-2 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-1.5 text-emerald-900">
+                          <span className="text-[10px] font-semibold truncate">
+                            ✓ Đã thêm <strong>{message.autoAddedProduct.name}</strong> vào giỏ hàng
+                          </span>
+                          <button
+                            type="button"
+                            onClick={openCart}
+                            className="shrink-0 px-2 py-0.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-bold transition-all"
+                          >
+                            Mở giỏ
+                          </button>
+                        </div>
+                      )}
                       {message.sender === "bot" && message.sources?.length ? (
                         <div className="mt-2 border-t border-slate-100 pt-1.5 text-[9px] text-slate-500">
                           Kiểm tra lúc {formatSourceTime(message.sources[0].checkedAt)} · {message.sources.map((source, index) => (
@@ -1391,6 +1438,24 @@ export default function AIChatBot() {
                       onAddToCart={handleAddProductToCart}
                       onViewDetails={handleViewProductDetails}
                     />
+                  )}
+                  {msg.autoAddedProduct && (
+                    <div className="mt-2.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-between gap-2 text-emerald-900">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-emerald-600 font-bold">✓</span>
+                        <span className="text-[11px] font-semibold truncate">
+                          Đã thêm <strong>{msg.autoAddedProduct.name}</strong> vào giỏ hàng
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={openCart}
+                        className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-sm transition-all"
+                      >
+                        <ShoppingCart className="w-3 h-3" />
+                        <span>Mở giỏ hàng</span>
+                      </button>
+                    </div>
                   )}
                   {msg.sender === "bot" && msg.sources?.length ? (
                     <div className="mt-2 border-t border-slate-100 pt-2 text-[10px] leading-relaxed text-slate-500">
