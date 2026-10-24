@@ -46,9 +46,9 @@ function AdminDashboardPageInner() {
   // Tab đang chọn
   const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase" | "settings" | "audit" | "sandbox">("orders");
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
-  const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("overview");
+  const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("auto");
 
-  const openAnalytics = (section: AnalyticsSection, module: AdminAiModuleId = "overview") => {
+  const openAnalytics = (section: AnalyticsSection, module: AdminAiModuleId = "auto") => {
     setAnalyticsInitialSection(section);
     setAnalyticsInitialModule(module);
     setActiveTab("analytics");

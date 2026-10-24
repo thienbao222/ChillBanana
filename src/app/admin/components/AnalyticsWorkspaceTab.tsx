@@ -20,7 +20,7 @@ const sections: { id: AnalyticsSection; label: string; description: string; icon
   { id: "assistant", label: "AI Agent", description: "Hỏi dữ liệu theo từng nghiệp vụ", icon: <Sparkles className="h-4 w-4" /> },
 ];
 
-export default function AnalyticsWorkspaceTab({ initialSection = "reports", initialAgentModule = "overview" }: Props) {
+export default function AnalyticsWorkspaceTab({ initialSection = "reports", initialAgentModule = "auto" }: Props) {
   const [section, setSection] = useState<AnalyticsSection>(initialSection);
   const [agentModule, setAgentModule] = useState<AdminAiModuleId>(initialAgentModule);
   const [agentQuestion, setAgentQuestion] = useState("");

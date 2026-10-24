@@ -1,32 +1,44 @@
 "use client";
 
 import React, { FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles } from "lucide-react";
+import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles, CheckCheck, Truck, CreditCard, Mail } from "lucide-react";
 import { ADMIN_AI_MODULES, AdminAiModuleId } from "./definitions";
+import type { ActionItem } from "./action-items";
 
 type AgentMessage = {
   id: string;
   role: "user" | "assistant";
   content: string;
   dataAsOf?: string;
+  resolvedModules?: string[];
 };
 
 const moduleIcons: Record<AdminAiModuleId, React.ReactNode> = {
+  auto: <Sparkles className="h-4 w-4 text-amber-500" />,
   overview: <Sparkles className="h-4 w-4" />,
   reports: <BarChart3 className="h-4 w-4" />,
   trends: <MessageSquareText className="h-4 w-4" />,
   orders: <ClipboardList className="h-4 w-4" />,
   products: <Boxes className="h-4 w-4" />,
   customers: <Users className="h-4 w-4" />,
+  approvals: <CheckCheck className="h-4 w-4" />,
+  logistics: <Truck className="h-4 w-4" />,
+  payments: <CreditCard className="h-4 w-4" />,
+  emails: <Mail className="h-4 w-4" />,
 };
 
 const quickPrompts: Record<AdminAiModuleId, string[]> = {
+  auto: ["Hôm nay có những vấn đề gì cần ưu tiên xử lý?", "Tình hình đơn hàng chờ duyệt giá và thanh toán?", "Có đơn hàng nào đứng yên hoặc email gửi lỗi không?"],
   overview: ["Tóm tắt tình hình hiện tại và các điểm cần chú ý.", "Có số liệu nào tăng hoặc giảm đáng chú ý?"],
   reports: ["So sánh 30 ngày gần nhất với 30 ngày trước đó.", "Giải thích doanh thu thực thu và giá trị đơn ước tính."],
   trends: ["Các chủ đề nào được ghi nhận nhiều nhất trong 30 ngày?", "Dữ liệu chat có giới hạn gì trước khi dùng để ra quyết định?"],
   orders: ["Có bao nhiêu đơn chờ cọc quá 3 ngày?", "Đơn nào đang mở lâu nhất và đang ở trạng thái nào?"],
   products: ["Sản phẩm nào đang còn ít suất hiển thị?", "Tên mặt hàng nào có nhiều đơn nhất trong 30 ngày?"],
   customers: ["Tóm tắt số khách đăng ký mới trong 30 ngày.", "So sánh số phiên chat với số đơn theo loại khách."],
+  approvals: ["Có bao nhiêu đơn chờ duyệt giá quá 4 giờ?", "Những đơn nào chưa duyệt giá mà cân nặng bằng 0?", "Đơn chờ cọc nào sắp hết hạn giữ chỗ?"],
+  logistics: ["Những đơn nào đứng yên quá 3 ngày theo từng trạng thái?", "Vận đơn VN->JP nào có hàng cần lưu ý kiểm dịch MAFF?"],
+  payments: ["Có đơn nào khách đã cọc nhưng trạng thái vẫn là chờ cọc không?", "Tỷ giá hiện tại có bị cũ hoặc biến động không?"],
+  emails: ["Có bao nhiêu email thông báo đang bị lỗi cần gửi lại?", "Các lỗi email gần đây chủ yếu là gì?"],
 };
 
 function renderAnswer(content: string) {
@@ -41,13 +53,14 @@ function renderAnswer(content: string) {
   });
 }
 
-export default function AdminAgentTab({ initialModule = "overview", initialQuestion = "" }: { initialModule?: AdminAiModuleId; initialQuestion?: string }) {
+export default function AdminAgentTab({ initialModule = "auto", initialQuestion = "" }: { initialModule?: AdminAiModuleId; initialQuestion?: string }) {
   const [moduleId, setModuleId] = useState<AdminAiModuleId>(initialModule);
   const [messages, setMessages] = useState<AgentMessage[]>([]);
   const [question, setQuestion] = useState(initialQuestion);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [operationalData, setOperationalData] = useState<any>(null);
+  const [actionItems, setActionItems] = useState<ActionItem[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,6 +68,13 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
       .then((res) => res.json())
       .then((data) => {
         if (data.overview) setOperationalData(data);
+      })
+      .catch(() => { /* silent fallback */ });
+
+    fetch("/api/admin/action-items")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.actionItems)) setActionItems(data.actionItems);
       })
       .catch(() => { /* silent fallback */ });
   }, []);
@@ -100,6 +120,7 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
         role: "assistant",
         content: data.answer,
         dataAsOf: data.dataAsOf,
+        resolvedModules: data.resolvedModules,
       }]);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Có lỗi khi kết nối trợ lý AI.";
@@ -165,6 +186,76 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
           <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:p-5">
             {messages.length === 0 ? (
               <div className="mx-auto max-w-4xl py-4 space-y-6">
+                {/* Việc cần làm hôm nay — Tính toán bằng quy tắc xác định */}
+                {actionItems.length > 0 && (
+                  <div className="rounded-2xl border border-amber-200/90 bg-gradient-to-r from-amber-50/70 to-orange-50/50 p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-5 w-5 items-center justify-center rounded-lg bg-amber-500 text-white font-bold text-xs">
+                          !
+                        </span>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950">
+                          Việc cần làm hôm nay ({actionItems.length} việc)
+                        </h4>
+                      </div>
+                      <span className="text-[10px] text-amber-800 font-medium">Quy tắc xác định · AI giải thích</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                      {actionItems.map((item) => (
+                        <div key={item.id} className="rounded-xl border border-amber-200/90 bg-white p-3.5 shadow-sm flex flex-col justify-between hover:shadow transition">
+                          <div>
+                            <div className="flex items-center justify-between gap-1 mb-1.5">
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                item.priority === "high" ? "bg-rose-100 text-rose-800" : "bg-amber-100 text-amber-800"
+                              }`}>
+                                {item.priority === "high" ? "Khẩn cấp" : "Cần xử lý"}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-semibold">{item.itemCount} đơn/mục</span>
+                            </div>
+                            <h5 className="text-xs font-bold text-slate-900">{item.title}</h5>
+                            <p className="mt-1 text-[11px] text-slate-600">{item.reason}</p>
+                            {item.aiExplanation && (
+                              <p className="mt-1.5 text-[11px] text-amber-900 bg-amber-50/80 rounded p-1.5 border border-amber-100 font-medium">
+                                💡 {item.aiExplanation}
+                              </p>
+                            )}
+                            {item.orderCodes.length > 0 && (
+                              <div className="mt-2 flex flex-wrap gap-1">
+                                {item.orderCodes.slice(0, 4).map((c) => (
+                                  <span key={c} className="font-mono text-[10px] bg-slate-100 px-1.5 py-0.5 rounded text-slate-700">
+                                    {c}
+                                  </span>
+                                ))}
+                                {item.orderCodes.length > 4 && (
+                                  <span className="text-[10px] bg-slate-100 px-1 py-0.5 rounded text-slate-500">
+                                    +{item.orderCodes.length - 4}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between">
+                            <a
+                              href={item.deepLink}
+                              className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1 transition"
+                            >
+                              Mở xử lý ngay →
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => executePrompt(`Phân tích và hướng dẫn xử lý cho đầu việc: "${item.title}". Danh sách mã: ${item.orderCodes.join(", ")}`)}
+                              className="text-[11px] text-slate-500 hover:text-navy-900 transition underline"
+                            >
+                              Hỏi trợ lý
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* Active AI Ops: Live Operational Cards */}
                 <div>
                   <div className="flex items-center justify-between mb-3 px-1">
@@ -395,6 +486,14 @@ export default function AdminAgentTab({ initialModule = "overview", initialQuest
             ) : messages.map((message) => (
               <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div className={`max-w-[92%] rounded-2xl px-4 py-3 sm:max-w-[82%] ${message.role === "user" ? "rounded-br-md bg-navy-900 text-white" : "rounded-bl-md border border-slate-200 bg-white text-slate-800 shadow-sm"}`}>
+                  {message.role === "assistant" && message.resolvedModules && message.resolvedModules.length > 0 && (
+                    <div className="mb-2 flex items-center gap-1.5 flex-wrap">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+                        <Sparkles className="h-3 w-3 text-amber-600" />
+                        Tự động chọn: {message.resolvedModules.join(", ")}
+                      </span>
+                    </div>
+                  )}
                   <div className="break-words text-sm leading-relaxed">{message.role === "assistant" ? renderAnswer(message.content) : <div className="whitespace-pre-wrap">{message.content}</div>}</div>
                   {message.dataAsOf && <div className="mt-2 border-t border-slate-100 pt-1.5 text-[10px] text-slate-400">Snapshot dữ liệu: {new Date(message.dataAsOf).toLocaleString("vi-VN")}</div>}
                 </div>

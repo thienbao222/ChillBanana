@@ -963,3 +963,21 @@ export async function sendPasswordResetEmail({
   }, transporter);
 }
 
+export async function sendAdminDirectEmail(params: {
+  orderId?: string;
+  to: string;
+  subject: string;
+  html: string;
+  emailType?: string;
+  payload?: Record<string, unknown>;
+}): Promise<boolean> {
+  return deliverLoggedEmail({
+    emailType: params.emailType || "admin-custom-email",
+    orderId: params.orderId,
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    payload: params.payload,
+  }, getTransporter());
+}
+

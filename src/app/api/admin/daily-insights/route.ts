@@ -21,6 +21,7 @@ import { adminKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
 import { requireAdmin } from "@/lib/admin-guard";
 import { isRecordedPaymentStatus } from "@/features/payments/policy";
+import { getDailyActionItems } from "@/features/ai/admin/action-items";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
@@ -310,12 +311,15 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
       insight = generateFallbackDailyInsightMarkdown(snapshot);
     }
 
+    const actionItems = await getDailyActionItems().catch(() => []);
+
     const snapshotSummary = {
       orders24h: snapshot.orders.new24h,
       chats24h: snapshot.chat.sessions24h,
       complaints24h: snapshot.chat.complaints24h,
       stuckOrders: snapshot.orders.stuckInTransit,
       lowStockCount: snapshot.catalog.lowStock.length,
+      actionItems,
     };
     const localDateParts = new Intl.DateTimeFormat("en-CA", {
       timeZone: "Asia/Ho_Chi_Minh", year: "numeric", month: "2-digit", day: "2-digit",
@@ -329,7 +333,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
         periodEnd: new Date(snapshot.periodEnd),
         generatedAt: new Date(snapshot.generatedAt),
         insight,
-        snapshotSummary,
+        snapshotSummary: snapshotSummary as any,
       },
       create: {
         businessDate,
@@ -337,7 +341,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
         periodEnd: new Date(snapshot.periodEnd),
         generatedAt: new Date(snapshot.generatedAt),
         insight,
-        snapshotSummary,
+        snapshotSummary: snapshotSummary as any,
       },
     });
 
@@ -358,6 +362,13 @@ export async function GET(req: NextRequest) {
 
   try {
     const report = await prisma.adminDailyInsight.findFirst({ orderBy: { businessDate: "desc" } });
+    if (report && !(report.snapshotSummary as any)?.actionItems) {
+      const actionItems = await getDailyActionItems().catch(() => []);
+      (report as any).snapshotSummary = {
+        ...((report.snapshotSummary as any) || {}),
+        actionItems,
+      };
+    }
     return NextResponse.json({ success: true, report });
   } catch (error) {
     console.error("[DailyInsight] Không đọc được báo cáo đã lưu:", error);

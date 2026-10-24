@@ -254,6 +254,7 @@ export default function AIChatBot() {
   const [imageAnalyzing, setImageAnalyzing] = useState(false);
   const [pendingImage, setPendingImage] = useState<PendingImage | null>(null);
   const [imageInputError, setImageInputError] = useState("");
+  const [dynamicQuickReplies, setDynamicQuickReplies] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingImageRef = useRef<PendingImage | null>(null);
   const imagePreviewUrlsRef = useRef(new Set<string>());
@@ -607,6 +608,8 @@ export default function AIChatBot() {
     const query = textToSend || inputMessage;
     if (!query.trim() || loading || imageAnalyzing) return;
 
+    setDynamicQuickReplies([]);
+
     const userMsg: Message = {
       id: "user-" + Date.now(),
       sender: "user",
@@ -721,6 +724,10 @@ export default function AIChatBot() {
             })
           : [];
         const productCards: ProductCardData[] = Array.isArray(data.productCards) ? data.productCards : [];
+        const quickReplies: string[] = Array.isArray(data.quickReplies)
+          ? data.quickReplies.filter((q: unknown): q is string => typeof q === "string" && q.trim().length > 0).slice(0, 3)
+          : [];
+        setDynamicQuickReplies(quickReplies);
         let autoAddedProduct: ProductCardData | undefined;
 
         // BƯỚC C: Khi khách yêu cầu rõ ràng VÀ chỉ có đúng 1 sản phẩm khớp chắc chắn VÀ còn hàng
@@ -1493,18 +1500,31 @@ export default function AIChatBot() {
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Quick Prompts */}
+          {/* Quick Prompts / Dynamic Quick Replies */}
           <div className="px-3 py-2 bg-white border-t border-slate-100 flex gap-1.5 overflow-x-auto no-scrollbar">
-            {quickPrompts.map((p, idx) => (
-              <button
-                key={idx}
-                disabled={loading || imageAnalyzing || Boolean(pendingImage)}
-                onClick={() => handleSendMessage(p.query)}
-                className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-banana-50 hover:text-banana-800 text-slate-700 text-[11px] font-semibold rounded-xl border border-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {p.label}
-              </button>
-            ))}
+            {dynamicQuickReplies.length > 0 ? (
+              dynamicQuickReplies.map((replyText, idx) => (
+                <button
+                  key={`qr-${idx}`}
+                  disabled={loading || imageAnalyzing || Boolean(pendingImage)}
+                  onClick={() => handleSendMessage(replyText)}
+                  className="whitespace-nowrap px-2.5 py-1 bg-banana-50 hover:bg-banana-100 text-banana-900 text-[11px] font-semibold rounded-xl border border-banana-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40 shadow-2xs"
+                >
+                  💡 {replyText}
+                </button>
+              ))
+            ) : (
+              quickPrompts.map((p, idx) => (
+                <button
+                  key={idx}
+                  disabled={loading || imageAnalyzing || Boolean(pendingImage)}
+                  onClick={() => handleSendMessage(p.query)}
+                  className="whitespace-nowrap px-2.5 py-1 bg-slate-100 hover:bg-banana-50 hover:text-banana-800 text-slate-700 text-[11px] font-semibold rounded-xl border border-slate-200 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {p.label}
+                </button>
+              ))
+            )}
           </div>
 
           {/* Input Box */}

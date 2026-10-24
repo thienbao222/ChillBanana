@@ -70,21 +70,28 @@ export class ApiKeyPool {
     return this.getNextKey();
   }
 
-  public markError(key: string, statusCode: number, modelName?: string): void {
+  public markError(key: string, statusCode: number, modelName?: string, retryAfterSeconds?: number): void {
     const stats = this.keyStats.get(key);
     if (!stats) return;
 
     if (statusCode === 404 || statusCode === 400) {
-      console.warn(`[ApiKeyPool:${this.envVarName}] model không khả dụng: ${modelName || "không xác định"}`);
+      console.warn(`[ApiKeyPool:${this.envVarName}] model không khả dụng (HTTP ${statusCode}): ${modelName || "không xác định"}`);
       return;
     }
 
     stats.errorCount++;
 
-    if (statusCode === 429 || statusCode === 503) {
+    if (statusCode === 429) {
+      let cooldownSec = 30;
+      if (typeof retryAfterSeconds === "number" && !isNaN(retryAfterSeconds)) {
+        cooldownSec = Math.min(60, Math.max(5, Math.round(retryAfterSeconds)));
+      }
       stats.status = "RATE_LIMITED";
-      stats.cooldownUntil = Date.now() + 60_000; // 60s cooldown
-      console.warn(`[ApiKeyPool:${this.envVarName}] Provider temporarily limited request (HTTP ${statusCode}). Cooldown 60s.`);
+      stats.cooldownUntil = Date.now() + cooldownSec * 1000;
+      console.warn(`[ApiKeyPool:${this.envVarName}] Provider temporarily limited request (HTTP 429). Cooldown ${cooldownSec}s.`);
+    } else if (statusCode === 500 || statusCode === 503) {
+      // HTTP 500/503: lỗi tạm thời của model, KHÔNG cooldown khóa
+      console.warn(`[ApiKeyPool:${this.envVarName}] Model temporary error (HTTP ${statusCode}). Không cooldown khóa.`);
     } else if (statusCode === 401 || statusCode === 403) {
       // BẢO MẬT (P2-02): Khóa key chết / bị thu hồi với status = 'DEAD' và cooldown 15 phút
       stats.status = "DEAD";

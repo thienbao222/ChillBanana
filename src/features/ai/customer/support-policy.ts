@@ -1,5 +1,6 @@
 export type CustomerSupportToolId =
   | "catalog_search"
+  | "product_comparison"
   | "quote_estimate"
   | "order_status"
   | "shipping_policy"
@@ -32,6 +33,7 @@ export interface SupportIntents {
   shipping: boolean;
   compatibility: boolean;
   addToCart: boolean;
+  comparison?: boolean;
   category: "cosmetics" | "health" | "gadgets" | "anime" | null;
   orderCode: string | null;
 }
@@ -111,7 +113,7 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
   const category = CATEGORY_PATTERNS.find(([, pattern]) => pattern.test(normalized))?.[0] ?? null;
   const orderCode = extractOrderCode(message);
   const orderStatus = Boolean(orderCode) || /\b(don hang|ma don|theo doi don|tinh trang don)\b/.test(normalized);
-  const quote = hasScrapedProduct || /\b(tinh gia|bao gia|uoc tinh|tong chi phi|gia ve viet nam|tinh bill|gia bao nhieu|bao nhieu tien)\b/.test(normalized);
+  const quote = hasScrapedProduct || /\b(tinh gia|bao gia|uoc tinh|tong chi phi|gia ve viet nam|tinh bill|gia bao nhieu|bao nhieu tien|gia|price|cost)\b/.test(normalized);
   const shipping = /\b(van chuyen|cuoc|phi ship|shipping|gop don|group buy|thoi gian giao|bao lau nhan|phi mua ho|phi dich vu|bieu phi|cach tinh phi|cach tinh gia|cong thuc tinh|dat coc)\b/.test(normalized);
   const compatibility = /\b(tuong thich|dien ap|100v|220v|bien ap|cong suat|dung o viet nam|cam truc tiep|am dun|noi com|may say)\b/.test(normalized);
   const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may|giay|gucci|t-fal|tfal|am dun|noi com|dong ho|tui|vi|ao|khoac|sneaker|shoes|kettle|figure|gundam|jpy|yen|trieu)\b/.test(normalized);
@@ -120,7 +122,12 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
     /\b(tu\s+them|them|cho|bo|dat)\b[^\n.?!]{0,120}\b(vao\s+gio|gio\s+hang|vao\s+cart|cart)\b/i.test(normalized) ||
     /\b(add\s+to\s+cart|mua\s+ngay|dat\s+mon\s+nay|mua\s+mon\s+nay|lay\s+mon\s+nay)\b/i.test(normalized);
 
-  return { catalog, quote, orderStatus, shipping, compatibility, addToCart, category, orderCode };
+  const comparison =
+    /\b(so\s+sanh|compare)\b/i.test(normalized) ||
+    (/\b(khac\s+nhau|khac\s+gi|nen\s+chon|nen\s+mua)\b/i.test(normalized) &&
+      /\b(va|voi|hay|hoac|and|vs|versus)\b/i.test(normalized));
+
+  return { catalog: catalog || comparison, quote, orderStatus, shipping, compatibility, addToCart, comparison, category, orderCode };
 }
 
 export function isValidOrderCode(value: string): boolean {
@@ -176,6 +183,7 @@ export function getRequestSlotLabel(stockSlots: number): string {
 
 export const CUSTOMER_SUPPORT_TOOL_REGISTRY = [
   { id: "catalog_search", access: "read-only", purpose: "Search the current website catalog" },
+  { id: "product_comparison", access: "read-only", purpose: "Compare two catalog products side-by-side with price, weight, voltage, and stock" },
   { id: "quote_estimate", access: "read-only", purpose: "Calculate a clearly labeled estimate using server pricing rules" },
   { id: "order_status", access: "read-only", purpose: "Read one order status after server-side ownership verification" },
   { id: "shipping_policy", access: "read-only", purpose: "Explain the configured shipping rate and group-buy rule" },
