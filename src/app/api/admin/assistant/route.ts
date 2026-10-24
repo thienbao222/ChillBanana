@@ -72,6 +72,31 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
     parts.push(`- **Đơn hàng cần chú ý (chậm tiến độ/chưa có tracking mới):** **${snapshot.stuckOrdersCount}** đơn.`);
   }
 
+  if (snapshot.scope === "approvals" || snapshot.unverifiedPriceCount !== undefined) {
+    parts.push(`- **Đơn chờ duyệt giá:** **${snapshot.unverifiedPriceCount ?? 0}** đơn (trong đó **${snapshot.unverifiedOver4HoursCount ?? 0}** đơn chờ > 4 giờ).`);
+    parts.push(`- **Đơn chờ cọc sắp hết hạn giữ chỗ:** **${snapshot.expiringReservationsCount ?? 0}** đơn.`);
+  }
+
+  if (snapshot.scope === "logistics" || snapshot.stalledCountsByStatus !== undefined) {
+    const stalledTotal = Object.values(snapshot.stalledCountsByStatus || {}).reduce((a: number, b: any) => a + Number(b), 0);
+    parts.push(`- **Đơn đứng yên ≥ 3 ngày:** **${stalledTotal}** đơn trên các chặng.`);
+    if (snapshot.maffQuarantineAlerts?.length) {
+      parts.push(`- **Vận đơn VN→JP cảnh báo kiểm dịch MAFF:** **${snapshot.maffQuarantineAlerts.length}** kiện.`);
+    }
+  }
+
+  if (snapshot.scope === "payments" || snapshot.mismatchedDepositCount !== undefined) {
+    parts.push(`- **Đơn đã nhận cọc nhưng chưa chuyển trạng thái:** **${snapshot.mismatchedDepositCount ?? 0}** đơn.`);
+    if (snapshot.exchangeRate) {
+      parts.push(`- **Tỷ giá hiện hành:** 1 JPY = **${snapshot.exchangeRate.roundedRate} VND** (${snapshot.exchangeRate.source}, cập nhật ${snapshot.exchangeRate.stalenessMinutes} phút trước).`);
+    }
+  }
+
+  if (snapshot.scope === "emails" || snapshot.failedCount !== undefined) {
+    parts.push(`- **Email gửi thất bại:** **${snapshot.failedCount ?? 0}** thư.`);
+    parts.push(`- **Email đang chờ thử lại:** **${snapshot.pendingRetryCount ?? 0}** thư.`);
+  }
+
   if (snapshot.catalog) {
     const total = snapshot.catalog.totalProducts ?? (Array.isArray(snapshot.catalog) ? snapshot.catalog.length : 0);
     parts.push(`- **Tổng sản phẩm mẫu Catalog:** **${total}** món.`);

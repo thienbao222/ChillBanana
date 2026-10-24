@@ -1,7 +1,7 @@
 "use client";
 
 import React, { FormEvent, useEffect, useRef, useState } from "react";
-import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles } from "lucide-react";
+import { ArrowUp, BarChart3, Bot, Boxes, ClipboardList, MessageSquareText, PackageSearch, Users, Sparkles, CheckCheck, Truck, CreditCard, Mail } from "lucide-react";
 import { ADMIN_AI_MODULES, AdminAiModuleId } from "./definitions";
 
 type AgentMessage = {
@@ -18,6 +18,10 @@ const moduleIcons: Record<AdminAiModuleId, React.ReactNode> = {
   orders: <ClipboardList className="h-4 w-4" />,
   products: <Boxes className="h-4 w-4" />,
   customers: <Users className="h-4 w-4" />,
+  approvals: <CheckCheck className="h-4 w-4" />,
+  logistics: <Truck className="h-4 w-4" />,
+  payments: <CreditCard className="h-4 w-4" />,
+  emails: <Mail className="h-4 w-4" />,
 };
 
 const quickPrompts: Record<AdminAiModuleId, string[]> = {
@@ -27,6 +31,10 @@ const quickPrompts: Record<AdminAiModuleId, string[]> = {
   orders: ["Có bao nhiêu đơn chờ cọc quá 3 ngày?", "Đơn nào đang mở lâu nhất và đang ở trạng thái nào?"],
   products: ["Sản phẩm nào đang còn ít suất hiển thị?", "Tên mặt hàng nào có nhiều đơn nhất trong 30 ngày?"],
   customers: ["Tóm tắt số khách đăng ký mới trong 30 ngày.", "So sánh số phiên chat với số đơn theo loại khách."],
+  approvals: ["Có bao nhiêu đơn chờ duyệt giá quá 4 giờ?", "Những đơn nào chưa duyệt giá mà cân nặng bằng 0?", "Đơn chờ cọc nào sắp hết hạn giữ chỗ?"],
+  logistics: ["Những đơn nào đứng yên quá 3 ngày theo từng trạng thái?", "Vận đơn VN->JP nào có hàng cần lưu ý kiểm dịch MAFF?"],
+  payments: ["Có đơn nào khách đã cọc nhưng trạng thái vẫn là chờ cọc không?", "Tỷ giá hiện tại có bị cũ hoặc biến động không?"],
+  emails: ["Có bao nhiêu email thông báo đang bị lỗi cần gửi lại?", "Các lỗi email gần đây chủ yếu là gì?"],
 };
 
 function renderAnswer(content: string) {
