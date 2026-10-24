@@ -133,12 +133,20 @@ function ChatProductCardList({
                   {product.name}
                 </h4>
                 <div className="mt-1 flex items-baseline gap-1.5 flex-wrap">
-                  <span className="text-xs font-extrabold text-banana-700">
-                    {product.priceVnd.toLocaleString("vi-VN")} đ
-                  </span>
-                  <span className="text-[10px] text-slate-400">
-                    ({product.priceJpy.toLocaleString("vi-VN")} ¥)
-                  </span>
+                  {product.priceVnd !== null && product.priceVnd !== undefined ? (
+                    <>
+                      <span className="text-xs font-extrabold text-banana-700">
+                        {product.priceVnd.toLocaleString("vi-VN")} đ
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        ({product.priceJpy.toLocaleString("vi-VN")} ¥)
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs font-extrabold text-banana-700">
+                      {product.priceJpy.toLocaleString("vi-VN")} ¥
+                    </span>
+                  )}
                 </div>
                 <div className="mt-0.5">
                   {inStock ? (

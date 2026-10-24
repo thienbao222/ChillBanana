@@ -426,7 +426,7 @@ export interface ProductCardData {
   name: string;
   imageUrl: string;
   priceJpy: number;
-  priceVnd: number;
+  priceVnd: number | null;
   inStock: boolean;
   weightKg?: number;
   originalStore?: string;
@@ -593,7 +593,7 @@ export async function searchCatalog(message: string, category: string | null): P
     const msgWords = new Set(tokenizeNormalizedWords(message));
     const detectedBrandNorm = translated.detectedBrand ? normalizeSupportText(translated.detectedBrand) : null;
 
-    const ranked = rows
+    const initialRanked = rows
       .map((product) => {
         const nameNorm = normalizeSupportText(product.name);
         const nameWords = new Set(tokenizeNormalizedWords(product.name));
@@ -663,7 +663,23 @@ export async function searchCatalog(message: string, category: string | null): P
         // (hoặc khớp trọn tên thương hiệu/sản phẩm). Không hiển thị sản phẩm chỉ khớp 1 từ chung chung.
         return matchedTermsCount >= 2 || isFullBrandMatch || isFullProductNameMatch;
       })
-      .sort((a, b) => b.score - a.score || b.product.createdAt.getTime() - a.product.createdAt.getTime())
+      .sort((a, b) => b.score - a.score || b.product.createdAt.getTime() - a.product.createdAt.getTime());
+
+    const maxScore = initialRanked.length > 0 ? initialRanked[0].score : 0;
+    const maxMatched = initialRanked.length > 0 ? Math.max(...initialRanked.map((r) => r.matchedTermsCount)) : 0;
+
+    const ranked = initialRanked
+      .filter(({ score, matchedTermsCount, isFullBrandMatch, isFullProductNameMatch }) => {
+        if (isFullProductNameMatch || isFullBrandMatch) return true;
+        if (terms.length >= 3) {
+          // Khi query có từ 3 từ khóa trở lên: loại bỏ các sản phẩm chỉ khớp từ generic
+          // khi đã có sản phẩm khớp nhiều từ khóa hơn
+          if (matchedTermsCount < Math.ceil(terms.length * 0.5)) return false;
+          if (matchedTermsCount < maxMatched - 1) return false;
+          if (score < maxScore * 0.6) return false;
+        }
+        return true;
+      })
       .slice(0, 5);
 
     let productResults = ranked.map(({ product }) => ({
@@ -1159,10 +1175,6 @@ export function isCommandOrConversationalMessage(text: string): boolean {
 }
 
 export function isFollowupQuery(message: string, currentTerms: string[]): boolean {
-  // Nếu tin nhắn hiện tại tự nó đã có từ 2 từ khóa trở lên -> KHÔNG gộp
-  if (currentTerms.length >= 2) {
-    return false;
-  }
   const trimmed = message.trim();
   const norm = normalizeSupportText(trimmed);
 
@@ -1174,6 +1186,15 @@ export function isFollowupQuery(message: string, currentTerms: string[]): boolea
   // Hỏi bổ sung ngân sách / khoảng giá
   const isBudgetFollowup =
     /^(khoảng|tầm|dưới|trên)?\s*(\d+[\d.,]*)\s*(k|nghìn|triệu|tr|jpy|yen|yên|¥|đ|vnd|man)?\b/i.test(trimmed);
+
+  if (isBudgetFollowup) {
+    return true;
+  }
+
+  // Nếu tin nhắn hiện tại tự nó đã có từ 2 từ khóa trở lên -> KHÔNG gộp
+  if (currentTerms.length >= 2) {
+    return false;
+  }
 
   // Cụm hỏi tiếp / kết quả
   const isContinuationPhrase =
@@ -1233,87 +1254,135 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   let productCards: ProductCardData[] = [];
   let cartReply: string | undefined;
+  let addToCartCatalogEvidence: SupportEvidence | null = null;
 
   if (intents.addToCart) {
-    // Tìm sản phẩm Catalog xuất hiện gần nhất trong lịch sử
-    let recentProduct: ProductCardData | null = null;
+    const currentTerms = extractCatalogSearchTerms(input.message);
 
-    if (input.history && input.history.length > 0) {
-      // 1. Kiểm tra nếu trong history có tin nhắn đã đính kèm productCards
-      for (let i = input.history.length - 1; i >= 0; i--) {
-        const item = input.history[i];
-        if (item.productCards && Array.isArray(item.productCards) && item.productCards.length > 0) {
-          recentProduct = item.productCards[0];
-          break;
-        }
+    if (currentTerms.length > 0) {
+      // 1. Khách có tên sản phẩm trong tin nhắn hiện tại -> tìm trong catalog theo các từ khóa đó
+      addToCartCatalogEvidence = await searchCatalog(input.message, intents.category);
+      const matchedProducts = (addToCartCatalogEvidence.known.products as any[]) || [];
+
+      if (matchedProducts.length === 1) {
+        // 3. Đúng 1 sản phẩm khớp chắc chắn -> trả productCards chỉ với sản phẩm đó
+        const p = matchedProducts[0];
+        productCards = [
+          {
+            id: p.id,
+            name: p.name,
+            imageUrl: p.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+            priceJpy: p.priceJpy,
+            priceVnd: p.estimatedProductPriceVnd ?? null,
+            inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+            weightKg: p.estimatedWeightKg,
+            originalStore: p.originalStore,
+            category: p.category,
+          },
+        ];
+        cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
+      } else if (matchedProducts.length >= 2) {
+        // 4. Có 2-3 sản phẩm khớp -> trả tối đa 3 thẻ và hỏi "Quý khách muốn thêm món nào?". KHÔNG chọn thay khách
+        productCards = matchedProducts.slice(0, 3).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          imageUrl: p.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+          priceJpy: p.priceJpy,
+          priceVnd: p.estimatedProductPriceVnd ?? null,
+          inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+          weightKg: p.estimatedWeightKg,
+          originalStore: p.originalStore,
+          category: p.category,
+        }));
+        cartReply = "ChillBanana tìm thấy một số sản phẩm phù hợp. Quý khách muốn thêm món nào vào giỏ hàng ạ?";
+      } else {
+        // 5. Không khớp sản phẩm nào -> nói chưa tìm thấy trong catalog, không lấy sản phẩm cũ trong lịch sử để thay thế.
+        // Tuyệt đối không bao giờ trả thẻ của một sản phẩm khác với sản phẩm khách vừa gọi tên.
+        productCards = [];
+        cartReply = "ChillBanana chưa tìm thấy sản phẩm này trong catalog. Quý khách có thể gửi link sản phẩm từ sàn Nhật để được hỗ trợ mua hộ nhé.";
       }
+    } else {
+      // 2. Tin nhắn dùng từ chỉ định (đó, này, nó...) hoặc không có tên sản phẩm -> dùng sản phẩm Catalog gần nhất trong lịch sử
+      let recentProduct: ProductCardData | null = null;
 
-      // 2. Nếu không có sẵn productCards, tìm trong catalog theo nội dung tin nhắn trước đó
-      if (!recentProduct) {
-        const pastTexts = input.history
-          .map((h) => (typeof h.text === "string" ? h.text : ""))
-          .filter(Boolean);
+      if (input.history && input.history.length > 0) {
+        for (let i = input.history.length - 1; i >= 0; i--) {
+          const item = input.history[i];
+          if (item.productCards && Array.isArray(item.productCards) && item.productCards.length > 0) {
+            recentProduct = item.productCards[0];
+            break;
+          }
+        }
 
-        if (pastTexts.length > 0) {
-          try {
-            const allProducts = await prisma.product.findMany({
-              take: 50,
-              orderBy: { createdAt: "desc" },
-              select: {
-                id: true,
-                name: true,
-                imageUrl: true,
-                priceJpy: true,
-                priceVnd: true,
-                weightKg: true,
-                originalStore: true,
-                category: true,
-                stockSlots: true,
-              },
-            });
+        // Nếu trong history không có sẵn productCards, tìm theo nội dung text trong lịch sử
+        if (!recentProduct) {
+          const pastTexts = input.history
+            .map((h) => (typeof h.text === "string" ? h.text : ""))
+            .filter(Boolean);
 
-            for (let i = pastTexts.length - 1; i >= 0; i--) {
-              const textNorm = normalizeSupportText(pastTexts[i]);
-              const matched = allProducts.find((p) => {
-                const pNameNorm = normalizeSupportText(p.name);
-                return textNorm.includes(pNameNorm) || (pNameNorm.length >= 6 && textNorm.includes(pNameNorm.slice(0, 20)));
+          if (pastTexts.length > 0) {
+            try {
+              const allProducts = await prisma.product.findMany({
+                take: 50,
+                orderBy: { createdAt: "desc" },
+                select: {
+                  id: true,
+                  name: true,
+                  imageUrl: true,
+                  priceJpy: true,
+                  priceVnd: true,
+                  weightKg: true,
+                  originalStore: true,
+                  category: true,
+                  stockSlots: true,
+                },
               });
-              if (matched) {
-                recentProduct = {
-                  id: matched.id,
-                  name: matched.name,
-                  imageUrl: matched.imageUrl,
-                  priceJpy: matched.priceJpy,
-                  priceVnd: matched.priceVnd || Math.round(matched.priceJpy * 165),
-                  inStock: matched.stockSlots > 0,
-                  weightKg: matched.weightKg,
-                  originalStore: matched.originalStore,
-                  category: matched.category,
-                };
-                break;
+
+              for (let i = pastTexts.length - 1; i >= 0; i--) {
+                const textNorm = normalizeSupportText(pastTexts[i]);
+                const matched = allProducts.find((p) => {
+                  const pNameNorm = normalizeSupportText(p.name);
+                  return textNorm.includes(pNameNorm) || (pNameNorm.length >= 6 && textNorm.includes(pNameNorm.slice(0, 20)));
+                });
+                if (matched) {
+                  recentProduct = {
+                    id: matched.id,
+                    name: matched.name,
+                    imageUrl: matched.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+                    priceJpy: matched.priceJpy,
+                    priceVnd: matched.priceVnd || null,
+                    inStock: matched.stockSlots > 0,
+                    weightKg: matched.weightKg,
+                    originalStore: matched.originalStore,
+                    category: matched.category,
+                  };
+                  break;
+                }
               }
+            } catch {
+              // Bỏ qua lỗi DB
             }
-          } catch {
-            // bỏ qua nếu lỗi DB
           }
         }
       }
-    }
 
-    if (recentProduct) {
-      productCards = [recentProduct];
-      cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
-    } else {
-      cartReply = "ChillBanana chưa tìm thấy sản phẩm Quý khách vừa xem để thêm vào giỏ. Quý khách vui lòng chọn hoặc tìm kiếm sản phẩm trước nhé.";
+      if (recentProduct) {
+        productCards = [recentProduct];
+        cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
+      } else {
+        productCards = [];
+        cartReply = "ChillBanana chưa tìm thấy sản phẩm nào trong cuộc trò chuyện để thêm vào giỏ. Quý khách vui lòng chọn hoặc tìm kiếm sản phẩm trước nhé.";
+      }
     }
   }
 
   const jobs: Array<Promise<SupportEvidence | { evidence: SupportEvidence; guardedReply?: string; quoteFooter?: string }>> = [];
 
-  const catalogPromise = intents.catalog || intents.compatibility
-    ? searchCatalog(effectiveMessage, intents.category)
-    : null;
-  if (intents.catalog && catalogPromise) jobs.push(catalogPromise);
+  const catalogPromise =
+    (intents.catalog || intents.compatibility) && !intents.addToCart
+      ? searchCatalog(effectiveMessage, intents.category)
+      : null;
+  if (intents.catalog && !intents.addToCart && catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
   if (intents.orderStatus) jobs.push(lookupOrderStatus(intents.orderCode, input.customerId, input.guestOrderAccessToken));
   if (intents.shipping) jobs.push(getShippingPolicyEvidence());
@@ -1323,6 +1392,9 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const results = await Promise.all(jobs);
   const evidence: SupportEvidence[] = [];
+  if (addToCartCatalogEvidence) {
+    evidence.push(addToCartCatalogEvidence);
+  }
   let orderReply: string | undefined;
   let quoteReply: string | undefined;
   let quoteFooter: string | undefined;
@@ -1338,7 +1410,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   }
 
   // Nếu chưa có productCards từ add_to_cart, lấy danh sách sản phẩm Catalog từ catalog_search
-  if (productCards.length === 0) {
+  if (!intents.addToCart && productCards.length === 0) {
     const catalogEvidence = evidence.find((e) => e.toolId === "catalog_search");
     const rawProducts = catalogEvidence?.known?.products;
     if (Array.isArray(rawProducts) && rawProducts.length > 0) {

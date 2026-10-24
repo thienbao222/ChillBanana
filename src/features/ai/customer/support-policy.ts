@@ -45,14 +45,14 @@ const CATEGORY_PATTERNS: Array<[SupportIntents["category"], RegExp]> = [
 
 export const SEARCH_STOP_WORDS = new Set([
   // Đại từ, xưng hô
-  "anh", "chi", "em", "bac", "ban", "toi", "minh", "ben", "shop", "ad", "admin",
+  "anh", "chi", "em", "bac", "ban", "toi", "minh", "no", "ben", "shop", "ad", "admin",
   // Trợ từ, hư từ, liên từ tiếng Việt phổ biến
   "co", "khong", "kem", "them", "do", "nay", "kia", "vao", "ra", "gio", "hang",
   "cua", "cho", "thi", "sao", "nao", "gi", "muon", "can", "xem", "giup", "voi", "va",
   "hay", "hoac", "bao", "nhieu", "la", "nhu", "nhat", "tu", "van", "xin", "y", "de",
   "dang", "mot", "cac", "nhung", "tren", "duoi", "trong", "ngoai", "the", "vay",
   "a", "oi", "nhe", "nha", "chao", "hoi", "cam", "on", "duoc", "bi", "lai", "di",
-  "den", "toi", "ve", "theo", "chiec", "cai", "con", "size", "mau",
+  "den", "toi", "ve", "theo", "chiec", "cai", "con", "size", "mau", "vua", "roi", "khoang",
   // Thuật ngữ mua bán chung chung / website
   "website", "chillbanana", "san", "pham", "mua", "ban", "loai", "tim", "kiem",
   "gia", "tam", "trieu", "dong", "nhan", "loi", "neo", "nhatban", "noidia",
@@ -76,7 +76,8 @@ export function normalizeSupportText(value: string): string {
 }
 
 export function extractCatalogSearchTerms(message: string): string[] {
-  const rawTokens = message.match(/[\p{L}\p{N}]+(?:[-_][\p{L}\p{N}]+)*/gu)?.filter((t) => t.length >= 2) ?? [];
+  const rawTokens =
+    message.match(/[\p{L}\p{N}]+(?:[-_][\p{L}\p{N}]+)*/gu)?.filter((t) => t.length >= 2 || /^\p{N}+$/u.test(t)) ?? [];
   const tokens = rawTokens.filter((token) => !SEARCH_STOP_WORDS.has(normalizeSupportText(token)));
   return [...new Set(tokens.map((token) => token.slice(0, 60)))].slice(0, 6);
 }
@@ -99,7 +100,7 @@ export function detectSupportIntents(message: string, hasScrapedProduct = false)
   const catalog = Boolean(category) || /\b(tim|xem|goi y|tu van|san pham|mua hang|co ban|con ban|danh muc|dong may|giay|gucci|t-fal|tfal|am dun|noi com|dong ho|tui|vi|ao|khoac|sneaker|shoes|kettle|figure|gundam|jpy|yen|trieu)\b/.test(normalized);
 
   const addToCart =
-    /\b(them|cho|bo|dat)\s+(?:[\w\s]{0,30}\s+)?(vao\s+gio|gio\s+hang|vao\s+cart|cart)\b/i.test(normalized) ||
+    /\b(tu\s+them|them|cho|bo|dat)\b[^\n.?!]{0,120}\b(vao\s+gio|gio\s+hang|vao\s+cart|cart)\b/i.test(normalized) ||
     /\b(add\s+to\s+cart|mua\s+ngay|dat\s+mon\s+nay|mua\s+mon\s+nay|lay\s+mon\s+nay)\b/i.test(normalized);
 
   return { catalog, quote, orderStatus, shipping, compatibility, addToCart, category, orderCode };
