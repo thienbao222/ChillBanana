@@ -17,7 +17,8 @@ import {
   Columns,
   ChevronRight,
   Ban,
-  Mail
+  Mail,
+  Sparkles
 } from "lucide-react";
 import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
@@ -71,6 +72,15 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [priceApprovalWeight, setPriceApprovalWeight] = useState("");
   const [hasManualVerifiedNoLink, setHasManualVerifiedNoLink] = useState(false);
   const [isApprovingPrice, setIsApprovingPrice] = useState(false);
+  const [isCheckingPrice, setIsCheckingPrice] = useState(false);
+  const [priceCheckResult, setPriceCheckResult] = useState<{
+    scrapedPriceJpy: number | null;
+    diffJpy: number | null;
+    diffPercent: number | null;
+    storeName: string | null;
+    warnings: string[];
+    suggestedJpy: number;
+  } | null>(null);
   const [paymentRecordOrder, setPaymentRecordOrder] = useState<StoredOrder | null>(null);
   const [paymentAmountVnd, setPaymentAmountVnd] = useState("");
   const [paymentReference, setPaymentReference] = useState("");
@@ -244,6 +254,33 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
     setPriceApprovalJpy(String(order.priceJpy || ""));
     setPriceApprovalWeight(String(order.weightKg || "0"));
     setHasManualVerifiedNoLink(false);
+    setPriceCheckResult(null);
+  };
+
+  const handleAiPriceCheck = async () => {
+    if (!priceApprovalOrder) return;
+    setIsCheckingPrice(true);
+    try {
+      const res = await fetch("/api/admin/price-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderCode: priceApprovalOrder.orderCode }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || "Không thể kiểm tra giá bằng AI.");
+      }
+      setPriceCheckResult(data);
+      if (data.scrapedPriceJpy && data.scrapedPriceJpy > 0) {
+        adminToast.success(`AI tìm thấy giá sàn gốc: ${data.scrapedPriceJpy.toLocaleString()} ¥`);
+      } else {
+        adminToast.info("Đã hoàn tất kiểm tra. Vui lòng xem các cảnh báo bên dưới.");
+      }
+    } catch (err) {
+      adminToast.error(err instanceof Error ? err.message : "Có lỗi khi kiểm tra giá.");
+    } finally {
+      setIsCheckingPrice(false);
+    }
   };
 
   const handleVerifyPrice = async (e: React.FormEvent) => {
@@ -1402,6 +1439,78 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                     </label>
                   </div>
                 )}
+
+                {/* HỖ TRỢ KIỂM TRA GIÁ BẰNG AI */}
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-3.5 space-y-2.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                    <div>
+                      <h5 className="text-xs font-bold text-amber-950 flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                        Hỗ Trợ Báo Giá Bằng AI (Tự Động Quét Sàn Gốc)
+                      </h5>
+                      <p className="text-[11px] text-amber-800/90 mt-0.5">
+                        Bóc tách giá thời gian thực từ link sàn Nhật để phát hiện chênh lệch và cảnh báo rủi ro.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAiPriceCheck}
+                      disabled={isCheckingPrice}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shadow-sm transition disabled:opacity-60 shrink-0"
+                    >
+                      {isCheckingPrice ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                      <span>{isCheckingPrice ? "Đang quét..." : "Kiểm tra giá bằng AI"}</span>
+                    </button>
+                  </div>
+
+                  {priceCheckResult && (
+                    <div className="rounded-xl border border-amber-200/90 bg-white p-3 space-y-2 text-xs">
+                      {priceCheckResult.scrapedPriceJpy ? (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-emerald-50 border border-emerald-200 rounded-lg p-2.5">
+                          <div>
+                            <span className="text-emerald-900 font-bold">
+                              Giá quét trên sàn {priceCheckResult.storeName ? `(${priceCheckResult.storeName})` : ""}:
+                            </span>{" "}
+                            <strong className="text-emerald-800 text-sm font-mono">
+                              {priceCheckResult.scrapedPriceJpy.toLocaleString()} ¥
+                            </strong>
+                            {priceCheckResult.diffPercent !== null && (
+                              <span className={`ml-2 text-[11px] font-semibold ${priceCheckResult.diffPercent > 0 ? "text-rose-700" : "text-emerald-700"}`}>
+                                ({priceCheckResult.diffPercent > 0 ? "+" : ""}{priceCheckResult.diffPercent}% so với khách lưu)
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setPriceApprovalJpy(String(priceCheckResult.suggestedJpy))}
+                            className="px-2.5 py-1 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold transition shrink-0"
+                          >
+                            Áp dụng giá này →
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-slate-600 bg-slate-50 border border-slate-200 rounded-lg p-2">
+                          Chưa phát hiện được giá số trên trang nguồn. Quản trị viên cần mở link kiểm tra thủ công.
+                        </div>
+                      )}
+
+                      {priceCheckResult.warnings.length > 0 && (
+                        <div className="space-y-1 pt-1">
+                          {priceCheckResult.warnings.map((w, idx) => (
+                            <div key={idx} className="flex items-start gap-1.5 text-amber-900 text-[11px]">
+                              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                              <span>{w}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      <p className="text-[10px] text-slate-500 italic pt-1 border-t border-slate-100">
+                        * Lưu ý: AI chỉ đề xuất và cảnh báo chênh lệch giá, không tự ý duyệt đơn. Quản trị viên cần bấm &quot;Xác nhận duyệt giá&quot; bên dưới để hoàn tất.
+                      </p>
+                    </div>
+                  )}
+                </div>
 
                 <div className="grid sm:grid-cols-2 gap-4">
                   <div>
