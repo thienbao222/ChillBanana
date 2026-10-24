@@ -174,6 +174,9 @@ QUY TẮC CỐT LÕI VỀ BẰNG CHỨNG VÀ BÁO GIÁ:
 8. Khi so sánh sản phẩm (có dữ liệu product_comparison hoặc khách yêu cầu so sánh):
    - Nêu rõ 4 yếu tố: Giá tiền (¥ và VND ước tính), Cân nặng, Điện áp (lưu ý điện 100V nếu có đồ gia dụng), và Tình trạng tồn kho.
    - Trả lời khách quan, súc tích, dựa đúng số liệu từ bằng chứng.
+9. Khi khách hỏi gợi ý theo ngân sách (ví dụ: tầm 2 triệu nên mua gì):
+   - CHỈ gợi ý các sản phẩm có trong bằng chứng catalog_search, TUYỆT ĐỐI KHÔNG bịa sản phẩm ngoài catalog.
+   - Trình bày gợi ý phân loại rõ ràng theo từng nhóm hàng (mỹ phẩm, đồ gia dụng, mô hình, thời trang...), nêu rõ Giá ¥ và Giá VND ước tính phải nhỏ hơn hoặc bằng ngân sách khách hỏi.
 
 KẾT QUẢ CÔNG CỤ TỪ MÁY CHỦ (JSON):
 Các công cụ đã được máy chủ chạy đồng bộ: ${CUSTOMER_SUPPORT_TOOL_REGISTRY.map((tool) => `${tool.id} (${tool.access})`).join(", ")}.
@@ -286,8 +289,42 @@ export function buildOfflineEvidenceReply(
     }
   }
 
-  // 1. Catalog Search
-  if (catalogEv && catalogEv.status === "ok" && catalogProducts.length > 0) {
+  // 1. Budget-based recommendations
+  if (catalogEv && catalogEv.status === "ok" && catalogEv.known.isBudgetFilter === true) {
+    const budgetVnd = Number(catalogEv.known.budgetVnd || 0);
+    const budgetStr = budgetVnd > 0 ? `${budgetVnd.toLocaleString("vi-VN")} đ` : "ngân sách yêu cầu";
+    const grouped = (catalogEv.known.groupedByCategory as any[]) || [];
+
+    if (lang === "en") {
+      lines.push(`\n📦 **Recommended Japanese products within budget (~${budgetStr}):**`);
+    } else if (lang === "ja") {
+      lines.push(`\n📦 **ご予算（約 ${budgetStr}）内でのおすすめ商品：**`);
+    } else {
+      lines.push(`\n📦 **Gợi ý sản phẩm trong tầm ngân sách (${budgetStr}):**`);
+    }
+
+    if (grouped.length > 0) {
+      for (const grp of grouped) {
+        lines.push(`\n🏷️ **${grp.categoryName}:**`);
+        for (const p of grp.topProducts || []) {
+          const priceVnd = p.estimatedProductPriceVnd
+            ? `${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ`
+            : "đang cập nhật";
+          lines.push(`• **${p.name}**: ~${Number(p.priceJpy).toLocaleString("vi-VN")} JPY (~${priceVnd})`);
+        }
+      }
+      lines.push("\nQuý khách bấm nút 'Thêm vào giỏ' trên thẻ sản phẩm bên dưới để đặt mua nhé.");
+    } else if (catalogProducts.length > 0) {
+      for (const p of catalogProducts.slice(0, 3)) {
+        const priceVnd = p.estimatedProductPriceVnd
+          ? `${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ`
+          : "đang cập nhật";
+        lines.push(`• **${p.name}**: ~${Number(p.priceJpy).toLocaleString("vi-VN")} JPY (~${priceVnd})`);
+      }
+    } else {
+      lines.push(`\nChillBanana chưa có sản phẩm nào trong catalog dưới ${budgetStr}. Quý khách có thể gửi link sản phẩm từ sàn Nhật để được hỗ trợ mua hộ nhé.`);
+    }
+  } else if (catalogEv && catalogEv.status === "ok" && catalogProducts.length > 0) {
     if (lang === "en") {
       lines.push("\n📦 **Matching products from Japanese stores:**");
       for (const p of catalogProducts.slice(0, 3)) {

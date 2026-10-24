@@ -163,6 +163,18 @@ export function parseBudgetAndCurrency(
     };
   }
 
+  const vndTrFractionMatch = norm.match(/(\d+)tr(\d+)\b/i);
+  if (vndTrFractionMatch) {
+    const m = parseFloat(`${vndTrFractionMatch[1]}.${vndTrFractionMatch[2]}`);
+    const vnd = m * 1_000_000;
+    return {
+      minJpy: Math.round((vnd * 0.7) / rate),
+      maxJpy: Math.round((vnd * 1.1) / rate),
+      rawVndText: `khoảng ${m} triệu VND`,
+      approxVndEquivalent: vnd,
+    };
+  }
+
   const vndSingleMatch = norm.match(/(\d+(?:\.\d+)?)\s*(?:triệu|tr|trieu)\b/i);
   if (vndSingleMatch) {
     const m = parseFloat(vndSingleMatch[1]);
@@ -172,6 +184,17 @@ export function parseBudgetAndCurrency(
       maxJpy: Math.round((vnd * 1.1) / rate),
       rawVndText: `khoảng ${m} triệu VND`,
       approxVndEquivalent: vnd,
+    };
+  }
+
+  const vndKMatch = norm.match(/(\d+(?:\.\d+)?)\s*k\b/i);
+  if (vndKMatch) {
+    const val = parseFloat(vndKMatch[1]) * 1000;
+    return {
+      minJpy: Math.round((val * 0.7) / rate),
+      maxJpy: Math.round((val * 1.1) / rate),
+      rawVndText: `${val.toLocaleString("vi-VN")} VND`,
+      approxVndEquivalent: val,
     };
   }
 
@@ -878,6 +901,137 @@ export async function searchCatalog(
   }
 }
 
+export async function searchCatalogByBudget(
+  maxVndBudget: number,
+  categoryFilter?: string | null
+): Promise<SupportEvidence> {
+  const [rate, pricingConfig] = await Promise.all([
+    fetchLiveExchangeRate().catch(() => null),
+    getCurrentPricingConfig().catch(() => null),
+  ]);
+
+  const hasCurrentRate = Boolean(rate && !rate.isStale && rate.roundedRate > 0);
+  const effectiveRate = hasCurrentRate ? rate!.roundedRate : DEFAULT_EXCHANGE_RATE;
+
+  const select = {
+    id: true,
+    name: true,
+    category: true,
+    categoryName: true,
+    priceJpy: true,
+    priceVnd: true,
+    weightKg: true,
+    stockSlots: true,
+    description: true,
+    voltageNote: true,
+    imageUrl: true,
+    originalStore: true,
+    createdAt: true,
+  };
+
+  try {
+    const allProducts = await prisma.product.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 120,
+      select,
+    });
+
+    const categoryOrder = ["cosmetics", "health", "gadgets", "anime", "fashion", "luxury", "other"];
+    const categoryLabels: Record<string, string> = {
+      cosmetics: "Mỹ phẩm & Chăm sóc sắc đẹp",
+      health: "Thực phẩm chức năng & Sức khỏe",
+      gadgets: "Đồ điện gia dụng & Công nghệ",
+      anime: "Mô hình & Đồ chơi Anime",
+      fashion: "Thời trang & Phụ kiện",
+      luxury: "Hàng hiệu cao cấp",
+      other: "Sản phẩm khác",
+    };
+
+    const qualifiedProducts = allProducts
+      .map((p) => {
+        const estimatedVnd = p.priceVnd && p.priceVnd > 0
+          ? p.priceVnd
+          : Math.round(p.priceJpy * effectiveRate);
+        return {
+          id: p.id,
+          name: p.name,
+          category: p.category,
+          categoryName: p.categoryName || categoryLabels[p.category] || "Sản phẩm",
+          priceJpy: p.priceJpy,
+          priceVnd: estimatedVnd,
+          estimatedProductPriceVnd: estimatedVnd,
+          estimatedWeightKg: p.weightKg || 0.5,
+          voltageNote: p.voltageNote,
+          inStock: p.stockSlots > 0,
+          requestSlots: p.stockSlots,
+          imageUrl: p.imageUrl,
+          originalStore: p.originalStore,
+        };
+      })
+      .filter((p) => {
+        if (p.estimatedProductPriceVnd <= 0 || p.estimatedProductPriceVnd > maxVndBudget) return false;
+        if (categoryFilter && p.category !== categoryFilter) return false;
+        return true;
+      });
+
+    const grouped: Record<string, typeof qualifiedProducts> = {};
+    for (const prod of qualifiedProducts) {
+      const cat = prod.category || "other";
+      if (!grouped[cat]) grouped[cat] = [];
+      grouped[cat].push(prod);
+    }
+
+    for (const cat of Object.keys(grouped)) {
+      grouped[cat].sort((a, b) => b.estimatedProductPriceVnd - a.estimatedProductPriceVnd);
+    }
+
+    const selectedProducts: typeof qualifiedProducts = [];
+    for (const cat of categoryOrder) {
+      if (grouped[cat] && grouped[cat].length > 0) {
+        selectedProducts.push(...grouped[cat].slice(0, 2));
+      }
+    }
+
+    const groupedSummary = Object.entries(grouped).map(([catKey, prods]) => ({
+      categoryKey: catKey,
+      categoryName: categoryLabels[catKey] || catKey,
+      productCount: prods.length,
+      topProducts: prods.slice(0, 2).map((p) => ({
+        name: p.name,
+        priceJpy: p.priceJpy,
+        estimatedProductPriceVnd: p.estimatedProductPriceVnd,
+      })),
+    }));
+
+    return createEvidence(
+      "catalog_search",
+      "ok",
+      `Danh mục sản phẩm trong ngân sách ${maxVndBudget.toLocaleString("vi-VN")} đ`,
+      {
+        searched: true,
+        budgetVnd: maxVndBudget,
+        isBudgetFilter: true,
+        resultCount: qualifiedProducts.length,
+        groupedByCategory: groupedSummary,
+        products: selectedProducts.slice(0, 6),
+      },
+      qualifiedProducts.length === 0 ? [`Không có sản phẩm nào trong catalog dưới ${maxVndBudget.toLocaleString("vi-VN")} đ`] : [],
+      CATALOG_LINKS,
+      rate?.updatedAt || null
+    );
+  } catch (error) {
+    console.warn("[CustomerSupportTools] Budget catalog search unavailable:", error);
+    return createEvidence(
+      "catalog_search",
+      "unavailable",
+      "Danh mục sản phẩm ChillBanana",
+      { searched: false, resultCount: null, products: [] },
+      ["Kết quả lọc ngân sách danh mục hiện tại"],
+      CATALOG_LINKS
+    );
+  }
+}
+
 async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise<{
   evidence: SupportEvidence;
   guardedReply?: string;
@@ -1545,6 +1699,31 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
         [],
         CATALOG_LINKS
       );
+    }
+  }
+
+  // Gợi ý theo ngân sách (ví dụ: "tầm 2 triệu nên mua gì")
+  const budgetInfo = parseBudgetAndCurrency(effectiveMessage);
+  const isBudgetRecommendation =
+    Boolean(budgetInfo.approxVndEquivalent) &&
+    /\b(nen\s+mua|mua\s+gi|co\s+(?:mon|gi|deal|san\s+pham)\s+gi|goi\s+y|tu\s+van|re\s+nhat|trong\s+tam|tam\s+gia|ngan\s+sach|duoi|budget|around|what\s+to\s+buy)\b/i.test(normalizeSupportText(effectiveMessage));
+
+  if (!catalogEvidenceForRun && isBudgetRecommendation && budgetInfo.approxVndEquivalent) {
+    catalogEvidenceForRun = await searchCatalogByBudget(budgetInfo.approxVndEquivalent, intents.category);
+    const prods = (catalogEvidenceForRun.known.products as any[]) || [];
+    if (prods.length > 0) {
+      productCards = prods.slice(0, 3).map((p) => ({
+        id: p.id,
+        name: p.name,
+        imageUrl: p.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
+        priceJpy: p.priceJpy,
+        priceVnd: p.estimatedProductPriceVnd ?? null,
+        inStock: Boolean(p.inStock ?? (p.requestSlots > 0)),
+        stockSlots: typeof p.requestSlots === "number" ? p.requestSlots : (typeof p.stockSlots === "number" ? p.stockSlots : 5),
+        weightKg: p.estimatedWeightKg,
+        originalStore: p.originalStore,
+        category: p.category,
+      }));
     }
   }
 
