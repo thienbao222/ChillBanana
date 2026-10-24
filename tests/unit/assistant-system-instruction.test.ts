@@ -16,6 +16,13 @@ describe("BƯỚC 6: Chỉnh system instruction (buildSystemInstruction)", () =>
     expect(instruction).toMatch(/dán link sản phẩm từ sàn Nhật/i);
   });
 
+  it("chỉ cho phép kết luận không có trong catalog sau một lần tìm thành công có 0 kết quả", () => {
+    const instruction = buildSystemInstruction([]);
+    expect(instruction).toMatch(/searched\s*=\s*true/i);
+    expect(instruction).toMatch(/resultCount\s*=\s*0/i);
+    expect(instruction).toMatch(/chưa có bằng chứng catalog|searched không phải true/i);
+  });
+
   it("cấm tự ý nêu giá hay cân nặng không có trong bằng chứng", () => {
     const instruction = buildSystemInstruction([]);
     expect(instruction).toMatch(/Tuyệt đối KHÔNG được tự nêu giá tiền.*cân nặng.*không có trong/i);

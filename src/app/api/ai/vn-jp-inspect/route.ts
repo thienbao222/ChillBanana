@@ -68,65 +68,119 @@ export async function POST(req: NextRequest) {
         mode === "ADMIN"
           ? [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
           : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+      const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingLevel: "low" },
+        },
+      };
+      const readResponseBody = async (response: Response) =>
+        typeof response.text === "function"
+          ? response.text().catch(() => "")
+          : JSON.stringify(await response.json().catch(() => ({})));
+      const parseInspectionResponse = async (response: Response, model: string) => {
+        const body = await readResponseBody(response);
+        let data: any;
+        try {
+          data = JSON.parse(body);
+        } catch {
+          console.warn(`[VnJpInspect] Model ${model} HTTP ${response.status}: ${body.slice(0, 200)}`);
+          return null;
+        }
+        const text = data?.candidates?.[0]?.content?.parts
+          ?.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought)
+          ?.pop()?.text?.trim();
+        try {
+          const parsed = JSON.parse(text || "");
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Expected JSON object");
+          return parsed as Record<string, unknown>;
+        } catch {
+          console.warn(`[VnJpInspect] Model ${model} HTTP ${response.status}, malformed JSON: ${(text || body).slice(0, 200)}`);
+          return null;
+        }
+      };
 
       for (const model of models) {
+        let responseStatus: number | null = null;
         try {
           let response = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
             {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                  responseMimeType: "application/json",
-                  thinkingConfig: { thinkingLevel: "low" },
-                },
-              }),
+              body: JSON.stringify(requestBody),
               signal: AbortSignal.timeout(10000),
             }
           );
+          responseStatus = response.status;
 
           if (response.status === 400) {
+            const errorBody = await readResponseBody(response);
+            console.warn(`[VnJpInspect] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  contents: [{ parts: [{ text: prompt }] }],
-                  generationConfig: { responseMimeType: "application/json" },
-                }),
+                body: JSON.stringify(requestBody),
                 signal: AbortSignal.timeout(10000),
               }
             );
+            responseStatus = retryRes.status;
             if (retryRes.ok) {
               response = retryRes;
+            } else {
+              const retryBody = await readResponseBody(retryRes);
+              console.warn(`[VnJpInspect] Model ${model} retry HTTP ${retryRes.status}: ${retryBody.slice(0, 200)}`);
+              activePool.markError(apiKey, retryRes.status, model);
+              continue;
             }
           }
 
-          if (response.ok) {
-            const data = await response.json();
-            const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (text) {
-              const parsed = JSON.parse(text);
-              if (mode === "ADMIN" && baseResult.adminCustomsDeclaration) {
-                if (typeof parsed.invoiceEn === "string" && parsed.invoiceEn.trim()) {
-                  baseResult.adminCustomsDeclaration.invoiceSummaryEn = parsed.invoiceEn.trim();
-                }
-                if (typeof parsed.invoiceJp === "string" && parsed.invoiceJp.trim()) {
-                  baseResult.adminCustomsDeclaration.invoiceSummaryJp = parsed.invoiceJp.trim();
-                }
-              } else if (typeof parsed.neoComment === "string" && parsed.neoComment.trim()) {
-                baseResult.neoKuudereComment = parsed.neoComment.trim();
-              }
-            }
-            break;
-          } else {
+          if (!response.ok) {
+            const errorBody = await readResponseBody(response);
+            console.warn(`[VnJpInspect] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
             activePool.markError(apiKey, response.status, model);
+            continue;
           }
-        } catch {
+
+          let parsed = await parseInspectionResponse(response, model);
+          if (!parsed) {
+            const retryRes = await fetch(
+              `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+              {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody),
+                signal: AbortSignal.timeout(10000),
+              }
+            );
+            responseStatus = retryRes.status;
+            if (!retryRes.ok) {
+              const retryBody = await readResponseBody(retryRes);
+              console.warn(`[VnJpInspect] Model ${model} retry HTTP ${retryRes.status}: ${retryBody.slice(0, 200)}`);
+              activePool.markError(apiKey, retryRes.status, model);
+              continue;
+            }
+            parsed = await parseInspectionResponse(retryRes, model);
+          }
+          if (parsed) {
+            if (mode === "ADMIN" && baseResult.adminCustomsDeclaration) {
+              if (typeof parsed.invoiceEn === "string" && parsed.invoiceEn.trim()) {
+                baseResult.adminCustomsDeclaration.invoiceSummaryEn = parsed.invoiceEn.trim();
+              }
+              if (typeof parsed.invoiceJp === "string" && parsed.invoiceJp.trim()) {
+                baseResult.adminCustomsDeclaration.invoiceSummaryJp = parsed.invoiceJp.trim();
+              }
+            } else if (typeof parsed.neoComment === "string" && parsed.neoComment.trim()) {
+              baseResult.neoKuudereComment = parsed.neoComment.trim();
+            }
+          }
+          break;
+        } catch (error) {
           activePool.markError(apiKey, 503, model);
+          console.warn(`[VnJpInspect] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
           // Fallback an toàn về kết quả Deterministic nếu Gemini quá tải hoặc mất mạng
         }
       }
@@ -139,9 +193,9 @@ export async function POST(req: NextRequest) {
       inspection: baseResult,
     });
   } catch (error) {
-    console.error("[API VN-JP AI Inspect] Lỗi:", error);
+    console.error("[VnJpInspect] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
     return NextResponse.json(
-      { success: false, error: "Lỗi máy chủ khi thực thi AI kiểm dịch VN → JP." },
+      { success: false, error: "Không thể hoàn tất kiểm dịch hàng VN → JP. Vui lòng kiểm tra thông tin hàng hóa rồi thử lại." },
       { status: 500 }
     );
   }

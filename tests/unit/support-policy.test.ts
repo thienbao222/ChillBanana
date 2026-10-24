@@ -1,4 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { routeSupportIntentMock } = vi.hoisted(() => ({
+  routeSupportIntentMock: vi.fn<(...args: any[]) => Promise<any>>(async () => null),
+}));
+
+vi.mock("@/features/ai/customer/intent-router", () => ({ routeSupportIntent: routeSupportIntentMock }));
+
 import {
   canReadOrder,
   detectSupportIntents,
@@ -13,6 +20,7 @@ import {
 } from "@/features/ai/customer/support-policy";
 import {
   searchCatalog,
+  runCustomerSupportTools,
   resolveEffectiveSupportMessage,
 } from "@/features/ai/customer/support-tools";
 import { prisma } from "@/lib/prisma";
@@ -31,6 +39,11 @@ vi.mock("@/features/pricing/config", () => ({
       tier2ServiceFeePercent: 6,
       tier3ServiceFeePercent: 5,
       minServiceFeeVnd: 20000,
+      serviceFeePercent: 8,
+      serviceFeeMinimumVnd: 20000,
+      airShippingPerKgVnd: 185000,
+      groupBuyShippingDiscountPercent: 25,
+      groupBuyMaxWeightKg: 0.5,
       baseInsurancePercent: 3,
       highValueInsurancePercent: 5,
     },
@@ -176,6 +189,230 @@ describe("support-policy unit tests", () => {
       const intent = detectSupportIntents("Cước bay Narita về Sài Gòn tính thế nào? Gom đơn được giảm không?");
       expect(intent.shipping).toBe(true);
     });
+  });
+
+  it("vẫn tìm catalog khi router không có API key và regex không nhận ra câu hỏi sản phẩm", async () => {
+    const hadaProduct = {
+      id: "hada-labo-cleanser",
+      name: "Sữa Rửa Mặt Hada Labo Gokujyun",
+      category: "cosmetics",
+      categoryName: "Mỹ phẩm & Chăm sóc da",
+      priceJpy: 900,
+      weightKg: 0.2,
+      stockSlots: 2,
+      description: "Sữa rửa mặt làm sạch da Hada Labo",
+      voltageNote: null,
+      imageUrl: "/hada-labo.jpg",
+      originalStore: "Amazon JP",
+      createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([hadaProduct as any]);
+
+    for (const message of ["sữa rửa mặt hada còn hàng sẵn không", "sua rua mat hada con hang khong"]) {
+      const result = await runCustomerSupportTools({
+        message,
+        customerId: null,
+        guestOrderAccessToken: null,
+        scrapedProduct: null,
+      });
+
+      expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products).toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })])
+      );
+    }
+    expect(prisma.product.findMany).toHaveBeenCalledTimes(2);
+  });
+
+  it("dùng searchTerms do router nhận diện để tìm catalog dù intent được phân loại là quote", async () => {
+    vi.restoreAllMocks();
+    routeSupportIntentMock.mockResolvedValueOnce({
+      intents: { catalog: false, quote: true, orderStatus: false, shipping: false, compatibility: false, addToCart: false },
+      searchTerms: ["Patagonia"],
+      keywordsJa: [],
+      category: "gadgets",
+      referencesPreviousProduct: true,
+    });
+    const product = {
+      id: "patagonia-bottle", name: "Bình giữ nhiệt Patagonia", category: "gadgets",
+      categoryName: "Gia dụng & Thiết bị", priceJpy: 2800, weightKg: 0.3, stockSlots: 2,
+      description: "Bình giữ nhiệt", voltageNote: null, imageUrl: null,
+      originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([product as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "còn hàng không",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "patagonia-bottle" })]));
+  });
+
+  it("không cho router biến câu hỏi sản phẩm không dấu thành tra cứu đơn hàng", async () => {
+    vi.restoreAllMocks();
+    routeSupportIntentMock.mockResolvedValueOnce({
+      intents: { catalog: false, quote: false, orderStatus: true, shipping: false, compatibility: false, addToCart: false },
+      searchTerms: ["Hada Labo"],
+      keywordsJa: [],
+      category: "cosmetics",
+      referencesPreviousProduct: false,
+    });
+    const product = {
+      id: "hada-labo-cleanser", name: "Sữa Rửa Mặt Hada Labo Gokujyun", category: "cosmetics",
+      categoryName: "Mỹ phẩm & Chăm sóc da", priceJpy: 900, weightKg: 0.2, stockSlots: 2,
+      description: "Sữa rửa mặt Hada Labo", voltageNote: null, imageUrl: null,
+      originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([product as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "sua rua mat hada con hang khong",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.evidence.some((item) => item.toolId === "order_status")).toBe(false);
+    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })]));
+  });
+
+  it("shows catalog evidence instead of the link-required quote guard when a product already matches", async () => {
+    vi.restoreAllMocks();
+    const product = {
+      id: "hada-labo-cleanser", name: "Sữa Rửa Mặt Hada Labo Gokujyun Hyaluronic", category: "cosmetics",
+      categoryName: "Mỹ phẩm & Chăm sóc da", priceJpy: 900, weightKg: 0.2, stockSlots: 2,
+      description: "Sữa rửa mặt Hada Labo", voltageNote: null, imageUrl: null,
+      originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([product as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "sữa rửa mặt hada giá bao nhiêu",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "hada-labo-cleanser" })]));
+    expect(result.guardedReply).toBeUndefined();
+  });
+
+  it("names the matched catalog product in the add-to-cart confirmation", async () => {
+    vi.restoreAllMocks();
+    const product = {
+      id: "luffy-gear-5", name: "One Piece Luffy Gear 5 Figure", category: "anime",
+      categoryName: "Anime & Mô hình", priceJpy: 3850, weightKg: 0.4, stockSlots: 2,
+      description: "Mô hình Luffy Gear 5", voltageNote: null, imageUrl: null,
+      originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([product as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "tự thêm mô hình luffy gear 5 vào giỏ hàng giúp tôi",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.guardedReply).toContain("Luffy Gear 5");
+    expect(result.guardedReply).toContain("Thêm vào giỏ");
+  });
+
+  it("does not replace a follow-up catalog answer with a generic quote prompt", async () => {
+    vi.restoreAllMocks();
+    const product = {
+      id: "gunpla-rx-78", name: "Bandai Gunpla RX-78-2 Figure", category: "anime",
+      categoryName: "Anime & Mô hình", priceJpy: 3850, weightKg: 0.4, stockSlots: 2,
+      description: "Mô hình RX-78", voltageNote: null, imageUrl: null,
+      originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+    };
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([product as any]);
+
+    const result = await runCustomerSupportTools({
+      message: "giá bao nhiêu vậy",
+      history: [{ role: "user", text: "gunpla rx-78 còn hàng không" }],
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(result.evidence.find((item) => item.toolId === "catalog_search")?.known.products)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: "gunpla-rx-78" })]));
+    expect(result.guardedReply).toBeUndefined();
+  });
+
+  it("không chạy catalog cho câu chào hỏi hoặc cảm ơn thuần túy", async () => {
+    vi.restoreAllMocks();
+    const findMany = vi.spyOn(prisma.product, "findMany");
+
+    const result = await runCustomerSupportTools({
+      message: "Dạ Neo ơi, cảm ơn bạn nhiều",
+      customerId: null,
+      guestOrderAccessToken: null,
+      scrapedProduct: null,
+    });
+
+    expect(findMany).not.toHaveBeenCalled();
+    expect(result.evidence).toEqual([]);
+  });
+
+  it("activates every registered support tool from a representative customer message", async () => {
+    vi.restoreAllMocks();
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue([]);
+    const cases = [
+      ["catalog_search", "Tìm sữa rửa mặt Hada"],
+      ["quote_estimate", "Tính giá về Việt Nam cho món này bao nhiêu tiền?"],
+      ["order_status", "Tình trạng đơn CB-2026-ABCD-123456"],
+      ["shipping_policy", "Cước bay Narita về Sài Gòn tính thế nào? Gom đơn được giảm không?"],
+      ["product_compatibility", "Nồi cơm điện Nhật 100V có cắm được điện 220V ở nhà không?"],
+    ] as const;
+
+    for (const [toolId, message] of cases) {
+      const result = await runCustomerSupportTools({
+        message,
+        customerId: null,
+        guestOrderAccessToken: null,
+        scrapedProduct: null,
+      });
+      expect(result.evidence.some((item) => item.toolId === toolId), `${message} should activate ${toolId}`).toBe(true);
+    }
+  });
+
+  it("matches accent-free queries against the small catalog and keeps product-type terms", async () => {
+    const products = [
+      {
+        id: "hada-labo-cleanser", name: "Sữa Rửa Mặt Hada Labo Gokujyun", category: "cosmetics",
+        categoryName: "Mỹ phẩm & Chăm sóc da", priceJpy: 900, weightKg: 0.2, stockSlots: 2,
+        description: "Sữa rửa mặt làm sạch da Hada Labo", voltageNote: null, imageUrl: null,
+        originalStore: "Amazon JP", createdAt: new Date("2026-01-01"),
+      },
+      {
+        id: "zojirushi-bottle", name: "Bình giữ nhiệt Zojirushi SM-SF48", category: "gadgets",
+        categoryName: "Gia dụng & Thiết bị", priceJpy: 2800, weightKg: 0.3, stockSlots: 2,
+        description: "Bình giữ nhiệt inox Zojirushi", voltageNote: null, imageUrl: null,
+        originalStore: "Amazon JP", createdAt: new Date("2026-01-02"),
+      },
+    ];
+    vi.spyOn(prisma.product, "findMany").mockResolvedValue(products as any);
+
+    for (const [query, productId] of [
+      ["sua rua mat hada con hang khong", "hada-labo-cleanser"],
+      ["bình giữ nhiệt zojirushi có sẵn không", "zojirushi-bottle"],
+    ]) {
+      const evidence = await searchCatalog(query, null);
+      expect(evidence.known.products).toEqual(expect.arrayContaining([expect.objectContaining({ id: productId })]));
+    }
+
+    expect(extractCatalogSearchTerms("kem chống nắng")).toContain("kem");
+    expect(extractCatalogSearchTerms("máy cạo râu")).toContain("máy");
+    expect(extractCatalogSearchTerms("kem")).toEqual([]);
+    expect(extractCatalogSearchTerms("may")).toEqual([]);
+    expect(extractCatalogSearchTerms("do")).toEqual([]);
   });
 
   describe("Nhãn hiển thị trạng thái và suất mua", () => {
@@ -334,6 +571,11 @@ describe("support-policy unit tests", () => {
         for (const stop of forbidden) {
           expect(normalizedTerms).not.toContain(stop);
         }
+      });
+
+      it("giữ các từ loại hàng khi nằm trong cụm sản phẩm", () => {
+        expect(extractCatalogSearchTerms("kem chống nắng")).toContain("kem");
+        expect(extractCatalogSearchTerms("máy cạo râu")).toContain("máy");
       });
     });
   });

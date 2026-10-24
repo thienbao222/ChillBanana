@@ -28,6 +28,11 @@ function loadTypeScript(relativePath, overrides = {}) {
 }
 
 const policy = loadTypeScript("src/features/ai/customer/support-policy.ts");
+const intentRouter = loadTypeScript("src/features/ai/customer/intent-router.ts", {
+  "./support-policy": policy,
+  "@/lib/api-key-manager": { chatKeyPool: { getNextKey: () => null, markError: () => {} } },
+  "@/lib/gemini-models": { GEMINI_MODELS: { lightweight: "gemini-3.5-flash-lite", neoFallback: "gemini-3.1-flash-lite" } },
+});
 const imageCatalogMatcher = loadTypeScript("src/features/ai/customer/image-catalog-matcher.ts");
 const orderPolicy = loadTypeScript("src/features/orders/policy.ts");
 const pricing = loadTypeScript("src/features/pricing/calculator.ts", {
@@ -182,6 +187,7 @@ async function evaluateReadOnlyTools() {
   };
   const tools = loadTypeScript("src/features/ai/customer/support-tools.ts", {
     "./support-policy": policy,
+    "./intent-router": intentRouter,
     "@/lib/prisma": { prisma: mockPrisma },
     "@/features/pricing/calculator": pricing,
     "@/features/pricing/config": {
@@ -364,11 +370,18 @@ async function evaluateImageAnalysisRoute() {
   });
 
   const originalFetch = global.fetch;
+  let returnMalformedImageJson = false;
+  let imageModelAttempts = 0;
   try {
-    global.fetch = async () => ({
-      ok: true,
-      status: 200,
-      json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
+    global.fetch = async () => {
+      imageModelAttempts += 1;
+      if (returnMalformedImageJson && imageModelAttempts === 1) {
+        return { ok: true, status: 200, text: async () => JSON.stringify({ candidates: [{ content: { parts: [{ text: "not json" }] } }] }) };
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({
         nameVi: "Kem chống nắng Anessa Perfect UV",
         nameJp: "アネッサ パーフェクトUV",
         visiblePriceJpy: null,
@@ -378,7 +391,8 @@ async function evaluateImageAnalysisRoute() {
         searchKeywords: ["アネッサ パーフェクトUV"],
         description: "Nhận diện sơ bộ từ ảnh.",
       }) }] } }] }),
-    });
+      };
+    };
 
     const request = (ip) => ({
       headers: { get: (name) => name === "x-forwarded-for" ? ip : null },
@@ -402,6 +416,12 @@ async function evaluateImageAnalysisRoute() {
     assert.equal(unavailable.analysis.catalogMatches.status, "unavailable");
     assert.deepEqual(unavailable.analysis.catalogMatches.products, []);
     assert.equal(catalogQueries, 3);
+
+    returnMalformedImageJson = true;
+    imageModelAttempts = 0;
+    const retried = await (await route.POST(request("eval-malformed-json-retry"))).json();
+    assert.equal(retried.success, true, "malformed model JSON should be retried once");
+    assert.equal(imageModelAttempts, 2, "the same model should be retried once before fallback");
   } finally {
     global.fetch = originalFetch;
   }

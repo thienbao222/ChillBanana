@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { askGeminiAgent, askGeminiAgentDetailed } from "@/features/ai/customer/assistant";
+import { askGeminiAgent, askGeminiAgentDetailed, ensureCatalogFactsInReply } from "@/features/ai/customer/assistant";
 import { runCustomerSupportTools, type ProductCardData } from "@/features/ai/customer/support-tools";
 import { translateToJapaneseKeywords, parseBudgetAndCurrency } from "@/features/ai/customer/japanese-translator";
 import { prisma } from "@/lib/prisma";
@@ -125,6 +125,11 @@ export async function POST(req: NextRequest) {
         aiMode = agentResult.mode;
       }
 
+      generatedReply = ensureCatalogFactsInReply(
+        generatedReply,
+        supportRun.evidence,
+        selectedPersonality === "omotenashi"
+      );
       reply = generatedReply + (supportRun.quoteFooter ?? "");
       supportSources = supportRun.sources;
       isGuardrailTriggered = supportRun.evidence.some((item) => item.toolId === "order_status" && item.status === "restricted");

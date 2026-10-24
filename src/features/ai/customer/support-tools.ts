@@ -12,6 +12,7 @@ import {
   canReadOrder,
   detectSupportIntents,
   extractCatalogSearchTerms,
+  extractOrderCode,
   getOrderStatusLabel,
   getRequestSlotLabel,
   isSupportedMarketplaceUrl,
@@ -21,6 +22,7 @@ import {
   type SupportEvidence,
   type SupportSourceLink,
 } from "./support-policy";
+import { routeSupportIntent, type RoutedSupportIntent } from "./intent-router";
 
 export interface TranslatedQuery {
   keywordsJa: string;
@@ -525,8 +527,12 @@ export function matchesWholePhraseOrWord(
   return regex.test(haystackNorm);
 }
 
-export async function searchCatalog(message: string, category: string | null): Promise<SupportEvidence> {
-  const terms = extractCatalogSearchTerms(message);
+export async function searchCatalog(
+  message: string,
+  category: string | null,
+  routedSearchTerms: string[] = []
+): Promise<SupportEvidence> {
+  const terms = [...new Set([...extractCatalogSearchTerms(message), ...routedSearchTerms])].slice(0, 12);
   const [rate, pricingConfig] = await Promise.all([
     fetchLiveExchangeRate().catch(() => null),
     getCurrentPricingConfig().catch(() => null),
@@ -548,21 +554,23 @@ export async function searchCatalog(message: string, category: string | null): P
       "catalog_search",
       "needs_input",
       "Danh mục sản phẩm ChillBanana",
-      {},
+      { searched: false, resultCount: 0, products: [] },
       ["Từ khóa hoặc nhóm sản phẩm cần tìm"],
       CATALOG_LINKS
     );
   }
 
   const allSearchTerms = [...new Set([...terms, ...(translated.detectedBrand ? [translated.detectedBrand] : [])])];
-  const termFilters = allSearchTerms.map((term) => ({
-    OR: [
-      { name: { contains: term, mode: "insensitive" as const } },
-      { description: { contains: term, mode: "insensitive" as const } },
-      { categoryName: { contains: term, mode: "insensitive" as const } },
-      { voltageNote: { contains: term, mode: "insensitive" as const } },
-    ],
-  }));
+  const termFilters = allSearchTerms.flatMap((term) =>
+    [...new Set([term, normalizeSupportText(term)])].map((variant) => ({
+      OR: [
+        { name: { contains: variant, mode: "insensitive" as const } },
+        { description: { contains: variant, mode: "insensitive" as const } },
+        { categoryName: { contains: variant, mode: "insensitive" as const } },
+        { voltageNote: { contains: variant, mode: "insensitive" as const } },
+      ],
+    }))
+  );
   const targetCategory = category || (translated.category !== "other" ? translated.category : null);
   const where = {
     ...(targetCategory ? { category: targetCategory } : {}),
@@ -570,25 +578,28 @@ export async function searchCatalog(message: string, category: string | null): P
   };
 
   try {
-    const rows = await prisma.product.findMany({
-      where,
+    const select = {
+      id: true,
+      name: true,
+      category: true,
+      categoryName: true,
+      priceJpy: true,
+      weightKg: true,
+      stockSlots: true,
+      description: true,
+      voltageNote: true,
+      imageUrl: true,
+      originalStore: true,
+      createdAt: true,
+    };
+    const catalogPreview = await prisma.product.findMany({
       orderBy: { createdAt: "desc" },
-      take: 60,
-      select: {
-        id: true,
-        name: true,
-        category: true,
-        categoryName: true,
-        priceJpy: true,
-        weightKg: true,
-        stockSlots: true,
-        description: true,
-        voltageNote: true,
-        imageUrl: true,
-        originalStore: true,
-        createdAt: true,
-      },
+      take: 501,
+      select,
     });
+    const rows = catalogPreview.length > 500
+      ? await prisma.product.findMany({ where, orderBy: { createdAt: "desc" }, take: 60, select })
+      : catalogPreview.filter((product) => !targetCategory || product.category === targetCategory);
 
     const msgNorm = normalizeSupportText(message);
     const msgWords = new Set(tokenizeNormalizedWords(message));
@@ -744,6 +755,8 @@ export async function searchCatalog(message: string, category: string | null): P
         ? "Danh mục ChillBanana, tỷ giá live và công cụ tìm kiếm sàn Nhật (Amazon, Mercari, Rakuten)"
         : "Không có trong catalog ChillBanana (cung cấp công cụ tìm kiếm sàn Nhật)",
       {
+        searched: true,
+        resultCount: productResults.length,
         category: targetCategory,
         matchCount: productResults.length,
         inCatalog: hasCatalogMatches,
@@ -788,7 +801,7 @@ export async function searchCatalog(message: string, category: string | null): P
       "catalog_search",
       "unavailable",
       "Danh mục sản phẩm ChillBanana",
-      {},
+      { searched: false, resultCount: null, products: [] },
       ["Kết quả tìm kiếm danh mục hiện tại"],
       CATALOG_LINKS
     );
@@ -1251,7 +1264,71 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
   const effectiveMessage = resolveEffectiveSupportMessage(input.message, input.history);
 
   const hasScrapedProduct = Boolean(input.scrapedProduct);
-  const intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+  let intents = detectSupportIntents(effectiveMessage, hasScrapedProduct);
+  const explicitOrderLookup = Boolean(intents.orderCode) || /\b(order status|check (?:my )?order|track (?:my )?order|where is my order|order tracking|shipment status|kiem tra don|tra cuu don)\b/i.test(normalizeSupportText(effectiveMessage));
+  let intentRoute: RoutedSupportIntent | null = null;
+  let routedSearchTerms: string[] = [];
+
+  const applyIntentRoute = async () => {
+    if (intentRoute) return intentRoute;
+    const route = await routeSupportIntent(effectiveMessage, input.history);
+    intentRoute = route;
+    if (!route) return null;
+    routedSearchTerms = route.searchTerms;
+    intents = {
+      catalog: intents.catalog || route.intents.catalog || route.searchTerms.length > 0,
+      quote: intents.quote || route.intents.quote,
+      orderStatus: intents.orderStatus || (route.intents.orderStatus && explicitOrderLookup),
+      shipping: intents.shipping || route.intents.shipping,
+      compatibility: intents.compatibility || route.intents.compatibility,
+      addToCart: intents.addToCart || route.intents.addToCart,
+      category: intents.category || route.category,
+      orderCode: intents.orderCode,
+    };
+    return route;
+  };
+
+  if (!Object.values(intents).some((value) => value === true)) await applyIntentRoute();
+
+  const normalizedMessage = normalizeSupportText(effectiveMessage)
+    .replace(/[.!?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const isGreetingOrThanks = /^(?:(?:da\s+)?(?:xin\s+)?chao(?:\s+(?:cac ban|shop|neo|ban|anh|chi|em))?|(?:da\s+)?neo oi|(?:(?:da\s+)?rat\s+)?cam on(?:\s+(?:shop|neo|ban|anh|chi|em|rat|nhieu|nhe|nha|a))*|hello|hi|hey|thanks(?:\s+you)?|thank you|good morning|good afternoon)$/.test(normalizedMessage);
+  if (
+    translateToJapaneseKeywordsFromDictionary(effectiveMessage).matched &&
+    !extractOrderCode(effectiveMessage) &&
+    !isGreetingOrThanks
+  ) {
+    intents.catalog = true;
+  }
+  if (
+    !Object.values(intents).some((value) => value === true) &&
+    extractCatalogSearchTerms(effectiveMessage).length > 0 &&
+    !extractOrderCode(effectiveMessage) &&
+    !isGreetingOrThanks
+  ) {
+    intents.catalog = true;
+  }
+
+  const searchCatalogWithRouterFallback = async (message: string) => {
+    let catalogEvidence = await searchCatalog(message, intents.category, routedSearchTerms);
+    if (
+      !intentRoute && catalogEvidence.status === "ok" &&
+      Array.isArray(catalogEvidence.known.products) && catalogEvidence.known.products.length === 0
+    ) {
+      const route = await applyIntentRoute();
+      if (route?.searchTerms.length) {
+        catalogEvidence = await searchCatalog(message, intents.category, routedSearchTerms);
+      }
+    }
+    return catalogEvidence;
+  };
+
+  let catalogEvidenceForRun: SupportEvidence | null = null;
+  if (!intents.addToCart && (intents.catalog || intents.compatibility)) {
+    catalogEvidenceForRun = await searchCatalogWithRouterFallback(effectiveMessage);
+  }
 
   let productCards: ProductCardData[] = [];
   let cartReply: string | undefined;
@@ -1262,7 +1339,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
     if (currentTerms.length > 0) {
       // 1. Khách có tên sản phẩm trong tin nhắn hiện tại -> tìm trong catalog theo các từ khóa đó
-      addToCartCatalogEvidence = await searchCatalog(input.message, intents.category);
+      addToCartCatalogEvidence = catalogEvidenceForRun || await searchCatalogWithRouterFallback(input.message);
       const matchedProducts = (addToCartCatalogEvidence.known.products as any[]) || [];
 
       if (matchedProducts.length === 1) {
@@ -1282,7 +1359,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
             category: p.category,
           },
         ];
-        cartReply = "Quý khách bấm nút Thêm vào giỏ bên dưới để thêm sản phẩm vào giỏ hàng nhé.";
+        cartReply = `Quý khách bấm nút Thêm vào giỏ bên dưới để thêm **${p.name}** nhé.`;
       } else if (matchedProducts.length >= 2) {
         // 4. Có 2-3 sản phẩm khớp -> trả tối đa 3 thẻ và hỏi "Quý khách muốn thêm món nào?". KHÔNG chọn thay khách
         productCards = matchedProducts.slice(0, 3).map((p: any) => ({
@@ -1386,7 +1463,7 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   const catalogPromise =
     (intents.catalog || intents.compatibility) && !intents.addToCart
-      ? searchCatalog(effectiveMessage, intents.category)
+      ? Promise.resolve(catalogEvidenceForRun || searchCatalog(effectiveMessage, intents.category, routedSearchTerms))
       : null;
   if (intents.catalog && !intents.addToCart && catalogPromise) jobs.push(catalogPromise);
   if (intents.quote) jobs.push(executeQuote(input.scrapedProduct));
@@ -1439,7 +1516,11 @@ export async function runCustomerSupportTools(input: CustomerSupportToolInput): 
 
   // Never let model-generated prose reinterpret private order details or quote arithmetic.
   // A combined request can be split by the customer into separate messages afterward.
-  const guardedReply = cartReply ?? orderReply ?? quoteReply;
+  const catalogHasProducts = evidence.some((item) =>
+    item.toolId === "catalog_search" && Array.isArray(item.known.products) && item.known.products.length > 0
+  );
+  const quoteNeedsInput = evidence.some((item) => item.toolId === "quote_estimate" && item.status === "needs_input");
+  const guardedReply = cartReply ?? orderReply ?? (catalogHasProducts && quoteNeedsInput ? undefined : quoteReply);
 
   return { evidence, sources: buildSourceList(evidence), guardedReply, quoteFooter, productCards };
 }

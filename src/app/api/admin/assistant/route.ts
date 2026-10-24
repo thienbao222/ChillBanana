@@ -98,6 +98,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
       if (!apiKey) break;
 
       for (const model of models) {
+        let responseStatus: number | null = null;
         try {
           let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
             method: "POST",
@@ -113,8 +114,11 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
             }),
             signal: AbortSignal.timeout(18000),
           });
+          responseStatus = response.status;
 
           if (response.status === 400) {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[AdminAssistant] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
             const retryRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -124,30 +128,41 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
                 generationConfig: {
                   maxOutputTokens: 1800,
                   temperature: 0.2,
+                  thinkingConfig: { thinkingLevel: "low" },
                 },
               }),
               signal: AbortSignal.timeout(18000),
             });
-            if (retryRes.ok) {
-              response = retryRes;
-            }
+            responseStatus = retryRes.status;
+            response = retryRes;
           }
 
           if (!response.ok) {
+            const errorBody = await response.text().catch(() => "");
+            console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
             adminKeyPool.markError(apiKey, response.status, model);
             continue;
           }
 
-          const data = await response.json();
+          const responseBody = await response.text();
+          let data: any;
+          try {
+            data = JSON.parse(responseBody);
+          } catch {
+            console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+            adminKeyPool.markError(apiKey, 503, model);
+            continue;
+          }
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const text = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
           if (text) {
             answer = text;
             break;
           }
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
         } catch (error) {
-          adminKeyPool.markError(apiKey, 503);
-          console.warn("[ADMIN AI] Gemini request failed:", error);
+          adminKeyPool.markError(apiKey, 503, model);
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
           continue;
         }
       }
@@ -161,7 +176,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
 
     return NextResponse.json({ success: true, answer, module: moduleId, dataAsOf });
   } catch (error) {
-    console.error("[ADMIN AI] Request failed:", error);
-    return NextResponse.json({ error: "Không thể tạo phân tích lúc này." }, { status: 500 });
+    console.error("[AdminAssistant] HTTP n/a:", error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200));
+    return NextResponse.json({ error: "Không thể đọc snapshot quản trị hoặc tạo phản hồi. Vui lòng thử lại." }, { status: 500 });
   }
 }

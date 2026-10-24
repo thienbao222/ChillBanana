@@ -1,7 +1,7 @@
 import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS } from "@/lib/gemini-models";
-import { CUSTOMER_SUPPORT_TOOL_REGISTRY, type SupportEvidence } from "./support-policy";
+import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type SupportEvidence } from "./support-policy";
 
 // shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
 let neoPrimaryUnavailable = false;
@@ -34,10 +34,10 @@ HÌNH TƯỢNG VÀ VĂN PHONG:
 
 QUY TẮC CỐT LÕI VỀ BẰNG CHỨNG VÀ BÁO GIÁ:
 1. Độ dài và căn cứ: Trả lời ngắn gọn 3-6 dòng, CHỈ DỰA TRÊN BẰNG CHỨNG CÔNG CỤ. Tuyệt đối KHÔNG được tự nêu giá tiền, tỷ giá, hay cân nặng sản phẩm nếu không có trong dữ liệu bằng chứng đính kèm.
-2. Khi Catalog KHÔNG có sản phẩm khớp (inCatalog = false hoặc matchCount = 0):
-   - Nói rõ ChillBanana chưa có sẵn mẫu này trong catalog.
-   - Hỏi lại đúng 1 câu làm rõ nhu cầu cụ thể (model, màu sắc, tình trạng mới/cũ).
-   - Đề nghị khách dán link sản phẩm từ sàn Nhật (Amazon JP, Rakuten, Mercari...) vào chat để hệ thống bóc tách và tính báo giá tự động chuẩn xác.
+2. Khi Catalog KHÔNG có sản phẩm khớp:
+   - CHỈ được nói ChillBanana chưa có mẫu này trong catalog khi bằng chứng catalog_search có searched=true VÀ resultCount=0. inCatalog=false hoặc matchCount=0 riêng lẻ không đủ căn cứ.
+   - Nếu chưa có bằng chứng catalog hoặc searched không phải true, tuyệt đối không kết luận là không có; nếu khách hỏi về sản phẩm, hỏi lại đúng 1 câu làm rõ (model, màu sắc hoặc tình trạng mới/cũ).
+   - Khi đã tìm thành công nhưng không có sản phẩm, hỏi lại đúng 1 câu về model, màu sắc hoặc tình trạng mới/cũ và đề nghị khách dán link sản phẩm từ sàn Nhật để hệ thống bóc tách, tính báo giá.
 3. Không lặp lại nguyên văn câu của khách:
    - TUYỆT ĐỐI KHÔNG lặp lại nguyên văn câu chat hay câu hỏi của khách làm tiêu đề hoặc nhãn liên kết (ví dụ: không viết [Tìm "tôi cần mua đồ rẻ rẻ" trên Amazon]). Chỉ dùng tên sản phẩm hoặc từ khóa tiếng Nhật chuẩn ngắn gọn (như [Tìm trên Amazon JP], [Săn trên Mercari JP]).
 4. Khi Catalog CÓ sản phẩm khớp:
@@ -54,6 +54,32 @@ ${evidencePayload}
 `;
 }
 
+export function ensureCatalogFactsInReply(
+  reply: string,
+  evidence: SupportEvidence[],
+  isOmo: boolean
+): string {
+  const catalog = evidence.find((item) => item.toolId === "catalog_search");
+  if (!catalog || catalog.known.searched !== true) return reply;
+
+  const products = Array.isArray(catalog.known.products) ? catalog.known.products as Array<{ name?: unknown }> : [];
+  const names = products.slice(0, 3).flatMap((product) =>
+    typeof product?.name === "string" && product.name.trim() ? [product.name.trim()] : []
+  );
+  if (names.length) {
+    const lowerReply = reply.toLocaleLowerCase();
+    const missingNames = names.filter((name) => !lowerReply.includes(name.toLocaleLowerCase()));
+    return missingNames.length ? `${reply}\n\n📦 Trong catalog có: ${missingNames.join("; ")}.` : reply;
+  }
+
+  if (catalog.known.resultCount !== 0) return reply;
+  const saysNotFound = /(?:chưa có|không có|không tìm thấy).{0,80}(?:catalog|mẫu|sản phẩm)|(?:catalog|mẫu|sản phẩm).{0,80}(?:chưa có|không có|không tìm thấy)/i.test(reply);
+  const asksForLink = /(?:link|đường dẫn|dán link)/i.test(reply);
+  const asksForDetails = /\?/.test(reply) && /\b(model|màu|phiên bản|tình trạng|mẫu cụ thể)\b/i.test(reply);
+  if (saysNotFound && asksForLink && asksForDetails) return reply;
+  return `${reply}\n\nChillBanana chưa có mẫu khớp trong catalog. ${isOmo ? "Quý khách" : "Bạn"} muốn tìm model hoặc màu sắc nào? Có thể dán link sản phẩm từ sàn Nhật để Neo kiểm tra tiếp.`;
+}
+
 export function buildOfflineEvidenceReply(
   userQuery: string,
   evidence: SupportEvidence[] = [],
@@ -64,6 +90,8 @@ export function buildOfflineEvidenceReply(
   const compatEv = evidence.find((e) => e.toolId === "product_compatibility");
   const quoteEv = evidence.find((e) => e.toolId === "quote_estimate");
   const orderEv = evidence.find((e) => e.toolId === "order_status");
+  const catalogProducts = catalogEv?.status === "ok" ? (catalogEv.known.products as any[]) || [] : [];
+  const catalogNotFound = catalogEv?.known.searched === true && catalogEv.known.resultCount === 0;
 
   const lines: string[] = [];
 
@@ -74,36 +102,38 @@ export function buildOfflineEvidenceReply(
   }
 
   // 1. Catalog Search
-  if (catalogEv && catalogEv.status === "ok") {
-    const products = (catalogEv.known.products as any[]) || [];
-    if (products.length > 0) {
-      lines.push("\n📦 **Gợi ý sản phẩm phù hợp từ các sàn Nhật:**");
-      for (const p of products.slice(0, 3)) {
-        const priceVnd = p.estimatedProductPriceVnd
-          ? `${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ`
-          : "Đang cập nhật";
-        const weight = p.estimatedWeightKg ? ` (${p.estimatedWeightKg} kg)` : "";
-        const note = p.voltageNote ? ` — ⚡ *${p.voltageNote}*` : "";
-        const link = p.directSearchUrl ? ` · [Xem trên ${p.sourceMarketplace || "Sàn Nhật"}](${p.directSearchUrl})` : "";
-        lines.push(`• **${p.name}**: ~${Number(p.priceJpy).toLocaleString("vi-VN")} JPY (~${priceVnd})${weight}${note}${link}`);
-      }
-      if (catalogEv.known.marketplaceLinks) {
-        const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
-        lines.push("\n🔗 **Đường dẫn tra cứu trực tiếp trên sàn Nhật:**");
-        if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
-        if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
-        if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
-      }
-    } else {
-      lines.push("\n📦 ChillBanana chưa có sản phẩm này trong catalog. Quý khách dán link sản phẩm từ sàn Nhật để được báo giá, hoặc dùng các đường dẫn tìm kiếm bên dưới.");
-      if (catalogEv.known.marketplaceLinks) {
-        const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
-        lines.push("\n🔗 **Đường dẫn tìm kiếm trên sàn Nhật:**");
-        if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
-        if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
-        if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
-      }
+  if (catalogEv && catalogEv.status === "ok" && catalogProducts.length > 0) {
+    lines.push("\n📦 **Gợi ý sản phẩm phù hợp từ các sàn Nhật:**");
+    for (const p of catalogProducts.slice(0, 3)) {
+      const priceVnd = p.estimatedProductPriceVnd
+        ? `${Number(p.estimatedProductPriceVnd).toLocaleString("vi-VN")} đ`
+        : "Đang cập nhật";
+      const weight = p.estimatedWeightKg ? ` (${p.estimatedWeightKg} kg)` : "";
+      const note = p.voltageNote ? ` — ⚡ *${p.voltageNote}*` : "";
+      const link = p.directSearchUrl ? ` · [Xem trên ${p.sourceMarketplace || "Sàn Nhật"}](${p.directSearchUrl})` : "";
+      lines.push(`• **${p.name}**: ~${Number(p.priceJpy).toLocaleString("vi-VN")} JPY (~${priceVnd})${weight}${note}${link}`);
     }
+    if (catalogEv.known.marketplaceLinks) {
+      const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
+      lines.push("\n🔗 **Đường dẫn tra cứu trực tiếp trên sàn Nhật:**");
+      if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
+      if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
+      if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
+    }
+  } else if (catalogNotFound) {
+    lines.push("\n📦 ChillBanana chưa có sản phẩm này trong catalog. Quý khách dán link sản phẩm từ sàn Nhật để được báo giá, hoặc dùng các đường dẫn tìm kiếm bên dưới.");
+    if (catalogEv?.known.marketplaceLinks) {
+      const ml = catalogEv.known.marketplaceLinks as Record<string, string>;
+      lines.push("\n🔗 **Đường dẫn tìm kiếm trên sàn Nhật:**");
+      if (ml.amazon) lines.push(`• [Tìm trên Amazon JP](${ml.amazon})`);
+      if (ml.mercari) lines.push(`• [Tìm trên Mercari JP](${ml.mercari})`);
+      if (ml.rakuten) lines.push(`• [Tìm trên Rakuten JP](${ml.rakuten})`);
+    }
+  } else if (extractCatalogSearchTerms(userQuery).length > 0) {
+    lines.push(isOmo
+      ? "\n📦 Neo chưa có kết quả tra cứu catalog cho sản phẩm này. Quý khách muốn tìm thương hiệu hoặc model cụ thể nào ạ?"
+      : "\n📦 Neo chưa có kết quả tra cứu catalog cho sản phẩm này. Bạn muốn tìm thương hiệu hoặc model cụ thể nào?"
+    );
   }
 
   // 2. Compatibility (Voltage 100V)
