@@ -46,7 +46,11 @@ export class ApiKeyPool {
     }
   }
 
-  public getNextKey(): string | null {
+  /**
+   * PHẦN 2: Lấy khóa mà cặp (khóa, model) còn khả dụng.
+   * Nếu không có khóa nào khả dụng cho model đó thì trả null để vòng lặp chuyển sang model kế tiếp.
+   */
+  public getNextKey(model?: string): string | null {
     if (this.keys.length === 0) {
       this.loadKeys();
       if (this.keys.length === 0) return null;
@@ -59,7 +63,7 @@ export class ApiKeyPool {
       const key = this.keys[this.currentIdx];
       const stats = this.keyStats.get(key)!;
 
-      // Reset RATE_LIMITED hoặc DEAD if cooldown is over (P2-02)
+      // Reset RATE_LIMITED hoặc DEAD nếu cooldown đã hết (P2-02)
       if ((stats.status === "RATE_LIMITED" || stats.status === "DEAD") && now > stats.cooldownUntil) {
         stats.status = "ACTIVE";
       }
@@ -67,24 +71,48 @@ export class ApiKeyPool {
       this.currentIdx = (this.currentIdx + 1) % this.keys.length;
       checkedCount++;
 
-      if (stats.status === "ACTIVE") {
-        stats.requestCount++;
-        return key;
+      // Khóa bị DEAD do 401/403 thì bỏ qua với mọi model
+      if (stats.status === "DEAD") {
+        continue;
       }
+
+      // Nếu có truyền model: kiểm tra trạng thái độc lập của cặp (khóa, model)
+      if (model) {
+        if (!isModelAvailableForKey(key, model, now)) {
+          continue; // Khóa này bị rate-limit hoặc hết ngày đối với model này -> thử khóa kế tiếp
+        }
+      } else {
+        // Tương thích ngược: nếu không truyền model thì kiểm tra status toàn cục của khóa
+        if (stats.status !== "ACTIVE") {
+          continue;
+        }
+      }
+
+      stats.requestCount++;
+      return key;
     }
 
-    return null; // All keys are RATE_LIMITED or DEAD
+    return null; // Không có khóa nào khả dụng cho model này
   }
 
-  public getAvailableKey(): string | null {
-    return this.getNextKey();
+  public getAvailableKey(model?: string): string | null {
+    return this.getNextKey(model);
+  }
+
+  public hasAvailableKeyForModel(model: string, now = Date.now()): boolean {
+    if (this.keys.length === 0) {
+      this.loadKeys();
+    }
+    return this.keys.some((key) => {
+      const stats = this.keyStats.get(key);
+      if (!stats) return false;
+      if (stats.status === "DEAD" && now <= stats.cooldownUntil) return false;
+      return isModelAvailableForKey(key, model, now);
+    });
   }
 
   /**
-   * API mới (PHẦN 1): Ghi nhận lỗi theo cặp (khóa, model).
-   * - 401/403: Đánh dấu cả khóa DEAD (15 phút).
-   * - 429: Phân loại Daily (đến 00:00 Pacific) hoặc Minute (5-60s), CHỈ khóa cặp (khóa, model).
-   * - 500/503/timeout: Lỗi tạm thời, KHÔNG khóa.
+   * Ghi nhận lỗi theo cặp (khóa, model).
    */
   public markModelError(
     key: string,
