@@ -10,7 +10,6 @@ import {
   BarChart3,
   Sparkles,
   Search,
-  Send,
   AlertTriangle,
   CheckCircle2,
   ExternalLink,
@@ -32,9 +31,6 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
   const [chatDateFrom, setChatDateFrom] = useState("");
   const [chatDateTo, setChatDateTo] = useState("");
   const [apiKeyStatus, setApiKeyStatus] = useState<any>(null);
-  const [takeoverMessage, setTakeoverMessage] = useState("");
-  const [sendingTakeover, setSendingTakeover] = useState(false);
-  const [showTakeoverInput, setShowTakeoverInput] = useState(false);
 
   const fetchAiTrends = async () => {
     setLoadingAi(true);
@@ -62,50 +58,19 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
     } catch { /* silent */ }
   };
 
-  const handleSendTakeover = async () => {
-    if (!selectedAiSession || !takeoverMessage.trim() || sendingTakeover) return;
-    setSendingTakeover(true);
-    try {
-      const res = await fetch("/api/admin/chat-reply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sessionId: selectedAiSession.sessionId,
-          message: takeoverMessage.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        adminToast.success("Đã gửi tin nhắn trực tiếp tới khách hàng!");
-        setSelectedAiSession((prev: any) => ({
-          ...prev,
-          messages: [...(prev.messages || []), data.message],
-        }));
-        setTakeoverMessage("");
-        setShowTakeoverInput(false);
-      } else {
-        adminToast.error(data.error || "Không thể gửi tin nhắn.");
-      }
-    } catch {
-      adminToast.error("Lỗi kết nối khi gửi tin nhắn tiếp quản.");
-    } finally {
-      setSendingTakeover(false);
-    }
-  };
-
   const handleQuickQuote = () => {
     if (!selectedAiSession) return;
     const sampleMsg = `[Báo giá từ ChillBanana]: Chuyên viên đã tiếp nhận yêu cầu về sản phẩm ${selectedAiSession.detectedKeywords || ""}. Quý khách có thể lựa chọn Đặt cọc 50% để mua hàng ngay, hoặc Thanh toán 100% để được ưu tiên chốt đơn tức thì. Vui lòng liên hệ hotline/zalo để được hỗ trợ chi tiết!`;
-    setTakeoverMessage(sampleMsg);
-    setShowTakeoverInput(true);
+    navigator.clipboard?.writeText(sampleMsg);
+    adminToast.success("Đã sao chép mẫu báo giá vào clipboard để gửi Zalo/Facebook!");
   };
 
   const handleSendLink = () => {
     if (!selectedAiSession) return;
     const kw = selectedAiSession.detectedKeywords ? encodeURIComponent(selectedAiSession.detectedKeywords) : "";
-    const sampleMsg = `[Gợi ý link sản phẩm từ sàn Nhật]: Quý khách có thể tham khảo trực tiếp các mẫu sản phẩm tại Amazon JP (https://www.amazon.co.jp/s?k=${kw}) và Mercari JP (https://jp.mercari.com/search?keyword=${kw}). Sau đó gửi link vào đây để ChillBanana báo giá mua hộ nhé!`;
-    setTakeoverMessage(sampleMsg);
-    setShowTakeoverInput(true);
+    const sampleMsg = `[Gợi ý link sản phẩm từ sàn Nhật]: Quý khách có thể tham khảo trực tiếp các mẫu sản phẩm tại Amazon JP (https://www.amazon.co.jp/s?k=${kw}) và Mercari JP (https://jp.mercari.com/search?keyword=${kw}). Sau đó gửi link cho ChillBanana để báo giá mua hộ nhé!`;
+    navigator.clipboard?.writeText(sampleMsg);
+    adminToast.success("Đã sao chép link tìm kiếm sàn Nhật vào clipboard để gửi Zalo/Facebook!");
   };
 
   const handleCopySessionId = () => {
@@ -511,7 +476,7 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
             <div className="bg-white rounded-3xl max-w-3xl w-full p-6 shadow-2xl border border-slate-200 relative my-8 flex flex-col max-h-[90vh]">
               <button
-                onClick={() => { setSelectedAiSession(null); setShowTakeoverInput(false); }}
+                onClick={() => setSelectedAiSession(null)}
                 className="absolute right-5 top-5 p-1 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
               >
                 <X className="w-6 h-6" />
@@ -634,61 +599,48 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
                 })}
               </div>
 
-              {/* Human Takeover Interactive Panel */}
-              {showTakeoverInput && (
-                <div className="mt-3 p-3 bg-indigo-50/80 rounded-2xl border border-indigo-200 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold text-indigo-950">
-                    <span className="flex items-center gap-1.5">
-                      <UserCheck className="w-4 h-4 text-indigo-600" />
-                      Tiếp Quản Hội Thoại &amp; Phản Hồi Trực Tiếp Tới Khách Hàng
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setShowTakeoverInput(false)}
-                      className="text-[11px] text-slate-500 hover:text-slate-800"
-                    >
-                      Đóng ô nhập
-                    </button>
+              {/* Human Direct Support via Zalo / Phone Banner */}
+              <div className="mt-3 p-3 bg-blue-50/80 rounded-2xl border border-blue-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <div className="text-xs">
+                  <div className="font-bold text-navy-900 flex items-center gap-1.5">
+                    <span>💬</span>
+                    <span>Tư vấn khách hàng trực tiếp qua Zalo / Hotline</span>
                   </div>
-                  <textarea
-                    value={takeoverMessage}
-                    onChange={(e) => setTakeoverMessage(e.target.value)}
-                    rows={2}
-                    maxLength={2000}
-                    placeholder="Nhập nội dung tư vấn, gửi link sản phẩm Nhật hoặc báo giá trực tiếp vào phiên chat khách..."
-                    className="w-full rounded-xl border border-indigo-200 bg-white p-2.5 text-xs text-slate-800 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300"
-                  />
-                  <div className="flex justify-end gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowTakeoverInput(false)}
-                      className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-200 rounded-xl transition"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSendTakeover}
-                      disabled={!takeoverMessage.trim() || sendingTakeover}
-                      className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow transition flex items-center gap-1.5 disabled:opacity-50"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>{sendingTakeover ? "Đang gửi..." : "Gửi tới phiên chat khách"}</span>
-                    </button>
-                  </div>
+                  <p className="text-[11px] text-slate-600 mt-0.5">
+                    Khách trên web là người dùng ẩn danh (F5 sẽ làm mới chat AI). Hãy tư vấn qua Zalo hoặc Hotline để lưu giữ hội thoại lâu dài.
+                  </p>
                 </div>
-              )}
+                {selectedAiSession.customerPhone ? (
+                  <a
+                    href={`https://zalo.me/${selectedAiSession.customerPhone.replace(/[^0-9]/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5 shrink-0"
+                    title="Mở Zalo nhắn tin trực tiếp với khách"
+                  >
+                    <span>💬 Nhắn Zalo ({selectedAiSession.customerPhone})</span>
+                  </a>
+                ) : (
+                  <span className="text-[11px] font-semibold text-slate-500 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 shrink-0">
+                    Khách chưa để lại SĐT
+                  </span>
+                )}
+              </div>
 
               {/* Modal Action Bar */}
               <div className="pt-3 border-t mt-3 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowTakeoverInput(true)}
-                    className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center gap-1.5"
+                    onClick={() => {
+                      const text = selectedAiSession.detectedKeywords || selectedAiSession.sessionId;
+                      navigator.clipboard?.writeText(text);
+                      adminToast.success("Đã sao chép từ khóa khách tìm kiếm!");
+                    }}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl text-xs font-bold transition flex items-center gap-1.5"
                   >
                     <UserCheck className="w-3.5 h-3.5" />
-                    <span>💬 Tiếp quản &amp; Chat trực tiếp</span>
+                    <span>📋 Sao chép từ khóa</span>
                   </button>
                   <button
                     type="button"
@@ -728,7 +680,7 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
 
                 <button
                   type="button"
-                  onClick={() => { setSelectedAiSession(null); setShowTakeoverInput(false); }}
+                  onClick={() => setSelectedAiSession(null)}
                   className="px-5 py-2 bg-navy-950 text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition"
                 >
                   Đóng

@@ -263,7 +263,7 @@ export default function AIChatBot() {
     {
       id: "welcome-1",
       sender: "bot",
-      text: "Xin chào! Mình là Neo — trợ lý mua sắm AI của ChillBanana 🍌. Mình có thể hỗ trợ bạn tìm kiếm sản phẩm trên các sàn Nhật (Amazon JP, Mercari JP, Rakuten, Yahoo Auctions...), quy đổi giá JPY sang VND theo tỷ giá live, phân tích ảnh sản phẩm, và giải thích chi tiết chính sách cọc 50% hoặc 100%. Bạn đang quan tâm món hàng nào ở Nhật cứ nhắn cho mình nhé!",
+      text: "Xin chào! Mình là Neo — trợ lý mua sắm AI của ChillBanana 🍌. Mình có thể hỗ trợ bạn tìm kiếm sản phẩm trên các sàn Nhật (Amazon JP, Mercari JP, Rakuten, Yahoo Auctions...), quy đổi giá JPY sang VND theo tỷ giá live, phân tích ảnh sản phẩm, và giải thích chi tiết chính sách cọc 50% hoặc 100%. Nếu cần chuyên viên người thật tư vấn, bạn có thể bấm nút Zalo hoặc Facebook ở góc trên nhé!",
       time: "Vừa xong",
     },
   ]);
@@ -1404,6 +1404,34 @@ export default function AIChatBot() {
               >
                 <span>🇻🇳 Thân Thiện (Chill)</span>
               </button>
+            </div>
+
+            {/* Kênh hỗ trợ chuyên viên thực tế qua Zalo & Facebook */}
+            <div className="bg-white/10 px-2.5 py-1.5 rounded-xl flex items-center justify-between text-[11px] border border-white/10">
+              <span className="text-slate-200 font-medium flex items-center gap-1">
+                <span>👤</span>
+                <span>Cần tư vấn người thật?</span>
+              </span>
+              <div className="flex items-center gap-1.5">
+                <a
+                  href="https://zalo.me/0912345678"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500 hover:bg-blue-400 text-white font-bold text-[10px] transition-all shadow-xs"
+                  title="Chat trực tiếp với chuyên viên ChillBanana qua Zalo"
+                >
+                  <span>💬 Zalo 24/7</span>
+                </a>
+                <a
+                  href="https://facebook.com/chillbanana.vn"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-700 hover:bg-blue-600 text-white font-bold text-[10px] transition-all shadow-xs"
+                  title="Nhắn tin qua Fanpage Facebook"
+                >
+                  <span>🔵 Facebook</span>
+                </a>
+              </div>
             </div>
           </div>
 

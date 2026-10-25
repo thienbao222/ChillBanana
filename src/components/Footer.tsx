@@ -102,12 +102,20 @@ export default function Footer() {
           {/* Col 4: Hỗ Trợ Khách Hàng */}
           <div className="space-y-3">
             <h4 className="text-sm font-bold text-white uppercase tracking-wider font-serif">
-              Tổng Đài Hỗ Trợ 24/7
+              Tổng Đài &amp; Kênh Hỗ Trợ 24/7
             </h4>
-            <div className="space-y-2">
+            <div className="space-y-2.5">
               <div className="flex items-center space-x-2">
                 <Phone className="w-4 h-4 text-banana-400" />
-                <span>Hotline: <strong className="text-white text-sm">1900 6868</strong> (Miễn phí)</span>
+                <span>Hotline: <strong className="text-white text-sm">1900 6868</strong></span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">💬</span>
+                <span>Zalo Tư Vấn: <a href="https://zalo.me/0912345678" target="_blank" rel="noopener noreferrer" className="text-banana-400 hover:underline font-bold">0912.345.678</a></span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <span className="text-sm">🔵</span>
+                <span>Facebook: <a href="https://facebook.com/chillbanana.vn" target="_blank" rel="noopener noreferrer" className="text-banana-400 hover:underline font-medium">fb.com/chillbanana.vn</a></span>
               </div>
               <div className="flex items-center space-x-2">
                 <Mail className="w-4 h-4 text-banana-400" />
