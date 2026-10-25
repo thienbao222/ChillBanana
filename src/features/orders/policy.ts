@@ -34,6 +34,10 @@ export type VnOriginOrderStatus = (typeof ORDER_STATUS_FLOW_VN_ORIGIN)[number];
 
 export function isNextOrderStatus(current: string, next: string, fulfillmentOrigin = "JP"): boolean {
   if (fulfillmentOrigin === "VN") {
+    // If an order with VN origin was mistakenly put in Japan status, allow transitioning directly to Kho VN
+    if (["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR"].includes(current) && next === "WAREHOUSE_VN") {
+      return true;
+    }
     const currentIndex = ORDER_STATUS_FLOW_VN_ORIGIN.indexOf(current as VnOriginOrderStatus);
     return currentIndex >= 0 && ORDER_STATUS_FLOW_VN_ORIGIN[currentIndex + 1] === next;
   }
@@ -43,6 +47,9 @@ export function isNextOrderStatus(current: string, next: string, fulfillmentOrig
 
 export function getPreviousOrderStatus(current: string, fulfillmentOrigin = "JP"): ActiveOrderStatus | null {
   if (fulfillmentOrigin === "VN") {
+    if (["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR"].includes(current)) {
+      return "PENDING_DEPOSIT";
+    }
     const currentIndex = ORDER_STATUS_FLOW_VN_ORIGIN.indexOf(current as VnOriginOrderStatus);
     return currentIndex > 0 ? (ORDER_STATUS_FLOW_VN_ORIGIN[currentIndex - 1] as ActiveOrderStatus) : null;
   }

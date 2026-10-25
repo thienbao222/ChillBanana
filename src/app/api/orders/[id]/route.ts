@@ -265,7 +265,8 @@ export async function PATCH(
         );
       }
 
-      const prevStatus = getPreviousOrderStatus(existingOrder.status);
+      const origin = (existingOrder as { fulfillmentOrigin?: string }).fulfillmentOrigin || "JP";
+      const prevStatus = getPreviousOrderStatus(existingOrder.status, origin);
       if (!prevStatus) {
         return NextResponse.json({ error: "Không tìm thấy trạng thái trước đó để hoàn tác." }, { status: 400 });
       }

@@ -72,7 +72,8 @@ export async function POST(
         { status: 400 }
       );
     }
-    const prevStatus = getPreviousOrderStatus(order.status);
+    const origin = (order as any).fulfillmentOrigin || "JP";
+    const prevStatus = getPreviousOrderStatus(order.status, origin);
     if (!prevStatus) {
       return NextResponse.json({ error: "Không tìm thấy trạng thái trước đó để hoàn tác." }, { status: 400 });
     }
@@ -170,7 +171,8 @@ export async function POST(
     const finalLocation = location?.trim() || meta.location;
 
     // RÀNG BUỘC STATE MACHINE: Chỉ cho phép sang đúng bước kế tiếp, không nhảy cóc
-    if (!isNextOrderStatus(order.status, targetStatus)) {
+    const origin = (order as any).fulfillmentOrigin || "JP";
+    if (!isNextOrderStatus(order.status, targetStatus, origin)) {
       return NextResponse.json(
         {
           error: `Không thể nhảy cóc từ "${order.status}" sang "${targetStatus}". Đơn hàng chỉ được chuyển tuần tự theo đúng quy trình 7 bước.`,

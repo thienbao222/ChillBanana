@@ -23,12 +23,12 @@ import {
 import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
-import { ORDER_STATUS_FLOW, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
+import { ORDER_STATUS_FLOW, ORDER_STATUS_FLOW_VN_ORIGIN, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
 import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
 import { parseOrderItemSource } from "@/features/orders/item-source";
 import ControlledEmailModal from "./ControlledEmailModal";
 
-const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = {
+const ORDER_STATUS_LABELS: Record<string, string> = {
   PENDING_DEPOSIT: `1. ${ORDER_STATUS_LABELS_VI.PENDING_DEPOSIT}`,
   PURCHASING_JP: `2. ${ORDER_STATUS_LABELS_VI.PURCHASING_JP}`,
   WAREHOUSE_JP: `3. ${ORDER_STATUS_LABELS_VI.WAREHOUSE_JP}`,
@@ -36,6 +36,16 @@ const ORDER_STATUS_LABELS: Record<(typeof ORDER_STATUS_FLOW)[number], string> = 
   WAREHOUSE_VN: `5. ${ORDER_STATUS_LABELS_VI.WAREHOUSE_VN}`,
   LOCAL_DELIVERY: `6. ${ORDER_STATUS_LABELS_VI.LOCAL_DELIVERY}`,
   COMPLETED: `7. ${ORDER_STATUS_LABELS_VI.COMPLETED}`,
+};
+
+const ORDER_STATUS_LABELS_VN: Record<string, string> = {
+  PENDING_DEPOSIT: `1. ${ORDER_STATUS_LABELS_VI.PENDING_DEPOSIT}`,
+  WAREHOUSE_VN: `2. ${ORDER_STATUS_LABELS_VI.WAREHOUSE_VN} (Hàng sẵn có)`,
+  LOCAL_DELIVERY: `3. ${ORDER_STATUS_LABELS_VI.LOCAL_DELIVERY}`,
+  COMPLETED: `4. ${ORDER_STATUS_LABELS_VI.COMPLETED}`,
+  PURCHASING_JP: `Chuyển về Kho VN (Hàng sẵn có)`,
+  WAREHOUSE_JP: `Chuyển về Kho VN (Hàng sẵn có)`,
+  IN_TRANSIT_AIR: `Chuyển về Kho VN (Hàng sẵn có)`,
 };
 
 interface OrderManagementTabProps {
@@ -152,8 +162,15 @@ export default function OrderManagementTab({
     setVnTrack(order.vnDomesticTrack || "");
     setUpdateWeightKg(order.weightKg > 0 ? String(order.weightKg) : "");
 
+    const isVn = (order as any).fulfillmentOrigin === "VN";
+
     if (order.status === "PENDING_DEPOSIT") {
-      if (order.isPriceVerified) {
+      if (isVn) {
+        setNewStatus("WAREHOUSE_VN");
+        setUpdateTitle("Đã nhận đơn - Sẵn tại kho Việt Nam");
+        setUpdateDesc("Đơn hàng có sẵn tại kho VN, chuẩn bị đóng gói giao nội địa.");
+        setUpdateLocation("Kho ChillBanana Việt Nam");
+      } else if (order.isPriceVerified) {
         setNewStatus("PURCHASING_JP");
         setUpdateTitle("Đã nhận cọc - Đang mua hàng tại Tokyo");
         setUpdateDesc("Nhân viên văn phòng Tokyo đã tiến hành order hàng trực tiếp từ người bán.");
@@ -164,23 +181,37 @@ export default function OrderManagementTab({
         setUpdateLocation("Việt Nam");
       }
     } else if (order.status === "PURCHASING_JP") {
-      setNewStatus("WAREHOUSE_JP");
-      setUpdateTitle("Đã nhập kho Tokyo");
-      setUpdateDesc("Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.");
-      setUpdateLocation("Kho Tokyo (Edogawa-ku)");
-      if (!order.jpDomesticTrack && (order as any).fulfillmentOrigin !== "VN") {
-        setJpTrack(`YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`);
+      if (isVn) {
+        setNewStatus("WAREHOUSE_VN");
+        setUpdateTitle("Đã chuyển về Kho Việt Nam (Hàng sẵn có)");
+        setUpdateDesc("Sản phẩm có sẵn tại kho VN, chuẩn bị xuất kho giao cho khách.");
+        setUpdateLocation("Kho ChillBanana Việt Nam");
+      } else {
+        setNewStatus("WAREHOUSE_JP");
+        setUpdateTitle("Đã nhập kho Tokyo");
+        setUpdateDesc("Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.");
+        setUpdateLocation("Kho Tokyo (Edogawa-ku)");
+        if (!order.jpDomesticTrack) {
+          setJpTrack(`YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`);
+        }
       }
-    } else if (order.status === "WAREHOUSE_JP") {
-      setNewStatus("IN_TRANSIT_AIR");
-      setUpdateTitle("Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam");
-      setUpdateDesc("Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.");
-      setUpdateLocation("Sân bay Quốc tế Narita (NRT)");
-    } else if (order.status === "IN_TRANSIT_AIR") {
-      setNewStatus("WAREHOUSE_VN");
-      setUpdateTitle("Đã nhập kho phân loại tại Việt Nam");
-      setUpdateDesc("Hàng hoàn tất thông quan hải quan và chuyển về kho trung chuyển.");
-      setUpdateLocation("Kho ChillBanana Hà Nội / TP.HCM");
+    } else if (order.status === "WAREHOUSE_JP" || order.status === "IN_TRANSIT_AIR") {
+      if (isVn) {
+        setNewStatus("WAREHOUSE_VN");
+        setUpdateTitle("Đã chuyển về Kho Việt Nam (Hàng sẵn có)");
+        setUpdateDesc("Sản phẩm có sẵn tại kho VN, chuẩn bị xuất kho giao cho khách.");
+        setUpdateLocation("Kho ChillBanana Việt Nam");
+      } else if (order.status === "WAREHOUSE_JP") {
+        setNewStatus("IN_TRANSIT_AIR");
+        setUpdateTitle("Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam");
+        setUpdateDesc("Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.");
+        setUpdateLocation("Sân bay Quốc tế Narita (NRT)");
+      } else {
+        setNewStatus("WAREHOUSE_VN");
+        setUpdateTitle("Đã nhập kho phân loại tại Việt Nam");
+        setUpdateDesc("Hàng hoàn tất thông quan hải quan và chuyển về kho trung chuyển.");
+        setUpdateLocation("Kho ChillBanana Hà Nội / TP.HCM");
+      }
     } else if (order.status === "WAREHOUSE_VN") {
       setNewStatus("LOCAL_DELIVERY");
       setUpdateTitle("Đang giao hàng chặng cuối");
@@ -488,12 +519,22 @@ export default function OrderManagementTab({
     return matchesStatus && matchesSearch;
   });
 
+  const isSelectedVn = selectedOrder && (selectedOrder as any).fulfillmentOrigin === "VN";
+  const statusFlow = isSelectedVn ? ORDER_STATUS_FLOW_VN_ORIGIN : ORDER_STATUS_FLOW;
   const editableStatuses = selectedOrder
-    ? ORDER_STATUS_FLOW.filter((status, index) =>
-        status === selectedOrder.status ||
-        (status === ORDER_STATUS_FLOW[ORDER_STATUS_FLOW.indexOf(selectedOrder.status as (typeof ORDER_STATUS_FLOW)[number]) + 1] &&
-          (status !== "PURCHASING_JP" || (selectedOrder.isPriceVerified && ["DEPOSITED_50", "PAID_100"].includes(selectedOrder.paymentStatus))))
-      )
+    ? isSelectedVn && ["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR"].includes(selectedOrder.status)
+      ? [selectedOrder.status, "WAREHOUSE_VN"]
+      : (statusFlow as readonly string[]).filter((status) => {
+          const flowArr = statusFlow as readonly string[];
+          const currentIndex = flowArr.indexOf(selectedOrder.status);
+          const nextStatus = currentIndex >= 0 ? flowArr[currentIndex + 1] : undefined;
+          return (
+            status === selectedOrder.status ||
+            (status === nextStatus &&
+              (status !== "PURCHASING_JP" ||
+                (selectedOrder.isPriceVerified && ["DEPOSITED_50", "PAID_100"].includes(selectedOrder.paymentStatus))))
+          );
+        })
     : [];
 
   const totalRevenue = orders.reduce((acc, curr) => acc + curr.totalVnd, 0);
@@ -1009,21 +1050,35 @@ export default function OrderManagementTab({
                           <button
                             onClick={() => {
                               const isVn = (ord as any).fulfillmentOrigin === "VN";
-                              const jpCode = ord.jpDomesticTrack || (isVn ? undefined : `YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`);
-                              quickMoveStatus(
-                                ord.orderCode,
-                                "WAREHOUSE_JP",
-                                "Đã nhập kho Tokyo",
-                                jpCode
-                                  ? `Kiện hàng đã về kho Nhật (Mã bưu tá: ${jpCode}), kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.`
-                                  : "Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.",
-                                "Kho Tokyo (Edogawa-ku)",
-                                jpCode ? { jpTrack: jpCode } : undefined
-                              );
+                              if (isVn) {
+                                quickMoveStatus(
+                                  ord.orderCode,
+                                  "WAREHOUSE_VN",
+                                  "Đã chuyển về Kho Việt Nam (Hàng sẵn có)",
+                                  "Sản phẩm có sẵn tại kho VN, sẵn sàng xuất kho bàn giao bưu cục.",
+                                  "Kho ChillBanana Việt Nam"
+                                );
+                              } else {
+                                const jpCode = ord.jpDomesticTrack || `YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`;
+                                quickMoveStatus(
+                                  ord.orderCode,
+                                  "WAREHOUSE_JP",
+                                  "Đã nhập kho Tokyo",
+                                  jpCode
+                                    ? `Kiện hàng đã về kho Nhật (Mã bưu tá: ${jpCode}), kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.`
+                                    : "Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.",
+                                  "Kho Tokyo (Edogawa-ku)",
+                                  jpCode ? { jpTrack: jpCode } : undefined
+                                );
+                              }
                             }}
-                            className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            className={`w-full py-1.5 ${
+                              (ord as any).fulfillmentOrigin === "VN"
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "bg-blue-600 hover:bg-blue-700 text-white"
+                            } font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1`}
                           >
-                            <span>Đã Mua → Về Kho Tokyo</span>
+                            <span>{(ord as any).fulfillmentOrigin === "VN" ? "Chuyển Sang Kho VN" : "Đã Mua → Về Kho Tokyo"}</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">
@@ -1107,6 +1162,17 @@ export default function OrderManagementTab({
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
                             onClick={() => {
+                              const isVn = (ord as any).fulfillmentOrigin === "VN";
+                              if (isVn) {
+                                quickMoveStatus(
+                                  ord.orderCode,
+                                  "WAREHOUSE_VN",
+                                  "Đã chuyển về Kho Việt Nam (Hàng sẵn có)",
+                                  "Kiện hàng sẵn sàng tại kho Việt Nam.",
+                                  "Kho ChillBanana Việt Nam"
+                                );
+                                return;
+                              }
                               if (!ord.weightKg || ord.weightKg <= 0) {
                                 adminToast.error(`Đơn #${ord.orderCode} chưa có trọng lượng thực tế. Vui lòng bấm "Chi Tiết" để cập nhật cân nặng trước khi xuất kho.`);
                                 return;
@@ -1119,9 +1185,13 @@ export default function OrderManagementTab({
                                 "Tokyo, Nhật Bản"
                               );
                             }}
-                            className="w-full py-1.5 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            className={`w-full py-1.5 ${
+                              (ord as any).fulfillmentOrigin === "VN"
+                                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                                : "bg-purple-600 hover:bg-purple-700 text-white"
+                            } font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1`}
                           >
-                            <span>Xuất Kho → Bay Về VN</span>
+                            <span>{(ord as any).fulfillmentOrigin === "VN" ? "Chuyển Sang Kho VN" : "Xuất Kho → Bay Về VN"}</span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">
@@ -1706,11 +1776,44 @@ export default function OrderManagementTab({
                 <label className="block font-bold text-slate-700 mb-1">Trạng thái tiếp theo</label>
                 <select
                   value={newStatus}
-                  onChange={(e) => setNewStatus(e.target.value as OrderStatus)}
+                  onChange={(e) => {
+                    const status = e.target.value as OrderStatus;
+                    setNewStatus(status);
+                    if (status === "WAREHOUSE_VN") {
+                      setUpdateTitle("Đã có tại Kho Việt Nam");
+                      setUpdateDesc("Kiện hàng sẵn sàng tại kho VN, chuẩn bị xuất kho giao cho khách.");
+                      setUpdateLocation("Kho ChillBanana Việt Nam");
+                    } else if (status === "LOCAL_DELIVERY") {
+                      setUpdateTitle("Đang giao hàng chặng cuối");
+                      setUpdateDesc("Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.");
+                      setUpdateLocation("Việt Nam");
+                      if (!vnTrack && selectedOrder) {
+                        setVnTrack(selectedOrder.vnDomesticTrack || `GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`);
+                      }
+                    } else if (status === "COMPLETED") {
+                      setUpdateTitle("Giao hàng thành công");
+                      setUpdateDesc("Khách hàng đã nhận đủ hàng và hoàn tất đơn hàng.");
+                      setUpdateLocation("Việt Nam");
+                    } else if (status === "PURCHASING_JP") {
+                      setUpdateTitle("Đã nhận cọc - Đang mua hàng tại Tokyo");
+                      setUpdateDesc("Nhân viên văn phòng Tokyo đã tiến hành order hàng trực tiếp từ người bán.");
+                      setUpdateLocation("Tokyo, Nhật Bản");
+                    } else if (status === "WAREHOUSE_JP") {
+                      setUpdateTitle("Đã nhập kho Tokyo");
+                      setUpdateDesc("Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.");
+                      setUpdateLocation("Kho Tokyo (Edogawa-ku)");
+                    } else if (status === "IN_TRANSIT_AIR") {
+                      setUpdateTitle("Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam");
+                      setUpdateDesc("Kiện hàng đã được đóng gói chống sốc và lên lộ trình chuyển về Việt Nam.");
+                      setUpdateLocation("Sân bay Quốc tế Narita (NRT)");
+                    }
+                  }}
                   className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-banana-500"
                 >
                   {editableStatuses.map((status) => (
-                    <option key={status} value={status}>{ORDER_STATUS_LABELS[status]}</option>
+                    <option key={status} value={status}>
+                      {isSelectedVn && ORDER_STATUS_LABELS_VN[status] ? ORDER_STATUS_LABELS_VN[status] : (ORDER_STATUS_LABELS[status] || status)}
+                    </option>
                   ))}
                 </select>
               </div>
