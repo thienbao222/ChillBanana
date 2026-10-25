@@ -221,35 +221,54 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     let insight: string | null = null;
     const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const apiKey = adminKeyPool.getNextKey();
-      if (!apiKey) break;
+    for (const model of models) {
+      const apiKey = adminKeyPool.getNextKey(model);
+      if (!apiKey) {
+        console.warn(`[DailyInsight] No available API key for model ${model}, skipping.`);
+        continue;
+      }
 
-      for (const model of models) {
-        let responseStatus: number | null = null;
-        try {
-          let response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: { parts: [{ text: systemInstruction }] },
-                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-                generationConfig: {
-                  maxOutputTokens: 2000,
-                  temperature: 0.2,
-                  thinkingConfig: { thinkingLevel: "low" },
-                },
-              }),
-              signal: AbortSignal.timeout(30000),
-            }
-          );
+      let responseStatus: number | null = null;
+      try {
+        let response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemInstruction }] },
+              contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+              generationConfig: {
+                maxOutputTokens: 2000,
+                temperature: 0.2,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
+            }),
+            signal: AbortSignal.timeout(30000),
+          }
+        );
 
-          responseStatus = response.status;
-          if (response.status === 400) {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[DailyInsight] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+        responseStatus = response.status;
+        if (response.status === 429) {
+          const errorBody = await response.text().catch(() => "");
+          const retryAfter = response.headers.get("retry-after") ?? undefined;
+          console.warn(`[DailyInsight] Model ${model} HTTP 429: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markModelError(apiKey, model, 429, errorBody, retryAfter);
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markError(apiKey, response.status, model);
+          continue;
+        }
+
+        if (response.status === 500 || response.status === 503) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+          try {
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
@@ -268,43 +287,74 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
               }
             );
             responseStatus = retryRes.status;
-            response = retryRes;
-          }
-
-          if (!response.ok) {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
-            adminKeyPool.markError(apiKey, response.status, model);
-            continue;
-          }
-
-          const responseBody = await response.text();
-          let data: any;
-          try {
-            data = JSON.parse(responseBody);
+            if (retryRes.ok) {
+              response = retryRes;
+            } else {
+              continue;
+            }
           } catch {
-            console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-            adminKeyPool.markError(apiKey, 503, model);
             continue;
           }
-          const parts = data?.candidates?.[0]?.content?.parts || [];
-          const text = parts
-            .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
-            .pop()?.text?.trim();
+        }
 
-          if (text) {
-            insight = text;
-            break;
+        if (response.status === 400) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[DailyInsight] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: { parts: [{ text: systemInstruction }] },
+                contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+                generationConfig: {
+                  maxOutputTokens: 2000,
+                  temperature: 0.2,
+                  thinkingConfig: { thinkingLevel: "low" },
+                },
+              }),
+              signal: AbortSignal.timeout(30000),
+            }
+          );
+          responseStatus = retryRes.status;
+          if (retryRes.ok) {
+            response = retryRes;
+          } else {
+            continue;
           }
-          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-        } catch (error) {
-          adminKeyPool.markError(apiKey, 503, model);
-          console.warn(`[DailyInsight] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
+        }
+
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
           continue;
         }
-      }
 
-      if (insight) break;
+        const responseBody = await response.text();
+        let data: any;
+        try {
+          data = JSON.parse(responseBody);
+        } catch {
+          console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+          continue;
+        }
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const text = parts
+          .filter((p: { text?: string; thought?: boolean }) => p.text && !p.thought)
+          .pop()?.text?.trim();
+
+        if (text) {
+          adminKeyPool.markModelSuccess(apiKey, model);
+          insight = text;
+          break;
+        }
+        console.warn(`[DailyInsight] Model ${model} HTTP ${response.status}: empty text`);
+      } catch (error) {
+        const isTimeout = error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+        console.warn(`[DailyInsight] Model ${model} ${isTimeout ? "timeout" : `HTTP ${responseStatus ?? "n/a"}`}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
+        continue;
+      }
     }
 
     if (!insight) {

@@ -76,11 +76,11 @@ interface HtmlExtractedMeta {
   rawSnippet: string;
 }
 
-function getAvailableScrapeApiKey(): string | null {
+function getAvailableScrapeApiKey(model?: string): string | null {
   return (
-    scrapeKeyPool?.getNextKey?.() ||
-    chatKeyPool?.getNextKey?.() ||
-    visionKeyPool?.getNextKey?.() ||
+    scrapeKeyPool?.getNextKey?.(model) ||
+    chatKeyPool?.getNextKey?.(model) ||
+    visionKeyPool?.getNextKey?.(model) ||
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     null
@@ -736,12 +736,6 @@ async function extractWithGemini(
   contextText: string,
   storeName: string
 ): Promise<Partial<ExtractedProduct> | null> {
-  const apiKey = getAvailableScrapeApiKey();
-  if (!apiKey) {
-    console.warn("[ScrapeLink] Không có Gemini key khả dụng, dùng kết quả bóc tách trực tiếp.");
-    return null;
-  }
-
   const prompt = `Bạn là agent trích xuất dữ liệu sản phẩm chính xác từ sàn thương mại điện tử Nhật Bản (${storeName}).
 Phân tích nội dung dưới đây và trả về đúng 1 JSON object theo schema.
 
@@ -792,6 +786,12 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
       : JSON.stringify(await response.json().catch(() => ({})));
 
   for (const modelName of models) {
+    const apiKey = getAvailableScrapeApiKey(modelName);
+    if (!apiKey) {
+      console.warn(`[ScrapeLink] No available API key for model ${modelName}, skipping.`);
+      continue;
+    }
+
     for (let jsonAttempt = 0; jsonAttempt < 2; jsonAttempt++) {
       let responseStatus: number | null = null;
     try {
@@ -805,6 +805,46 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
         }
       );
       responseStatus = response.status;
+
+      if (response.status === 429) {
+        const errorBody = await readResponseBody(response);
+        const retryAfter = response.headers.get("retry-after") ?? undefined;
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP 429: ${errorBody.slice(0, 200)}`);
+        scrapeKeyPool.markModelError(apiKey, modelName, 429, errorBody, retryAfter);
+        break;
+      }
+
+      if (response.status === 401 || response.status === 403) {
+        const errorBody = await readResponseBody(response);
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+        scrapeKeyPool.markError(apiKey, response.status, modelName);
+        break;
+      }
+
+      if (response.status === 500 || response.status === 503) {
+        const errorBody = await readResponseBody(response);
+        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+        await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+        try {
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestBody),
+              signal: AbortSignal.timeout(12000),
+            }
+          );
+          responseStatus = retryRes.status;
+          if (retryRes.ok) {
+            response = retryRes;
+          } else {
+            break;
+          }
+        } catch {
+          break;
+        }
+      }
 
       if (response.status === 400) {
         const errorBody = await readResponseBody(response);
@@ -824,7 +864,6 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
         } else {
           const retryBody = await readResponseBody(retryRes);
           console.warn(`[ScrapeLink] Model ${modelName} retry HTTP ${retryRes.status}: ${retryBody.slice(0, 200)}`);
-          scrapeKeyPool.markError(apiKey, retryRes.status, modelName);
           break;
         }
       }
@@ -832,7 +871,6 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
       if (!response.ok) {
         const errorBody = await readResponseBody(response);
         console.warn(`[ScrapeLink] Model ${modelName} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
-        scrapeKeyPool.markError(apiKey, response.status, modelName);
         break;
       }
 
@@ -880,6 +918,7 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
         ? (categoryVal as JpVnProductCategory)
         : undefined;
 
+      scrapeKeyPool.markModelSuccess(apiKey, modelName);
       return {
         title:
           typeof parsed.title === "string" && parsed.title.trim()
@@ -938,8 +977,8 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
             : "",
       };
       } catch (err) {
-        console.warn(`[ScrapeLink] Model ${modelName} HTTP ${responseStatus ?? "n/a"}: ${err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)}`);
-        scrapeKeyPool.markError(apiKey, 503, modelName);
+        const isTimeout = err instanceof Error && (err.name === "AbortError" || err.name === "TimeoutError");
+        console.warn(`[ScrapeLink] Model ${modelName} ${isTimeout ? "timeout" : `HTTP ${responseStatus ?? "n/a"}`}: ${err instanceof Error ? err.message.slice(0, 200) : String(err).slice(0, 200)}`);
         break;
       }
     }

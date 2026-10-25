@@ -116,33 +116,54 @@ export async function GET(req: NextRequest) {
     // Tạo tóm tắt phân tích bằng AI nếu có API Key
     let aiSummary = `Hệ thống ghi nhận tổng doanh thu 2 chiều đạt ${totalSystemRevenue.toLocaleString("vi-VN")} đ. Tuyến gửi hàng đi Nhật (VN ➔ JP) có ${totalVnJpShipments} vận đơn, trong đó ${inFlightShipments} kiện đang bay quốc tế và ${unpaidShipmentsCount} kiện đang chờ thu cước.`;
 
-    const apiKey = adminKeyPool.getAvailableKey();
-    if (apiKey) {
-      const prompt = `Bạn là Trợ lý Giám đốc Vận hành ChillBanana. Hãy nhận xét ngắn gọn (3-4 gạch đầu dòng) về bức tranh vận hành logistics 2 chiều Việt - Nhật dựa trên số liệu sau:\n${JSON.stringify(analyticsData, null, 2)}`;
-      const models = [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+    const prompt = `Bạn là Trợ lý Giám đốc Vận hành ChillBanana. Hãy nhận xét ngắn gọn (3-4 gạch đầu dòng) về bức tranh vận hành logistics 2 chiều Việt - Nhật dựa trên số liệu sau:\n${JSON.stringify(analyticsData, null, 2)}`;
+    const models = [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
 
-      for (const model of models) {
-        let responseStatus: number | null = null;
-        try {
-          let response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: prompt }] }],
-                generationConfig: {
-                  thinkingConfig: { thinkingLevel: "low" },
-                },
-              }),
-              signal: AbortSignal.timeout(8000),
-            }
-          );
-          responseStatus = response.status;
+    for (const model of models) {
+      const apiKey = adminKeyPool.getNextKey(model);
+      if (!apiKey) {
+        console.warn(`[AIAnalytics] No available API key for model ${model}, skipping.`);
+        continue;
+      }
 
-          if (response.status === 400) {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[AIAnalytics] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+      let responseStatus: number | null = null;
+      try {
+        let response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                thinkingConfig: { thinkingLevel: "low" },
+              },
+            }),
+            signal: AbortSignal.timeout(8000),
+          }
+        );
+        responseStatus = response.status;
+
+        if (response.status === 429) {
+          const errorBody = await response.text().catch(() => "");
+          const retryAfter = response.headers.get("retry-after") ?? undefined;
+          console.warn(`[AIAnalytics] Model ${model} HTTP 429: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markModelError(apiKey, model, 429, errorBody, retryAfter);
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markError(apiKey, response.status, model);
+          continue;
+        }
+
+        if (response.status === 500 || response.status === 503) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+          try {
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
@@ -156,35 +177,63 @@ export async function GET(req: NextRequest) {
               }
             );
             responseStatus = retryRes.status;
-            response = retryRes;
-          }
-
-          if (response.ok) {
-            const responseBody = await response.text();
-            let resData: any;
-            try {
-              resData = JSON.parse(responseBody);
-            } catch {
-              console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-              adminKeyPool.markError(apiKey, 503, model);
+            if (retryRes.ok) {
+              response = retryRes;
+            } else {
               continue;
             }
-            const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-            if (text) {
-              aiSummary = text;
-              break;
-            }
-            console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-          } else {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
-            adminKeyPool.markError(apiKey, response.status, model);
+          } catch {
+            continue;
           }
-        } catch (error) {
-          adminKeyPool.markError(apiKey, 503, model);
-          console.warn(`[AIAnalytics] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
-          // Fallback giữ nguyên tóm tắt deterministic
         }
+
+        if (response.status === 400) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AIAnalytics] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: prompt }] }],
+                generationConfig: { thinkingConfig: { thinkingLevel: "low" } },
+              }),
+              signal: AbortSignal.timeout(8000),
+            }
+          );
+          responseStatus = retryRes.status;
+          if (retryRes.ok) {
+            response = retryRes;
+          } else {
+            continue;
+          }
+        }
+
+        if (response.ok) {
+          const responseBody = await response.text();
+          let resData: any;
+          try {
+            resData = JSON.parse(responseBody);
+          } catch {
+            console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+            continue;
+          }
+          const text = resData?.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
+          if (text) {
+            adminKeyPool.markModelSuccess(apiKey, model);
+            aiSummary = text;
+            break;
+          }
+          console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: empty text`);
+        } else {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AIAnalytics] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+        }
+      } catch (error) {
+        const isTimeout = error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+        console.warn(`[AIAnalytics] Model ${model} ${isTimeout ? "timeout" : `HTTP ${responseStatus ?? "n/a"}`}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
+        // Fallback giữ nguyên tóm tắt deterministic
       }
     }
 

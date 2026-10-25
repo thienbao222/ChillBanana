@@ -119,7 +119,7 @@ export class ApiKeyPool {
     model: string,
     statusCode: number,
     bodyOrMessage?: unknown,
-    retryAfterSeconds?: number
+    retryAfterSeconds?: string | number | null
   ): QuotaClassification {
     const classification = recordModelQuotaError(key, model, statusCode, bodyOrMessage, retryAfterSeconds);
     const stats = this.keyStats.get(key);

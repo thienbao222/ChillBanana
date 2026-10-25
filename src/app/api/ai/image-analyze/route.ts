@@ -37,11 +37,11 @@ function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy
 /**
  * Lấy API Key khả dụng từ visionKeyPool; nếu hết thì mượn tạm từ chatKeyPool hoặc scrapeKeyPool
  */
-function getAvailableVisionApiKey(): string | null {
+function getAvailableVisionApiKey(model?: string): string | null {
   return (
-    visionKeyPool?.getNextKey?.() ||
-    chatKeyPool?.getNextKey?.() ||
-    scrapeKeyPool?.getNextKey?.() ||
+    visionKeyPool?.getNextKey?.(model) ||
+    chatKeyPool?.getNextKey?.(model) ||
+    scrapeKeyPool?.getNextKey?.(model) ||
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     null
@@ -296,6 +296,9 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
     };
 
     for (const modelName of uniqueModels) {
+      const apiKey = getAvailableVisionApiKey(modelName);
+      if (!apiKey) continue;
+
       const requestBody = {
         contents: [
           {
@@ -337,7 +340,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         if (!res.ok) {
           const errText = await readResponseBody(res);
           console.warn(`[ImageAnalyze] Model ${modelName} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
-          visionKeyPool?.markError?.(apiKey, res.status, modelName);
+          visionKeyPool?.markModelError?.(apiKey, modelName, res.status, errText);
 
           // Retry lỗi request một lần; giữ cấu hình thinking như yêu cầu ban đầu.
           if (res.status === 400) {
@@ -383,6 +386,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
           continue;
         }
 
+        visionKeyPool?.markModelSuccess?.(apiKey, modelName);
         parsedResult = await parseVisionResponse(res, modelName);
         if (parsedResult) break;
         const retryRes = await fetch(

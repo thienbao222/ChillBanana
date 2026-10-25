@@ -501,33 +501,35 @@ export async function askGeminiAgentDetailed(
   });
 
   let lastAttemptedModel: string | undefined;
-  const activeKey = chatKeyPool.getNextKey();
-  if (activeKey) {
-    const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
-    const models = Array.from(new Set(candidateModels));
+  const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
+    ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
+    : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
+  const models = Array.from(new Set(candidateModels));
 
-    for (const model of models) {
-      lastAttemptedModel = model;
-      try {
-        let response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemInstruction }] },
-              contents,
-              generationConfig: {
-                maxOutputTokens: 700,
-                temperature: 0.4,
-                thinkingConfig: { thinkingLevel: "low" },
-              },
-            }),
-            signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-          }
-        );
+  for (const model of models) {
+    const activeKey = chatKeyPool.getNextKey(model);
+    if (!activeKey) {
+      continue; // Bỏ qua ngay model nếu không có khóa khả dụng
+    }
+    lastAttemptedModel = model;
+    try {
+      let response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 700,
+              temperature: 0.4,
+              thinkingConfig: { thinkingLevel: "low" },
+            },
+          }),
+          signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+        }
+      );
 
         // HTTP 500/503: lỗi tạm thời của model, KHÔNG cooldown khóa. Thử lại cùng model 1 lần sau 600-1200ms (có jitter), nếu vẫn lỗi thì chuyển model kế tiếp.
         if (response.status === 500 || response.status === 503) {
@@ -601,6 +603,7 @@ export async function askGeminiAgentDetailed(
         }
 
         if (response.ok) {
+          chatKeyPool?.markModelSuccess?.(activeKey, model);
           const data = await response.json();
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
@@ -632,9 +635,9 @@ export async function askGeminiAgentDetailed(
         if (response.status === 429) {
           const retryAfter = response.headers.get("retry-after");
           const retryAfterSec = retryAfter ? parseInt(retryAfter, 10) : undefined;
-          chatKeyPool.markError(activeKey, 429, model, retryAfterSec);
-        } else {
-          chatKeyPool.markError(activeKey, response.status, model);
+          chatKeyPool?.markModelError?.(activeKey, model, 429, errText, retryAfterSec);
+        } else if (response.status === 401 || response.status === 403) {
+          chatKeyPool?.markError?.(activeKey, response.status, model);
         }
 
         if (model === GEMINI_MODELS.neo && (response.status === 403 || response.status === 404)) {
@@ -650,11 +653,9 @@ export async function askGeminiAgentDetailed(
           continue;
         }
         console.warn(`[Assistant] Model ${model} error:`, err?.message || String(err));
-        chatKeyPool.markError(activeKey, 503, model);
         continue;
       }
     }
-  }
 
   return {
     text: buildOfflineEvidenceReply(userQuery, evidence, isOmo, customerLang),

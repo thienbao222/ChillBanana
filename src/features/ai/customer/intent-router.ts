@@ -72,8 +72,8 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
   for (const model of [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback]) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
-    const activeKey = chatKeyPool.getNextKey();
-    if (!activeKey) return null;
+    const activeKey = chatKeyPool.getNextKey(model);
+    if (!activeKey) continue;
 
     try {
       const response = await fetch(
@@ -98,9 +98,13 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
       if (!response.ok) {
         const body = await response.text().catch(() => "");
         console.warn(`[SupportIntentRouter] Model ${model} HTTP ${response.status}: ${body.slice(0, 200)}`);
-        // Lỗi của router tuyệt đối không gọi markError của chatKeyPool
+        if (response.status === 429) {
+          chatKeyPool?.markModelError?.(activeKey, model, 429, body);
+        }
         continue;
       }
+
+      chatKeyPool?.markModelSuccess?.(activeKey, model);
 
       const data = await response.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];

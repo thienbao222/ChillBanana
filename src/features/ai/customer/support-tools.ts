@@ -246,8 +246,11 @@ export function isValidJapaneseSearchKeyword(text: string): boolean {
 export async function extractKeywordsWithGemini(
   text: string
 ): Promise<{ keywordsJa: string; keywordsVi: string; category?: string; brand?: string } | null> {
-  const activeKey = chatKeyPool.getNextKey();
-  if (!activeKey) return null;
+  const models = [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback2];
+
+  for (const model of models) {
+    const activeKey = chatKeyPool.getNextKey(model);
+    if (!activeKey) continue;
 
   try {
     const prompt = `Bạn là trợ lý AI chuyên trích xuất và dịch từ khóa tìm kiếm sản phẩm sang tiếng Nhật chuẩn để tìm kiếm trên các sàn thương mại điện tử Nhật Bản (Amazon JP, Rakuten, Mercari).
@@ -262,7 +265,7 @@ Trả về đúng định dạng JSON:
 }`;
 
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODELS.lightweight}:generateContent?key=${activeKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -281,19 +284,23 @@ Trả về đúng định dạng JSON:
 
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      console.warn(`[GeminiExtractKeywords] Model ${GEMINI_MODELS.lightweight} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
-      chatKeyPool.markError(activeKey, res.status, GEMINI_MODELS.lightweight);
-      return null;
+      console.warn(`[GeminiExtractKeywords] Model ${model} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      if (res.status === 429) {
+        chatKeyPool?.markModelError?.(activeKey, model, 429, errText);
+        continue;
+      }
+      break;
     }
 
+    chatKeyPool?.markModelSuccess?.(activeKey, model);
     const data = await res.json();
     const parts = data?.candidates?.[0]?.content?.parts || [];
     const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
     const rawJson = textPart?.text;
-    if (!rawJson) return null;
+    if (!rawJson) continue;
 
     const parsed = JSON.parse(rawJson);
-    if (!parsed || typeof parsed !== "object") return null;
+    if (!parsed || typeof parsed !== "object") continue;
 
     return {
       keywordsJa: typeof parsed.keywordsJa === "string" ? parsed.keywordsJa.trim() : "",
@@ -303,9 +310,11 @@ Trả về đúng định dạng JSON:
     };
   } catch (error: any) {
     console.warn(`[GeminiExtractKeywords] Error:`, error?.message || String(error));
-    chatKeyPool.markError(activeKey, 503, GEMINI_MODELS.lightweight);
-    return null;
+    continue;
   }
+}
+
+  return null;
 }
 
 export function translateToJapaneseKeywordsFromDictionary(text: string, currentRate = DEFAULT_EXCHANGE_RATE): TranslatedQuery & { matched: boolean } {
