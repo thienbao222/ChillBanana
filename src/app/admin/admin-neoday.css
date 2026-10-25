@@ -157,17 +157,16 @@
 }
 
 .admin-neoday-navrow {
-  min-height: 58px;
+  min-height: 52px;
+  padding-block: 8px;
   justify-content: flex-start;
-  gap: 16px;
+  align-items: center;
+  gap: 10px 16px;
   border-top: 1px solid rgba(43, 127, 176, 0.1);
-  overflow-x: auto;
-  scrollbar-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  overflow: visible;
   max-width: 100%;
-}
-
-.admin-neoday-navrow::-webkit-scrollbar {
-  display: none;
 }
 
 .admin-neoday-modes,
@@ -175,6 +174,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
+  flex-wrap: wrap;
 }
 
 .admin-neoday-modes {
@@ -220,15 +220,24 @@
 
 .admin-neoday-tabs {
   min-width: 0;
-  padding-left: 16px;
+  padding-left: 14px;
   border-left: 1px solid rgba(43, 127, 176, 0.16);
-  overflow-x: auto;
-  scrollbar-width: none;
   flex: 1 1 auto;
+  overflow: visible;
 }
 
-.admin-neoday-tabs::-webkit-scrollbar {
-  display: none;
+@media (max-width: 1650px) {
+  .admin-neoday-navrow {
+    row-gap: 8px;
+  }
+
+  .admin-neoday-tabs {
+    border-left: none;
+    padding-left: 0;
+    width: 100%;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(43, 127, 176, 0.14);
+  }
 }
 
 .admin-neoday-tab.is-active {
@@ -350,19 +359,25 @@
   }
 
   .admin-neoday-navrow {
-    min-height: 56px;
+    min-height: auto;
     gap: 8px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .admin-neoday-navrow::-webkit-scrollbar,
-  .admin-neoday-tabs::-webkit-scrollbar {
-    display: none;
+    padding-block: 6px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .admin-neoday-modes {
     flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+    padding: 3px;
+  }
+
+  .admin-neoday-modes::-webkit-scrollbar,
+  .admin-neoday-tabs::-webkit-scrollbar {
+    display: none;
   }
 
   .admin-neoday-mode {
@@ -373,7 +388,10 @@
   .admin-neoday-tabs {
     flex: 1 0 auto;
     overflow-x: auto;
-    padding-left: 8px;
+    scrollbar-width: none;
+    padding-left: 0;
+    border-left: none;
+    max-width: 100%;
   }
 
   .admin-neoday-tab {
