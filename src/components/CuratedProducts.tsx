@@ -111,6 +111,7 @@ export default function CuratedProducts({
       originalStore: product.originalStore,
       category: product.category,
       stockSlots: product.stockSlots,
+      fulfillmentOrigin: product.fulfillmentOrigin || "JP",
     });
     if (added) toast.success("Đã thêm sản phẩm vào giỏ hàng.");
   };
@@ -259,9 +260,15 @@ export default function CuratedProducts({
                       🔥 HOT DEAL
                     </span>
                   )}
-                  <span className={`${inStock ? "bg-emerald-700/90" : "bg-slate-600/90"} backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg`}>
-                    {inStock ? "⚡ Sẵn Hàng" : "Tạm hết hàng"}
-                  </span>
+                  {product.fulfillmentOrigin === "VN" ? (
+                    <span className="bg-emerald-600 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-lg shadow-sm">
+                      🇻🇳 SẴN KHO VN (0Đ BAY)
+                    </span>
+                  ) : (
+                    <span className={`${inStock ? "bg-emerald-700/90" : "bg-slate-600/90"} backdrop-blur-sm text-white text-[10px] font-semibold px-2 py-0.5 rounded-lg`}>
+                      {inStock ? "⚡ Sẵn Hàng" : "Tạm hết hàng"}
+                    </span>
+                  )}
                 </div>
 
                 {/* Số lượng còn lại */}

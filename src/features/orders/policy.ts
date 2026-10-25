@@ -10,6 +10,13 @@ export const ORDER_STATUS_FLOW = [
   "COMPLETED",
 ] as const;
 
+export const ORDER_STATUS_FLOW_VN_ORIGIN = [
+  "PENDING_DEPOSIT",
+  "WAREHOUSE_VN",
+  "LOCAL_DELIVERY",
+  "COMPLETED",
+] as const;
+
 export type ActiveOrderStatus = (typeof ORDER_STATUS_FLOW)[number];
 
 export const ORDER_STATUS_LABELS_VI: Record<string, string> = {
@@ -23,12 +30,22 @@ export const ORDER_STATUS_LABELS_VI: Record<string, string> = {
   CANCELLED: "Đã hủy",
 };
 
-export function isNextOrderStatus(current: string, next: string): boolean {
+export type VnOriginOrderStatus = (typeof ORDER_STATUS_FLOW_VN_ORIGIN)[number];
+
+export function isNextOrderStatus(current: string, next: string, fulfillmentOrigin = "JP"): boolean {
+  if (fulfillmentOrigin === "VN") {
+    const currentIndex = ORDER_STATUS_FLOW_VN_ORIGIN.indexOf(current as VnOriginOrderStatus);
+    return currentIndex >= 0 && ORDER_STATUS_FLOW_VN_ORIGIN[currentIndex + 1] === next;
+  }
   const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
   return currentIndex >= 0 && ORDER_STATUS_FLOW[currentIndex + 1] === next;
 }
 
-export function getPreviousOrderStatus(current: string): ActiveOrderStatus | null {
+export function getPreviousOrderStatus(current: string, fulfillmentOrigin = "JP"): ActiveOrderStatus | null {
+  if (fulfillmentOrigin === "VN") {
+    const currentIndex = ORDER_STATUS_FLOW_VN_ORIGIN.indexOf(current as VnOriginOrderStatus);
+    return currentIndex > 0 ? (ORDER_STATUS_FLOW_VN_ORIGIN[currentIndex - 1] as ActiveOrderStatus) : null;
+  }
   const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
   return currentIndex > 0 ? ORDER_STATUS_FLOW[currentIndex - 1] : null;
 }

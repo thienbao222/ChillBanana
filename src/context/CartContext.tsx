@@ -25,6 +25,7 @@ export interface CartItem {
   category?: string;
   stockSlots?: number;
   quantity: number;
+  fulfillmentOrigin?: "JP" | "VN" | string;
 }
 
 interface CartContextType {
@@ -57,6 +58,10 @@ interface CartContextType {
   deposit50Vnd: number;
   depositAmountVnd: number;
   remainingAmountVnd: number;
+  hasVnItems: boolean;
+  hasJpItems: boolean;
+  hasOnlyVnItems: boolean;
+  jpItemsWeightKg: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -205,6 +210,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       weightKg: safeWeightKg,
       imageUrl: product.imageUrl || "https://images.unsplash.com/photo-1526170375885-4d8ecf77b99f?auto=format&fit=crop&w=600&q=80",
       originalStore: product.originalStore || "Catalog ChillBanana",
+      fulfillmentOrigin: product.fulfillmentOrigin || "JP",
     };
 
     let wasAdded = false;
@@ -323,8 +329,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     items.reduce((acc, item) => acc + item.weightKg * item.quantity, 0).toFixed(2)
   );
 
-  // Cước bay: 0đ khi chưa có trọng lượng thực tế (sẽ tính khi kho Tokyo cân đo)
-  const shippingFeeVnd = totalWeightKg > 0 ? Math.round(totalWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
+  // Trọng lượng hàng cần bay từ Nhật (loại trừ hàng đã có sẵn tại kho VN)
+  const jpItemsWeightKg = Number(
+    items
+      .filter((item) => item.fulfillmentOrigin !== "VN")
+      .reduce((acc, item) => acc + item.weightKg * item.quantity, 0)
+      .toFixed(2)
+  );
+
+  const hasVnItems = items.some((item) => item.fulfillmentOrigin === "VN");
+  const hasJpItems = items.some((item) => item.fulfillmentOrigin !== "VN");
+  const hasOnlyVnItems = items.length > 0 && !hasJpItems;
+
+  // Cước bay: 0đ cho hàng sẵn tại kho VN, chỉ tính theo trọng lượng hàng bay từ Nhật
+  const shippingFeeVnd = jpItemsWeightKg > 0 ? Math.round(jpItemsWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
 
   // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 20.000đ)
   const rawServiceFeeVnd = Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100);
@@ -377,6 +395,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         deposit50Vnd,
         depositAmountVnd,
         remainingAmountVnd,
+        hasVnItems,
+        hasJpItems,
+        hasOnlyVnItems,
+        jpItemsWeightKg,
       }}
     >
       {children}

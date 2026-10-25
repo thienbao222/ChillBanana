@@ -352,6 +352,7 @@ export async function POST(req: NextRequest) {
 
         // Xử lý thông tin và xác minh giá
         let verifiedProductName = "";
+        let hasNonVnItem = false;
 
         for (const item of items) {
           const qty = Number(item.quantity);
@@ -363,6 +364,9 @@ export async function POST(req: NextRequest) {
             verifiedPriceJpy += product.priceJpy * qty;
             verifiedWeightKg += product.weightKg * qty;
             verifiedProductName += `${product.name} (x${qty}), `;
+            if ((product as any).fulfillmentOrigin !== "VN") {
+              hasNonVnItem = true;
+            }
 
             orderItemsData.push({
               productId: product.id,
@@ -379,6 +383,7 @@ export async function POST(req: NextRequest) {
             verifiedPriceJpy += itemPrice * qty;
             verifiedWeightKg += itemWeight * qty;
             verifiedProductName += `${item.name || body.productName || "Sản phẩm Nhật Bản"} (x${qty}), `;
+            hasNonVnItem = true;
 
             const itemOriginalUrl = typeof item.originalUrl === "string" && item.originalUrl.trim() ? item.originalUrl.trim() : null;
             const itemDisplayName = itemOriginalUrl
@@ -409,8 +414,10 @@ export async function POST(req: NextRequest) {
           throw new Error("ORDER_PRICE_TOO_LOW");
         }
 
+        const orderFulfillmentOrigin = (!hasNonVnItem && items.length > 0) || body.fulfillmentOrigin === "VN" ? "VN" : "JP";
+
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
-        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingConfig.values);
+        const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingConfig.values, orderFulfillmentOrigin);
         const { productPriceVnd, serviceFeeVnd, baseOrderCostVnd, shippingFeeVnd, totalVnd } = price;
         if (baseOrderCostVnd < minimumBaseOrderVnd) {
           throw new Error(`ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`);
@@ -446,6 +453,7 @@ export async function POST(req: NextRequest) {
             depositPercent,
             paymentStatus: "UNPAID",
             paymentMethod: body.paymentMethod === "VNPAY" ? "VNPAY" : "VIETQR",
+            fulfillmentOrigin: orderFulfillmentOrigin,
             isGroupBuy: !!body.isGroupBuy,
             groupBuyCode: body.groupBuyCode || null,
             status: "PENDING_DEPOSIT",
@@ -461,9 +469,11 @@ export async function POST(req: NextRequest) {
               create: [
                 {
                   status: "PENDING_DEPOSIT",
-                  title: "Khởi tạo đơn hàng & Chờ đặt cọc",
-                  description: "Khách hàng đã tạo đơn mua hộ qua công cụ tính giá tự động của ChillBanana.",
-                  location: "Hệ thống ChillBanana",
+                  title: orderFulfillmentOrigin === "VN" ? "Khởi tạo đơn hàng • Sẵn kho Việt Nam" : "Khởi tạo đơn hàng & Chờ đặt cọc",
+                  description: orderFulfillmentOrigin === "VN"
+                    ? "Sản phẩm có sẵn tại kho Việt Nam (miễn cước bay quốc tế), sẵn sàng đóng gói giao hàng ngay khi hoàn tất thanh toán."
+                    : "Khách hàng đã tạo đơn mua hộ qua công cụ tính giá tự động của ChillBanana.",
+                  location: orderFulfillmentOrigin === "VN" ? "Kho ChillBanana Việt Nam" : "Hệ thống ChillBanana",
                 },
               ],
             },

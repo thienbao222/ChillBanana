@@ -36,6 +36,7 @@ export interface CuratedProduct {
   isHot: boolean;
   featuredNote?: string;
   voltageNote?: string;
+  fulfillmentOrigin?: "JP" | "VN";
 }
 
 export interface NewsItem {
@@ -63,6 +64,7 @@ export interface PriceCalculationResult {
   isUnderMinOrder: boolean;
   minOrderDiffVnd: number;
   canGroupBuy: boolean;
+  fulfillmentOrigin?: "JP" | "VN";
 }
 
 export interface TrackingStep {
@@ -130,6 +132,7 @@ export interface StoredOrder {
   depositPercent: 50 | 100;
   paymentStatus: PaymentStatus;
   paymentMethod: string;
+  fulfillmentOrigin?: "JP" | "VN";
   isGroupBuy: boolean;
   groupBuyCode?: string;
   status: OrderStatus;

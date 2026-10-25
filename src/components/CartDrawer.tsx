@@ -38,7 +38,11 @@ export default function CartDrawer() {
     setDepositOption,
     deposit50Vnd,
     depositAmountVnd,
-    remainingAmountVnd
+    remainingAmountVnd,
+    hasVnItems,
+    hasJpItems,
+    hasOnlyVnItems,
+    jpItemsWeightKg,
   } = useCart();
 
   const { customer, openAuthModal } = useAuth();
@@ -556,9 +560,16 @@ export default function CartDrawer() {
                         <span className="text-xs font-bold text-banana-700">
                           {Math.round(item.priceJpy * exchangeRate).toLocaleString()} đ
                         </span>
-                        <span className="text-[10px] text-slate-500">
-                          ({item.priceJpy.toLocaleString()} ¥ • {item.weightKg > 0 ? `${item.weightKg}kg` : "chờ cân"})
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] text-slate-500">
+                            ({item.priceJpy.toLocaleString()} ¥ • {item.weightKg > 0 ? `${item.weightKg}kg` : "chờ cân"})
+                          </span>
+                          {item.fulfillmentOrigin === "VN" && (
+                            <span className="text-[9px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.2 rounded border border-emerald-200">
+                              🇻🇳 Kho VN (0đ bay)
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {/* Quantity counter */}
@@ -697,9 +708,19 @@ export default function CartDrawer() {
                 <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString()} đ</span>
               </div>
               <div className="flex justify-between items-center">
-                <span>Cước bay Tokyo ⇄ VN:</span>
-                {totalWeightKg > 0 ? (
-                  <span className="font-semibold text-navy-900">{shippingFeeVnd.toLocaleString()} đ ({totalWeightKg}kg)</span>
+                <span>
+                  {hasOnlyVnItems
+                    ? "Cước vận chuyển:"
+                    : hasVnItems
+                    ? `Cước bay Tokyo ⇄ VN (${jpItemsWeightKg}kg hàng Nhật):`
+                    : "Cước bay Tokyo ⇄ VN:"}
+                </span>
+                {hasOnlyVnItems ? (
+                  <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    0 đ (Sẵn tại kho VN - Miễn cước bay)
+                  </span>
+                ) : jpItemsWeightKg > 0 ? (
+                  <span className="font-semibold text-navy-900">{shippingFeeVnd.toLocaleString()} đ ({jpItemsWeightKg}kg)</span>
                 ) : (
                   <span className="text-[10px] font-medium text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
                     Tạm tính khi cân tại kho JP ({pricingConfig.airShippingPerKgVnd.toLocaleString()}đ/kg)

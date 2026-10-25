@@ -39,6 +39,16 @@ describe("quy trình trạng thái đơn", () => {
     expect(isNextOrderStatus("RAC", "PURCHASING_JP")).toBe(false);
   });
 
+  it("hàng có sẵn tại kho VN (fulfillmentOrigin = 'VN') đi theo flow rút gọn trực tiếp từ PENDING_DEPOSIT sang WAREHOUSE_VN", () => {
+    expect(isNextOrderStatus("PENDING_DEPOSIT", "WAREHOUSE_VN", "VN")).toBe(true);
+    expect(isNextOrderStatus("WAREHOUSE_VN", "LOCAL_DELIVERY", "VN")).toBe(true);
+    expect(isNextOrderStatus("LOCAL_DELIVERY", "COMPLETED", "VN")).toBe(true);
+    // Không đi qua bước mua hàng hoặc bay quốc tế
+    expect(isNextOrderStatus("PENDING_DEPOSIT", "PURCHASING_JP", "VN")).toBe(false);
+    expect(isNextOrderStatus("PENDING_DEPOSIT", "IN_TRANSIT_AIR", "VN")).toBe(false);
+    expect(getPreviousOrderStatus("WAREHOUSE_VN", "VN")).toBe("PENDING_DEPOSIT");
+  });
+
   it("ngưỡng đơn tối thiểu là 300.000đ", () => {
     expect(MIN_ORDER_THRESHOLD_VND).toBe(300_000);
   });
