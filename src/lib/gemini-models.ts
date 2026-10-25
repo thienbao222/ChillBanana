@@ -18,8 +18,8 @@ export const DEFAULT_FEATURE_MODELS = {
   chat: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"] as const,
   // Trích xuất từ khóa & Intent Router: siêu nhanh, tốn ít token
   light: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite"] as const,
-  // Phân tích hình ảnh: Multimodal Vision
-  vision: ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.8-flash"] as const,
+  // Phân tích hình ảnh: Multimodal Vision — Flash đầy đủ trước (nhận diện chi tiết), Lite chỉ fallback
+  vision: ["gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.1-flash-lite"] as const,
   // Admin Assistant, Daily Insights, AI Analytics: suy luận mạnh mẽ cho số liệu
   admin: ["gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite"] as const,
   // Kiểm định hàng hóa VN - JP (MAFF / Hải quan)
@@ -56,7 +56,7 @@ export const GEMINI_MODELS = {
   lightweight: "gemini-3.5-flash-lite",
 
   // AI Vision Phân tích hình ảnh (Multimodal gốc, nhận diện đa giác quan)
-  vision: "gemini-3.5-flash-lite",
+  vision: "gemini-3.8-flash",
 
   // Trợ lý Quản trị & Báo cáo Admin (Phân tích bảng biểu số liệu)
   admin: "gemini-3.8-flash",
