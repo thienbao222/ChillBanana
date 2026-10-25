@@ -787,12 +787,25 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
       ? response.text().catch(() => "")
       : JSON.stringify(await response.json().catch(() => ({})));
 
-  for (const modelName of models) {
+  const deadline = Date.now() + 45_000;
+
+  for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+    const modelName = models[modelIdx];
+    const remaining = deadline - Date.now();
+    if (remaining < 3000) {
+      console.warn(`[ScrapeLink] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử.`);
+      break;
+    }
+
     const apiKey = getAvailableScrapeApiKey(modelName);
     if (!apiKey) {
       console.warn(`[ScrapeLink] No available API key for model ${modelName}, skipping.`);
       continue;
     }
+
+    const modelTimeout = modelIdx === 0
+      ? Math.min(15_000, remaining)
+      : Math.min(10_000, remaining);
 
     for (let jsonAttempt = 0; jsonAttempt < 2; jsonAttempt++) {
       let responseStatus: number | null = null;
@@ -803,7 +816,7 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(requestBody),
-          signal: AbortSignal.timeout(12000),
+          signal: AbortSignal.timeout(modelTimeout),
         }
       );
       responseStatus = response.status;

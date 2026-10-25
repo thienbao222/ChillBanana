@@ -297,9 +297,22 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
       return parsed;
     };
 
-    for (const modelName of uniqueModels) {
+    const deadline = Date.now() + 24_000;
+
+    for (let modelIdx = 0; modelIdx < uniqueModels.length; modelIdx++) {
+      const modelName = uniqueModels[modelIdx];
+      const remaining = deadline - Date.now();
+      if (remaining < 3000) {
+        console.warn(`[ImageAnalyze] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử.`);
+        break;
+      }
+
       const apiKey = getAvailableVisionApiKey(modelName);
       if (!apiKey) continue;
+
+      const modelTimeout = modelIdx === 0
+        ? Math.min(12_000, remaining)
+        : Math.min(8_000, remaining);
 
       const requestBody = {
         contents: [
@@ -333,7 +346,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
-            signal: AbortSignal.timeout(18000),
+            signal: AbortSignal.timeout(modelTimeout),
           }
         );
 

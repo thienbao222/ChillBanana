@@ -11,6 +11,10 @@ export const CHAT_TIMEOUT_MS = Number(process.env.CHAT_TIMEOUT_MS) > 0
   ? Number(process.env.CHAT_TIMEOUT_MS)
   : 25_000;
 
+export const CHAT_TOTAL_BUDGET_MS = Number(process.env.CHAT_TOTAL_BUDGET_MS) > 0
+  ? Number(process.env.CHAT_TOTAL_BUDGET_MS)
+  : 45_000;
+
 const SENSITIVE_KEYWORDS = [
   "chính trị", "chinh tri", "bầu cử", "biểu tình", "bạo động",
   "khiêu dâm", "sex", "đồi trụy", "người lớn 18+", "phim sex", "gái gọi",
@@ -510,12 +514,26 @@ export async function askGeminiAgentDetailed(
     : configuredChatModels;
   const models = Array.from(new Set(candidateModels));
 
-  for (const model of models) {
+  const deadline = Date.now() + CHAT_TOTAL_BUDGET_MS;
+
+  for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+    const model = models[modelIdx];
+    const remaining = deadline - Date.now();
+    if (remaining < 3000) {
+      console.warn(`[Assistant] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử model và chuyển ngay sang offline.`);
+      break;
+    }
+
     const activeKey = chatKeyPool.getNextKey(model);
     if (!activeKey) {
       continue; // Bỏ qua ngay model nếu không có khóa khả dụng
     }
     lastAttemptedModel = model;
+
+    const modelTimeout = modelIdx === 0
+      ? Math.min(CHAT_TIMEOUT_MS, remaining, 25_000)
+      : Math.min(15_000, remaining);
+
     try {
       let response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
@@ -531,7 +549,7 @@ export async function askGeminiAgentDetailed(
               thinkingConfig: { thinkingLevel: "low" },
             },
           }),
-          signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+          signal: AbortSignal.timeout(modelTimeout),
         }
       );
 
@@ -539,10 +557,15 @@ export async function askGeminiAgentDetailed(
         if (response.status === 500 || response.status === 503) {
           const errStatus = response.status;
           console.warn(`[Assistant] Model ${model} lỗi HTTP ${errStatus}. Đang thử lại cùng model sau 600-1200ms...`);
+          const retryRemaining = deadline - Date.now();
+          if (retryRemaining < 3000) {
+            continue;
+          }
           const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
           const jitterMs = isTestEnv ? 10 : 600 + Math.floor(Math.random() * 600);
           await new Promise((r) => setTimeout(r, jitterMs));
           try {
+            const retryTimeout = Math.min(modelTimeout, Math.max(1000, deadline - Date.now()));
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
               {
@@ -557,14 +580,13 @@ export async function askGeminiAgentDetailed(
                     thinkingConfig: { thinkingLevel: "low" },
                   },
                 }),
-                signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+                signal: AbortSignal.timeout(retryTimeout),
               }
             );
             if (retryRes.ok) {
               response = retryRes;
             } else {
               console.warn(`[Assistant] Model ${model} retry lỗi HTTP ${retryRes.status}`);
-              chatKeyPool.markError(activeKey, retryRes.status, model);
               continue;
             }
           } catch (retryErr: any) {
@@ -581,6 +603,7 @@ export async function askGeminiAgentDetailed(
         if (response.status === 400) {
           const err400 = await response.text().catch(() => "");
           console.warn(`[Assistant] Model ${model} lỗi HTTP 400: ${err400.slice(0, 200)}`);
+          const retryTimeout = Math.min(modelTimeout, Math.max(1000, deadline - Date.now()));
           const retryRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
             {
@@ -594,7 +617,7 @@ export async function askGeminiAgentDetailed(
                   temperature: 0.4,
                 },
               }),
-              signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+              signal: AbortSignal.timeout(retryTimeout),
             }
           );
           if (retryRes.ok) {

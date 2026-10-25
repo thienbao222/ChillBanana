@@ -148,12 +148,25 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
       : Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
     let answer: string | null = null;
 
-    for (const model of models) {
+    const deadline = Date.now() + 38_000;
+
+    for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+      const model = models[modelIdx];
+      const remaining = deadline - Date.now();
+      if (remaining < 3000) {
+        console.warn(`[AdminAssistant] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử.`);
+        break;
+      }
+
       const apiKey = adminKeyPool.getNextKey(model);
       if (!apiKey) {
         console.warn(`[AdminAssistant] No available API key for model ${model}, skipping.`);
         continue;
       }
+
+      const modelTimeout = modelIdx === 0
+        ? Math.min(18_000, remaining)
+        : Math.min(12_000, remaining);
 
       let responseStatus: number | null = null;
       try {
@@ -169,7 +182,7 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
               thinkingConfig: { thinkingLevel: "low" },
             },
           }),
-          signal: AbortSignal.timeout(18000),
+          signal: AbortSignal.timeout(modelTimeout),
         });
         responseStatus = response.status;
 
