@@ -21,6 +21,7 @@ import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsiteText } from "@/context/WebsitePreferencesContext";
+import AiEcosystemModal from "@/app/admin/components/AiEcosystemModal";
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -30,6 +31,7 @@ export default function Navbar() {
   const newsHref = isClassicRoute ? "/classic#news" : "/#news";
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [showAiEcosystemModal, setShowAiEcosystemModal] = useState(false);
 
   const { totalItems, openCart } = useCart();
   const { customer, openAuthModal, logout } = useAuth();
@@ -130,6 +132,14 @@ export default function Navbar() {
             >
               {t("Cẩm Nang Hàng Nhật")}
             </Link>
+            <button
+              onClick={() => setShowAiEcosystemModal(true)}
+              className="px-3 py-1.5 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-xl transition-all flex items-center gap-1 shadow-2xs"
+              title="Xem tất cả các tính năng vận dụng AI trong ChillBanana"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-purple-600 animate-pulse" />
+              <span>{t("Vận Dụng AI")}</span>
+            </button>
           </nav>
 
           <div className="hidden md:flex lg:hidden">
@@ -227,6 +237,17 @@ export default function Navbar() {
               {t("ChillBanana AI")}
             </button>
 
+            {/* AI Ecosystem Showcase Modal Trigger */}
+            <button
+              id="ai-ecosystem-modal-trigger"
+              onClick={() => setShowAiEcosystemModal(true)}
+              className="inline-flex items-center px-3 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-100 text-purple-800 border border-purple-300 hover:shadow transition-all"
+              title="Khám phá toàn bộ 6 nhóm tính năng vận dụng AI trong ChillBanana"
+            >
+              <Sparkles className="w-3.5 h-3.5 mr-1.5 text-purple-600 animate-pulse" />
+              <span>{t("✨ Vận Dụng AI")}</span>
+            </button>
+
             <WebsitePreferencesTrigger />
 
             <Link
@@ -306,6 +327,16 @@ export default function Navbar() {
             <Sparkles className="h-4 w-4" />
             {t("Giao diện chính NeoDay")}
           </Link>
+          <button
+            onClick={() => {
+              setMobileMenuOpen(false);
+              setShowAiEcosystemModal(true);
+            }}
+            className="w-full flex items-center gap-2 rounded-xl border border-purple-200 bg-purple-50 px-3 py-2.5 font-bold text-purple-800 hover:bg-purple-100 text-left"
+          >
+            <Sparkles className="h-4 w-4 text-purple-600 animate-pulse" />
+            <span>{t("✨ Xem Hệ Sinh Thái Vận Dụng AI")}</span>
+          </button>
           <WebsitePreferencesTrigger className="w-full" onOpen={() => setMobileMenuOpen(false)} />
           <div className="pt-2 border-t border-slate-200 flex flex-col gap-2">
             {customer ? (
@@ -357,6 +388,11 @@ export default function Navbar() {
           </div>
         </div>
       )}
+      {/* Modal Hệ Sinh Thái Vận Dụng AI Toàn Diện */}
+      <AiEcosystemModal
+        isOpen={showAiEcosystemModal}
+        onClose={() => setShowAiEcosystemModal(false)}
+      />
     </header>
   );
 }
