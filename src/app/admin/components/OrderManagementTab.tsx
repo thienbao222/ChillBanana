@@ -168,6 +168,9 @@ export default function OrderManagementTab({
       setUpdateTitle("Đã nhập kho Tokyo");
       setUpdateDesc("Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.");
       setUpdateLocation("Kho Tokyo (Edogawa-ku)");
+      if (!order.jpDomesticTrack && (order as any).fulfillmentOrigin !== "VN") {
+        setJpTrack(`YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`);
+      }
     } else if (order.status === "WAREHOUSE_JP") {
       setNewStatus("IN_TRANSIT_AIR");
       setUpdateTitle("Đang vận chuyển quốc tế Tokyo ⇄ Việt Nam");
@@ -183,6 +186,9 @@ export default function OrderManagementTab({
       setUpdateTitle("Đang giao hàng chặng cuối");
       setUpdateDesc("Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.");
       setUpdateLocation("Việt Nam");
+      if (!order.vnDomesticTrack) {
+        setVnTrack(`GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`);
+      }
     } else if (order.status === "LOCAL_DELIVERY") {
       setNewStatus("COMPLETED");
       setUpdateTitle("Giao hàng thành công");
@@ -395,13 +401,20 @@ export default function OrderManagementTab({
     nextStatus: OrderStatus,
     title: string,
     desc: string,
-    loc: string
+    loc: string,
+    extraData?: { jpTrack?: string; vnTrack?: string; weightKg?: number }
   ) => {
     try {
       const res = await fetch(`/api/orders/${orderCode}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus, title, description: desc, location: loc }),
+        body: JSON.stringify({
+          status: nextStatus,
+          title,
+          description: desc,
+          location: loc,
+          ...extraData,
+        }),
       });
       const data = await res.json();
       if (res.ok && data.success) {
@@ -994,13 +1007,20 @@ export default function OrderManagementTab({
                         </div>
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
-                            onClick={() => quickMoveStatus(
-                              ord.orderCode,
-                              "WAREHOUSE_JP",
-                              "Đã nhập kho Tokyo",
-                              "Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.",
-                              "Kho Tokyo (Edogawa-ku)"
-                            )}
+                            onClick={() => {
+                              const isVn = (ord as any).fulfillmentOrigin === "VN";
+                              const jpCode = ord.jpDomesticTrack || (isVn ? undefined : `YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`);
+                              quickMoveStatus(
+                                ord.orderCode,
+                                "WAREHOUSE_JP",
+                                "Đã nhập kho Tokyo",
+                                jpCode
+                                  ? `Kiện hàng đã về kho Nhật (Mã bưu tá: ${jpCode}), kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.`
+                                  : "Kiện hàng đã về kho Nhật, kiểm tra seal nguyên vẹn và cân nặng chuẩn xác.",
+                                "Kho Tokyo (Edogawa-ku)",
+                                jpCode ? { jpTrack: jpCode } : undefined
+                              );
+                            }}
                             className="w-full py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
                           >
                             <span>Đã Mua → Về Kho Tokyo</span>
@@ -1194,12 +1214,14 @@ export default function OrderManagementTab({
                                   "Kho Việt Nam"
                                 );
                               } else {
+                                const vnCode = ord.vnDomesticTrack || `GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`;
                                 quickMoveStatus(
                                   ord.orderCode,
                                   "LOCAL_DELIVERY",
                                   "Đang giao hàng chặng cuối",
-                                  "Đã bàn giao cho đơn vị vận chuyển nội địa (GHTK/GHN/ViettelPost) phát tận tay khách.",
-                                  "Việt Nam"
+                                  `Đã bàn giao cho đơn vị vận chuyển nội địa (Mã vận đơn: ${vnCode}) phát tận tay khách.`,
+                                  "Việt Nam",
+                                  { vnTrack: vnCode }
                                 );
                               }
                             }}
@@ -1731,28 +1753,116 @@ export default function OrderManagementTab({
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mã vận đơn JP (Sagawa/Yamato)</label>
-                  <input
-                    type="text"
-                    value={jpTrack}
-                    onChange={(e) => setJpTrack(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono"
-                    placeholder="VD: SGW-88219"
-                  />
-                </div>
-                <div>
-                  <label className="block font-bold text-slate-700 mb-1">Mã vận đơn VN (GHTK/GHN)</label>
+              {/* Mã vận đơn JP & VN */}
+              {selectedOrder.fulfillmentOrigin === "VN" ? (
+                /* Đơn hàng sẵn kho VN: Chỉ cần mã bưu cục VN, ẩn mã JP */
+                <div className="bg-emerald-50/70 p-3.5 rounded-2xl border border-emerald-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block font-bold text-emerald-950">
+                      🇻🇳 Mã vận đơn bưu cục Việt Nam (GHTK / GHN / ViettelPost)
+                    </label>
+                    <span className="text-[10px] text-emerald-800 font-bold bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      Hàng sẵn kho VN (Miễn cước bay)
+                    </span>
+                  </div>
                   <input
                     type="text"
                     value={vnTrack}
                     onChange={(e) => setVnTrack(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono"
-                    placeholder="VD: GHTK-VN0982"
+                    className="w-full p-2.5 bg-white border border-emerald-300 rounded-xl font-mono focus:ring-2 focus:ring-emerald-400"
+                    placeholder="VD: GHN-VN0982 hoặc GHTK-VN123"
                   />
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    <span className="text-[10px] text-slate-500 font-semibold">Gán nhanh:</span>
+                    <button
+                      type="button"
+                      onClick={() => setVnTrack(`GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`)}
+                      className="text-[10px] bg-white hover:bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-lg border border-emerald-300 transition-colors"
+                    >
+                      + GHN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVnTrack(`GHTK-VN${Math.floor(10000000 + Math.random() * 90000000)}`)}
+                      className="text-[10px] bg-white hover:bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-lg border border-emerald-300 transition-colors"
+                    >
+                      + GHTK
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVnTrack(`VTP-${Math.floor(100000000 + Math.random() * 900000000)}`)}
+                      className="text-[10px] bg-white hover:bg-emerald-100 text-emerald-900 font-bold px-2 py-0.5 rounded-lg border border-emerald-300 transition-colors"
+                    >
+                      + ViettelPost
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* Đơn hàng mua hộ từ Nhật Bản: Hiển thị cả 2 mã kèm nút gán nhanh */
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">🇯🇵 Mã vận đơn JP (Sagawa/Yamato)</label>
+                    <input
+                      type="text"
+                      value={jpTrack}
+                      onChange={(e) => setJpTrack(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                      placeholder="VD: YAMATO-882190"
+                    />
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      <span className="text-[10px] text-slate-400 font-medium">Gán:</span>
+                      <button
+                        type="button"
+                        onClick={() => setJpTrack(`YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`)}
+                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-1.5 py-0.5 rounded border transition-colors"
+                      >
+                        + Yamato
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setJpTrack(`SGW-${Math.floor(10000000 + Math.random() * 90000000)}`)}
+                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold px-1.5 py-0.5 rounded border transition-colors"
+                      >
+                        + Sagawa
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-700 mb-1">🇻🇳 Mã vận đơn VN (GHTK/GHN)</label>
+                    <input
+                      type="text"
+                      value={vnTrack}
+                      onChange={(e) => setVnTrack(e.target.value)}
+                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-mono text-xs"
+                      placeholder="VD: GHN-VN0982"
+                    />
+                    <div className="flex flex-wrap items-center gap-1 mt-1">
+                      <span className="text-[10px] text-slate-400 font-medium">Gán:</span>
+                      <button
+                        type="button"
+                        onClick={() => setVnTrack(`GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`)}
+                        className="text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-800 font-semibold px-1.5 py-0.5 rounded border border-blue-200 transition-colors"
+                      >
+                        + GHN
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVnTrack(`GHTK-VN${Math.floor(10000000 + Math.random() * 90000000)}`)}
+                        className="text-[10px] bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-semibold px-1.5 py-0.5 rounded border border-emerald-200 transition-colors"
+                      >
+                        + GHTK
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVnTrack(`VTP-${Math.floor(100000000 + Math.random() * 900000000)}`)}
+                        className="text-[10px] bg-red-50 hover:bg-red-100 text-red-800 font-semibold px-1.5 py-0.5 rounded border border-red-200 transition-colors"
+                      >
+                        + ViettelPost
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-3 flex justify-end space-x-2">
                 <button
@@ -1979,8 +2089,12 @@ export default function OrderManagementTab({
 
             {/* Tracking Identifiers */}
             <div className="p-3 bg-slate-100 rounded-xl font-mono text-[11px] text-slate-700 space-y-1 mb-4">
-              <div>🇯🇵 Mã vận đơn Nhật: <strong className="text-navy-900">{packingSlipOrder.jpDomesticTrack || "YAMATO-PENDING"}</strong></div>
-              <div>🇻🇳 Mã bưu cục Việt Nam: <strong className="text-navy-900">{packingSlipOrder.vnDomesticTrack || "GHTK-PENDING"}</strong></div>
+              {packingSlipOrder.fulfillmentOrigin === "VN" ? (
+                <div>🇻🇳 Xuất kho: <strong className="text-emerald-800">Kho ChillBanana Việt Nam (Hàng sẵn có)</strong></div>
+              ) : (
+                <div>🇯🇵 Mã vận đơn Nhật: <strong className="text-navy-900">{packingSlipOrder.jpDomesticTrack || "YAMATO-PENDING"}</strong></div>
+              )}
+              <div>🇻🇳 Mã bưu cục Việt Nam: <strong className="text-navy-900">{packingSlipOrder.vnDomesticTrack || "GHN-PENDING"}</strong></div>
             </div>
 
             {/* Signature Box */}

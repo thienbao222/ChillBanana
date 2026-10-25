@@ -584,9 +584,14 @@ export async function PATCH(
 
     if (isAdminUser && jpTrack !== undefined) {
       updateData.jpDomesticTrack = jpTrack;
+    } else if (isAdminUser && status === "WAREHOUSE_JP" && !existingOrder.jpDomesticTrack && existingOrder.fulfillmentOrigin !== "VN") {
+      updateData.jpDomesticTrack = `YAMATO-${Math.floor(1000000000 + Math.random() * 9000000000)}`;
     }
+
     if (isAdminUser && vnTrack !== undefined) {
       updateData.vnDomesticTrack = vnTrack;
+    } else if (isAdminUser && status === "LOCAL_DELIVERY" && !existingOrder.vnDomesticTrack) {
+      updateData.vnDomesticTrack = `GHN-VN${Math.floor(10000000 + Math.random() * 90000000)}`;
     }
     if (isAdminUser && weightKg !== undefined && weightKg !== null && weightKg !== "" && !updateData.weightKg) {
       const parsedWeightKg = typeof weightKg === "number" ? weightKg : parseFloat(String(weightKg));
