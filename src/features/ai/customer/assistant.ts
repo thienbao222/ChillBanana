@@ -2,6 +2,7 @@ import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { formatVietnamTime } from "@/lib/model-quota";
+import { getChatCache, setChatCache } from "@/lib/chat-cache";
 import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type SupportEvidence } from "./support-policy";
 
 // shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
@@ -485,6 +486,17 @@ export async function askGeminiAgentDetailed(
     };
   }
 
+  // Kiểm tra cache nếu là câu hỏi chung không chứa thông tin cá nhân
+  const cached = getChatCache(userQuery, personality, customerLang);
+  if (cached) {
+    console.log(`[AI Chat] CACHE_HIT query="${userQuery.slice(0, 50)}"`);
+    return {
+      text: cached.text,
+      mode: cached.mode,
+      model: cached.model,
+    };
+  }
+
   const personalityPrompt = isOmo
     ? "Phong cách Omotenashi: Lễ phép, chu đáo, ân cần, xưng ChillBanana hoặc Mình và gọi Quý khách. Giải thích rõ ràng chi phí, tỷ giá live, quyền lợi cọc 50% hoặc thanh toán 100%, và lưu ý hàng Nhật."
     : "Phong cách Chill: Thân thiện, tự nhiên, súc tích, xưng Neo hoặc Mình và gọi Bạn. Báo giá nhanh, mách deal hời, không rườm rà.";
@@ -657,7 +669,10 @@ export async function askGeminiAgentDetailed(
               .replace(/\*\*Công cụ đang chạy:\*\*.*?(?:\n|$)/gi, "")
               .replace(/\[(?:Công cụ đang chạy|Tool running):.*?\](?:\n|$)/gi, "")
               .trim();
-            if (sanitized) return { text: sanitized, mode: "gemini", model };
+            if (sanitized) {
+              setChatCache(userQuery, personality, customerLang, { text: sanitized, mode: "gemini", model });
+              return { text: sanitized, mode: "gemini", model };
+            }
           }
           continue;
         }

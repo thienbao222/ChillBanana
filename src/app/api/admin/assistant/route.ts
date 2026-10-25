@@ -10,6 +10,21 @@ export const maxDuration = 45;
 
 type HistoryMessage = { role: "user" | "assistant"; content: string };
 
+interface AdminCacheEntry {
+  answer: string;
+  dataAsOf: string;
+  resolvedModules: ConcreteAdminModuleId[] | null;
+  createdAt: number;
+}
+
+const adminAssistantCache = new Map<string, AdminCacheEntry>();
+const ADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+
+function getAdminCacheKey(moduleId: string, question: string): string {
+  const normQ = question.toLowerCase().trim().replace(/\s+/g, " ");
+  return `${moduleId}|${normQ}`;
+}
+
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin(req);
   if (!guard.ok) return guard.response;
@@ -23,6 +38,20 @@ export async function POST(req: NextRequest) {
     }
     if (!question || question.length > 2000) {
       return NextResponse.json({ error: "Câu hỏi phải có từ 1 đến 2.000 ký tự." }, { status: 400 });
+    }
+
+    const cacheKey = getAdminCacheKey(moduleId, question);
+    const cached = adminAssistantCache.get(cacheKey);
+    if (cached && Date.now() - cached.createdAt < ADMIN_CACHE_TTL_MS) {
+      console.log(`[AdminAssistant] CACHE_HIT module=${moduleId} question="${question.slice(0, 40)}"`);
+      return NextResponse.json({
+        success: true,
+        answer: cached.answer,
+        module: moduleId,
+        resolvedModules: cached.resolvedModules,
+        dataAsOf: cached.dataAsOf,
+        cached: true,
+      });
     }
 
     const rawHistory = Array.isArray(body?.history) ? body.history.slice(-8) : [];
@@ -288,6 +317,13 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
     if (!answer) {
       answer = buildOfflineAdminReply(moduleId, question, snapshot, dataAsOf);
     }
+
+    adminAssistantCache.set(cacheKey, {
+      answer,
+      dataAsOf,
+      resolvedModules,
+      createdAt: Date.now(),
+    });
 
     return NextResponse.json({ success: true, answer, module: moduleId, resolvedModules, dataAsOf });
   } catch (error) {

@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearChatCache } from "@/lib/chat-cache";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetModules();
+  clearChatCache();
 });
 
 describe("Neo model routing", () => {
@@ -66,6 +68,8 @@ describe("Neo model routing", () => {
     expect(res.text).toBe("Phản hồi trực tiếp từ Gemini");
 
     // Khi fetch fail thì trả về offline
+    const { clearChatCache: resetCache } = await import("@/lib/chat-cache");
+    resetCache();
     fetchMock.mockResolvedValue(new Response("error 500", { status: 500 }));
     const offlineRes = await askGeminiAgentDetailed("Tư vấn nồi cơm", "omotenashi");
     expect(offlineRes.mode).toBe("offline");
