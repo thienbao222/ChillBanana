@@ -11,6 +11,7 @@ import { inspectVnJpCargoDeterministic } from "@/features/ai/vn-jp/maff-inspecto
 import { GEMINI_MODELS } from "@/lib/gemini-models";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
   try {

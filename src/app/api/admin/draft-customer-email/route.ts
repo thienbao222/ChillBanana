@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { prepareControlledCustomerEmail, ControlledDraftType } from "@/features/ai/admin/controlled-email";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 30;
 
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin(req);

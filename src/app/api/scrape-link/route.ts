@@ -15,6 +15,7 @@ import {
 import { findSampleProductByUrl } from "@/features/pricing/japan-stores";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const SCRAPE_LINK_LIMIT = { max: 10, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
 
