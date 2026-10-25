@@ -25,7 +25,7 @@ export function getBaseUrl(): string {
   return "http://localhost:3000";
 }
 
-function escapeHtml(value: string) {
+export function escapeHtml(value: string) {
   return value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
