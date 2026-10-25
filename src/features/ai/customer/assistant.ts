@@ -1,6 +1,7 @@
 import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
 import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
+import { formatVietnamTime } from "@/lib/model-quota";
 import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type SupportEvidence } from "./support-policy";
 
 // shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
@@ -471,7 +472,7 @@ export async function askGeminiAgentDetailed(
   conversationHistory: { role: string; text: string }[] = [],
   evidence: SupportEvidence[] = [],
   sessionPreferences?: string | null
-): Promise<{ text: string; mode: "gemini" | "offline"; model?: string }> {
+): Promise<{ text: string; mode: "gemini" | "offline"; model?: string; isQuotaFallback?: boolean }> {
   const isOmo = personality === "omotenashi";
   const customerLang = detectCustomerLanguage(userQuery);
 
@@ -505,6 +506,9 @@ export async function askGeminiAgentDetailed(
   });
 
   let lastAttemptedModel: string | undefined;
+  let hasQuotaExhaustion = false;
+  const maskKey = (k: string) => (k && k.length > 8 ? "..." + k.slice(-4) : "...");
+
   const configuredChatModels = typeof getFeatureModels === "function"
     ? getFeatureModels("chat")
     : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
@@ -526,9 +530,11 @@ export async function askGeminiAgentDetailed(
 
     const activeKey = chatKeyPool.getNextKey(model);
     if (!activeKey) {
+      console.log(`[AI Chat] model=${model} key=none - Không có khóa khả dụng cho model này.`);
       continue; // Bỏ qua ngay model nếu không có khóa khả dụng
     }
     lastAttemptedModel = model;
+    console.log(`[AI Chat] model=${model} key=${maskKey(activeKey)} remaining_budget=${remaining}ms`);
 
     const modelTimeout = modelIdx === 0
       ? Math.min(CHAT_TIMEOUT_MS, remaining, 25_000)
@@ -660,11 +666,22 @@ export async function askGeminiAgentDetailed(
         console.warn(`[Assistant] Model ${model} lỗi HTTP ${response.status}: ${errText.slice(0, 200)}`);
 
         if (response.status === 429) {
+          hasQuotaExhaustion = true;
           const retryAfter = response.headers.get("retry-after");
           const retryAfterSec = retryAfter ? parseInt(retryAfter, 10) : undefined;
-          chatKeyPool?.markModelError?.(activeKey, model, 429, errText, retryAfterSec);
+          const classification = chatKeyPool?.markModelError?.(activeKey, model, 429, errText, retryAfterSec);
+          console.warn(
+            `[AI Chat] 429 RATE_LIMIT model=${model} key=${maskKey(activeKey)} type=${classification?.type || "DAILY"} cooldown_until=${formatVietnamTime(classification?.cooldownUntil || 0)} reason=${classification?.reason || errText.slice(0, 80)}`
+          );
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=quota_exhausted`);
         } else if (response.status === 401 || response.status === 403) {
           chatKeyPool?.markError?.(activeKey, response.status, model);
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=HTTP_${response.status}`);
+        } else {
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=HTTP_${response.status}`);
         }
 
         if (model === primaryChatModel && (response.status === 403 || response.status === 404)) {
@@ -677,9 +694,13 @@ export async function askGeminiAgentDetailed(
         const isTimeout = err?.name === "AbortError" || err?.name === "TimeoutError" || /timeout|abort/i.test(err?.message || "");
         if (isTimeout) {
           console.warn(`[Assistant] Model ${model} timeout`);
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=timeout`);
           continue;
         }
         console.warn(`[Assistant] Model ${model} error:`, err?.message || String(err));
+        const nextModel = models[modelIdx + 1] || "offline";
+        console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=error`);
         continue;
       }
     }
@@ -688,6 +709,7 @@ export async function askGeminiAgentDetailed(
     text: buildOfflineEvidenceReply(userQuery, evidence, isOmo, customerLang),
     mode: "offline",
     model: lastAttemptedModel,
+    isQuotaFallback: hasQuotaExhaustion,
   };
 }
 
