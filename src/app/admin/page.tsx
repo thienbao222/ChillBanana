@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   LayoutDashboard,
@@ -30,10 +30,12 @@ import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import AuditLogsTab from "@/app/admin/components/AuditLogsTab";
 import SandboxTab from "@/app/admin/components/SandboxTab";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
+import { parseAdminLocation, AdminTab } from "@/features/ai/admin/tab-utils";
 import "./admin-neoday.css";
 
 function AdminDashboardPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { adminToast } = useAdminToast();
 
   // Chế độ giao diện: "dashboard" | "operations" | "vn_jp_dispatch"
@@ -44,7 +46,10 @@ function AdminDashboardPageInner() {
   const [currentUser, setCurrentUser] = useState<{ username: string; name: string; role: string } | null>(null);
 
   // Tab đang chọn
-  const [activeTab, setActiveTab] = useState<"orders" | "customers" | "products" | "analytics" | "purchase" | "settings" | "audit" | "sandbox">("orders");
+  const [activeTab, setActiveTab] = useState<AdminTab>("orders");
+  const [currentFilter, setCurrentFilter] = useState<string | undefined>(undefined);
+  const [currentStatus, setCurrentStatus] = useState<string | undefined>(undefined);
+
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
   const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("auto");
 
@@ -75,6 +80,16 @@ function AdminDashboardPageInner() {
     };
     checkAuth();
   }, [router]);
+
+  // Đồng bộ URL params (?tab=..., ?view=..., ?filter=..., ?status=...)
+  useEffect(() => {
+    if (!searchParams) return;
+    const parsed = parseAdminLocation(searchParams, currentUser?.role);
+    setActiveTab(parsed.tab);
+    setAdminViewMode(parsed.viewMode);
+    if (parsed.filter) setCurrentFilter(parsed.filter);
+    if (parsed.status) setCurrentStatus(parsed.status);
+  }, [searchParams, currentUser?.role]);
 
   const handleLogout = async () => {
     try {
@@ -213,6 +228,8 @@ function AdminDashboardPageInner() {
             activeTab={activeTab}
             externalSearchTerm={searchTerm}
             onClearSearch={() => setSearchTerm("")}
+            initialFilter={currentFilter}
+            initialStatus={currentStatus}
           />
         )}
 
@@ -232,7 +249,9 @@ function AdminDashboardPageInner() {
             )}
             {activeTab === "sandbox"   && <SandboxTab />}
             {activeTab === "settings" && currentUser?.role === "SUPER_ADMIN" && <BusinessSettingsTab />}
-            {activeTab === "audit" && currentUser?.role === "SUPER_ADMIN" && <AuditLogsTab />}
+            {activeTab === "audit" && currentUser?.role === "SUPER_ADMIN" && (
+              <AuditLogsTab initialFilter={currentFilter} />
+            )}
           </>
         )}
 
@@ -244,7 +263,18 @@ function AdminDashboardPageInner() {
 export default function AdminDashboardPage() {
   return (
     <AdminToastProvider>
-      <AdminDashboardPageInner />
+      <Suspense
+        fallback={
+          <div className="admin-neoday min-h-screen flex items-center justify-center text-xs">
+            <div className="flex items-center space-x-2">
+              <RefreshCw className="w-5 h-5 animate-spin text-sky-700" />
+              <span>Đang tải không gian quản trị...</span>
+            </div>
+          </div>
+        }
+      >
+        <AdminDashboardPageInner />
+      </Suspense>
     </AdminToastProvider>
   );
 }

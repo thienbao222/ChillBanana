@@ -140,7 +140,7 @@ describe("Admin AI - Deterministic Action Item Rules (Việc cần làm hôm nay
     expect(stalledItem?.priority).toBe("medium");
     expect(stalledItem?.itemCount).toBe(2);
     expect(stalledItem?.orderCodes).toEqual(["KZN-STALLED-4D", "KZN-STALLED-5D"]);
-    expect(stalledItem?.deepLink).toBe("/admin?tab=operations");
+    expect(stalledItem?.deepLink).toBe("/admin?tab=orders&view=kanban");
   });
 
   it("Rule 4: Email thất bại gửi lại được gắn nhãn ưu tiên TRUNG BÌNH và gom mã đơn", () => {
@@ -184,7 +184,7 @@ describe("Admin AI - Deterministic Action Item Rules (Việc cần làm hôm nay
     expect(maffItem?.priority).toBe("high");
     expect(maffItem?.itemCount).toBe(2);
     expect(maffItem?.orderCodes).toEqual(["VNJP-2026-FOOD1", "VNJP-2026-FOOD2"]);
-    expect(maffItem?.deepLink).toBe("/admin?tab=vn_jp_dispatch");
+    expect(maffItem?.deepLink).toBe("/admin?tab=orders&view=vnjp");
   });
 
   it("Trả về danh sách rỗng khi không có vấn đề nào vượt ngưỡng", () => {
