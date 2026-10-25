@@ -1,3 +1,13 @@
+import {
+  isModelAvailableForKey,
+  recordModelQuotaError,
+  recordModelSuccess,
+  getModelQuotaState,
+  getAllModelQuotaStates,
+  QuotaClassification,
+  ModelQuotaState,
+} from "./model-quota";
+
 export interface KeyEntry {
   keyPreview: string;
   status: "ACTIVE" | "RATE_LIMITED" | "DEAD";
@@ -70,6 +80,49 @@ export class ApiKeyPool {
     return this.getNextKey();
   }
 
+  /**
+   * API mới (PHẦN 1): Ghi nhận lỗi theo cặp (khóa, model).
+   * - 401/403: Đánh dấu cả khóa DEAD (15 phút).
+   * - 429: Phân loại Daily (đến 00:00 Pacific) hoặc Minute (5-60s), CHỈ khóa cặp (khóa, model).
+   * - 500/503/timeout: Lỗi tạm thời, KHÔNG khóa.
+   */
+  public markModelError(
+    key: string,
+    model: string,
+    statusCode: number,
+    bodyOrMessage?: unknown,
+    retryAfterSeconds?: number
+  ): QuotaClassification {
+    const classification = recordModelQuotaError(key, model, statusCode, bodyOrMessage, retryAfterSeconds);
+    const stats = this.keyStats.get(key);
+    if (stats) {
+      stats.errorCount++;
+      if (statusCode === 401 || statusCode === 403) {
+        stats.status = "DEAD";
+        stats.cooldownUntil = Date.now() + 15 * 60_000;
+        console.warn(`[ApiKeyPool:${this.envVarName}] API key revoked or unauthorized (HTTP ${statusCode}). Marked DEAD with 15m cooldown.`);
+      }
+    }
+    return classification;
+  }
+
+  public markModelSuccess(key: string, model: string): void {
+    recordModelSuccess(key, model);
+  }
+
+  public isModelAvailable(key: string, model: string): boolean {
+    const stats = this.keyStats.get(key);
+    if (!stats) return false;
+    const now = Date.now();
+    if (stats.status === "DEAD" && now < stats.cooldownUntil) {
+      return false;
+    }
+    return isModelAvailableForKey(key, model, now);
+  }
+
+  /**
+   * Giữ nguyên hàm cũ để tương thích ngược hoàn toàn với code & tests hiện hữu.
+   */
   public markError(key: string, statusCode: number, modelName?: string, retryAfterSeconds?: number): void {
     const stats = this.keyStats.get(key);
     if (!stats) return;
