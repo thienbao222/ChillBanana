@@ -38,7 +38,8 @@ export function calculateOrderPrice(
   weightKg = 0,
   exchangeRate = DEFAULT_EXCHANGE_RATE,
   isGroupBuy = false,
-  config: PricingConfigValues = DEFAULT_PRICING_CONFIG
+  config: PricingConfigValues = DEFAULT_PRICING_CONFIG,
+  fulfillmentOrigin: string = "JP"
 ) {
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
   const serviceFeeVnd = Math.max(config.serviceFeeMinimumVnd, Math.round(productPriceVnd * config.serviceFeePercent / 100));
@@ -46,7 +47,8 @@ export function calculateOrderPrice(
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
 
   let shippingFeeVnd = 0;
-  if (weightKg > 0) {
+  // Hàng sẵn tại kho Việt Nam không phát sinh cước bay quốc tế Tokyo ⇄ VN
+  if (weightKg > 0 && fulfillmentOrigin !== "VN") {
     const shippingRate = isGroupBuy && weightKg <= config.groupBuyMaxWeightKg
       ? Math.round(config.airShippingPerKgVnd * (1 - config.groupBuyShippingDiscountPercent / 100))
       : config.airShippingPerKgVnd;
@@ -70,5 +72,6 @@ export function calculateOrderPrice(
     isUnderMinOrder,
     minOrderDiffVnd,
     canGroupBuy: weightKg <= 0.8 || isUnderMinOrder,
+    fulfillmentOrigin,
   };
 }

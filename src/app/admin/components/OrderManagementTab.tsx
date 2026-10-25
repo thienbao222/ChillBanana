@@ -819,6 +819,11 @@ export default function OrderManagementTab({
                           <div className="flex justify-between items-start">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-mono font-bold text-navy-900 text-xs">#{ord.orderCode}</span>
+                              {(ord as any).fulfillmentOrigin === "VN" && (
+                                <span className="px-1 py-0.2 rounded bg-emerald-100 text-emerald-800 text-[9px] font-bold border border-emerald-200">
+                                  🇻🇳 Kho VN
+                                </span>
+                              )}
                               {cardSource.url && (
                                 <a
                                   href={cardSource.url}
@@ -864,19 +869,28 @@ export default function OrderManagementTab({
                         </div>
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
-                            onClick={() => ord.paymentStatus === "UNPAID"
-                              ? openPaymentRecordModal(ord)
-                              : quickMoveStatus(
+                            onClick={() => {
+                              if (ord.paymentStatus === "UNPAID") {
+                                openPaymentRecordModal(ord);
+                              } else {
+                                const isVn = (ord as any).fulfillmentOrigin === "VN";
+                                quickMoveStatus(
                                   ord.orderCode,
-                                  "PURCHASING_JP",
-                                  "Đã nhận cọc - Đang mua hàng tại Tokyo",
-                                  "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
-                                  "Tokyo, Nhật Bản"
-                                )}
+                                  isVn ? "WAREHOUSE_VN" : "PURCHASING_JP",
+                                  isVn ? "Đã nhận cọc - Sẵn tại kho Việt Nam" : "Đã nhận cọc - Đang mua hàng tại Tokyo",
+                                  isVn ? "Đơn hàng có sẵn tại kho VN, chuẩn bị đóng gói giao nội địa." : "Nhân viên văn phòng Tokyo đã tiến hành order trực tiếp từ người bán.",
+                                  isVn ? "Kho ChillBanana Việt Nam" : "Tokyo, Nhật Bản"
+                                );
+                              }
+                            }}
                             disabled={!ord.isPriceVerified || (ord.paymentStatus !== "UNPAID" && !["DEPOSITED_50", "PAID_100"].includes(ord.paymentStatus))}
                             className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            <span>{ord.paymentStatus === "UNPAID" ? (ord.isPriceVerified ? "Ghi nhận chuyển khoản" : "Duyệt giá trước khi nhận cọc") : "Bắt đầu mua hàng"}</span>
+                            <span>
+                              {ord.paymentStatus === "UNPAID"
+                                ? (ord.isPriceVerified ? "Ghi nhận chuyển khoản" : "Duyệt giá trước khi nhận cọc")
+                                : ((ord as any).fulfillmentOrigin === "VN" ? "Xuất kho VN giao ngay" : "Bắt đầu mua hàng")}
+                            </span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           {!ord.isPriceVerified && (

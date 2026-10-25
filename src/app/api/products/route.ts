@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
               isHot: Boolean(item.isHot),
               featuredNote: item.featuredNote || "",
               voltageNote: (item as { voltageNote?: string }).voltageNote || undefined,
+              fulfillmentOrigin: (item as any).fulfillmentOrigin || "JP",
             })),
             skipDuplicates: true,
           });
@@ -152,6 +153,7 @@ export async function POST(req: NextRequest) {
         isHot: Boolean(body.isHot),
         featuredNote: body.featuredNote || "",
         voltageNote: body.voltageNote || undefined,
+        fulfillmentOrigin: body.fulfillmentOrigin === "VN" ? "VN" : "JP",
       },
     });
 
@@ -230,6 +232,7 @@ export async function PUT(req: NextRequest) {
     if (data.isHot !== undefined) updateData.isHot = Boolean(data.isHot);
     if (data.featuredNote !== undefined) updateData.featuredNote = data.featuredNote;
     if (data.voltageNote !== undefined) updateData.voltageNote = data.voltageNote;
+    if (data.fulfillmentOrigin !== undefined) updateData.fulfillmentOrigin = data.fulfillmentOrigin === "VN" ? "VN" : "JP";
 
     const updated = await prisma.product.update({
       where: { id },

@@ -40,6 +40,8 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
       if (claimedAttempt.count !== 1) return false;
 
       if (autoConfirmOrder) {
+        const isVnOrigin = (attempt.order as { fulfillmentOrigin?: string }).fulfillmentOrigin === "VN";
+        const nextStatus = isVnOrigin ? "WAREHOUSE_VN" : "PURCHASING_JP";
         const recordedStatus = getRecordedPaymentStatus(attempt.order.depositPercent);
         const claimedOrder = await tx.order.updateMany({
           where: {
@@ -50,7 +52,7 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
           data: {
             paymentStatus: recordedStatus,
             paymentMethod: "MOCK",
-            status: "PURCHASING_JP",
+            status: nextStatus,
             reservationExpiresAt: null,
           },
         });
@@ -70,10 +72,14 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
           await tx.trackingLog.create({
             data: {
               orderId: attempt.orderId,
-              status: "PURCHASING_JP",
-              title: attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Live Demo)" : "Thanh toán cọc 50% thành công (Live Demo)",
-              description: `Hệ thống ghi nhận thanh toán mô phỏng ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
-              location: "ChillBanana Payment Gateway",
+              status: nextStatus,
+              title: isVnOrigin
+                ? (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Sẵn kho VN)" : "Thanh toán cọc 50% thành công (Sẵn kho VN)")
+                : (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Live Demo)" : "Thanh toán cọc 50% thành công (Live Demo)"),
+              description: isVnOrigin
+                ? `Hệ thống ghi nhận thanh toán ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Hàng có sẵn tại kho VN, sẵn sàng đóng gói giao nội địa.`
+                : `Hệ thống ghi nhận thanh toán mô phỏng ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
+              location: isVnOrigin ? "Kho ChillBanana Việt Nam" : "ChillBanana Payment Gateway",
             },
           });
           return true;

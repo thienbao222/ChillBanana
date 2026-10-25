@@ -50,6 +50,7 @@ model Order {
   depositPercent   Int           @default(50) // 50 hoặc 100; áp dụng cho tiền hàng + phí mua hộ
   paymentStatus    String        @default("UNPAID") // UNPAID, DEPOSITED_50, PAID_100, REFUNDED
   paymentMethod    String        @default("VIETQR") // VIETQR, VNPAY, MOMO, COD
+  fulfillmentOrigin String       @default("JP") // "JP" (Kho Tokyo/Mua hộ Nhật) | "VN" (Có sẵn tại kho Việt Nam)
 
   // Tùy chọn gộp đơn
   isGroupBuy       Boolean       @default(false)
@@ -207,6 +208,7 @@ model Product {
   isHot          Boolean  @default(false)
   featuredNote   String?  // Ghi chú đặc biệt (VD: Bán chạy số 1 tại Cosme Nhật)
   voltageNote    String?  // Cảnh báo điện áp nếu là đồ điện tử (VD: "Điện áp 100V - Cần dùng biến áp")
+  fulfillmentOrigin String @default("JP") // "JP" (Kho Tokyo/Mua hộ Nhật) | "VN" (Có sẵn tại kho Việt Nam)
   orderItems     OrderItem[]
   createdAt      DateTime @default(now())
 }

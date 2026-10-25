@@ -444,13 +444,14 @@ export async function PATCH(
     }
 
     const requestedStatus = status || existingOrder.status;
-    if (requestedStatus !== existingOrder.status && requestedStatus !== "CANCELLED" && !isNextOrderStatus(existingOrder.status, requestedStatus)) {
+    const origin = (existingOrder as { fulfillmentOrigin?: string }).fulfillmentOrigin || "JP";
+    if (requestedStatus !== existingOrder.status && requestedStatus !== "CANCELLED" && !isNextOrderStatus(existingOrder.status, requestedStatus, origin)) {
       return NextResponse.json({ error: "Đơn chỉ được chuyển sang bước kế tiếp trong quy trình. Hãy kiểm tra lại trạng thái hiện tại." }, { status: 409 });
     }
     if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP" && !existingOrder.isPriceVerified) {
       return NextResponse.json({ error: "Cần xác minh báo giá trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
     }
-    if (existingOrder.status === "PENDING_DEPOSIT" && requestedStatus === "PURCHASING_JP") {
+    if (existingOrder.status === "PENDING_DEPOSIT" && (requestedStatus === "PURCHASING_JP" || requestedStatus === "WAREHOUSE_VN")) {
       if (existingOrder.paymentStatus !== "DEPOSITED_50" && existingOrder.paymentStatus !== "PAID_100") {
         return NextResponse.json({ error: "Cần xác nhận đã nhận tiền cọc trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
       }

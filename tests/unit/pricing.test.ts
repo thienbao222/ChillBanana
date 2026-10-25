@@ -85,6 +85,16 @@ describe("calculateOrderPrice", () => {
     expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, unknown: 1 })).toBe(true);
   });
 
+  it("hàng có sẵn tại kho VN (fulfillmentOrigin = 'VN') không phát sinh cước bay quốc tế (0đ)", () => {
+    const jpPrice = calculateOrderPrice(10_000, 1.5, 170, false, DEFAULT_PRICING_CONFIG, "JP");
+    const vnPrice = calculateOrderPrice(10_000, 1.5, 170, false, DEFAULT_PRICING_CONFIG, "VN");
+
+    expect(jpPrice.shippingFeeVnd).toBeGreaterThan(0);
+    expect(vnPrice.shippingFeeVnd).toBe(0);
+    expect(vnPrice.totalVnd).toBe(vnPrice.baseOrderCostVnd);
+    expect(vnPrice.fulfillmentOrigin).toBe("VN");
+  });
+
   it("thẩm định trường fxSpreadPercent (0% đến 20%, số thực hợp lệ)", () => {
     expect(validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 0 })).toMatchObject({
       values: { fxSpreadPercent: 0 },

@@ -108,6 +108,8 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
     if (claimedAttempt.count !== 1) return null;
 
     if (autoSettleOrder) {
+      const isVnOrigin = (order as { fulfillmentOrigin?: string }).fulfillmentOrigin === "VN";
+      const nextStatus = isVnOrigin ? "WAREHOUSE_VN" : "PURCHASING_JP";
       const recordedStatus = getRecordedPaymentStatus(order.depositPercent);
       const updatedOrder = await tx.order.updateMany({
         where: {
@@ -119,7 +121,7 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
         data: {
           paymentStatus: recordedStatus,
           paymentMethod: "VNPAY_SANDBOX",
-          status: "PURCHASING_JP",
+          status: nextStatus,
           reservationExpiresAt: null,
         },
       });
@@ -143,10 +145,12 @@ export async function confirmVnpayPayment(orderCode: string, amountMinor: string
       await tx.trackingLog.create({
         data: {
           orderId: order.id,
-          status: "PURCHASING_JP",
+          status: nextStatus,
           title: order.depositPercent === 100 ? "Đã thanh toán 100% qua VNPAY" : "Đã đặt cọc 50% qua VNPAY",
-          description: `Cổng VNPAY xác nhận thanh toán ${amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng tự động chuyển sang bước mua hộ tại Nhật.`,
-          location: "Cổng thanh toán VNPAY",
+          description: isVnOrigin
+            ? `Cổng VNPAY xác nhận thanh toán ${amountVnd.toLocaleString("vi-VN")} đ. Hàng có sẵn tại kho VN, sẵn sàng đóng gói giao nội địa.`
+            : `Cổng VNPAY xác nhận thanh toán ${amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng tự động chuyển sang bước mua hộ tại Nhật.`,
+          location: isVnOrigin ? "Kho ChillBanana Việt Nam" : "Cổng thanh toán VNPAY",
         },
       });
     } else {
