@@ -133,6 +133,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
               const originalUrl = typeof item.originalUrl === "string" ? item.originalUrl : undefined;
               const category = typeof item.category === "string" ? item.category : undefined;
               const stockSlots = typeof item.stockSlots === "number" ? item.stockSlots : undefined;
+              const fulfillmentOrigin = (item.fulfillmentOrigin === "VN" ? "VN" : "JP") as "JP" | "VN";
 
               return {
                 id,
@@ -146,6 +147,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 originalUrl,
                 category,
                 stockSlots,
+                fulfillmentOrigin,
               } as CartItem;
             })
             .filter((item) => item.quantity > 0 && item.priceJpy >= 0);
@@ -360,7 +362,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Đặt cọc 50% hoặc Thanh toán 100%
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
   const depositAmountVnd = depositOption === 100 ? baseOrderCostVnd : deposit50Vnd;
-  const remainingAmountVnd = depositOption === 100 ? 0 : (baseOrderCostVnd - depositAmountVnd);
+  // Số tiền còn lại khi nhận hàng = Tổng tiền đơn hàng - Số tiền thanh toán ngay
+  // Đảm bảo nguyên tắc bảo toàn: Tổng = Cần thanh toán ngay + Còn lại khi nhận hàng (không bị hụt cước bay)
+  const targetTotalVnd = totalWeightKg > 0 ? totalVnd : baseOrderCostVnd;
+  const remainingAmountVnd = Math.max(0, targetTotalVnd - depositAmountVnd);
   const isShippingWeightPending = totalWeightKg <= 0;
 
   return (

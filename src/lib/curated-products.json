@@ -30,7 +30,8 @@
     "originalStore": "Matsumoto Kiyoshi JP",
     "stockSlots": 8,
     "isHot": true,
-    "featuredNote": "Phiên bản nội địa Nhật có tem bảo an"
+    "featuredNote": "Phiên bản nội địa Nhật có tem bảo an • Sẵn tại kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-cos-03",
@@ -46,7 +47,8 @@
     "originalStore": "Rakuten JP",
     "stockSlots": 24,
     "isHot": false,
-    "featuredNote": "Giá nhẹ nhàng - Thích hợp gộp đơn"
+    "featuredNote": "Giá nhẹ nhàng - Sẵn hàng tại kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-hea-01",
@@ -62,7 +64,8 @@
     "originalStore": "Amazon JP Official",
     "stockSlots": 6,
     "isHot": true,
-    "featuredNote": "Dòng tảo cao cấp màu vàng có chứng nhận GMP"
+    "featuredNote": "Dòng tảo cao cấp màu vàng có chứng nhận GMP • Sẵn kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-hea-02",
@@ -78,7 +81,8 @@
     "originalStore": "Orihiro JP Direct",
     "stockSlots": 12,
     "isHot": false,
-    "featuredNote": "Hạn sử dụng mới nhất 2028"
+    "featuredNote": "Hạn sử dụng mới nhất 2028 • Sẵn tại kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-gad-01",
@@ -94,7 +98,8 @@
     "originalStore": "Bic Camera JP",
     "stockSlots": 10,
     "isHot": true,
-    "featuredNote": "Chất liệu thép không gỉ SUS304 chuẩn an toàn Nhật Bản"
+    "featuredNote": "Chất liệu thép không gỉ SUS304 chuẩn Nhật • Sẵn kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-gad-02",
@@ -110,8 +115,9 @@
     "originalStore": "Yodobashi Camera",
     "stockSlots": 5,
     "isHot": true,
-    "featuredNote": "Bản sạc dải rộng 100V - 240V tiện lợi không cần cục đổi nguồn",
-    "voltageNote": "Hỗ trợ điện áp toàn cầu 100V-240V (Cắm trực tiếp tại VN)"
+    "featuredNote": "Bản sạc dải rộng 100V - 240V cắm trực tiếp tại VN",
+    "voltageNote": "Hỗ trợ điện áp toàn cầu 100V-240V (Cắm trực tiếp tại VN)",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-gad-03",
@@ -127,7 +133,8 @@
     "originalStore": "Amazon JP Official",
     "stockSlots": 6,
     "isHot": true,
-    "featuredNote": "Không cần thay pin - Bảo hành chính hãng"
+    "featuredNote": "Không cần thay pin • Sẵn tại kho Việt Nam",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-ani-01",
@@ -143,7 +150,8 @@
     "originalStore": "Surugaya JP / AmiAmi",
     "stockSlots": 3,
     "isHot": true,
-    "featuredNote": "Hàng nguyên seal chính hãng có tem vàng Toei"
+    "featuredNote": "Hàng nguyên seal chính hãng Toei • Sẵn kho VN",
+    "fulfillmentOrigin": "VN"
   },
   {
     "id": "prod-ani-02",
@@ -159,6 +167,7 @@
     "originalStore": "Bandai Hobby JP",
     "stockSlots": 7,
     "isHot": false,
-    "featuredNote": "Bản kỷ niệm 45 năm thương hiệu Gundam"
+    "featuredNote": "Bản kỷ niệm 45 năm thương hiệu Gundam • Sẵn kho VN",
+    "fulfillmentOrigin": "VN"
   }
 ]

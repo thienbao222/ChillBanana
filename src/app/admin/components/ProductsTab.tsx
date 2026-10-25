@@ -13,10 +13,7 @@ import {
   Image as ImageIcon,
   AlertTriangle,
   CheckCircle2,
-  Zap,
   Package,
-  ShieldCheck,
-  Info,
 } from "lucide-react";
 import { CuratedProduct } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
@@ -43,6 +40,7 @@ export default function ProductsTab() {
     isHot: false,
     featuredNote: "",
     voltageNote: "",
+    fulfillmentOrigin: "JP" as "JP" | "VN",
   });
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [imageLoadError, setImageLoadError] = useState(false);
@@ -141,6 +139,7 @@ export default function ProductsTab() {
       description: "Sản phẩm nội địa Nhật Bản chính hãng gom mua trực tiếp.",
       originalStore: "Amazon JP", stockSlots: 10, isHot: true,
       featuredNote: "Mặt hàng săn sale số lượng có hạn", voltageNote: "",
+      fulfillmentOrigin: "JP",
     });
     setImageLoadError(false);
     setIsConvertedDriveLink(false);
@@ -155,6 +154,7 @@ export default function ProductsTab() {
       description: prod.description || "", originalStore: prod.originalStore || "Amazon JP",
       stockSlots: prod.stockSlots ?? 10, isHot: Boolean(prod.isHot),
       featuredNote: prod.featuredNote || "", voltageNote: prod.voltageNote || "",
+      fulfillmentOrigin: (prod.fulfillmentOrigin === "VN" ? "VN" : "JP") as "JP" | "VN",
     });
     setImageLoadError(false);
     setIsConvertedDriveLink(false);
@@ -265,17 +265,22 @@ export default function ProductsTab() {
         </div>
 
         <div className="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto text-xs">
-          {["all", "cosmetics", "health", "gadgets", "anime"].map((cat) => (
+          {["all", "warehouse-vn", "cosmetics", "health", "gadgets", "anime"].map((cat) => (
             <button
               key={cat}
               onClick={() => setProductCategoryFilter(cat)}
               className={`px-3 py-1.5 rounded-xl font-bold whitespace-nowrap transition-all ${
                 productCategoryFilter === cat
-                  ? "bg-navy-900 text-white shadow-sm"
+                  ? cat === "warehouse-vn"
+                    ? "bg-emerald-600 text-white shadow-sm"
+                    : "bg-navy-900 text-white shadow-sm"
+                  : cat === "warehouse-vn"
+                  ? "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
               {cat === "all" && `Tất Cả (${products.length})`}
+              {cat === "warehouse-vn" && `🇻🇳 Sẵn Kho VN (${products.filter((p) => p.fulfillmentOrigin === "VN").length})`}
               {cat === "cosmetics" && "Mỹ Phẩm"}
               {cat === "health" && "Sức Khỏe"}
               {cat === "gadgets" && "Gia Dụng 100V"}
@@ -304,7 +309,12 @@ export default function ProductsTab() {
             <tbody className="divide-y divide-slate-100">
               {products
                 .filter((p) => {
-                  const matchCat = productCategoryFilter === "all" || p.category === productCategoryFilter;
+                  const matchCat =
+                    productCategoryFilter === "all"
+                      ? true
+                      : productCategoryFilter === "warehouse-vn"
+                      ? p.fulfillmentOrigin === "VN"
+                      : p.category === productCategoryFilter;
                   const matchSearch = p.name.toLowerCase().includes(productSearch.toLowerCase());
                   return matchCat && matchSearch;
                 })
@@ -323,6 +333,17 @@ export default function ProductsTab() {
                         />
                         <div>
                           <div className="font-bold text-navy-900 line-clamp-1 max-w-xs">{prod.name}</div>
+                          <div className="flex items-center gap-1.5 mt-0.5">
+                            {prod.fulfillmentOrigin === "VN" ? (
+                              <span className="inline-flex items-center gap-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-emerald-300">
+                                🇻🇳 Kho VN (0đ bay)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 bg-slate-100 text-slate-600 text-[10px] font-medium px-1.5 py-0.5 rounded">
+                                🇯🇵 Kho Tokyo
+                              </span>
+                            )}
+                          </div>
                           {prod.voltageNote && (() => {
                             const n = prod.voltageNote.toLowerCase();
                             const icon =
@@ -470,6 +491,87 @@ export default function ProductsTab() {
                     onChange={(e) => setProductForm({ ...productForm, originalStore: e.target.value })}
                     className="w-full p-3 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-banana-500"
                   />
+                </div>
+              </div>
+
+              {/* Vị trí kho hàng xuất xứ & Cước bay */}
+              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-bold text-slate-800 flex items-center space-x-1.5">
+                    <Package className="w-4 h-4 text-banana-600" />
+                    <span>Kho hàng xuất xứ &amp; Cước bay quốc tế</span>
+                  </label>
+                  <span className="text-[10px] text-slate-500 font-medium">
+                    Chọn kho VN để tự động miễn cước bay (0đ)
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {/* Kho Tokyo Nhật Bản */}
+                  <button
+                    type="button"
+                    onClick={() => setProductForm({ ...productForm, fulfillmentOrigin: "JP" })}
+                    className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                      productForm.fulfillmentOrigin === "JP"
+                        ? "border-banana-500 bg-white ring-2 ring-banana-300 shadow-sm"
+                        : "border-slate-200 bg-white/60 hover:bg-white hover:border-slate-300 text-slate-600"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5 font-bold text-navy-950">
+                        <span className="text-base">🇯🇵</span>
+                        <span>Kho Tokyo (Mua hộ Nhật)</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${
+                          productForm.fulfillmentOrigin === "JP"
+                            ? "border-banana-600 bg-banana-500 text-navy-950 font-bold"
+                            : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        {productForm.fulfillmentOrigin === "JP" ? "✓" : ""}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                      Bay quốc tế Tokyo → VN. Tự động tính cước bay theo cân nặng khi đặt hàng.
+                    </p>
+                    <div className="mt-2 inline-flex items-center text-[10px] font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md self-start border border-slate-200">
+                      Tính cước bay theo cân nặng
+                    </div>
+                  </button>
+
+                  {/* Có sẵn tại Kho Việt Nam */}
+                  <button
+                    type="button"
+                    onClick={() => setProductForm({ ...productForm, fulfillmentOrigin: "VN" })}
+                    className={`p-3 rounded-xl border text-left transition-all relative flex flex-col justify-between ${
+                      productForm.fulfillmentOrigin === "VN"
+                        ? "border-emerald-500 bg-emerald-50/60 ring-2 ring-emerald-300 shadow-sm"
+                        : "border-slate-200 bg-white/60 hover:bg-white hover:border-slate-300 text-slate-600"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5 font-bold text-emerald-950">
+                        <span className="text-base">🇻🇳</span>
+                        <span>Có sẵn tại Kho Việt Nam</span>
+                      </div>
+                      <div
+                        className={`w-4 h-4 rounded-full border flex items-center justify-center text-[10px] ${
+                          productForm.fulfillmentOrigin === "VN"
+                            ? "border-emerald-600 bg-emerald-500 text-white font-bold"
+                            : "border-slate-300 bg-white"
+                        }`}
+                      >
+                        {productForm.fulfillmentOrigin === "VN" ? "✓" : ""}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-emerald-900 mt-1 leading-relaxed font-medium">
+                      Hàng có sẵn tại kho VN. Khách đặt được miễn cước bay quốc tế (0đ).
+                    </p>
+                    <div className="mt-2 inline-flex items-center text-[10px] font-extrabold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded-md self-start border border-emerald-300">
+                      ✨ 0đ cước bay quốc tế
+                    </div>
+                  </button>
                 </div>
               </div>
 

@@ -170,6 +170,7 @@ export default function CartDrawer() {
           depositPercent: depositOption,
           paymentMethod: "VNPAY",
           isGroupBuy: false,
+          fulfillmentOrigin: hasOnlyVnItems ? "VN" : "JP",
           items: items.map(it => ({
             id: it.id,
             name: it.name,
@@ -177,6 +178,7 @@ export default function CartDrawer() {
             priceJpy: it.priceJpy,
             weightKg: it.weightKg,
             originalUrl: it.originalUrl || "",
+            fulfillmentOrigin: it.fulfillmentOrigin || "JP",
           })),
         }),
       });
@@ -492,10 +494,19 @@ export default function CartDrawer() {
                   <span>Cần thanh toán ngay ({depositOption}%):</span>
                   <span>{depositAmountVnd.toLocaleString()} đ</span>
                 </div>
-                {depositOption < 100 && (
+                {remainingAmountVnd > 0 ? (
                   <div className="flex justify-between text-slate-500 text-[11px]">
-                    <span>Còn lại thanh toán khi nhận hàng:</span>
+                    <span>
+                      {depositOption === 100
+                        ? "Còn lại (cước bay khi nhận hàng):"
+                        : "Còn lại thanh toán khi nhận hàng:"}
+                    </span>
                     <span className="font-semibold text-navy-900">{remainingAmountVnd.toLocaleString()} đ</span>
+                  </div>
+                ) : (
+                  <div className="flex justify-between text-emerald-700 text-[11px]">
+                    <span>Còn lại khi nhận hàng:</span>
+                    <span className="font-semibold">0 đ (Đã tất toán 100%)</span>
                   </div>
                 )}
               </div>

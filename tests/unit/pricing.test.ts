@@ -110,4 +110,27 @@ describe("calculateOrderPrice", () => {
     expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: 20.1 })).toBe(true);
     expect("error" in validatePricingConfig({ ...DEFAULT_PRICING_CONFIG, fxSpreadPercent: "3.6" as unknown as number })).toBe(true);
   });
+
+  it("nguyên tắc bảo toàn số tiền: Tổng tiền luôn bằng Đã thanh toán + Còn lại khi nhận hàng (không hụt cước bay)", () => {
+    // 1. Hàng JP có cước bay
+    const jpResult = calculateOrderPrice(10_000, 1.2, 172, false, DEFAULT_PRICING_CONFIG, "JP");
+    // Option cọc 50%:
+    const deposit50 = jpResult.deposit50Vnd;
+    const remaining50 = Math.max(0, jpResult.totalVnd - deposit50);
+    expect(deposit50 + remaining50).toBe(jpResult.totalVnd);
+
+    // Option thanh toán 100% (trả trước 100% base, cước bay trả khi nhận hàng):
+    const deposit100 = jpResult.baseOrderCostVnd;
+    const remaining100 = Math.max(0, jpResult.totalVnd - deposit100);
+    expect(remaining100).toBe(jpResult.shippingFeeVnd);
+    expect(deposit100 + remaining100).toBe(jpResult.totalVnd);
+
+    // 2. Hàng VN không cước bay (shippingFee = 0)
+    const vnResult = calculateOrderPrice(2_200, 0.3, 172, false, DEFAULT_PRICING_CONFIG, "VN");
+    expect(vnResult.shippingFeeVnd).toBe(0);
+    const vnDeposit100 = vnResult.baseOrderCostVnd;
+    const vnRemaining100 = Math.max(0, vnResult.totalVnd - vnDeposit100);
+    expect(vnRemaining100).toBe(0);
+    expect(vnDeposit100 + vnRemaining100).toBe(vnResult.totalVnd);
+  });
 });
