@@ -128,6 +128,20 @@ function AdminDashboardPageInner() {
           </Link>
 
           <div className="admin-neoday-userbar">
+            <button
+              onClick={() => setShowAiEcosystemModal(true)}
+              className="admin-neoday-action"
+              style={{
+                background: "linear-gradient(135deg, #fef3c7 0%, #ede9fe 100%)",
+                borderColor: "#c4b5fd",
+                color: "#5b21b6",
+                fontWeight: 800,
+              }}
+              title="Khám phá toàn bộ 6 nhóm tính năng vận dụng AI trong hệ thống ChillBanana"
+            >
+              <Sparkles className="h-4 w-4 text-purple-600 animate-pulse" />
+              <span>✨ Vận Dụng AI</span>
+            </button>
             <div className="admin-neoday-user">
               <ShieldCheck className="h-4 w-4" />
               <span>{currentUser?.name || "Admin"}</span>
