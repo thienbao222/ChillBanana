@@ -18,6 +18,7 @@ import {
   FlaskConical,
   Settings2,
   Plane,
+  Sparkles,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
@@ -29,6 +30,7 @@ import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
 import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import AuditLogsTab from "@/app/admin/components/AuditLogsTab";
 import SandboxTab from "@/app/admin/components/SandboxTab";
+import AiEcosystemModal from "@/app/admin/components/AiEcosystemModal";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 import { parseAdminLocation, AdminTab } from "@/features/ai/admin/tab-utils";
 import "./admin-neoday.css";
@@ -52,6 +54,7 @@ function AdminDashboardPageInner() {
 
   const [analyticsInitialSection, setAnalyticsInitialSection] = useState<AnalyticsSection>("reports");
   const [analyticsInitialModule, setAnalyticsInitialModule] = useState<AdminAiModuleId>("auto");
+  const [showAiEcosystemModal, setShowAiEcosystemModal] = useState(false);
 
   const openAnalytics = (section: AnalyticsSection, module: AdminAiModuleId = "auto") => {
     setAnalyticsInitialSection(section);
@@ -172,6 +175,20 @@ function AdminDashboardPageInner() {
               <Plane className="h-4 w-4 text-emerald-600" />
               <span>✈️ Điều phối VN➔JP</span>
             </button>
+            <button
+              onClick={() => setShowAiEcosystemModal(true)}
+              className="admin-neoday-mode"
+              title="Khám phá toàn bộ 6 nhóm tính năng vận dụng AI trong hệ thống ChillBanana"
+              style={{
+                background: "linear-gradient(135deg, #fef3c7 0%, #ede9fe 100%)",
+                borderColor: "#a78bfa",
+                color: "#5b21b6",
+                fontWeight: 800,
+              }}
+            >
+              <Sparkles className="h-4 w-4 text-purple-600 animate-pulse" />
+              <span>✨ Vận Dụng AI</span>
+            </button>
           </div>
 
           {adminViewMode === "dashboard" ? (
@@ -256,6 +273,19 @@ function AdminDashboardPageInner() {
         )}
 
       </main>
+
+      {/* Modal Hệ Sinh Thái Toàn Bộ Ứng Dụng AI */}
+      <AiEcosystemModal
+        isOpen={showAiEcosystemModal}
+        onClose={() => setShowAiEcosystemModal(false)}
+        onNavigateTab={(tabKey) => {
+          setAdminViewMode("dashboard");
+          setActiveTab(tabKey as any);
+        }}
+        onNavigateMode={(modeKey) => {
+          setAdminViewMode(modeKey as any);
+        }}
+      />
     </div>
   );
 }
