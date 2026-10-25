@@ -413,7 +413,7 @@ export default function AiEcosystemModal({ isOpen, onClose, onNavigateTab, onNav
           </button>
 
           <div className="flex flex-wrap items-center gap-2 mb-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-600 text-white shadow-sm">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-600 text-white !text-white shadow-sm">
               <Sparkles className="w-3.5 h-3.5" />
               <span>Hệ Sinh Thái AI Đa Tầng</span>
             </span>
@@ -470,7 +470,7 @@ export default function AiEcosystemModal({ isOpen, onClose, onNavigateTab, onNav
                   onClick={() => setSelectedCategory(tab.key)}
                   className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
                     isActive
-                      ? "bg-purple-600 text-white shadow-sm"
+                      ? "bg-purple-600 text-white !text-white shadow-sm"
                       : "bg-white text-slate-600 hover:bg-slate-200/80 border border-slate-200"
                   }`}
                 >
@@ -478,7 +478,7 @@ export default function AiEcosystemModal({ isOpen, onClose, onNavigateTab, onNav
                   <span>{tab.label}</span>
                   <span
                     className={`ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isActive ? "bg-white/25 text-white" : "bg-slate-100 text-slate-500"
+                      isActive ? "bg-white/25 text-white !text-white" : "bg-slate-100 text-slate-500"
                     }`}
                   >
                     {tab.count}

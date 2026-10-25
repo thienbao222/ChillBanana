@@ -121,10 +121,28 @@ html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-slate-100 
   background-color: #202d40 !important;
 }
 
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-slate-950,
 html[data-site-preferences-active="true"][data-site-theme="dark"] .text-slate-900,
 html[data-site-preferences-active="true"][data-site-theme="dark"] .text-slate-800,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-navy-950,
 html[data-site-preferences-active="true"][data-site-theme="dark"] .text-navy-900 {
   color: #e8eef7 !important;
+}
+
+/* Maintain dark legible text on bright banana / amber buttons */
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-banana-400.text-navy-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-banana-500.text-navy-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-amber-400.text-navy-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-amber-500.text-navy-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] [class*="from-banana-"].text-navy-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] [class*="bg-banana-"].text-navy-950 {
+  color: #0f172a !important;
+}
+
+/* Ensure white text buttons remain crisp white on dark/accent buttons */
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-white,
+html[data-site-preferences-active="true"][data-site-theme="dark"] [class*="text-white"] {
+  color: #ffffff !important;
 }
 
 html[data-site-preferences-active="true"][data-site-theme="dark"] .text-slate-700,
@@ -137,6 +155,113 @@ html[data-site-preferences-active="true"][data-site-theme="dark"] .border-slate-
 html[data-site-preferences-active="true"][data-site-theme="dark"] .border-slate-200,
 html[data-site-preferences-active="true"][data-site-theme="dark"] .border-slate-300 {
   border-color: #34445a !important;
+}
+
+/* Modal interactive cards and widget containers in dark mode */
+html[data-site-preferences-active="true"][data-site-theme="dark"] .from-rose-50 {
+  --tw-gradient-from: #22151c !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .to-pink-50 {
+  --tw-gradient-to: #251720 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-rose-200,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-rose-200\/60 {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-rose-900 {
+  color: #fecdd3 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-rose-800 {
+  color: #fda4af !important;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .from-amber-50 {
+  --tw-gradient-from: #261f14 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .to-orange-50 {
+  --tw-gradient-to: #291e13 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-amber-200,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-amber-200\/60 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-amber-900 {
+  color: #fef08a !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-amber-800 {
+  color: #fde047 !important;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .from-blue-50 {
+  --tw-gradient-from: #121e33 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .to-indigo-50 {
+  --tw-gradient-to: #181d38 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-blue-200,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-blue-200\/60 {
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-blue-900 {
+  color: #bfdbfe !important;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .from-emerald-50 {
+  --tw-gradient-from: #10241d !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .to-teal-50 {
+  --tw-gradient-to: #112623 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-emerald-200 {
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-emerald-900 {
+  color: #a7f3d0 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-emerald-800 {
+  color: #6ee7b7 !important;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .from-purple-50 {
+  --tw-gradient-from: #1f142b !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-purple-200 {
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-purple-900 {
+  color: #e9d5ff !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-purple-700 {
+  color: #d8b4fe !important;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-banana-950,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-banana-900 {
+  color: #fef08a !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .text-banana-800 {
+  color: #fde047 !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-banana-50,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-banana-50\/80 {
+  background-color: rgba(245, 158, 11, 0.15) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .bg-banana-100 {
+  background-color: rgba(245, 158, 11, 0.22) !important;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-banana-200,
+html[data-site-preferences-active="true"][data-site-theme="dark"] .border-banana-200\/80 {
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+/* Form inputs & selects inside modals & dark containers */
+html[data-site-preferences-active="true"][data-site-theme="dark"] select option {
+  background-color: #17263a;
+  color: #e7effb;
+}
+html[data-site-preferences-active="true"][data-site-theme="dark"] input,
+html[data-site-preferences-active="true"][data-site-theme="dark"] select {
+  color-scheme: dark;
 }
 
 html[data-site-effects="off"] *,
@@ -158,6 +283,7 @@ html[data-site-theme="dark"] .site-pref-choice,
 html[data-site-theme="dark"] .site-pref-icon-button,
 html[data-site-theme="dark"] .site-pref-reset { border-color: #3b4b61; color: #d7e2ef; background: #1c293b; }
 html[data-site-theme="dark"] .site-pref-choice.is-selected { border-color: #57b9e2; color: #d4f2ff; background: #19374a; }
+html[data-site-preferences-active="true"][data-site-theme="dark"] .site-preferences-trigger,
 html[data-site-theme="dark"] .site-preferences-trigger { border-color: rgba(120, 190, 224, .34); color: #c6edff; background: rgba(20, 34, 52, .82); }
 
 html[data-site-font="system"] body, html[data-site-font="system"] .cosmos-root { --site-body-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }

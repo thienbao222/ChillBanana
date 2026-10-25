@@ -3,8 +3,9 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MotionConfig } from "framer-motion";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, CreditCard, ShoppingCart } from "lucide-react";
+import { ArrowLeft, ExternalLink, CreditCard, ShoppingCart, Sparkles } from "lucide-react";
 import "@/styles/NeoDaylightCosmos.css";
+import AiEcosystemModal from "@/app/admin/components/AiEcosystemModal";
 import { useCart } from "@/context/CartContext";
 import { useAuth } from "@/context/AuthContext";
 import CuratedProducts from "@/components/CuratedProducts";
@@ -27,6 +28,7 @@ export default function NeoDaylightCosmos() {
   const [showMini, setShowMini] = useState(false);
   const { preferences } = useWebsitePreferences();
   const t = useWebsiteText();
+  const [showAiEcosystemModal, setShowAiEcosystemModal] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<NodeJS.Timeout | null>(null);
 
@@ -557,6 +559,17 @@ export default function NeoDaylightCosmos() {
               <i className="gem-icon"><svg><use href="#i-ai" /></svg></i>
               <span>Neo AI</span>
             </a>
+
+            <button
+              type="button"
+              className="pill-gem pill-gem--ecosystem"
+              style={{ "--pill-rgb": "168, 85, 247" } as any}
+              onClick={() => setShowAiEcosystemModal(true)}
+              title={t("Khám phá Hệ Sinh Thái Vận Dụng AI ChillBanana")}
+            >
+              <i className="gem-icon"><Sparkles className="w-3.5 h-3.5 text-purple-500" /></i>
+              <span>{t("Vận Dụng AI")}</span>
+            </button>
           </nav>
 
           {/* Cụm 3: Tiện ích tài khoản & Giỏ hàng */}
@@ -667,6 +680,16 @@ export default function NeoDaylightCosmos() {
           </div>
           <div className="telemetry-sep">✦</div>
           <div className="telemetry-item flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAiEcosystemModal(true)}
+              className="hover:text-purple-400 transition font-bold flex items-center gap-1 text-slate-700 dark:text-slate-300 cursor-pointer bg-transparent border-0 p-0 text-inherit"
+              title="Khám phá toàn bộ 6 nhóm ứng dụng AI trong ChillBanana"
+            >
+              <Sparkles className="w-3 h-3 text-purple-500 animate-pulse" />
+              <span>{t("Vận Dụng AI")}</span>
+            </button>
+            <span>·</span>
             <Link className="hover:text-amber-500 transition font-bold text-slate-700 dark:text-slate-300" href="/admin/login">
               ⚙️ {t("Admin Portal")}
             </Link>
@@ -727,22 +750,13 @@ export default function NeoDaylightCosmos() {
               marginBottom: "16px",
               fontSize: "0.75rem",
             }}>
-              <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
+              <span style={{ fontWeight: 700, color: "var(--ink)" }}>
                 {t("Sàn hỗ trợ bóc tách:")}
               </span>
               {JAPAN_SUPPORTED_STORES.map((store) => (
                 <div
                   key={store.id}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    borderRadius: "8px",
-                    background: "rgba(224, 242, 254, 0.75)",
-                    border: "1px solid rgba(186, 230, 253, 0.9)",
-                    overflow: "hidden",
-                    fontSize: "0.72rem",
-                    transition: "all 0.15s ease",
-                  }}
+                  className="store-pill"
                 >
                   <button
                     type="button"
@@ -755,7 +769,7 @@ export default function NeoDaylightCosmos() {
                       padding: "3px 8px",
                       background: "transparent",
                       border: "none",
-                      color: "#0369a1",
+                      color: "inherit",
                       fontWeight: 600,
                       cursor: "pointer",
                       fontSize: "0.72rem",
@@ -768,25 +782,27 @@ export default function NeoDaylightCosmos() {
                     target="_blank"
                     rel="noopener noreferrer"
                     title={`Mở trang chủ chính thức ${store.name} trong tab mới`}
-                    style={{
-                      padding: "3px 6px",
-                      borderLeft: "1px solid rgba(186, 230, 253, 0.7)",
-                      color: "#0284c7",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      textDecoration: "none",
-                      background: "rgba(255, 255, 255, 0.4)",
-                    }}
+                    className="store-pill-link"
                   >
                     <ExternalLink style={{ width: "10px", height: "10px" }} />
                   </a>
                 </div>
               ))}
             </div>
-            <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
-              {t("Dán Link Tính Giá Tự Động")} <svg><use href="#i-arrow" /></svg>
-            </a>
+            <div className="hero-cta-cluster">
+              <a className="cta lg" href="#quote" onClick={(e) => { e.preventDefault(); scrollToSection("quote"); }}>
+                {t("Dán Link Tính Giá Tự Động")} <svg><use href="#i-arrow" /></svg>
+              </a>
+              <button
+                type="button"
+                className="cta-ai-ecosystem"
+                onClick={() => setShowAiEcosystemModal(true)}
+                title={t("Khám phá 6 nhóm giải pháp vận dụng AI công nghệ Google Gemini")}
+              >
+                <Sparkles className="w-4 h-4 text-purple-500 animate-pulse" />
+                <span>{t("Vận Dụng AI")}</span>
+              </button>
+            </div>
           </div>
 
           <div className="card agent">
@@ -816,12 +832,22 @@ export default function NeoDaylightCosmos() {
             </div>
             <div className="af">
               <b>Guardrail chuyên sâu mua sắm Nhật – Việt</b>
-              <button
-                style={{ background: "none", border: "none", color: "var(--blue-d)", cursor: "pointer", fontWeight: 800 }}
-                onClick={handleOpenAIChat}
-              >
-                Mở khung tư vấn 24/7 ↗
-              </button>
+              <div className="af-actions">
+                <button
+                  type="button"
+                  className="af-ecosystem-link"
+                  onClick={() => setShowAiEcosystemModal(true)}
+                  title="Khám phá toàn cảnh 6 nhóm công nghệ AI"
+                >
+                  ✨ {t("Hệ Sinh Thái AI ↗")}
+                </button>
+                <button
+                  style={{ background: "none", border: "none", color: "var(--blue-d)", cursor: "pointer", fontWeight: 800 }}
+                  onClick={handleOpenAIChat}
+                >
+                  Mở khung tư vấn 24/7 ↗
+                </button>
+              </div>
             </div>
           </div>
         </section>
@@ -958,25 +984,25 @@ export default function NeoDaylightCosmos() {
                       setVnJpLoading(false);
                     }
                   }}
-                  style={{ borderTop: "1px dashed #cbd5e1", paddingTop: "1.5rem" }}
+                  style={{ borderTop: "1px dashed var(--line, #cbd5e1)", paddingTop: "1.5rem" }}
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.2rem", flexWrap: "wrap", gap: "8px" }}>
                     <div>
-                      <h4 style={{ fontWeight: 800, fontSize: "1.1rem", margin: 0, color: "#0f172a" }}>
+                      <h4 style={{ fontWeight: 800, fontSize: "1.1rem", margin: 0, color: "var(--ink, #0f172a)" }}>
                         ✈️ Phiếu Đăng Ký Vận Đơn Tuyến Việt Nam ➔ Nhật Bản
                       </h4>
-                      <p style={{ margin: "3px 0 0", fontSize: "0.8rem", color: "#64748b" }}>
+                      <p style={{ margin: "3px 0 0", fontSize: "0.8rem", color: "var(--muted, #64748b)" }}>
                         Khởi tạo mã vận đơn bay AWB, điều phối bưu tá lấy hàng tận nơi và phát tận tay tại Nhật Bản.
                       </p>
                     </div>
-                    <span style={{ fontSize: "0.75rem", background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "4px 10px", borderRadius: "999px", fontWeight: 700 }}>
+                    <span style={{ fontSize: "0.75rem", background: "rgba(245, 158, 11, 0.16)", color: "#f59e0b", border: "1px solid rgba(245, 158, 11, 0.35)", padding: "4px 10px", borderRadius: "999px", fontWeight: 700 }}>
                       ⚡ Chuẩn Bay IATA & Thông Quan Nhanh
                     </span>
                   </div>
 
                   {/* KHỐI 1: THÔNG TIN NGƯỜI GỬI TẠI VIỆT NAM */}
-                  <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "14px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
-                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "#1e293b", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ background: "var(--glass, #f8fafc)", padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--line, #e2e8f0)", marginBottom: "14px" }}>
+                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "var(--ink, #1e293b)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span>🇻🇳 1. Thông Tin Người Gửi & Điểm Lấy Hàng Tại Việt Nam</span>
                     </div>
                     <div className="fg" style={{ marginBottom: "10px" }}>
@@ -1022,8 +1048,8 @@ export default function NeoDaylightCosmos() {
                   </div>
 
                   {/* KHỐI 2: THÔNG TIN NGƯỜI NHẬN TẠI NHẬT BẢN */}
-                  <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "14px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
-                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "#1e293b", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ background: "var(--glass, #f8fafc)", padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--line, #e2e8f0)", marginBottom: "14px" }}>
+                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "var(--ink, #1e293b)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span>🇯🇵 2. Thông Tin Người Nhận Tại Nhật Bản (Bắt buộc để bưu tá Yamato/Sagawa giao tận nơi)</span>
                     </div>
                     <div className="fg" style={{ marginBottom: "10px" }}>
@@ -1082,8 +1108,8 @@ export default function NeoDaylightCosmos() {
                   </div>
 
                   {/* KHỐI 3: HÀNG HÓA & CƯỚC TÍNH IATA */}
-                  <div style={{ background: "#f8fafc", padding: "14px 16px", borderRadius: "14px", border: "1px solid #e2e8f0", marginBottom: "14px" }}>
-                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "#1e293b", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div style={{ background: "var(--glass, #f8fafc)", padding: "14px 16px", borderRadius: "14px", border: "1px solid var(--line, #e2e8f0)", marginBottom: "14px" }}>
+                    <div style={{ fontWeight: 800, fontSize: "0.85rem", color: "var(--ink, #1e293b)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "6px" }}>
                       <span>📦 3. Chi Tiết Mặt Hàng & Tạm Tính Cước Phí</span>
                     </div>
                     <div className="fg" style={{ marginBottom: "10px" }}>
@@ -1137,16 +1163,16 @@ export default function NeoDaylightCosmos() {
                           }}
                         >
                           <div>
-                            <span style={{ fontSize: "0.82rem", color: "#475569", fontWeight: 700, display: "block" }}>
+                            <span style={{ fontSize: "0.82rem", color: "var(--muted, #475569)", fontWeight: 700, display: "block" }}>
                               Tạm tính cước vận chuyển VN ➔ JP ({vnJpWeightKg} kg):
                             </span>
-                            <span style={{ fontSize: "0.85rem", color: "#1e293b" }}>
+                            <span style={{ fontSize: "0.85rem", color: "var(--ink, #1e293b)" }}>
                               Đơn giá: <b>{rate.toLocaleString("vi-VN")} đ/kg</b> × {vnJpWeightKg} kg —{" "}
                               <span style={{ color: "#16a34a", fontWeight: 700 }}>Đã gồm đóng thùng carton đạt chuẩn bay</span>
                             </span>
                           </div>
                           <div style={{ textAlign: "right" }}>
-                            <span style={{ fontSize: "1.25rem", fontWeight: 900, color: "#0f172a" }}>
+                            <span style={{ fontSize: "1.25rem", fontWeight: 900, color: "var(--ink, #0f172a)" }}>
                               {totalEst.toLocaleString("vi-VN")} đ
                             </span>
                           </div>
@@ -1155,7 +1181,7 @@ export default function NeoDaylightCosmos() {
                     })()}
 
                     {/* Checkbox cam kết kiểm dịch MAFF */}
-                    <div style={{ marginTop: "12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: "10px" }}>
+                    <div style={{ marginTop: "12px", background: "rgba(239, 68, 68, 0.12)", border: "1px solid rgba(239, 68, 68, 0.35)", borderRadius: "10px", padding: "10px 14px", display: "flex", alignItems: "flex-start", gap: "10px" }}>
                       <input
                         type="checkbox"
                         id="maffCheck"
@@ -1164,8 +1190,8 @@ export default function NeoDaylightCosmos() {
                         style={{ marginTop: "3px", width: "16px", height: "16px", accentColor: "#dc2626" }}
                         required
                       />
-                      <label htmlFor="maffCheck" style={{ fontSize: "0.78rem", color: "#991b1b", lineHeight: 1.4, cursor: "pointer" }}>
-                        <b>CAM KẾT KIỂM DỊCH MAFF:</b> Tôi cam đoan kiện hàng <b>KHÔNG CHỨA</b> các loại thịt động vật (thịt tươi, khô bò, khô gà, xúc xích, giò chả, nem chua, chà bông), hoa quả tươi hay chất cấm/dễ cháy nổ theo quy định kiểm dịch của Bộ Nông Lâm Thủy Sản Nhật Bản. Tôi chịu hoàn toàn trách nhiệm pháp lý nếu vi phạm.
+                      <label htmlFor="maffCheck" style={{ fontSize: "0.78rem", color: "var(--ink, #991b1b)", lineHeight: 1.4, cursor: "pointer" }}>
+                        <b style={{ color: "#ef4444" }}>CAM KẾT KIỂM DỊCH MAFF:</b> Tôi cam đoan kiện hàng <b>KHÔNG CHỨA</b> các loại thịt động vật (thịt tươi, khô bò, khô gà, xúc xích, giò chả, nem chua, chà bông), hoa quả tươi hay chất cấm/dễ cháy nổ theo quy định kiểm dịch của Bộ Nông Lâm Thủy Sản Nhật Bản. Tôi chịu hoàn toàn trách nhiệm pháp lý nếu vi phạm.
                       </label>
                     </div>
                   </div>
@@ -1182,9 +1208,9 @@ export default function NeoDaylightCosmos() {
                         display: "inline-flex",
                         alignItems: "center",
                         gap: "6px",
-                        color: "#0f172a",
-                        background: "#f1f5f9",
-                        border: "1px solid #cbd5e1",
+                        color: "var(--ink, #0f172a)",
+                        background: "var(--glass, #f1f5f9)",
+                        border: "1px solid var(--line, #cbd5e1)",
                         fontWeight: 700,
                       }}
                     >
@@ -1193,45 +1219,45 @@ export default function NeoDaylightCosmos() {
                   </div>
                 </form>
               ) : (
-                <div style={{ padding: "24px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: "18px", marginTop: "1.5rem" }}>
+                <div style={{ padding: "24px", background: "rgba(16, 185, 129, 0.12)", border: "1px solid rgba(16, 185, 129, 0.35)", borderRadius: "18px", marginTop: "1.5rem" }}>
                   <div style={{ textAlign: "center", marginBottom: "14px" }}>
                     <div style={{ fontSize: "2rem", marginBottom: "4px" }}>✅</div>
-                    <h4 style={{ fontWeight: 800, color: "#166534", margin: "0 0 6px", fontSize: "1.15rem" }}>
+                    <h4 style={{ fontWeight: 800, color: "#10b981", margin: "0 0 6px", fontSize: "1.15rem" }}>
                       Đã Ghi Nhận Phiếu Điều Phối Vận Đơn VN ➔ JP Thành Công!
                     </h4>
                     {vnJpDispatchCode && (
-                      <div style={{ display: "inline-block", background: "#dcfce7", color: "#15803d", border: "1px solid #bbf7d0", padding: "4px 14px", borderRadius: "999px", fontWeight: 800, fontSize: "0.95rem", fontFamily: "monospace" }}>
+                      <div style={{ display: "inline-block", background: "rgba(16, 185, 129, 0.2)", color: "#10b981", border: "1px solid rgba(16, 185, 129, 0.4)", padding: "4px 14px", borderRadius: "999px", fontWeight: 800, fontSize: "0.95rem", fontFamily: "monospace" }}>
                         Mã vận đơn: {vnJpDispatchCode}
                       </div>
                     )}
                   </div>
 
-                  <div style={{ background: "#ffffff", borderRadius: "14px", padding: "14px 18px", border: "1px solid #bbf7d0", margin: "14px 0", fontSize: "0.85rem", color: "#1e293b", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
+                  <div style={{ background: "var(--glass, #ffffff)", borderRadius: "14px", padding: "14px 18px", border: "1px solid var(--line, #bbf7d0)", margin: "14px 0", fontSize: "0.85rem", color: "var(--ink, #1e293b)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px" }}>
                     <div>
-                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Người gửi tại VN:</span>
+                      <span style={{ color: "var(--muted, #64748b)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Người gửi tại VN:</span>
                       <b>{vnJpSenderName}</b> ({vnJpSenderPhone})
-                      <div style={{ fontSize: "0.75rem", color: "#475569" }}>📍 {vnJpSenderAddress}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--muted, #475569)" }}>📍 {vnJpSenderAddress}</div>
                     </div>
                     <div>
-                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Người nhận tại Nhật Bản:</span>
+                      <span style={{ color: "var(--muted, #64748b)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Người nhận tại Nhật Bản:</span>
                       <b>{vnJpReceiverName}</b> ({vnJpReceiverPhone})
-                      <div style={{ fontSize: "0.75rem", color: "#475569" }}>〒 {vnJpReceiverPostalCode} · {vnJpCity} · {vnJpReceiverAddress}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--muted, #475569)" }}>〒 {vnJpReceiverPostalCode} · {vnJpCity} · {vnJpReceiverAddress}</div>
                     </div>
                     <div>
-                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Hàng hóa & Cân nặng:</span>
+                      <span style={{ color: "var(--muted, #64748b)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Hàng hóa & Cân nặng:</span>
                       <b>{vnJpWeightKg} kg</b> ({getVnJpCargoLabel(vnJpCargoType)})
-                      <div style={{ fontSize: "0.75rem", color: "#475569" }}>📦 {vnJpCargoDetails}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--muted, #475569)" }}>📦 {vnJpCargoDetails}</div>
                     </div>
                     <div>
-                      <span style={{ color: "#64748b", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Tổng cước tạm tính:</span>
-                      <b style={{ color: "#15803d", fontSize: "1.1rem" }}>
+                      <span style={{ color: "var(--muted, #64748b)", display: "block", fontSize: "0.75rem", textTransform: "uppercase", fontWeight: 700 }}>Tổng cước tạm tính:</span>
+                      <b style={{ color: "#10b981", fontSize: "1.1rem" }}>
                         {Math.round(getVnJpRatePerKg(vnJpCargoType) * vnJpWeightKg).toLocaleString("vi-VN")} đ
                       </b>
-                      <div style={{ fontSize: "0.75rem", color: "#16a34a" }}>Đã bao gồm đóng thùng carton chuẩn bay</div>
+                      <div style={{ fontSize: "0.75rem", color: "#10b981" }}>Đã bao gồm đóng thùng carton chuẩn bay</div>
                     </div>
                   </div>
 
-                  <p style={{ color: "#15803d", fontSize: "0.85rem", textAlign: "center", margin: "0 0 16px" }}>
+                  <p style={{ color: "#10b981", fontSize: "0.85rem", textAlign: "center", margin: "0 0 16px" }}>
                     Điều phối viên ChillBanana đang tiếp nhận trên hệ thống và sẽ liên hệ số <b>{vnJpSenderPhone}</b> để xác nhận lịch bưu tá qua lấy hàng tận nơi!
                   </p>
                   <div style={{ textAlign: "center" }}>
@@ -1296,22 +1322,13 @@ export default function NeoDaylightCosmos() {
                   fontSize: "0.72rem",
                   color: "var(--muted)",
                 }}>
-                  <span style={{ fontWeight: 700, color: "var(--navy-900, #0f172a)" }}>
+                  <span style={{ fontWeight: 700, color: "var(--ink)" }}>
                     {t("Sàn hỗ trợ bóc tách:")}
                   </span>
                   {JAPAN_SUPPORTED_STORES.map((store) => (
                     <div
                       key={store.id}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        borderRadius: "6px",
-                        background: "rgba(224, 242, 254, 0.6)",
-                        border: "1px solid rgba(186, 230, 253, 0.8)",
-                        overflow: "hidden",
-                        fontSize: "0.7rem",
-                        transition: "all 0.15s ease",
-                      }}
+                      className="store-pill"
                     >
                       <button
                         type="button"
@@ -1321,7 +1338,7 @@ export default function NeoDaylightCosmos() {
                           padding: "2px 7px",
                           background: "transparent",
                           border: "none",
-                          color: "#0369a1",
+                          color: "inherit",
                           fontWeight: 600,
                           fontSize: "0.7rem",
                           cursor: "pointer",
@@ -1334,16 +1351,7 @@ export default function NeoDaylightCosmos() {
                         target="_blank"
                         rel="noopener noreferrer"
                         title={`Mở trang chủ ${store.name} trong tab mới`}
-                        style={{
-                          padding: "2px 5px",
-                          borderLeft: "1px solid rgba(186, 230, 253, 0.7)",
-                          color: "#0284c7",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          textDecoration: "none",
-                          background: "rgba(255, 255, 255, 0.4)",
-                        }}
+                        className="store-pill-link"
                       >
                         <ExternalLink style={{ width: "9px", height: "9px" }} />
                       </a>
@@ -1965,6 +1973,12 @@ export default function NeoDaylightCosmos() {
       <div className={`toast ${toastMsg ? "on" : ""}`} role="status">
         {toastMsg}
       </div>
+
+      {/* Modal Hệ Sinh Thái Vận Dụng AI Toàn Diện */}
+      <AiEcosystemModal
+        isOpen={showAiEcosystemModal}
+        onClose={() => setShowAiEcosystemModal(false)}
+      />
     </div>
   </MotionConfig>
   );

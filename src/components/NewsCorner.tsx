@@ -301,7 +301,7 @@ export default function NewsCorner() {
                   <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-amber-200/60">
                     <button
                       onClick={scrollToQuote}
-                      className="px-4 py-2 bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1"
+                      className="px-4 py-2 bg-navy-900 hover:bg-slate-800 text-white !text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1 shadow-sm"
                     >
                       <span>Mở Form Tính Giá Chi Tiết</span>
                       <ChevronRight className="w-3.5 h-3.5" />
@@ -438,7 +438,7 @@ export default function NewsCorner() {
                           } nhé!`
                         )
                       }
-                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1"
+                      className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white !text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1 shadow-sm"
                     >
                       <Bot className="w-3.5 h-3.5" />
                       <span>Hỏi Neo Tư Vấn Size Chi Tiết</span>
@@ -504,7 +504,7 @@ export default function NewsCorner() {
                   <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-rose-200/60">
                     <button
                       onClick={scrollToProducts}
-                      className="px-4 py-2 bg-navy-900 hover:bg-slate-800 text-white text-xs font-bold rounded-xl transition-all"
+                      className="px-4 py-2 bg-navy-900 hover:bg-slate-800 text-white !text-white text-xs font-bold rounded-xl transition-all shadow-sm"
                     >
                       Xem Các Món Gia Dụng &amp; Điện Tử Mini Sẵn Có
                     </button>
@@ -514,7 +514,7 @@ export default function NewsCorner() {
                           `Neo giải thích thêm giúp tôi về cách chọn biến áp cho đồ điện Nhật 100V nhé!`
                         )
                       }
-                      className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1"
+                      className="px-4 py-2 bg-rose-500 hover:bg-rose-600 text-white !text-white text-xs font-bold rounded-xl transition-all flex items-center space-x-1 shadow-sm"
                     >
                       <Bot className="w-3.5 h-3.5" />
                       <span>Hỏi Neo Về Điện Áp 100V</span>

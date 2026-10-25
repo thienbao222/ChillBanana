@@ -44,14 +44,14 @@
   box-sizing: inherit;
 }
 
-.cosmos-root button,
-.cosmos-root input,
-.cosmos-root select {
+:where(.cosmos-root) button,
+:where(.cosmos-root) input,
+:where(.cosmos-root) select {
   font: inherit;
   color: inherit;
 }
 
-.cosmos-root button {
+:where(.cosmos-root) button {
   cursor: pointer;
 }
 
@@ -1464,6 +1464,63 @@
   text-decoration: none;
 }
 
+.cosmos-root .hero-cta-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.cosmos-root .cta-ai-ecosystem {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 22px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.95rem;
+  background: linear-gradient(135deg, rgba(243, 232, 255, 0.95), rgba(238, 242, 255, 0.95));
+  border: 1px solid rgba(192, 132, 252, 0.5);
+  color: #6b21a8;
+  box-shadow: 0 4px 14px rgba(168, 85, 247, 0.12);
+  transition: all 0.22s var(--ease);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.cosmos-root .cta-ai-ecosystem:hover {
+  transform: translateY(-2px);
+  background: linear-gradient(135deg, #f3e8ff, #e0e7ff);
+  box-shadow: 0 8px 24px rgba(168, 85, 247, 0.24);
+  color: #581c87;
+  border-color: rgba(168, 85, 247, 0.7);
+}
+
+.cosmos-root .store-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  background: rgba(224, 242, 254, 0.75);
+  border: 1px solid rgba(186, 230, 253, 0.9);
+  overflow: hidden;
+  font-size: 0.72rem;
+  color: #0369a1;
+  transition: all 0.15s ease;
+}
+
+.cosmos-root .store-pill-link {
+  padding: 3px 6px;
+  border-left: 1px solid rgba(186, 230, 253, 0.7);
+  color: #0284c7;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.4);
+}
+
 .cosmos-root .ghost {
   display: inline-flex;
   align-items: center;
@@ -1560,6 +1617,29 @@
 
 .cosmos-root .af b {
   color: #8a5a00;
+}
+
+.cosmos-root .af-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.cosmos-root .af-ecosystem-link {
+  background: none;
+  border: none;
+  color: #7c3aed;
+  font-weight: 800;
+  cursor: pointer;
+  font-size: 0.76rem;
+  padding: 0;
+  transition: color 0.18s ease;
+}
+
+.cosmos-root .af-ecosystem-link:hover {
+  color: #6d28d9;
+  text-decoration: underline;
 }
 
 .cosmos-root .sidehead {
@@ -1986,6 +2066,19 @@
   }
 }
 
+@media (max-width: 640px) {
+  .cosmos-root .hero-cta-cluster {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cosmos-root .hero-cta-cluster .cta,
+  .cosmos-root .hero-cta-cluster .cta-ai-ecosystem {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+}
+
 @media (max-width: 600px) {
   .cosmos-root .hot {
     grid-template-columns: 1fr;
@@ -2223,6 +2316,19 @@
   .cosmos-root .r5 { --r: 235px; --af: 78.2deg; }
   .cosmos-root .pl { font-size: 0.8rem; padding-right: 14px; }
   .cosmos-root .mini .mp:nth-of-type(n+4) { display: none; }
+}
+
+@media (max-width: 640px) {
+  .cosmos-root .hero-cta-cluster {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cosmos-root .hero-cta-cluster .cta,
+  .cosmos-root .hero-cta-cluster .cta-ai-ecosystem {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
 }
 
 @media (max-width: 600px) {
@@ -2875,9 +2981,47 @@ html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .
 }
 
 html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .hc,
-html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .tag,
 html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .box {
   color: var(--ink);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .tag {
+  background: rgba(245, 158, 11, 0.16);
+  border-color: rgba(245, 158, 11, 0.35);
+  color: #fef08a;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .cta-ai-ecosystem {
+  background: linear-gradient(135deg, rgba(88, 28, 135, 0.4), rgba(49, 46, 129, 0.4));
+  border-color: rgba(192, 132, 252, 0.4);
+  color: #f3e8ff;
+  box-shadow: 0 4px 18px rgba(168, 85, 247, 0.2);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .cta-ai-ecosystem:hover {
+  background: linear-gradient(135deg, rgba(107, 33, 168, 0.55), rgba(67, 56, 202, 0.55));
+  color: #ffffff;
+  border-color: rgba(216, 180, 254, 0.7);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .store-pill {
+  background: rgba(14, 165, 233, 0.16);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #7dd3fc;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .store-pill-link {
+  border-left-color: rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  background: rgba(15, 23, 42, 0.3);
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .af-ecosystem-link {
+  color: #c084fc;
+}
+
+html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .af-ecosystem-link:hover {
+  color: #e9d5ff;
 }
 
 html[data-site-preferences-active="true"][data-site-theme="dark"] .cosmos-root .hc b {

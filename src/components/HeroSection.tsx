@@ -133,18 +133,6 @@ export default function HeroSection() {
                 <Bot className="w-4 h-4 text-banana-600" />
                 <span>Trò Chuyện Cùng ChillBanana AI</span>
               </button>
-
-              <button
-                onClick={() => {
-                  const trigger = document.getElementById("ai-ecosystem-modal-trigger");
-                  if (trigger) trigger.click();
-                }}
-                className="w-full sm:w-auto px-6 py-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-purple-100 hover:from-purple-100 hover:to-indigo-200 text-purple-900 border border-purple-200 font-bold text-sm rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center space-x-2"
-                title="Khám phá toàn bộ 6 nhóm tính năng vận dụng AI trong hệ thống ChillBanana"
-              >
-                <Sparkles className="w-4 h-4 text-purple-600 animate-pulse" />
-                <span>Khám Phá Vận Dụng AI (All)</span>
-              </button>
             </motion.div>
           </motion.div>
 
