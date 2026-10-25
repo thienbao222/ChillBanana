@@ -220,7 +220,7 @@ export function recordModelQuotaError(
 /**
  * Ghi nhận gọi thành công cho cặp (apiKey, model) - nếu trước đó chỉ bị rate limit theo phút thì gỡ bỏ.
  */
-export function recordModelSuccess(apiKey: string, model: string, now = Date.now()): void {
+export function recordModelSuccess(apiKey: string, model: string): void {
   const pk = pairKey(apiKey, model);
   const current = quotaMap.get(pk);
   if (current && current.status === "MINUTE_RATE_LIMITED") {
