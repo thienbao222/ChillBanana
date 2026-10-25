@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-guard";
 import { chatKeyPool, scrapeKeyPool, visionKeyPool, adminKeyPool } from "@/lib/api-key-manager";
+import { getAllModelQuotaStates, formatVietnamTime } from "@/lib/model-quota";
 
 export const dynamic = "force-dynamic";
 
@@ -61,12 +62,22 @@ export async function GET(req: NextRequest) {
       };
     });
 
+    const modelQuotas = getAllModelQuotaStates().map((mq) => ({
+      keyPreview: mq.keyPreview,
+      model: mq.model,
+      status: mq.status,
+      cooldownUntil: mq.cooldownUntil,
+      cooldownUntilVn: formatVietnamTime(mq.cooldownUntil),
+      reason: mq.reason,
+    }));
+
     return NextResponse.json({
       success: true,
       keys: uniqueKeys,
       totalKeys: uniqueKeys.length,
       activeKeys: uniqueKeys.filter(k => k.status === "ACTIVE").length,
       rateLimitedKeys: uniqueKeys.filter(k => k.status === "RATE_LIMITED").length,
+      modelQuotas,
     });
   } catch (error) {
     console.error("Lỗi lấy trạng thái API Keys:", error);

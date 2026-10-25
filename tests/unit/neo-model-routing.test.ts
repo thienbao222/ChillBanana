@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { clearChatCache } from "@/lib/chat-cache";
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.resetModules();
+  clearChatCache();
 });
 
 describe("Neo model routing", () => {
@@ -22,8 +24,8 @@ describe("Neo model routing", () => {
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
 
     expect(reply).toBe("Neo trả lời");
-    expect(urls[0]).toContain("/gemini-3.5-flash:generateContent");
-    expect(urls[1]).toContain("/gemini-3.6-flash:generateContent");
+    expect(urls[0]).toContain("/gemini-3.5-flash-lite:generateContent");
+    expect(urls[1]).toContain("/gemini-3.1-flash-lite:generateContent");
   });
 
   it("builds offline reply with voltage compatibility and general safety note", async () => {
@@ -66,6 +68,8 @@ describe("Neo model routing", () => {
     expect(res.text).toBe("Phản hồi trực tiếp từ Gemini");
 
     // Khi fetch fail thì trả về offline
+    const { clearChatCache: resetCache } = await import("@/lib/chat-cache");
+    resetCache();
     fetchMock.mockResolvedValue(new Response("error 500", { status: 500 }));
     const offlineRes = await askGeminiAgentDetailed("Tư vấn nồi cơm", "omotenashi");
     expect(offlineRes.mode).toBe("offline");

@@ -19,13 +19,23 @@ function formatDate(value: string) {
   return new Date(value).toLocaleString("vi-VN", { dateStyle: "short", timeStyle: "short" });
 }
 
-export default function AuditLogsTab() {
+export default function AuditLogsTab({ initialFilter }: { initialFilter?: string } = {}) {
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [pagination, setPagination] = useState<AuditPage>({ page: 1, pageSize: 50, total: 0, totalPages: 0 });
   const [page, setPage] = useState(1);
-  const [action, setAction] = useState("");
+  const [action, setAction] = useState(() => {
+    if (initialFilter === "emails" || initialFilter === "email") return "EMAIL";
+    return "";
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (initialFilter === "emails" || initialFilter === "email") {
+      setAction("EMAIL");
+      setPage(1);
+    }
+  }, [initialFilter]);
 
   const reload = useCallback(async () => {
     setLoading(true);

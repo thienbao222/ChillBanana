@@ -90,6 +90,7 @@ export async function POST(req: NextRequest) {
     let aiMode: "gemini" | "offline" = "offline";
     let productCards: ProductCardData[] = [];
     let quickReplies: string[] = [];
+    let isQuotaFallback = false;
 
     if (isVnJpRegistration) {
       aiMode = "offline";
@@ -148,6 +149,7 @@ export async function POST(req: NextRequest) {
         generatedReply = agentResult.text;
         aiMode = agentResult.mode;
         modelUsed = agentResult.model || "none";
+        isQuotaFallback = Boolean((agentResult as any).isQuotaFallback);
       }
 
       generatedReply = ensureCatalogFactsInReply(
@@ -365,6 +367,7 @@ export async function POST(req: NextRequest) {
       sources: supportSources,
       isGuardrailTriggered,
       aiMode,
+      isQuotaFallback,
       productCards,
     });
     response.cookies.set(sessionCookieName, resolvedSessionId, {

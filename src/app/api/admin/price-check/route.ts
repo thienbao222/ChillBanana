@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { POST as scrapeLinkHandler } from "@/app/api/scrape-link/route";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 const ALLOWED_DOMAINS = [
   "amazon.co.jp",

@@ -43,13 +43,26 @@ interface OrderManagementTabProps {
   activeTab: string;
   externalSearchTerm: string;
   onClearSearch: () => void;
+  initialFilter?: string;
+  initialStatus?: string;
 }
 
-export default function OrderManagementTab({ adminViewMode, activeTab, externalSearchTerm, onClearSearch }: OrderManagementTabProps) {
+export default function OrderManagementTab({
+  adminViewMode,
+  activeTab,
+  externalSearchTerm,
+  onClearSearch,
+  initialFilter,
+  initialStatus,
+}: OrderManagementTabProps) {
   const { adminToast } = useAdminToast();
   const [orders, setOrders] = useState<StoredOrder[]>([]);
   const [loadingOrders, setLoadingOrders] = useState(true);
-  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [filterStatus, setFilterStatus] = useState<string>(() => {
+    if (initialFilter === "unverified") return "UNVERIFIED";
+    if (initialStatus) return initialStatus;
+    return "ALL";
+  });
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedOrder, setSelectedOrder] = useState<StoredOrder | null>(null);
   const [newStatus, setNewStatus] = useState<OrderStatus>("PURCHASING_JP");
@@ -91,12 +104,20 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   const [rollbackConfirmedCompleted, setRollbackConfirmedCompleted] = useState(false);
   const [isRollingBack, setIsRollingBack] = useState(false);
 
-  // Sync external search term
+  // Sync external search term, filter & status
   useEffect(() => {
     if (externalSearchTerm) {
       setSearchTerm(externalSearchTerm);
     }
   }, [externalSearchTerm]);
+
+  useEffect(() => {
+    if (initialFilter === "unverified") {
+      setFilterStatus("UNVERIFIED");
+    } else if (initialStatus) {
+      setFilterStatus(initialStatus);
+    }
+  }, [initialFilter, initialStatus]);
 
   const fetchOrders = async () => {
     setLoadingOrders(true);
@@ -438,7 +459,12 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
   };
 
   const filteredOrders = orders.filter((ord) => {
-    const matchesStatus = filterStatus === "ALL" || ord.status === filterStatus;
+    let matchesStatus = true;
+    if (filterStatus === "UNVERIFIED" || filterStatus === "unverified") {
+      matchesStatus = !ord.isPriceVerified && ord.status !== "CANCELLED";
+    } else if (filterStatus !== "ALL") {
+      matchesStatus = ord.status === filterStatus;
+    }
     const term = searchTerm.toLowerCase();
     const matchesSearch =
       ord.orderCode.toLowerCase().includes(term) ||
@@ -538,6 +564,7 @@ export default function OrderManagementTab({ adminViewMode, activeTab, externalS
                   className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-2xl text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-banana-500"
                 >
                   <option value="ALL">Tất cả trạng thái ({orders.length})</option>
+                  <option value="UNVERIFIED">⚠️ Chờ duyệt giá ({orders.filter((o) => !o.isPriceVerified && o.status !== "CANCELLED").length})</option>
                   <option value="PENDING_DEPOSIT">1. Chờ cọc (Pending Deposit)</option>
                   <option value="PURCHASING_JP">2. Đang mua hàng tại Nhật</option>
                   <option value="WAREHOUSE_JP">3. Đã nhập kho Tokyo</option>

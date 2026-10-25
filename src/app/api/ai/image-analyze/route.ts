@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { visionKeyPool, chatKeyPool, scrapeKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { prisma } from "@/lib/prisma";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import {
@@ -37,11 +37,11 @@ function buildMarketplaceSearchLinks(keywordsJa: string, minJpy?: number, maxJpy
 /**
  * Lấy API Key khả dụng từ visionKeyPool; nếu hết thì mượn tạm từ chatKeyPool hoặc scrapeKeyPool
  */
-function getAvailableVisionApiKey(): string | null {
+function getAvailableVisionApiKey(model?: string): string | null {
   return (
-    visionKeyPool?.getNextKey?.() ||
-    chatKeyPool?.getNextKey?.() ||
-    scrapeKeyPool?.getNextKey?.() ||
+    visionKeyPool?.getNextKey?.(model) ||
+    chatKeyPool?.getNextKey?.(model) ||
+    scrapeKeyPool?.getNextKey?.(model) ||
     process.env.GEMINI_API_KEY ||
     process.env.GOOGLE_API_KEY ||
     null
@@ -263,11 +263,13 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
 }`;
 
     // ── BƯỚC 2: Gọi Gemini Vision với cơ chế Fallback 3 Model (vision, neoFallback, lightweight) & thinkingLevel: low ──
-    const candidateModels = [
-      GEMINI_MODELS.vision,
-      GEMINI_MODELS.neoFallback,
-      GEMINI_MODELS.lightweight,
-    ];
+    const candidateModels = typeof getFeatureModels === "function"
+      ? getFeatureModels("vision")
+      : [
+          GEMINI_MODELS.vision,
+          GEMINI_MODELS.neoFallback,
+          GEMINI_MODELS.lightweight,
+        ];
     const uniqueModels = Array.from(new Set(candidateModels));
 
     let parsedResult: Record<string, unknown> | null = null;
@@ -295,7 +297,23 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
       return parsed;
     };
 
-    for (const modelName of uniqueModels) {
+    const deadline = Date.now() + 24_000;
+
+    for (let modelIdx = 0; modelIdx < uniqueModels.length; modelIdx++) {
+      const modelName = uniqueModels[modelIdx];
+      const remaining = deadline - Date.now();
+      if (remaining < 3000) {
+        console.warn(`[ImageAnalyze] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử.`);
+        break;
+      }
+
+      const apiKey = getAvailableVisionApiKey(modelName);
+      if (!apiKey) continue;
+
+      const modelTimeout = modelIdx === 0
+        ? Math.min(12_000, remaining)
+        : Math.min(8_000, remaining);
+
       const requestBody = {
         contents: [
           {
@@ -328,7 +346,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(requestBody),
-            signal: AbortSignal.timeout(18000),
+            signal: AbortSignal.timeout(modelTimeout),
           }
         );
 
@@ -337,7 +355,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
         if (!res.ok) {
           const errText = await readResponseBody(res);
           console.warn(`[ImageAnalyze] Model ${modelName} lỗi HTTP ${res.status}: ${errText.slice(0, 200)}`);
-          visionKeyPool?.markError?.(apiKey, res.status, modelName);
+          visionKeyPool?.markModelError?.(apiKey, modelName, res.status, errText);
 
           // Retry lỗi request một lần; giữ cấu hình thinking như yêu cầu ban đầu.
           if (res.status === 400) {
@@ -383,6 +401,7 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
           continue;
         }
 
+        visionKeyPool?.markModelSuccess?.(apiKey, modelName);
         parsedResult = await parseVisionResponse(res, modelName);
         if (parsedResult) break;
         const retryRes = await fetch(

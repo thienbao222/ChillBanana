@@ -1,6 +1,8 @@
 import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
+import { formatVietnamTime } from "@/lib/model-quota";
+import { getChatCache, setChatCache } from "@/lib/chat-cache";
 import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type SupportEvidence } from "./support-policy";
 
 // shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
@@ -10,6 +12,10 @@ let neoPrimaryCooldownUntil = 0;
 export const CHAT_TIMEOUT_MS = Number(process.env.CHAT_TIMEOUT_MS) > 0
   ? Number(process.env.CHAT_TIMEOUT_MS)
   : 25_000;
+
+export const CHAT_TOTAL_BUDGET_MS = Number(process.env.CHAT_TOTAL_BUDGET_MS) > 0
+  ? Number(process.env.CHAT_TOTAL_BUDGET_MS)
+  : 45_000;
 
 const SENSITIVE_KEYWORDS = [
   "chính trị", "chinh tri", "bầu cử", "biểu tình", "bạo động",
@@ -467,7 +473,7 @@ export async function askGeminiAgentDetailed(
   conversationHistory: { role: string; text: string }[] = [],
   evidence: SupportEvidence[] = [],
   sessionPreferences?: string | null
-): Promise<{ text: string; mode: "gemini" | "offline"; model?: string }> {
+): Promise<{ text: string; mode: "gemini" | "offline"; model?: string; isQuotaFallback?: boolean }> {
   const isOmo = personality === "omotenashi";
   const customerLang = detectCustomerLanguage(userQuery);
 
@@ -477,6 +483,17 @@ export async function askGeminiAgentDetailed(
         ? (customerLang === "en" ? "ChillBanana Customer Support: We cannot assist with this topic." : "Dạ, Neo xin phép từ chối chủ đề này. Neo có thể hỗ trợ tìm sản phẩm Nhật, ước tính chi phí, chính sách vận chuyển và tra cứu đơn đã xác minh ạ.")
         : (customerLang === "en" ? "Neo cannot assist with this topic. I can help find Japanese items, estimate prices, or explain shipping policies. 🍌" : "Neo xin phép không hỗ trợ nội dung này nha. Mình có thể giúp tìm hàng Nhật, ước tính giá, giải thích vận chuyển hoặc hướng dẫn tra cứu đơn đã xác minh nhé. 🍌"),
       mode: "offline",
+    };
+  }
+
+  // Kiểm tra cache nếu là câu hỏi chung không chứa thông tin cá nhân
+  const cached = getChatCache(userQuery, personality, customerLang);
+  if (cached) {
+    console.log(`[AI Chat] CACHE_HIT query="${userQuery.slice(0, 50)}"`);
+    return {
+      text: cached.text,
+      mode: cached.mode,
+      model: cached.model,
     };
   }
 
@@ -501,42 +518,72 @@ export async function askGeminiAgentDetailed(
   });
 
   let lastAttemptedModel: string | undefined;
-  const activeKey = chatKeyPool.getNextKey();
-  if (activeKey) {
-    const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-      ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
-      : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
-    const models = Array.from(new Set(candidateModels));
+  let hasQuotaExhaustion = false;
+  const maskKey = (k: string) => (k && k.length > 8 ? "..." + k.slice(-4) : "...");
 
-    for (const model of models) {
-      lastAttemptedModel = model;
-      try {
-        let response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemInstruction }] },
-              contents,
-              generationConfig: {
-                maxOutputTokens: 700,
-                temperature: 0.4,
-                thinkingConfig: { thinkingLevel: "low" },
-              },
-            }),
-            signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
-          }
-        );
+  const configuredChatModels = typeof getFeatureModels === "function"
+    ? getFeatureModels("chat")
+    : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
+  const primaryChatModel = configuredChatModels[0] || GEMINI_MODELS.neo;
+  const candidateModels = (neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil)
+    ? configuredChatModels.filter((m) => m !== primaryChatModel)
+    : configuredChatModels;
+  const models = Array.from(new Set(candidateModels));
+
+  const deadline = Date.now() + CHAT_TOTAL_BUDGET_MS;
+
+  for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+    const model = models[modelIdx];
+    const remaining = deadline - Date.now();
+    if (remaining < 3000) {
+      console.warn(`[Assistant] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử model và chuyển ngay sang offline.`);
+      break;
+    }
+
+    const activeKey = chatKeyPool.getNextKey(model);
+    if (!activeKey) {
+      console.log(`[AI Chat] model=${model} key=none - Không có khóa khả dụng cho model này.`);
+      continue; // Bỏ qua ngay model nếu không có khóa khả dụng
+    }
+    lastAttemptedModel = model;
+    console.log(`[AI Chat] model=${model} key=${maskKey(activeKey)} remaining_budget=${remaining}ms`);
+
+    const modelTimeout = modelIdx === 0
+      ? Math.min(CHAT_TIMEOUT_MS, remaining, 25_000)
+      : Math.min(15_000, remaining);
+
+    try {
+      let response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 700,
+              temperature: 0.4,
+              thinkingConfig: { thinkingLevel: "low" },
+            },
+          }),
+          signal: AbortSignal.timeout(modelTimeout),
+        }
+      );
 
         // HTTP 500/503: lỗi tạm thời của model, KHÔNG cooldown khóa. Thử lại cùng model 1 lần sau 600-1200ms (có jitter), nếu vẫn lỗi thì chuyển model kế tiếp.
         if (response.status === 500 || response.status === 503) {
           const errStatus = response.status;
           console.warn(`[Assistant] Model ${model} lỗi HTTP ${errStatus}. Đang thử lại cùng model sau 600-1200ms...`);
+          const retryRemaining = deadline - Date.now();
+          if (retryRemaining < 3000) {
+            continue;
+          }
           const isTestEnv = process.env.NODE_ENV === "test" || process.env.VITEST === "true";
           const jitterMs = isTestEnv ? 10 : 600 + Math.floor(Math.random() * 600);
           await new Promise((r) => setTimeout(r, jitterMs));
           try {
+            const retryTimeout = Math.min(modelTimeout, Math.max(1000, deadline - Date.now()));
             const retryRes = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
               {
@@ -551,14 +598,13 @@ export async function askGeminiAgentDetailed(
                     thinkingConfig: { thinkingLevel: "low" },
                   },
                 }),
-                signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+                signal: AbortSignal.timeout(retryTimeout),
               }
             );
             if (retryRes.ok) {
               response = retryRes;
             } else {
               console.warn(`[Assistant] Model ${model} retry lỗi HTTP ${retryRes.status}`);
-              chatKeyPool.markError(activeKey, retryRes.status, model);
               continue;
             }
           } catch (retryErr: any) {
@@ -575,6 +621,7 @@ export async function askGeminiAgentDetailed(
         if (response.status === 400) {
           const err400 = await response.text().catch(() => "");
           console.warn(`[Assistant] Model ${model} lỗi HTTP 400: ${err400.slice(0, 200)}`);
+          const retryTimeout = Math.min(modelTimeout, Math.max(1000, deadline - Date.now()));
           const retryRes = await fetch(
             `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${activeKey}`,
             {
@@ -588,7 +635,7 @@ export async function askGeminiAgentDetailed(
                   temperature: 0.4,
                 },
               }),
-              signal: AbortSignal.timeout(CHAT_TIMEOUT_MS),
+              signal: AbortSignal.timeout(retryTimeout),
             }
           );
           if (retryRes.ok) {
@@ -601,6 +648,7 @@ export async function askGeminiAgentDetailed(
         }
 
         if (response.ok) {
+          chatKeyPool?.markModelSuccess?.(activeKey, model);
           const data = await response.json();
           const parts = data?.candidates?.[0]?.content?.parts || [];
           const textPart = parts.filter((part: { text?: string; thought?: boolean }) => part.text && !part.thought).pop();
@@ -621,7 +669,10 @@ export async function askGeminiAgentDetailed(
               .replace(/\*\*Công cụ đang chạy:\*\*.*?(?:\n|$)/gi, "")
               .replace(/\[(?:Công cụ đang chạy|Tool running):.*?\](?:\n|$)/gi, "")
               .trim();
-            if (sanitized) return { text: sanitized, mode: "gemini", model };
+            if (sanitized) {
+              setChatCache(userQuery, personality, customerLang, { text: sanitized, mode: "gemini", model });
+              return { text: sanitized, mode: "gemini", model };
+            }
           }
           continue;
         }
@@ -630,14 +681,25 @@ export async function askGeminiAgentDetailed(
         console.warn(`[Assistant] Model ${model} lỗi HTTP ${response.status}: ${errText.slice(0, 200)}`);
 
         if (response.status === 429) {
+          hasQuotaExhaustion = true;
           const retryAfter = response.headers.get("retry-after");
           const retryAfterSec = retryAfter ? parseInt(retryAfter, 10) : undefined;
-          chatKeyPool.markError(activeKey, 429, model, retryAfterSec);
+          const classification = chatKeyPool?.markModelError?.(activeKey, model, 429, errText, retryAfterSec);
+          console.warn(
+            `[AI Chat] 429 RATE_LIMIT model=${model} key=${maskKey(activeKey)} type=${classification?.type || "DAILY"} cooldown_until=${formatVietnamTime(classification?.cooldownUntil || 0)} reason=${classification?.reason || errText.slice(0, 80)}`
+          );
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=quota_exhausted`);
+        } else if (response.status === 401 || response.status === 403) {
+          chatKeyPool?.markError?.(activeKey, response.status, model);
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=HTTP_${response.status}`);
         } else {
-          chatKeyPool.markError(activeKey, response.status, model);
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=HTTP_${response.status}`);
         }
 
-        if (model === GEMINI_MODELS.neo && (response.status === 403 || response.status === 404)) {
+        if (model === primaryChatModel && (response.status === 403 || response.status === 404)) {
           neoPrimaryUnavailable = true;
           continue;
         }
@@ -647,19 +709,22 @@ export async function askGeminiAgentDetailed(
         const isTimeout = err?.name === "AbortError" || err?.name === "TimeoutError" || /timeout|abort/i.test(err?.message || "");
         if (isTimeout) {
           console.warn(`[Assistant] Model ${model} timeout`);
+          const nextModel = models[modelIdx + 1] || "offline";
+          console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=timeout`);
           continue;
         }
         console.warn(`[Assistant] Model ${model} error:`, err?.message || String(err));
-        chatKeyPool.markError(activeKey, 503, model);
+        const nextModel = models[modelIdx + 1] || "offline";
+        console.log(`[AI Chat] FALLBACK from=${model} to=${nextModel} reason=error`);
         continue;
       }
     }
-  }
 
   return {
     text: buildOfflineEvidenceReply(userQuery, evidence, isOmo, customerLang),
     mode: "offline",
     model: lastAttemptedModel,
+    isQuotaFallback: hasQuotaExhaustion,
   };
 }
 

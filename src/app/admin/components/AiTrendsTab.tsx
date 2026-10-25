@@ -146,35 +146,85 @@ export default function AiTrendsTab({ onOpenAgent }: { onOpenAgent?: () => void 
               </button>
             </div>
 
-            {/* API Key Failover Monitor */}
+            {/* API Key Failover Monitor & Model Quota Table */}
             {apiKeyStatus && (
-              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h3 className="text-sm font-bold text-navy-900 flex items-center space-x-2">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Hệ Thống API Key Pool (Gemini)</span>
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">Tự động chuyển đổi khóa khi bị quá tải (HTTP 429/503). Đang có {apiKeyStatus.activeKeys}/{apiKeyStatus.totalKeys} khóa thực tế sẵn sàng.</p>
+              <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-navy-900 flex items-center space-x-2">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      <span>Hệ Thống API Key Pool (Gemini)</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">Tự động chuyển đổi khóa khi bị quá tải (HTTP 429/503). Đang có {apiKeyStatus.activeKeys}/{apiKeyStatus.totalKeys} khóa thực tế sẵn sàng.</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {apiKeyStatus.keys?.map((k: any) => (
+                      <div key={k.index} className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center space-x-2 ${
+                        k.status === "ACTIVE" 
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
+                          : "bg-rose-50 border-rose-200 text-rose-700"
+                      }`}>
+                        <span>Key {k.index}: {k.keyPreview}</span>
+                        {k.pools && k.pools.length > 0 && (
+                          <span className="text-[10px] opacity-70 font-sans">({k.pools.join(", ")})</span>
+                        )}
+                        {k.status === "ACTIVE" ? (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                        ) : (
+                          <span className="text-[10px] text-rose-500 animate-pulse">Nghỉ {k.cooldownRemainingSec}s</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  {apiKeyStatus.keys?.map((k: any) => (
-                    <div key={k.index} className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-medium flex items-center space-x-2 ${
-                      k.status === "ACTIVE" 
-                        ? "bg-emerald-50 border-emerald-200 text-emerald-700" 
-                        : "bg-rose-50 border-rose-200 text-rose-700"
-                    }`}>
-                      <span>Key {k.index}: {k.keyPreview}</span>
-                      {k.pools && k.pools.length > 0 && (
-                        <span className="text-[10px] opacity-70 font-sans">({k.pools.join(", ")})</span>
-                      )}
-                      {k.status === "ACTIVE" ? (
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                      ) : (
-                        <span className="text-[10px] text-rose-500 animate-pulse">Nghỉ {k.cooldownRemainingSec}s</span>
-                      )}
+
+                {/* Bảng Hạn mức theo Cặp (Khóa, Model) */}
+                {apiKeyStatus.modelQuotas && apiKeyStatus.modelQuotas.length > 0 && (
+                  <div className="pt-3 border-t border-slate-100">
+                    <h4 className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                      Hạn mức theo Cặp (Khóa, Model)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {apiKeyStatus.modelQuotas.map((mq: any, idx: number) => {
+                        const isAvail = mq.status === "AVAILABLE";
+                        const isDaily = mq.status === "DAILY_EXHAUSTED";
+                        return (
+                          <div
+                            key={idx}
+                            className={`p-2.5 rounded-xl border text-xs flex flex-col justify-between ${
+                              isAvail
+                                ? "bg-slate-50 border-slate-200 text-slate-700"
+                                : isDaily
+                                ? "bg-amber-50 border-amber-200 text-amber-900"
+                                : "bg-rose-50 border-rose-200 text-rose-900"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between font-mono">
+                              <span className="font-semibold">{mq.keyPreview}</span>
+                              <span
+                                className={`text-[10px] px-1.5 py-0.5 rounded font-sans font-medium ${
+                                  isAvail
+                                    ? "bg-emerald-100 text-emerald-800"
+                                    : isDaily
+                                    ? "bg-amber-200 text-amber-900"
+                                    : "bg-rose-200 text-rose-900"
+                                }`}
+                              >
+                                {isAvail ? "Sẵn sàng" : isDaily ? "Hết hạn ngày" : "Đang chờ phút"}
+                              </span>
+                            </div>
+                            <div className="mt-1 font-mono text-[11px] text-slate-600 truncate">{mq.model}</div>
+                            {!isAvail && (
+                              <div className="mt-1 text-[10px] text-slate-500 flex items-center justify-between">
+                                <span>Reset: {mq.cooldownUntilVn} (giờ VN)</span>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
             )}
 

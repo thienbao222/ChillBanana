@@ -1,5 +1,5 @@
 import { chatKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { normalizeSupportText, SEARCH_STOP_WORDS } from "./support-policy";
 
 export interface RoutedSupportIntent {
@@ -69,11 +69,15 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
   ];
   const deadline = Date.now() + 8_000;
 
-  for (const model of [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback]) {
+  const lightModels = typeof getFeatureModels === "function"
+    ? getFeatureModels("light")
+    : [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback];
+
+  for (const model of lightModels) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
-    const activeKey = chatKeyPool.getNextKey();
-    if (!activeKey) return null;
+    const activeKey = chatKeyPool.getNextKey(model);
+    if (!activeKey) continue;
 
     try {
       const response = await fetch(
@@ -98,9 +102,13 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
       if (!response.ok) {
         const body = await response.text().catch(() => "");
         console.warn(`[SupportIntentRouter] Model ${model} HTTP ${response.status}: ${body.slice(0, 200)}`);
-        // Lỗi của router tuyệt đối không gọi markError của chatKeyPool
+        if (response.status === 429) {
+          chatKeyPool?.markModelError?.(activeKey, model, 429, body);
+        }
         continue;
       }
+
+      chatKeyPool?.markModelSuccess?.(activeKey, model);
 
       const data = await response.json();
       const parts = data?.candidates?.[0]?.content?.parts || [];

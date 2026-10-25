@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { getAdminAiModuleSnapshot, getAdminAiMergedSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
 import { resolveAutoModules, ConcreteAdminModuleId } from "@/features/ai/admin/module-router";
 import { requireAdmin } from "@/lib/admin-guard";
@@ -9,6 +9,21 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 45;
 
 type HistoryMessage = { role: "user" | "assistant"; content: string };
+
+interface AdminCacheEntry {
+  answer: string;
+  dataAsOf: string;
+  resolvedModules: ConcreteAdminModuleId[] | null;
+  createdAt: number;
+}
+
+const adminAssistantCache = new Map<string, AdminCacheEntry>();
+const ADMIN_CACHE_TTL_MS = 5 * 60 * 1000; // 5 phút
+
+function getAdminCacheKey(moduleId: string, question: string): string {
+  const normQ = question.toLowerCase().trim().replace(/\s+/g, " ");
+  return `${moduleId}|${normQ}`;
+}
 
 export async function POST(req: NextRequest) {
   const guard = await requireAdmin(req);
@@ -23,6 +38,20 @@ export async function POST(req: NextRequest) {
     }
     if (!question || question.length > 2000) {
       return NextResponse.json({ error: "Câu hỏi phải có từ 1 đến 2.000 ký tự." }, { status: 400 });
+    }
+
+    const cacheKey = getAdminCacheKey(moduleId, question);
+    const cached = adminAssistantCache.get(cacheKey);
+    if (cached && Date.now() - cached.createdAt < ADMIN_CACHE_TTL_MS) {
+      console.log(`[AdminAssistant] CACHE_HIT module=${moduleId} question="${question.slice(0, 40)}"`);
+      return NextResponse.json({
+        success: true,
+        answer: cached.answer,
+        module: moduleId,
+        resolvedModules: cached.resolvedModules,
+        dataAsOf: cached.dataAsOf,
+        cached: true,
+      });
     }
 
     const rawHistory = Array.isArray(body?.history) ? body.history.slice(-8) : [];
@@ -143,35 +172,69 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
   return parts.join("\n");
 }
 
-    const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
+    const models = typeof getFeatureModels === "function"
+      ? getFeatureModels("admin")
+      : Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
     let answer: string | null = null;
 
-    for (let attempt = 0; attempt < 2; attempt++) {
-      const apiKey = adminKeyPool.getNextKey();
-      if (!apiKey) break;
+    const deadline = Date.now() + 38_000;
 
-      for (const model of models) {
-        let responseStatus: number | null = null;
-        try {
-          let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              system_instruction: { parts: [{ text: systemInstruction }] },
-              contents,
-              generationConfig: {
-                maxOutputTokens: 1800,
-                temperature: 0.2,
-                thinkingConfig: { thinkingLevel: "low" },
-              },
-            }),
-            signal: AbortSignal.timeout(18000),
-          });
-          responseStatus = response.status;
+    for (let modelIdx = 0; modelIdx < models.length; modelIdx++) {
+      const model = models[modelIdx];
+      const remaining = deadline - Date.now();
+      if (remaining < 3000) {
+        console.warn(`[AdminAssistant] Ngân sách thời gian còn lại ${remaining}ms < 3000ms. Dừng thử.`);
+        break;
+      }
 
-          if (response.status === 400) {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[AdminAssistant] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+      const apiKey = adminKeyPool.getNextKey(model);
+      if (!apiKey) {
+        console.warn(`[AdminAssistant] No available API key for model ${model}, skipping.`);
+        continue;
+      }
+
+      const modelTimeout = modelIdx === 0
+        ? Math.min(18_000, remaining)
+        : Math.min(12_000, remaining);
+
+      let responseStatus: number | null = null;
+      try {
+        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: systemInstruction }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 1800,
+              temperature: 0.2,
+              thinkingConfig: { thinkingLevel: "low" },
+            },
+          }),
+          signal: AbortSignal.timeout(modelTimeout),
+        });
+        responseStatus = response.status;
+
+        if (response.status === 429) {
+          const errorBody = await response.text().catch(() => "");
+          const retryAfter = response.headers.get("retry-after") ?? undefined;
+          console.warn(`[AdminAssistant] Model ${model} HTTP 429: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markModelError(apiKey, model, 429, errorBody, retryAfter);
+          continue;
+        }
+
+        if (response.status === 401 || response.status === 403) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          adminKeyPool.markError(apiKey, response.status, model);
+          continue;
+        }
+
+        if (response.status === 500 || response.status === 503) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
+          await new Promise((r) => setTimeout(r, 600 + Math.random() * 600));
+          try {
             const retryRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -187,45 +250,80 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
               signal: AbortSignal.timeout(18000),
             });
             responseStatus = retryRes.status;
-            response = retryRes;
-          }
-
-          if (!response.ok) {
-            const errorBody = await response.text().catch(() => "");
-            console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
-            adminKeyPool.markError(apiKey, response.status, model);
-            continue;
-          }
-
-          const responseBody = await response.text();
-          let data: any;
-          try {
-            data = JSON.parse(responseBody);
+            if (retryRes.ok) {
+              response = retryRes;
+            } else {
+              continue;
+            }
           } catch {
-            console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-            adminKeyPool.markError(apiKey, 503, model);
             continue;
           }
-          const parts = data?.candidates?.[0]?.content?.parts || [];
-          const text = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
-          if (text) {
-            answer = text;
-            break;
+        }
+
+        if (response.status === 400) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AdminAssistant] Model ${model} HTTP 400: ${errorBody.slice(0, 200)}`);
+          const retryRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              system_instruction: { parts: [{ text: systemInstruction }] },
+              contents,
+              generationConfig: {
+                maxOutputTokens: 1800,
+                temperature: 0.2,
+                thinkingConfig: { thinkingLevel: "low" },
+              },
+            }),
+            signal: AbortSignal.timeout(18000),
+          });
+          responseStatus = retryRes.status;
+          if (retryRes.ok) {
+            response = retryRes;
+          } else {
+            continue;
           }
-          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
-        } catch (error) {
-          adminKeyPool.markError(apiKey, 503, model);
-          console.warn(`[AdminAssistant] Model ${model} HTTP ${responseStatus ?? "n/a"}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
+        }
+
+        if (!response.ok) {
+          const errorBody = await response.text().catch(() => "");
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${errorBody.slice(0, 200)}`);
           continue;
         }
-      }
 
-      if (answer) break;
+        const responseBody = await response.text();
+        let data: any;
+        try {
+          data = JSON.parse(responseBody);
+        } catch {
+          console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+          continue;
+        }
+        const parts = data?.candidates?.[0]?.content?.parts || [];
+        const text = parts.filter((part: any) => typeof part.text === "string" && !part.thought).pop()?.text?.trim();
+        if (text) {
+          adminKeyPool.markModelSuccess(apiKey, model);
+          answer = text;
+          break;
+        }
+        console.warn(`[AdminAssistant] Model ${model} HTTP ${response.status}: ${responseBody.slice(0, 200)}`);
+      } catch (error) {
+        const isTimeout = error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError");
+        console.warn(`[AdminAssistant] Model ${model} ${isTimeout ? "timeout" : `HTTP ${responseStatus ?? "n/a"}`}: ${error instanceof Error ? error.message.slice(0, 200) : String(error).slice(0, 200)}`);
+        continue;
+      }
     }
 
     if (!answer) {
       answer = buildOfflineAdminReply(moduleId, question, snapshot, dataAsOf);
     }
+
+    adminAssistantCache.set(cacheKey, {
+      answer,
+      dataAsOf,
+      resolvedModules,
+      createdAt: Date.now(),
+    });
 
     return NextResponse.json({ success: true, answer, module: moduleId, resolvedModules, dataAsOf });
   } catch (error) {

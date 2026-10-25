@@ -14,6 +14,7 @@ vi.mock("@/lib/gemini-models", () => ({
     lightweight: "gemini-lightweight",
     neoFallback: "gemini-fallback",
   },
+  getFeatureModels: () => ["gemini-lightweight", "gemini-fallback"],
 }));
 
 import { routeSupportIntent } from "@/features/ai/customer/intent-router";

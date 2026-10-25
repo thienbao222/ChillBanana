@@ -23,6 +23,7 @@ interface Message {
   sender: "user" | "bot";
   text: string;
   isGuardrail?: boolean;
+  isQuotaFallback?: boolean;
   imagePreviewUrl?: string;
   sources?: MessageSource[];
   productCards?: ProductCardData[];
@@ -763,6 +764,7 @@ export default function AIChatBot() {
           sender: "bot",
           text: data.reply,
           isGuardrail: data.isGuardrailTriggered,
+          isQuotaFallback: Boolean(data.isQuotaFallback),
           sources,
           productCards,
           autoAddedProduct,
@@ -1297,6 +1299,12 @@ export default function AIChatBot() {
                           </button>
                         </div>
                       )}
+                      {message.isQuotaFallback && (
+                        <div className="mt-1.5 pt-1 border-t border-slate-100 text-[9px] text-slate-400 italic flex items-center gap-1">
+                          <span>⚡</span>
+                          <span>Neo đang ở chế độ tra cứu nhanh vì hạn mức AI hôm nay đã hết. Dữ liệu giá & tồn kho vẫn chính xác 100%.</span>
+                        </div>
+                      )}
                       {message.sender === "bot" && message.sources?.length ? (
                         <div className="mt-2 border-t border-slate-100 pt-1.5 text-[9px] text-slate-500">
                           Kiểm tra lúc {formatSourceTime(message.sources[0].checkedAt)} · {message.sources.map((source, index) => (
@@ -1462,6 +1470,12 @@ export default function AIChatBot() {
                         <ShoppingCart className="w-3 h-3" />
                         <span>Mở giỏ hàng</span>
                       </button>
+                    </div>
+                  )}
+                  {msg.isQuotaFallback && (
+                    <div className="mt-2 pt-1.5 border-t border-slate-100 text-[10px] text-slate-400 italic flex items-center gap-1">
+                      <span>⚡</span>
+                      <span>Neo đang ở chế độ tra cứu nhanh vì hạn mức AI hôm nay đã hết. Dữ liệu giá & tồn kho vẫn chính xác 100%.</span>
                     </div>
                   )}
                   {msg.sender === "bot" && msg.sources?.length ? (

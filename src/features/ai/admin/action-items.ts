@@ -76,7 +76,7 @@ export function evaluateActionItemRules(input: ActionRuleInput, now: Date = new 
       title: "Đơn kẹt ở kho hoặc đứng yên > 3 ngày",
       reason: `Có ${stalledOver3d.length} đơn hàng chưa có cập nhật tracking hoặc đứng yên tại trạm hơn 3 ngày.`,
       orderCodes: stalledOver3d.map((o) => o.orderCode),
-      deepLink: "/admin?tab=operations",
+      deepLink: "/admin?tab=orders&view=kanban",
       itemCount: stalledOver3d.length,
     });
   }
@@ -103,7 +103,7 @@ export function evaluateActionItemRules(input: ActionRuleInput, now: Date = new 
       title: "Vận đơn VN→JP cần rà soát kiểm dịch MAFF",
       reason: `Có ${input.maffShipments.length} kiện hàng thực phẩm gửi đi Nhật Bản cần kiểm tra danh mục cấm trước khi xếp chuyến bay.`,
       orderCodes: input.maffShipments.map((s) => s.trackingCode),
-      deepLink: "/admin?tab=vn_jp_dispatch",
+      deepLink: "/admin?tab=orders&view=vnjp",
       itemCount: input.maffShipments.length,
     });
   }

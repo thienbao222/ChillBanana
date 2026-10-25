@@ -1,3 +1,10 @@
+import {
+  isModelAvailableForKey,
+  recordModelQuotaError,
+  recordModelSuccess,
+  QuotaClassification,
+} from "./model-quota";
+
 export interface KeyEntry {
   keyPreview: string;
   status: "ACTIVE" | "RATE_LIMITED" | "DEAD";
@@ -36,7 +43,11 @@ export class ApiKeyPool {
     }
   }
 
-  public getNextKey(): string | null {
+  /**
+   * PHẦN 2: Lấy khóa mà cặp (khóa, model) còn khả dụng.
+   * Nếu không có khóa nào khả dụng cho model đó thì trả null để vòng lặp chuyển sang model kế tiếp.
+   */
+  public getNextKey(model?: string): string | null {
     if (this.keys.length === 0) {
       this.loadKeys();
       if (this.keys.length === 0) return null;
@@ -49,7 +60,7 @@ export class ApiKeyPool {
       const key = this.keys[this.currentIdx];
       const stats = this.keyStats.get(key)!;
 
-      // Reset RATE_LIMITED hoặc DEAD if cooldown is over (P2-02)
+      // Reset RATE_LIMITED hoặc DEAD nếu cooldown đã hết (P2-02)
       if ((stats.status === "RATE_LIMITED" || stats.status === "DEAD") && now > stats.cooldownUntil) {
         stats.status = "ACTIVE";
       }
@@ -57,19 +68,86 @@ export class ApiKeyPool {
       this.currentIdx = (this.currentIdx + 1) % this.keys.length;
       checkedCount++;
 
-      if (stats.status === "ACTIVE") {
-        stats.requestCount++;
-        return key;
+      // Khóa bị DEAD do 401/403 thì bỏ qua với mọi model
+      if (stats.status === "DEAD") {
+        continue;
       }
+
+      // Nếu có truyền model: kiểm tra trạng thái độc lập của cặp (khóa, model)
+      if (model) {
+        if (!isModelAvailableForKey(key, model, now)) {
+          continue; // Khóa này bị rate-limit hoặc hết ngày đối với model này -> thử khóa kế tiếp
+        }
+      } else {
+        // Tương thích ngược: nếu không truyền model thì kiểm tra status toàn cục của khóa
+        if (stats.status !== "ACTIVE") {
+          continue;
+        }
+      }
+
+      stats.requestCount++;
+      return key;
     }
 
-    return null; // All keys are RATE_LIMITED or DEAD
+    return null; // Không có khóa nào khả dụng cho model này
   }
 
-  public getAvailableKey(): string | null {
-    return this.getNextKey();
+  public getAvailableKey(model?: string): string | null {
+    return this.getNextKey(model);
   }
 
+  public hasAvailableKeyForModel(model: string, now = Date.now()): boolean {
+    if (this.keys.length === 0) {
+      this.loadKeys();
+    }
+    return this.keys.some((key) => {
+      const stats = this.keyStats.get(key);
+      if (!stats) return false;
+      if (stats.status === "DEAD" && now <= stats.cooldownUntil) return false;
+      return isModelAvailableForKey(key, model, now);
+    });
+  }
+
+  /**
+   * Ghi nhận lỗi theo cặp (khóa, model).
+   */
+  public markModelError(
+    key: string,
+    model: string,
+    statusCode: number,
+    bodyOrMessage?: unknown,
+    retryAfterSeconds?: string | number | null
+  ): QuotaClassification {
+    const classification = recordModelQuotaError(key, model, statusCode, bodyOrMessage, retryAfterSeconds);
+    const stats = this.keyStats.get(key);
+    if (stats) {
+      stats.errorCount++;
+      if (statusCode === 401 || statusCode === 403) {
+        stats.status = "DEAD";
+        stats.cooldownUntil = Date.now() + 15 * 60_000;
+        console.warn(`[ApiKeyPool:${this.envVarName}] API key revoked or unauthorized (HTTP ${statusCode}). Marked DEAD with 15m cooldown.`);
+      }
+    }
+    return classification;
+  }
+
+  public markModelSuccess(key: string, model: string): void {
+    recordModelSuccess(key, model);
+  }
+
+  public isModelAvailable(key: string, model: string): boolean {
+    const stats = this.keyStats.get(key);
+    if (!stats) return false;
+    const now = Date.now();
+    if (stats.status === "DEAD" && now < stats.cooldownUntil) {
+      return false;
+    }
+    return isModelAvailableForKey(key, model, now);
+  }
+
+  /**
+   * Giữ nguyên hàm cũ để tương thích ngược hoàn toàn với code & tests hiện hữu.
+   */
   public markError(key: string, statusCode: number, modelName?: string, retryAfterSeconds?: number): void {
     const stats = this.keyStats.get(key);
     if (!stats) return;
