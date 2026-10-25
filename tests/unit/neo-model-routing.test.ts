@@ -22,8 +22,8 @@ describe("Neo model routing", () => {
     const urls = fetchMock.mock.calls.map(([url]) => String(url));
 
     expect(reply).toBe("Neo trả lời");
-    expect(urls[0]).toContain("/gemini-3.5-flash:generateContent");
-    expect(urls[1]).toContain("/gemini-3.6-flash:generateContent");
+    expect(urls[0]).toContain("/gemini-3.5-flash-lite:generateContent");
+    expect(urls[1]).toContain("/gemini-3.1-flash-lite:generateContent");
   });
 
   it("builds offline reply with voltage compatibility and general safety note", async () => {

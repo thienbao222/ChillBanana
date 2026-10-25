@@ -1,5 +1,5 @@
 import { chatKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { normalizeSupportText, SEARCH_STOP_WORDS } from "./support-policy";
 
 export interface RoutedSupportIntent {
@@ -69,7 +69,11 @@ searchTerms tối đa 6 tên thương hiệu, loại hàng hoặc sản phẩm b
   ];
   const deadline = Date.now() + 8_000;
 
-  for (const model of [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback]) {
+  const lightModels = typeof getFeatureModels === "function"
+    ? getFeatureModels("light")
+    : [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback];
+
+  for (const model of lightModels) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) break;
     const activeKey = chatKeyPool.getNextKey(model);

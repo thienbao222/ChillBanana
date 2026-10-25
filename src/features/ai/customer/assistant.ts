@@ -1,6 +1,6 @@
 import { AIPersonality } from "@/types";
 import { chatKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { CUSTOMER_SUPPORT_TOOL_REGISTRY, extractCatalogSearchTerms, type SupportEvidence } from "./support-policy";
 
 // shortcut: cooldown is per serverless runtime; use shared storage if cross-instance coordination becomes necessary.
@@ -501,9 +501,13 @@ export async function askGeminiAgentDetailed(
   });
 
   let lastAttemptedModel: string | undefined;
-  const candidateModels = neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil
-    ? [GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2]
+  const configuredChatModels = typeof getFeatureModels === "function"
+    ? getFeatureModels("chat")
     : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.neoFallback2];
+  const primaryChatModel = configuredChatModels[0] || GEMINI_MODELS.neo;
+  const candidateModels = (neoPrimaryUnavailable || Date.now() < neoPrimaryCooldownUntil)
+    ? configuredChatModels.filter((m) => m !== primaryChatModel)
+    : configuredChatModels;
   const models = Array.from(new Set(candidateModels));
 
   for (const model of models) {
@@ -640,7 +644,7 @@ export async function askGeminiAgentDetailed(
           chatKeyPool?.markError?.(activeKey, response.status, model);
         }
 
-        if (model === GEMINI_MODELS.neo && (response.status === 403 || response.status === 404)) {
+        if (model === primaryChatModel && (response.status === 403 || response.status === 404)) {
           neoPrimaryUnavailable = true;
           continue;
         }

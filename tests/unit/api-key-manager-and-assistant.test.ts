@@ -94,13 +94,13 @@ describe("Assistant Fault Tolerance & Model Chain", () => {
 
     expect(result.mode).toBe("gemini");
     expect(result.text).toBe("Trả lời từ model dự phòng 3.6-flash");
-    expect(result.model).toBe("gemini-3.6-flash");
+    expect(result.model).toBe("gemini-3.1-flash-lite");
 
     const calledUrls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(calledUrls.length).toBe(3);
-    expect(calledUrls[0]).toContain("/gemini-3.5-flash:generateContent");
-    expect(calledUrls[1]).toContain("/gemini-3.5-flash:generateContent"); // retry cùng model 1
-    expect(calledUrls[2]).toContain("/gemini-3.6-flash:generateContent"); // chuyển sang model 2
+    expect(calledUrls[0]).toContain("/gemini-3.5-flash-lite:generateContent");
+    expect(calledUrls[1]).toContain("/gemini-3.5-flash-lite:generateContent"); // retry cùng model 1
+    expect(calledUrls[2]).toContain("/gemini-3.1-flash-lite:generateContent"); // chuyển sang model 2
   });
 
   it("Timeout ở model 1 -> KHÔNG cooldown khóa -> model 2 trả lời được", async () => {
@@ -123,11 +123,11 @@ describe("Assistant Fault Tolerance & Model Chain", () => {
 
     expect(result.mode).toBe("gemini");
     expect(result.text).toBe("Trả lời sau khi model 1 timeout");
-    expect(result.model).toBe("gemini-3.6-flash");
+    expect(result.model).toBe("gemini-3.1-flash-lite");
 
     const calledUrls = fetchMock.mock.calls.map(([url]) => String(url));
     expect(calledUrls.length).toBe(2);
-    expect(calledUrls[0]).toContain("/gemini-3.5-flash:generateContent");
-    expect(calledUrls[1]).toContain("/gemini-3.6-flash:generateContent");
+    expect(calledUrls[0]).toContain("/gemini-3.5-flash-lite:generateContent");
+    expect(calledUrls[1]).toContain("/gemini-3.1-flash-lite:generateContent");
   });
 });

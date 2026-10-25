@@ -8,7 +8,7 @@ import { requireAdmin } from "@/lib/admin-guard";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { chatKeyPool, adminKeyPool } from "@/lib/api-key-manager";
 import { inspectVnJpCargoDeterministic } from "@/features/ai/vn-jp/maff-inspector";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -63,10 +63,11 @@ export async function POST(req: NextRequest) {
         ? `Bạn là Chuyên gia Khai báo Hải quan Hàng không Việt - Nhật. Hãy dịch chính xác danh mục hàng hóa sau sang tiếng Anh và tiếng Nhật dùng cho tờ khai CN23 (chỉ trả về JSON {"invoiceEn": "...", "invoiceJp": "..."}): "${cargoDetails}"`
         : `Bạn là linh vật Neo Universe (phong cách Kuudere thông thái, ấm áp, dùng ẩn dụ vũ trụ ngắn gọn 2 câu). Hãy nhận xét kiện hàng gửi đi Nhật gồm "${cargoDetails}" với kết quả kiểm dịch MAFF hiện tại là ${baseResult.overallRisk} (chỉ trả về JSON {"neoComment": "..."}).`;
 
-    const models =
-      mode === "ADMIN"
-        ? [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
-        : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+    const models = typeof getFeatureModels === "function"
+      ? (mode === "ADMIN" ? getFeatureModels("admin") : getFeatureModels("inspect"))
+      : (mode === "ADMIN"
+          ? [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]
+          : [GEMINI_MODELS.neo, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]);
     const requestBody = {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {

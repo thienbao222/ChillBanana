@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { getAdminAiModuleSnapshot, getAdminAiMergedSnapshot, isAdminAiModuleId } from "@/features/ai/admin/snapshots";
 import { resolveAutoModules, ConcreteAdminModuleId } from "@/features/ai/admin/module-router";
 import { requireAdmin } from "@/lib/admin-guard";
@@ -143,7 +143,9 @@ function buildOfflineAdminReply(moduleId: string, question: string, snapshot: an
   return parts.join("\n");
 }
 
-    const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
+    const models = typeof getFeatureModels === "function"
+      ? getFeatureModels("admin")
+      : Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
     let answer: string | null = null;
 
     for (const model of models) {

@@ -5,7 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -117,7 +117,9 @@ export async function GET(req: NextRequest) {
     let aiSummary = `Hệ thống ghi nhận tổng doanh thu 2 chiều đạt ${totalSystemRevenue.toLocaleString("vi-VN")} đ. Tuyến gửi hàng đi Nhật (VN ➔ JP) có ${totalVnJpShipments} vận đơn, trong đó ${inFlightShipments} kiện đang bay quốc tế và ${unpaidShipmentsCount} kiện đang chờ thu cước.`;
 
     const prompt = `Bạn là Trợ lý Giám đốc Vận hành ChillBanana. Hãy nhận xét ngắn gọn (3-4 gạch đầu dòng) về bức tranh vận hành logistics 2 chiều Việt - Nhật dựa trên số liệu sau:\n${JSON.stringify(analyticsData, null, 2)}`;
-    const models = [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
+    const models = typeof getFeatureModels === "function"
+      ? getFeatureModels("admin")
+      : [GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight];
 
     for (const model of models) {
       const apiKey = adminKeyPool.getNextKey(model);

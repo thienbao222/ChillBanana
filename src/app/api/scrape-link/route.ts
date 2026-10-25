@@ -3,7 +3,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { scrapeKeyPool, chatKeyPool, visionKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { isPrivateHost } from "@/lib/ssrf";
 import {
@@ -764,13 +764,15 @@ BẮT BUỘC chỉ trả về JSON hợp lệ (không bọc markdown):
   "imageUrl": ""
 }`;
 
-  const models = Array.from(
-    new Set([
-      GEMINI_MODELS.lightweight,
-      GEMINI_MODELS.neoFallback,
-      GEMINI_MODELS.neo,
-    ])
-  );
+  const models = typeof getFeatureModels === "function"
+    ? getFeatureModels("light")
+    : Array.from(
+        new Set([
+          GEMINI_MODELS.lightweight,
+          GEMINI_MODELS.neoFallback,
+          GEMINI_MODELS.neo,
+        ])
+      );
   const requestBody = {
     contents: [{ parts: [{ text: prompt }] }],
     generationConfig: {

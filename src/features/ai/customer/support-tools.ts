@@ -3,7 +3,7 @@ import { calculateOrderPrice, DEFAULT_EXCHANGE_RATE } from "@/features/pricing/c
 import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { fetchLiveExchangeRate } from "@/features/pricing/exchange-rate";
 import { chatKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import {
   hasGuestOrderAccessForEmail,
   verifyGuestOrderAccessToken,
@@ -246,7 +246,9 @@ export function isValidJapaneseSearchKeyword(text: string): boolean {
 export async function extractKeywordsWithGemini(
   text: string
 ): Promise<{ keywordsJa: string; keywordsVi: string; category?: string; brand?: string } | null> {
-  const models = [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback2];
+  const models = typeof getFeatureModels === "function"
+    ? getFeatureModels("light")
+    : [GEMINI_MODELS.lightweight, GEMINI_MODELS.neoFallback2];
 
   for (const model of models) {
     const activeKey = chatKeyPool.getNextKey(model);

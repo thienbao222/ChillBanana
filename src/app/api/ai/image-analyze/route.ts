@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { visionKeyPool, chatKeyPool, scrapeKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { prisma } from "@/lib/prisma";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import {
@@ -263,11 +263,13 @@ BẮT BUỘC chỉ trả về đúng 1 JSON object hợp lệ (không bọc mark
 }`;
 
     // ── BƯỚC 2: Gọi Gemini Vision với cơ chế Fallback 3 Model (vision, neoFallback, lightweight) & thinkingLevel: low ──
-    const candidateModels = [
-      GEMINI_MODELS.vision,
-      GEMINI_MODELS.neoFallback,
-      GEMINI_MODELS.lightweight,
-    ];
+    const candidateModels = typeof getFeatureModels === "function"
+      ? getFeatureModels("vision")
+      : [
+          GEMINI_MODELS.vision,
+          GEMINI_MODELS.neoFallback,
+          GEMINI_MODELS.lightweight,
+        ];
     const uniqueModels = Array.from(new Set(candidateModels));
 
     let parsedResult: Record<string, unknown> | null = null;

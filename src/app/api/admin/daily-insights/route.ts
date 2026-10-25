@@ -18,7 +18,7 @@ import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { adminKeyPool } from "@/lib/api-key-manager";
-import { GEMINI_MODELS } from "@/lib/gemini-models";
+import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { requireAdmin } from "@/lib/admin-guard";
 import { isRecordedPaymentStatus } from "@/features/payments/policy";
 import { getDailyActionItems } from "@/features/ai/admin/action-items";
@@ -219,7 +219,9 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
     const userPrompt = `Snapshot dữ liệu ${snapshot.period} (lấy lúc ${snapshot.generatedAt}):\n${JSON.stringify(snapshot, null, 2)}`;
 
     let insight: string | null = null;
-    const models = Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
+    const models = typeof getFeatureModels === "function"
+      ? getFeatureModels("admin")
+      : Array.from(new Set([GEMINI_MODELS.admin, GEMINI_MODELS.neoFallback, GEMINI_MODELS.lightweight]));
 
     for (const model of models) {
       const apiKey = adminKeyPool.getNextKey(model);
