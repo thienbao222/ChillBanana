@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sendOrderStatusUpdateEmail, sendPriceApprovedEmail, sendOrderRollbackEmail } from "@/lib/mailer";
 import {
@@ -11,7 +12,7 @@ import {
 import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { isVerifiedAdmin, requireAdmin } from "@/lib/admin-guard";
 import { isNextOrderStatus, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
-import { getDepositAmount } from "@/features/payments/policy";
+import { getDepositAmount, checkWeightTolerance } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
@@ -306,17 +307,11 @@ export async function PATCH(
 
       // Nếu lùi từ COMPLETED về LOCAL_DELIVERY
       if (existingOrder.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
-        if (existingOrder.depositPercent === 50) {
-          rollbackUpdateData.paymentStatus = "DEPOSITED_50";
-          rollbackUpdateData.depositAmountVnd = getDepositAmount(
-            existingOrder.productPriceVnd + existingOrder.serviceFeeVnd,
-            50
-          );
-        }
         deletedCodTransactions = await prisma.paymentTransaction.findMany({
           where: {
             orderId: existingOrder.id,
             provider: "COD_SETTLEMENT",
+            status: { not: "VOIDED" },
           },
           select: {
             id: true,
@@ -329,12 +324,65 @@ export async function PATCH(
 
       const rolledBackOrder = await prisma.$transaction(async (tx) => {
         if (existingOrder.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
-          await tx.paymentTransaction.deleteMany({
+          const actorUsername = getAdminUsernameFromRequest(req) ?? "admin";
+          // WP2.2: Thay deleteMany bằng tạo bản ghi đảo REVERSAL và đánh dấu bản gốc VOIDED
+          for (const txItem of deletedCodTransactions) {
+            await tx.paymentTransaction.update({
+              where: { id: txItem.id },
+              data: {
+                status: "VOIDED",
+                voidedAt: new Date(),
+                note: `[Hoàn tác lùi trạng thái về LOCAL_DELIVERY bởi ${actorUsername}]`,
+              },
+            });
+
+            await tx.paymentTransaction.create({
+              data: {
+                orderId: existingOrder.id,
+                provider: txItem.provider,
+                amountVnd: -txItem.amountVnd,
+                status: "CONFIRMED",
+                kind: "REVERSAL",
+                reversalOfId: txItem.id,
+                confirmedByAdmin: actorUsername,
+                note: `Hoàn tác tất toán COD do lùi trạng thái đơn #${existingOrder.orderCode}`,
+                providerTransactionId: `rev_${Date.now()}_${txItem.id.slice(-8)}`,
+              },
+            });
+
+            await tx.auditLog.create({
+              data: {
+                actor: actorUsername,
+                action: "PAYMENT_REVERSED",
+                entityType: "PaymentTransaction",
+                entityId: txItem.id,
+                summary: `Hoàn tác thanh toán COD ${txItem.id} (${txItem.amountVnd.toLocaleString("vi-VN")} đ) khi lùi trạng thái về LOCAL_DELIVERY`,
+                metadata: {
+                  originalPaymentId: txItem.id,
+                  orderId: existingOrder.id,
+                  amountVnd: txItem.amountVnd,
+                  reversalReason: "ORDER_ROLLBACK",
+                } as Prisma.InputJsonValue,
+              },
+            });
+          }
+
+          // Khôi phục paymentStatus và depositAmountVnd theo tổng các giao dịch hiệu lực (không VOIDED)
+          const activeTransactions = await tx.paymentTransaction.findMany({
             where: {
               orderId: existingOrder.id,
-              provider: "COD_SETTLEMENT",
+              status: "CONFIRMED",
             },
           });
+          const totalPaidVnd = activeTransactions.reduce((sum, t) => sum + t.amountVnd, 0);
+          rollbackUpdateData.depositAmountVnd = Math.max(0, totalPaidVnd);
+          if (totalPaidVnd >= existingOrder.totalVnd && existingOrder.totalVnd > 0) {
+            rollbackUpdateData.paymentStatus = "PAID_100";
+          } else if (totalPaidVnd > 0) {
+            rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+          } else {
+            rollbackUpdateData.paymentStatus = "UNPAID";
+          }
         }
         const scalarData = { ...rollbackUpdateData };
         delete scalarData.trackingLogs;
@@ -461,11 +509,47 @@ export async function PATCH(
       weightKg !== undefined && weightKg !== null && weightKg !== ""
         ? Number(weightKg)
         : existingOrder.weightKg;
-    if (requestedStatus === "IN_TRANSIT_AIR" && (!Number.isFinite(effectiveWeightKg) || effectiveWeightKg <= 0)) {
+    const isVnOrigin = existingOrder.fulfillmentOrigin === "VN";
+    if (
+      !isVnOrigin &&
+      (requestedStatus === "IN_TRANSIT_AIR" || requestedStatus === "LOCAL_DELIVERY" || requestedStatus === "COMPLETED") &&
+      (!Number.isFinite(effectiveWeightKg) || (effectiveWeightKg ?? 0) <= 0)
+    ) {
       return NextResponse.json(
-        { error: "Đơn hàng chưa có trọng lượng thực tế tại kho Tokyo. Cần cập nhật cân nặng kiện hàng (> 0 kg) trước khi xuất kho bay về Việt Nam." },
+        { error: "Đơn hàng chưa có trọng lượng thực tế (> 0 kg). Cần cập nhật cân nặng kiện hàng trước khi chuyển trạng thái." },
         { status: 409 }
       );
+    }
+
+    // WP3.3: Chặn chuyển sang LOCAL_DELIVERY khi chưa thanh toán đủ 100% (PAID_100)
+    if (requestedStatus === "LOCAL_DELIVERY" && existingOrder.paymentStatus !== "PAID_100") {
+      const isOverride = body.adminOverrideDeliveryWithoutFullPayment === true;
+      if (isAdminUser && isOverride) {
+        if (!body.overrideReason || typeof body.overrideReason !== "string" || !body.overrideReason.trim()) {
+          return NextResponse.json(
+            { error: "Bắt buộc nhập lý do (overrideReason) khi vượt quyền giao hàng cho đơn chưa thanh toán 100%." },
+            { status: 400 }
+          );
+        }
+        await writeAuditLog({
+          actor: getAdminUsernameFromRequest(req) ?? "admin",
+          action: "OVERRIDE_DELIVERY_WITHOUT_FULL_PAYMENT",
+          entityType: "Order",
+          entityId: existingOrder.orderCode,
+          summary: `Admin vượt quyền chuyển LOCAL_DELIVERY cho đơn ${existingOrder.orderCode} khi chưa PAID_100 (${existingOrder.paymentStatus}). Lý do: ${body.overrideReason.trim()}`,
+          metadata: {
+            orderCode: existingOrder.orderCode,
+            paymentStatus: existingOrder.paymentStatus,
+            overrideReason: body.overrideReason.trim(),
+          },
+          req,
+        });
+      } else {
+        return NextResponse.json(
+          { error: "Chính sách Dòng tiền v2: Đơn hàng chỉ được chuyển sang giao hàng nội địa (LOCAL_DELIVERY) sau khi đã thu đủ 100% (PAID_100)." },
+          { status: 409 }
+        );
+      }
     }
 
     const logStatus = status || existingOrder.status;
@@ -509,8 +593,20 @@ export async function PATCH(
       );
       const shippingVnd = existingOrder.shippingFeeVnd || 0;
 
-      updateData.paymentStatus = "PAID_100";
-      updateData.depositAmountVnd = existingOrder.totalVnd;
+      // WP2.2: Tách giao hàng khỏi thanh toán; không tự đặt PAID_100 và không tự đặt depositAmountVnd = totalVnd
+      if (remainingBalanceVnd > 0) {
+        updateData.paymentStatus = "PENDING_RECONCILE";
+        updateData.paymentTransactions = {
+          create: {
+            provider: "COD_SETTLEMENT",
+            amountVnd: remainingBalanceVnd,
+            status: "PENDING_RECONCILE",
+            kind: "BALANCE",
+            reference: `Chờ đối soát tất toán COD khi nhận hàng (${existingOrder.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${existingOrder.weightKg}kg)`,
+            confirmedByAdmin: getAdminUsernameFromRequest(req) ?? "admin",
+          },
+        };
+      }
 
       if (!description && remainingBalanceVnd > 0) {
         const breakdownParts: string[] = [];
@@ -522,19 +618,7 @@ export async function PATCH(
         }
         const detailText = breakdownParts.length > 0 ? ` gồm ${breakdownParts.join(" + ")}` : "";
         updateData.trackingLogs.create.description =
-          `Kiện hàng đã giao thành công và thu đủ khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ${detailText}. Tổng thanh toán hoàn tất 100% (${existingOrder.totalVnd.toLocaleString("vi-VN")} đ).`;
-      }
-
-      if (remainingBalanceVnd > 0) {
-        updateData.paymentTransactions = {
-          create: {
-            provider: "COD_SETTLEMENT",
-            amountVnd: remainingBalanceVnd,
-            status: "CONFIRMED",
-            reference: `Tất toán khi nhận hàng (${existingOrder.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${existingOrder.weightKg}kg)`,
-            confirmedByAdmin: getAdminUsernameFromRequest(req) ?? "admin",
-          },
-        };
+          `Kiện hàng đã giao thành công (Chờ đối soát khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ${detailText}).`;
       }
     }
 
@@ -559,13 +643,23 @@ export async function PATCH(
           return NextResponse.json({ error: "Để duyệt giá, vui lòng nhập giá JPY hợp lệ (tối đa 10,000,000 ¥) và cân nặng từ 0 đến 1000 kg." }, { status: 400 });
         }
         const pricingConfig = await getCurrentPricingConfig();
-        const finalPrice = calculateOrderPrice(finalPriceJpy, finalWeightKg, existingOrder.exchangeRate, existingOrder.isGroupBuy, pricingConfig.values);
+        const finalPrice = calculateOrderPrice(
+          finalPriceJpy,
+          finalWeightKg,
+          existingOrder.exchangeRate,
+          existingOrder.isGroupBuy,
+          pricingConfig.values,
+          existingOrder.fulfillmentOrigin
+        );
         const { productPriceVnd: finalProductPriceVnd, serviceFeeVnd: finalServiceFeeVnd, shippingFeeVnd: finalShippingFeeVnd, totalVnd: finalTotalVnd } = finalPrice;
         updateData.priceJpy = finalPriceJpy;
         updateData.weightKg = finalWeightKg;
         updateData.productPriceVnd = finalProductPriceVnd;
         updateData.serviceFeeVnd = finalServiceFeeVnd;
+        updateData.handlingFeeVnd = finalPrice.handlingFeeVnd;
+        updateData.fxFeeVnd = finalPrice.fxFeeVnd;
         updateData.shippingFeeVnd = finalShippingFeeVnd;
+        updateData.taxEstimateVnd = finalPrice.taxEstimateVnd;
         updateData.totalVnd = finalTotalVnd;
         updateData.pricingConfigVersion = pricingConfig.version || null;
         updateData.depositAmountVnd = getDepositAmount(
@@ -575,6 +669,7 @@ export async function PATCH(
         if (existingOrder.orderItems.some((item) => item.itemType === "CATALOG" && item.productId)) {
           // Start the customer payment hold only once a mixed catalog/quote order is payable.
           updateData.reservationExpiresAt = new Date(Date.now() + 30 * 60 * 1000);
+          updateData.quoteHoldExpiresAt = null;
         }
       } else {
         if ([priceJpy, productPriceVnd, serviceFeeVnd, shippingFeeVnd, totalVnd, depositAmountVnd].some((value) => value !== undefined)) {
@@ -602,15 +697,27 @@ export async function PATCH(
       updateData.weightKg = parsedWeightKg;
       if (parsedWeightKg > 0) {
         const pricingConfig = await getCurrentPricingConfig();
-        const recalc = calculateOrderPrice(
-          existingOrder.priceJpy,
-          parsedWeightKg,
-          existingOrder.exchangeRate,
-          existingOrder.isGroupBuy,
-          pricingConfig.values
-        );
-        updateData.shippingFeeVnd = recalc.shippingFeeVnd;
-        updateData.totalVnd = existingOrder.productPriceVnd + existingOrder.serviceFeeVnd + recalc.shippingFeeVnd;
+        const toleranceCheck = checkWeightTolerance(existingOrder.weightKg, parsedWeightKg);
+        if (existingOrder.status === "WAREHOUSE_JP" && toleranceCheck.isWithinTolerance && existingOrder.shippingFeeVnd > 0) {
+          // WP3.3: Trong dung sai (±20% hoặc 0.1kg) thì giữ nguyên cước ước tính ban đầu
+          updateData.shippingFeeVnd = existingOrder.shippingFeeVnd;
+          updateData.totalVnd = existingOrder.totalVnd;
+        } else {
+          // Ngoài dung sai: tính lại cước theo cân nặng thực tế
+          const recalc = calculateOrderPrice(
+            existingOrder.priceJpy,
+            parsedWeightKg,
+            existingOrder.exchangeRate,
+            existingOrder.isGroupBuy,
+            pricingConfig.values,
+            existingOrder.fulfillmentOrigin
+          );
+          updateData.shippingFeeVnd = recalc.shippingFeeVnd;
+          updateData.handlingFeeVnd = recalc.handlingFeeVnd;
+          updateData.fxFeeVnd = recalc.fxFeeVnd;
+          updateData.taxEstimateVnd = recalc.taxEstimateVnd;
+          updateData.totalVnd = recalc.totalVnd;
+        }
       }
     }
 
@@ -680,6 +787,19 @@ export async function PATCH(
               data: {
                 orderId: existingOrder.id,
                 ...updateData.paymentTransactions.create,
+              },
+            });
+          }
+          if (updateData.paymentStatus === "PAID_100") {
+            await tx.paymentTransaction.updateMany({
+              where: {
+                orderId: existingOrder.id,
+                status: "PENDING_RECONCILE",
+              },
+              data: {
+                status: "CONFIRMED",
+                confirmedByAdmin: getAdminUsernameFromRequest(req) ?? "admin",
+                confirmedAt: new Date(),
               },
             });
           }

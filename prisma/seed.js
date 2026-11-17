@@ -42,9 +42,19 @@ async function main() {
   console.log("🌱 Bắt đầu khởi tạo dữ liệu mẫu cho ChillBanana (Prisma + Neon Postgres)...");
 
   // 1. Tạo tài khoản Admin mặc định nếu chưa tồn tại
-  const adminPassword = process.env.ADMIN_INITIAL_PASSWORD || "Admin@2026";
   const existingAdmin = await prisma.adminUser.findUnique({ where: { username: "admin" } });
   if (!existingAdmin) {
+    const adminPassword = process.env.ADMIN_INITIAL_PASSWORD;
+    if (!adminPassword || adminPassword.trim().length < 6) {
+      console.error(
+        "\n❌ [SEED ERROR] Thiếu biến môi trường ADMIN_INITIAL_PASSWORD (tối thiểu 6 ký tự).\n" +
+          "Để bảo mật, hệ thống không còn dùng mật khẩu mặc định.\n" +
+          "Vui lòng thiết lập ADMIN_INITIAL_PASSWORD trong file .env hoặc command line trước khi chạy seed:\n" +
+          "  Windows: $env:ADMIN_INITIAL_PASSWORD='MatKhauCuaBan'; npm run prisma:seed\n" +
+          "  Linux/macOS: ADMIN_INITIAL_PASSWORD='MatKhauCuaBan' npm run prisma:seed\n"
+      );
+      process.exit(1);
+    }
     const adminHash = hashPassword(adminPassword);
     const admin = await prisma.adminUser.create({
       data: {
@@ -54,7 +64,7 @@ async function main() {
         role: "SUPER_ADMIN",
       },
     });
-    console.log(`✅ Đã tạo tài khoản quản trị mặc định: ${admin.username} / ${adminPassword}`);
+    console.log(`✅ Đã tạo tài khoản quản trị: ${admin.username} (mật khẩu đã cấu hình từ biến môi trường)`);
   } else {
     console.log(`ℹ️ Tài khoản admin đã tồn tại trong CSDL: ${existingAdmin.username}`);
   }

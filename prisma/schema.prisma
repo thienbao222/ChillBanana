@@ -44,7 +44,10 @@ model Order {
   exchangeRate     Int           @default(172) // 1 JPY = X VND
   productPriceVnd  Int           // Giá hàng quy đổi VND
   serviceFeeVnd    Int           // Phí mua hộ (3% - 5%)
+  handlingFeeVnd   Int?          @default(0) // Phí xử lý cố định (WP3.2)
+  fxFeeVnd         Int?          @default(0) // Phí chuyển đổi ngoại tệ (WP3.2)
   shippingFeeVnd   Int           // Cước bay quốc tế (185.000đ/kg)
+  taxEstimateVnd   Int?          @default(0) // Thuế ước tính (WP3.2)
   totalVnd         Int           // Tổng giá trị đơn hàng
   depositAmountVnd Int           // Số tiền đã thanh toán/đặt cọc
   depositPercent   Int           @default(50) // 50 hoặc 100; áp dụng cho tiền hàng + phí mua hộ
@@ -70,9 +73,12 @@ model Order {
   trackingLogs     TrackingLog[]
   orderItems       OrderItem[]
   paymentTransactions PaymentTransaction[]
+  costLines        OrderCostLine[]
   purchaseTask     PurchaseTask?         // Nhóm 3: Auto-Purchasing Agent task
   reservationExpiresAt DateTime?
+  quoteHoldExpiresAt   DateTime?
   reservationReleasedAt DateTime?
+  belowMargin          Boolean?      @default(false)
   pricingConfigVersion Int?
   pricingConfig PricingConfig? @relation(fields: [pricingConfigVersion], references: [version], onDelete: SetNull)
   paymentAttempts PaymentAttempt[]
@@ -84,23 +90,34 @@ model Order {
   @@index([customerId])
   @@index([customerEmail])
   @@index([status, paymentStatus, reservationExpiresAt])
+  @@index([status, paymentStatus, quoteHoldExpiresAt])
 }
 
 model PaymentTransaction {
-  id                    String   @id @default(cuid())
+  id                    String              @id @default(cuid())
   orderId               String
-  order                 Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  provider              String   // VNPAY | MANUAL_BANK_TRANSFER
+  order                 Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  provider              String              // VNPAY | MANUAL_BANK_TRANSFER
   amountVnd             Int
-  status                String   @default("CONFIRMED") // CONFIRMED | REFUNDED
+  status                String              @default("CONFIRMED") // CONFIRMED | REFUNDED | VOIDED
+  kind                  String              @default("LEGACY")    // DEPOSIT | BALANCE | REFUND | REVERSAL | LEGACY
+  reversalOfId          String?
+  reversalOf            PaymentTransaction? @relation("PaymentReversals", fields: [reversalOfId], references: [id], onDelete: Restrict)
+  reversals             PaymentTransaction[] @relation("PaymentReversals")
+  voidedAt              DateTime?
+  note                  String?
+  shipmentId            String?             // Dành cho WP6.1 (VN -> JP)
   providerTransactionId String?
   reference             String?
   confirmedByAdmin      String?
-  confirmedAt           DateTime @default(now())
-  createdAt             DateTime @default(now())
+  confirmedAt           DateTime            @default(now())
+  createdAt             DateTime            @default(now())
 
   @@unique([provider, providerTransactionId])
   @@index([orderId, createdAt])
+  @@index([kind])
+  @@index([reversalOfId])
+  @@index([shipmentId])
 }
 
 // Ghi nhận các lần khởi tạo/kết quả thanh toán, bao gồm cả mock thất bại hoặc pending.
@@ -173,6 +190,14 @@ model OrderItem {
   quantity      Int
   priceJpy      Int      // Đơn giá ¥ mỗi item (server-verified cho catalog)
   weightKg      Float    // Cân nặng mỗi item (kg)
+
+  // Nguồn báo giá & duyệt giá (WP4.1)
+  quoteSource     String?  // CATALOG | API_RAKUTEN | API_YAHOO | EXTENSION | MANUAL | SCRAPE
+  quoteVerifiedAt DateTime?
+  quoteVerifiedBy String?
+
+  // Chiến dịch mua theo đợt (WP5.1)
+  campaignEntry   CampaignEntry?
 
   createdAt     DateTime @default(now())
 
@@ -300,6 +325,7 @@ model Customer {
   zaloUserId   String?   // Zalo OA User ID — lưu khi khách Follow OA (để gửi thông báo Zalo)
   orders       Order[]
   chatSessions ChatSession[]
+  vnJpShipments VnJpShipment[]
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -346,12 +372,39 @@ model PurchaseTask {
   lastError       String?
   adminNote       String?   // Ghi chú nội bộ
 
+  costLines       OrderCostLine[]
+
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   @@index([status])
   @@index([platform])
   @@index([createdAt])
+}
+
+// Bảng ghi nhận chi phí thực tế cho đơn hàng (WP2.1)
+model OrderCostLine {
+  id             String        @id @default(cuid())
+  orderId        String
+  order          Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  purchaseTaskId String?
+  purchaseTask   PurchaseTask? @relation(fields: [purchaseTaskId], references: [id], onDelete: SetNull)
+  category       String        // GOODS_JPY | JP_DOMESTIC_SHIP | TOKYO_HANDLING | INTL_FREIGHT | VN_DOMESTIC_SHIP | IMPORT_TAX | PAYMENT_FEE | FX_FEE | OTHER
+  amountOriginal Float
+  currency       String        // JPY | VND
+  fxRate         Float?
+  amountVnd      Int
+  note           String?
+  receiptUrl     String?
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  voidedAt       DateTime?
+  shipmentId     String?       // Dành cho WP6.1 (VN -> JP)
+
+  @@index([orderId, category])
+  @@index([category])
+  @@index([shipmentId])
+  @@index([purchaseTaskId])
 }
 
 // Cấu hình hệ thống động — Admin có thể điều chỉnh tỷ lệ phí, cước vận chuyển mà không cần redeploy
@@ -402,6 +455,10 @@ model VnJpShipment {
   id                    String   @id @default(cuid())
   trackingCode          String   @unique // Ví dụ: VNJP-2026-8891
 
+  // Khách hàng sở hữu phiếu (WP6.1)
+  customerId            String?
+  customer              Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
   // Người gửi tại Việt Nam
   senderName            String
   senderPhone           String
@@ -415,6 +472,11 @@ model VnJpShipment {
   receiverPostalCode    String   // Mã bưu điện Nhật Bản 〒 7 số (VD: 160-0022)
   receiverPrefecture    String   // Tỉnh/Thành (Tokyo, Osaka, Kanagawa...)
   receiverAddress       String   // Địa chỉ chi tiết, Tên Mansion, Số phòng
+
+  // Tuân thủ dữ liệu & kiểm dịch MAFF (WP6.1, WP6.2)
+  consentAt             DateTime?
+  consentVersion        String?
+  maffAcknowledgedAt    DateTime?
 
   // Hàng hóa & Cước tính IATA
   cargoType             String   // gift, food, doc, other
@@ -455,5 +517,88 @@ model VnJpShipment {
   @@index([senderPhone])
   @@index([createdAt])
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CHIẾN DỊCH MUA THEO ĐỢT (GROUP BUY / CAMPAIGNS - WP5.1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Campaign {
+  id              String         @id @default(cuid())
+  slug            String         @unique
+  title           String
+  description     String?
+  marketplace     String         // RAKUTEN | YAHOO | AMAZON | OTHER
+  status          String         @default("DRAFT") // DRAFT, OPEN, CLOSED, ORDERED, ARRIVED, SHIPPED, SETTLED, CANCELLED
+  opensAt         DateTime?
+  closesAt        DateTime?
+  minParticipants Int            @default(1)
+  maxSlots        Int?           // Tổng giới hạn suất của chiến dịch
+  notes           String?
+  createdBy       String?
+
+  campaignItems   CampaignItem[]
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([status])
+  @@index([slug])
+  @@index([closesAt])
+}
+
+model CampaignItem {
+  id           String          @id @default(cuid())
+  campaignId   String
+  campaign     Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  name         String
+  priceJpy     Int
+  weightKg     Float
+  maxSlots     Int?
+  claimedSlots Int             @default(0)
+  imageUrl     String?
+  originalUrl  String?
+
+  entries      CampaignEntry[]
+
+  createdAt    DateTime        @default(now())
+
+  @@index([campaignId])
+}
+
+model CampaignEntry {
+  id             String        @id @default(cuid())
+  campaignItemId String
+  campaignItem   CampaignItem  @relation(fields: [campaignItemId], references: [id], onDelete: Cascade)
+
+  orderItemId    String?       @unique
+  orderItem      OrderItem?    @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  quantity       Int           @default(1)
+  createdAt      DateTime      @default(now())
+
+  @@index([campaignItemId])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ĐÓNG SỔ KỲ KẾ TOÁN (PERIOD CLOSE - WP7.2)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model PeriodClose {
+  id              String   @id @default(cuid())
+  period          String   @unique // Ví dụ: "2026-10", "2026-11"
+  closedAt        DateTime @default(now())
+  closedBy        String   // Username Super Admin
+  totalGmvVnd     BigInt   @default(0)
+  totalRevenueVnd BigInt   @default(0)
+  totalCostVnd    BigInt   @default(0)
+  grossProfitVnd  BigInt   @default(0)
+  ordersCount     Int      @default(0)
+  notes           String?
+  createdAt       DateTime @default(now())
+
+  @@index([period])
+}
+
 
 

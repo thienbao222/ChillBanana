@@ -13,6 +13,7 @@ import {
 import { writeAuditLog } from "@/lib/audit";
 import { getClientIp, getMaxBlockedSeconds, recordHits, resetKey } from "@/lib/rate-limit";
 import { LOGIN_FAILURES_PER_ACCOUNT, LOGIN_FAILURES_PER_IP } from "@/lib/rate-limit-core";
+import { isDemoSelfHealEnabled } from "@/lib/demo-mode";
 
 
 export const dynamic = "force-dynamic";
@@ -108,24 +109,24 @@ export async function POST(req: NextRequest) {
     const userKey = `admin-login:user:${trimmedUser}`;
     const ipKey = `admin-login:ip:${ip}`;
 
-    const isTestEnv =
-      process.env.NODE_ENV === "test" ||
-      process.env.VITEST === "true" ||
-      process.env.APP_ENV === "test";
-    const defaultAdminPassword = process.env.ADMIN_INITIAL_PASSWORD || "Admin@2026";
+    // BẢO MẬT (WP0.2): Không hardcode mật khẩu mặc định.
+    // Đường tự phục hồi Master Admin CHỈ hoạt động khi bật demo self-heal VÀ ADMIN_INITIAL_PASSWORD được đặt rõ ràng.
+    const initialAdminPassword = process.env.ADMIN_INITIAL_PASSWORD;
     const isMasterAdminAuth =
-      !isTestEnv && trimmedUser === "admin" && password === defaultAdminPassword;
+      isDemoSelfHealEnabled() &&
+      Boolean(initialAdminPassword) &&
+      trimmedUser === "admin" &&
+      password === initialAdminPassword;
 
-    // Giới hạn đăng nhập sai theo tài khoản và theo IP (trừ trường hợp Master Admin tự phục hồi).
-    if (!isMasterAdminAuth) {
-      const waitSeconds = await getMaxBlockedSeconds([userKey, ipKey]);
-      if (waitSeconds > 0) {
-        console.warn(`[AdminAuth] Chặn đăng nhập "${trimmedUser}" từ ${ip}: còn ${waitSeconds}s.`);
-        return NextResponse.json(
-          { error: `Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(waitSeconds / 60)} phút.` },
-          { status: 429, headers: { "Retry-After": String(waitSeconds) } }
-        );
-      }
+    // BẢO MẬT (WP0.2): Mọi yêu cầu đăng nhập BẮT BUỘC phải đi qua kiểm tra giới hạn rate limit,
+    // không cho phép bất kỳ đường nào bỏ qua getMaxBlockedSeconds để chống brute-force.
+    const waitSeconds = await getMaxBlockedSeconds([userKey, ipKey]);
+    if (waitSeconds > 0) {
+      console.warn(`[AdminAuth] Chặn đăng nhập "${trimmedUser}" từ ${ip}: còn ${waitSeconds}s.`);
+      return NextResponse.json(
+        { error: `Bạn đã nhập sai quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(waitSeconds / 60)} phút.` },
+        { status: 429, headers: { "Retry-After": String(waitSeconds) } }
+      );
     }
 
     let isAuthenticated = false;
@@ -172,8 +173,7 @@ export async function POST(req: NextRequest) {
             await writeAuditLog({ actor: trimmedUser, action: "ADMIN_PASSWORD_REHASHED", summary: "Nâng cấp hash mật khẩu sang scrypt.", req });
           }
         } else if (isMasterAdminAuth) {
-          // Trường hợp mật khẩu trong DB bị lệch, nhưng người quản trị nhập đúng mật khẩu Master Admin@2026:
-          // Tự động đồng bộ và cấp quyền đăng nhập
+          // Trường hợp demo self-heal: tự động đồng bộ lại mật khẩu admin theo ADMIN_INITIAL_PASSWORD
           await prisma.adminUser.update({
             where: { id: dbAdmin.id },
             data: { passwordHash: hashAdminPassword(password), role: "SUPER_ADMIN" },
@@ -184,7 +184,7 @@ export async function POST(req: NextRequest) {
           adminPwdHash = hashAdminPassword(password);
           await resetKey(userKey);
           await resetKey(ipKey);
-          console.log("[AdminAuth] Self-Healing: Đã đồng bộ lại mật khẩu admin theo Master Key.");
+          console.log("[AdminAuth] Self-Healing: Đã đồng bộ lại mật khẩu admin theo biến môi trường demo.");
         }
       } else {
         // Tài khoản không tồn tại: dùng hash khởi tạo sẵn ở module-level để tránh double scryptSync (P1-08)

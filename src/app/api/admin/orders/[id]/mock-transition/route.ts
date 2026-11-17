@@ -52,7 +52,14 @@ export async function POST(
   const adminUsername = guard.username;
   const { id } = await params;
 
-  let body: { targetStatus?: string; description?: string; location?: string; action?: string };
+  let body: {
+    targetStatus?: string;
+    description?: string;
+    location?: string;
+    action?: string;
+    adminOverrideDeliveryWithoutFullPayment?: boolean;
+    overrideReason?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -100,9 +107,41 @@ export async function POST(
 
     const rolledBackOrder = await prisma.$transaction(async (tx) => {
       if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
-        await tx.paymentTransaction.deleteMany({
-          where: { orderId: order.id, provider: "COD_SETTLEMENT" },
+        const codTxs = await tx.paymentTransaction.findMany({
+          where: { orderId: order.id, provider: "COD_SETTLEMENT", status: { not: "VOIDED" } },
         });
+        for (const codTx of codTxs) {
+          await tx.paymentTransaction.update({
+            where: { id: codTx.id },
+            data: { status: "VOIDED", voidedAt: new Date(), note: `[Hoàn tác Sandbox bởi ${adminUsername}]` },
+          });
+          await tx.paymentTransaction.create({
+            data: {
+              orderId: order.id,
+              provider: codTx.provider,
+              amountVnd: -codTx.amountVnd,
+              status: "CONFIRMED",
+              kind: "REVERSAL",
+              reversalOfId: codTx.id,
+              confirmedByAdmin: adminUsername,
+              note: `[Sandbox] Hoàn tác tất toán COD đơn #${order.orderCode}`,
+              providerTransactionId: `rev_${Date.now()}_${codTx.id.slice(-8)}`,
+            },
+          });
+        }
+
+        const activeTxs = await tx.paymentTransaction.findMany({
+          where: { orderId: order.id, status: "CONFIRMED" },
+        });
+        const totalPaid = activeTxs.reduce((sum, t) => sum + t.amountVnd, 0);
+        rollbackUpdateData.depositAmountVnd = Math.max(0, totalPaid);
+        if (totalPaid >= order.totalVnd && order.totalVnd > 0) {
+          rollbackUpdateData.paymentStatus = "PAID_100";
+        } else if (totalPaid > 0) {
+          rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+        } else {
+          rollbackUpdateData.paymentStatus = "UNPAID";
+        }
       }
       return tx.order.update({
         where: { id: order.id },
@@ -197,12 +236,39 @@ export async function POST(
       }
     }
 
-    // Điều kiện xuất kho Tokyo bay về VN (IN_TRANSIT_AIR): Phải có trọng lượng thực tế
-    if (targetStatus === "IN_TRANSIT_AIR" && (!order.weightKg || order.weightKg <= 0)) {
+    // Điều kiện xuất kho Tokyo bay về VN (IN_TRANSIT_AIR) hoặc giao hàng / hoàn tất: Phải có trọng lượng thực tế (trừ origin VN)
+    if (origin !== "VN" && (targetStatus === "IN_TRANSIT_AIR" || targetStatus === "LOCAL_DELIVERY" || targetStatus === "COMPLETED") && (!order.weightKg || order.weightKg <= 0)) {
       return NextResponse.json(
-        { error: "Đơn hàng chưa có trọng lượng thực tế tại kho Tokyo. Cần cập nhật cân nặng kiện hàng trước khi xuất kho bay về Việt Nam." },
+        { error: "Đơn hàng chưa có trọng lượng thực tế (> 0 kg). Cần cập nhật cân nặng kiện hàng trước khi chuyển trạng thái." },
         { status: 409 }
       );
+    }
+
+    // WP3.3: Chặn chuyển sang LOCAL_DELIVERY khi chưa thanh toán đủ 100% (PAID_100)
+    if (targetStatus === "LOCAL_DELIVERY" && order.paymentStatus !== "PAID_100") {
+      const isOverride = body.adminOverrideDeliveryWithoutFullPayment === true;
+      if (isOverride) {
+        if (!body.overrideReason || typeof body.overrideReason !== "string" || !body.overrideReason.trim()) {
+          return NextResponse.json(
+            { error: "Bắt buộc nhập lý do (overrideReason) khi vượt quyền giao hàng cho đơn chưa thanh toán 100%." },
+            { status: 400 }
+          );
+        }
+        await writeAuditLog({
+          actor: adminUsername || "admin",
+          action: "OVERRIDE_DELIVERY_WITHOUT_FULL_PAYMENT",
+          entityType: "Order",
+          entityId: order.orderCode,
+          summary: `[Sandbox] Admin vượt quyền chuyển LOCAL_DELIVERY cho đơn ${order.orderCode} khi chưa PAID_100. Lý do: ${body.overrideReason.trim()}`,
+          metadata: { orderCode: order.orderCode, paymentStatus: order.paymentStatus, overrideReason: body.overrideReason.trim() },
+          req,
+        });
+      } else {
+        return NextResponse.json(
+          { error: "Chính sách Dòng tiền v2: Đơn hàng chỉ được chuyển sang giao hàng nội địa (LOCAL_DELIVERY) sau khi đã thu đủ 100% (PAID_100)." },
+          { status: 409 }
+        );
+      }
     }
 
     const mockJpTrack = targetStatus === "WAREHOUSE_JP" && !order.jpDomesticTrack
@@ -219,8 +285,7 @@ export async function POST(
         where: { id: order.id, status: order.status },
         data: {
           status: targetStatus,
-          paymentStatus: targetStatus === "COMPLETED" ? "PAID_100" : undefined,
-          depositAmountVnd: targetStatus === "COMPLETED" ? order.totalVnd : undefined,
+          paymentStatus: targetStatus === "COMPLETED" && remainingBalanceVnd > 0 ? "PENDING_RECONCILE" : undefined,
           jpDomesticTrack: mockJpTrack || undefined,
           vnDomesticTrack: mockVnTrack || undefined,
           adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} chuyển trạng thái sang ${targetStatus}.`,
@@ -235,8 +300,9 @@ export async function POST(
             orderId: order.id,
             provider: "COD_SETTLEMENT",
             amountVnd: remainingBalanceVnd,
-            status: "CONFIRMED",
-            reference: `Tất toán khi nhận hàng (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
+            status: "PENDING_RECONCILE",
+            kind: "BALANCE",
+            reference: `Chờ đối soát tất toán COD khi nhận hàng (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
             confirmedByAdmin: adminUsername,
           },
         });

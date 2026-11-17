@@ -18,6 +18,15 @@ export type PricingConfigValues = {
   fallbackJpyVndRate: number;
   usdVndReferenceRate: number;
   fxSpreadPercent?: number;
+  groupBuyEnabled?: boolean;
+
+  // WP3.2 extensions:
+  handlingFeeVnd?: number;         // Phí xử lý cố định (VND, mặc định 0)
+  fxFeePercent?: number;           // Phí chuyển đổi ngoại tệ hiển thị dòng riêng (%, mặc định 0)
+  minBillableWeightKg?: number;    // Cân tính cước tối thiểu (kg, mặc định 0)
+  taxEstimateEnabled?: boolean;    // Cờ hiển thị ước tính thuế (mặc định false)
+  vatPercent?: number;             // Thuế GTGT ước tính (%, mặc định 0)
+  importTaxPercent?: number;       // Thuế nhập khẩu ước tính (%, mặc định 0)
 };
 
 export const DEFAULT_PRICING_CONFIG: PricingConfigValues = {
@@ -30,7 +39,24 @@ export const DEFAULT_PRICING_CONFIG: PricingConfigValues = {
   fallbackJpyVndRate: DEFAULT_EXCHANGE_RATE,
   usdVndReferenceRate: 25_400,
   fxSpreadPercent: 0,
+  handlingFeeVnd: 0,
+  fxFeePercent: 0,
+  minBillableWeightKg: 0,
+  taxEstimateEnabled: false,
+  vatPercent: 0,
+  importTaxPercent: 0,
 };
+
+export interface PricingBreakdown {
+  goods: number;
+  serviceFee: number;
+  handlingFee: number;
+  fxFee: number;
+  shipping: number;
+  billableWeightKg: number;
+  taxEstimate: number;
+  total: number;
+}
 
 /** Canonical estimate used by the storefront and APIs. Actual orders are recalculated server-side. */
 export function calculateOrderPrice(
@@ -42,36 +68,76 @@ export function calculateOrderPrice(
   fulfillmentOrigin: string = "JP"
 ) {
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(config.serviceFeeMinimumVnd, Math.round(productPriceVnd * config.serviceFeePercent / 100));
-  const baseOrderCostVnd = productPriceVnd + serviceFeeVnd;
+  const serviceFeeVnd = Math.max(
+    config.serviceFeeMinimumVnd,
+    Math.round((productPriceVnd * config.serviceFeePercent) / 100)
+  );
+
+  // WP3.2 extensions:
+  const handlingFeeVnd = Math.round(config.handlingFeeVnd ?? 0);
+  const fxFeeVnd = Math.round((productPriceVnd * (config.fxFeePercent ?? 0)) / 100);
+
+  const baseOrderCostVnd = productPriceVnd + serviceFeeVnd + handlingFeeVnd + fxFeeVnd;
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
 
   let shippingFeeVnd = 0;
+  let billableWeightKg = weightKg;
+
   // Hàng sẵn tại kho Việt Nam không phát sinh cước bay quốc tế Tokyo ⇄ VN
   if (weightKg > 0 && fulfillmentOrigin !== "VN") {
-    const shippingRate = isGroupBuy && weightKg <= config.groupBuyMaxWeightKg
-      ? Math.round(config.airShippingPerKgVnd * (1 - config.groupBuyShippingDiscountPercent / 100))
-      : config.airShippingPerKgVnd;
-    shippingFeeVnd = Math.round(weightKg * shippingRate);
+    // Áp dụng cân tối thiểu tính cước (minBillableWeightKg) nếu được cấu hình
+    billableWeightKg = Math.max(weightKg, config.minBillableWeightKg ?? 0);
+
+    // WP1.2: calculator bỏ qua isGroupBuy khi cấu hình groupBuyEnabled bị tắt (false)
+    const isEffectiveGroupBuy = config.groupBuyEnabled === false ? false : Boolean(isGroupBuy);
+    const shippingRate =
+      isEffectiveGroupBuy && billableWeightKg <= config.groupBuyMaxWeightKg
+        ? Math.round(config.airShippingPerKgVnd * (1 - config.groupBuyShippingDiscountPercent / 100))
+        : config.airShippingPerKgVnd;
+    shippingFeeVnd = Math.round(billableWeightKg * shippingRate);
   }
 
-  const totalVnd = baseOrderCostVnd + shippingFeeVnd;
+  // Thuế ước tính (nếu bật cấu hình taxEstimateEnabled)
+  let taxEstimateVnd = 0;
+  if (config.taxEstimateEnabled) {
+    const vatVnd = Math.round((productPriceVnd * (config.vatPercent ?? 0)) / 100);
+    const importTaxVnd = Math.round((productPriceVnd * (config.importTaxPercent ?? 0)) / 100);
+    taxEstimateVnd = vatVnd + importTaxVnd;
+  }
+
+  const totalVnd = baseOrderCostVnd + shippingFeeVnd + taxEstimateVnd;
   const isUnderMinOrder = baseOrderCostVnd < config.minimumBaseOrderVnd;
   const minOrderDiffVnd = Math.max(0, config.minimumBaseOrderVnd - baseOrderCostVnd);
+
+  const breakdown: PricingBreakdown = {
+    goods: productPriceVnd,
+    serviceFee: serviceFeeVnd,
+    handlingFee: handlingFeeVnd,
+    fxFee: fxFeeVnd,
+    shipping: shippingFeeVnd,
+    billableWeightKg,
+    taxEstimate: taxEstimateVnd,
+    total: totalVnd,
+  };
 
   return {
     priceJpy,
     exchangeRate,
     productPriceVnd,
     serviceFeeVnd,
+    handlingFeeVnd,
+    fxFeeVnd,
+    taxEstimateVnd,
     baseOrderCostVnd,
     shippingFeeVnd,
     weightKg,
+    billableWeightKg,
     totalVnd,
     deposit50Vnd,
     isUnderMinOrder,
     minOrderDiffVnd,
     canGroupBuy: weightKg <= 0.8 || isUnderMinOrder,
     fulfillmentOrigin,
+    breakdown,
   };
 }

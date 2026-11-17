@@ -17,6 +17,7 @@
     "prisma:seed": "prisma db seed",
     "admin:reset": "node scripts/set-admin.js",
     "seed:demo": "npx tsx scripts/seed-demo-showcase.ts",
+    "seed:sim": "npx tsx prisma/seed-simulation.ts",
     "eval:customer-support": "node scripts/evals/customer-support-evals.cjs",
     "eval:support": "node scripts/evals/customer-support-evals.cjs",
     "test": "vitest run",

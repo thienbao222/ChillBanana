@@ -1,21 +1,14 @@
 /**
  * system-config.ts
  * ─────────────────────────────────────────────────────────────────────────────
- * Đọc cấu hình hệ thống từ bảng SystemConfig trong DB.
+ * Đọc cấu hình hệ thống từ nguồn chân lý duy nhất (PricingConfig).
+ * Hợp nhất theo WP1.3: Mọi tham số giá, cước, tỷ giá được ủy quyền trực tiếp
+ * sang PricingConfig, loại bỏ dữ liệu phân mảnh.
  * Có cache in-memory TTL 5 phút để giảm số lần query DB.
- *
- * Các key được định nghĩa sẵn (với giá trị mặc định dự phòng):
- *   - service_fee_percent          : Tỷ lệ phí mua hộ (%) — mặc định 4
- *   - min_service_fee_vnd          : Phí mua hộ tối thiểu (VND) — mặc định 20000
- *   - air_shipping_per_kg_vnd      : Cước hàng không /kg (VND) — mặc định 185000
- *   - group_buy_discount_percent   : Giảm cước khi gộp đơn (%) — mặc định 25
- *   - floor_exchange_rate_jpy      : Tỷ giá sàn an toàn JPY/VND — mặc định 172
- *   - min_order_threshold_vnd      : Giá trị đơn tối thiểu (VND) — mặc định 300000
  * ─────────────────────────────────────────────────────────────────────────────
  */
 
-import { prisma } from "@/lib/prisma";
-import { invalidatePricingConfigCache } from "@/features/pricing/config";
+import { getCurrentPricingConfig, invalidatePricingConfigCache } from "@/features/pricing/config";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Kiểu và giá trị mặc định
@@ -30,7 +23,7 @@ export interface SystemConfigMap {
   min_order_threshold_vnd: number;     // VND
 }
 
-/** Giá trị mặc định — dùng khi DB chưa có row tương ứng (seed chưa chạy, hoặc dev chưa set). */
+/** Giá trị mặc định — dùng khi DB chưa có row tương ứng. */
 export const SYSTEM_CONFIG_DEFAULTS: SystemConfigMap = {
   service_fee_percent: 4,
   min_service_fee_vnd: 20_000,
@@ -62,11 +55,11 @@ export function invalidateSystemConfigCache(): void {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Hàm đọc chính
+// Hàm đọc chính (Ủy quyền sang PricingConfig theo WP1.3)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Trả về toàn bộ SystemConfig dưới dạng số, merge với defaults.
+ * Trả về toàn bộ SystemConfig dưới dạng số, lấy từ PricingConfig đang hiệu lực.
  * Kết quả được cache 5 phút để tránh overload DB.
  */
 export async function getSystemConfig(): Promise<SystemConfigMap> {
@@ -76,23 +69,21 @@ export async function getSystemConfig(): Promise<SystemConfigMap> {
   }
 
   try {
-    const rows = await prisma.systemConfig.findMany();
-    const merged = { ...SYSTEM_CONFIG_DEFAULTS };
-    for (const row of rows) {
-      const key = row.key as keyof SystemConfigMap;
-      if (key in merged) {
-        const parsed = parseFloat(row.value);
-        if (Number.isFinite(parsed)) {
-          merged[key] = parsed;
-        }
-      }
-    }
+    const pricing = await getCurrentPricingConfig();
+    const merged: SystemConfigMap = {
+      service_fee_percent: pricing.values.serviceFeePercent,
+      min_service_fee_vnd: pricing.values.serviceFeeMinimumVnd,
+      air_shipping_per_kg_vnd: pricing.values.airShippingPerKgVnd,
+      group_buy_discount_percent: pricing.values.groupBuyShippingDiscountPercent,
+      floor_exchange_rate_jpy: pricing.values.fallbackJpyVndRate,
+      min_order_threshold_vnd: pricing.values.minimumBaseOrderVnd,
+    };
+
     configCache = merged;
     cacheExpiresAt = now + CACHE_TTL_MS;
     return merged;
   } catch (err) {
-    // Nếu DB lỗi (cold start, migration chưa chạy...) → fallback về default
-    console.error("[SystemConfig] Không đọc được config từ DB, dùng giá trị mặc định:", err);
+    console.error("[SystemConfig] Không đọc được config từ PricingConfig, dùng giá trị mặc định:", err);
     return { ...SYSTEM_CONFIG_DEFAULTS };
   }
 }

@@ -10,7 +10,13 @@ import {
 // Kiểm tra quyền admin ở backend: ngoài việc cookie hợp lệ, còn đối chiếu với bảng AdminUser
 // để tài khoản đã bị xóa mất quyền ngay và để kiểm tra được vai trò (role).
 
-export type AdminRole = "SUPER_ADMIN" | "OPERATOR";
+export type AdminRole =
+  | "SUPER_ADMIN"
+  | "OPERATOR"
+  | "PURCHASER"
+  | "WAREHOUSE"
+  | "ACCOUNTANT"
+  | "SUPPORT";
 
 export type AdminGuardResult =
   | { ok: true; username: string; role: string; admin: { username: string; role: string } }
@@ -24,6 +30,23 @@ export function verifySameOrigin(req: NextRequest): NextResponse | null {
     );
   }
   return null;
+}
+
+/**
+ * Kiểm tra tính hợp lệ của vai trò (WP7.1 - RBAC Matrix).
+ * - SUPER_ADMIN luôn luôn có toàn quyền tối cao.
+ * - OPERATOR cũ được tự động ánh xạ sang PURCHASER, WAREHOUSE và SUPPORT để không gián đoạn vận hành.
+ */
+export function hasRequiredRole(adminRole: string, allowedRoles?: AdminRole[]): boolean {
+  if (!allowedRoles || allowedRoles.length === 0) return true;
+  if (adminRole === "SUPER_ADMIN") return true;
+
+  const effectiveRoles: string[] = [adminRole];
+  if (adminRole === "OPERATOR") {
+    effectiveRoles.push("PURCHASER", "WAREHOUSE", "SUPPORT");
+  }
+
+  return allowedRoles.some((r) => effectiveRoles.includes(r));
 }
 
 export async function requireAdmin(req: NextRequest, options: { roles?: AdminRole[] } = {}): Promise<AdminGuardResult> {
@@ -78,15 +101,23 @@ export async function requireAdmin(req: NextRequest, options: { roles?: AdminRol
     }
   }
 
-  if (options.roles && !options.roles.includes(admin.role as AdminRole)) {
+  if (options.roles && !hasRequiredRole(admin.role, options.roles)) {
     return { ok: false, response: NextResponse.json({ error: "Tài khoản của bạn không đủ quyền cho thao tác này." }, { status: 403 }) };
   }
+
   return {
     ok: true,
     username: admin.username,
     role: admin.role,
     admin: { username: admin.username, role: admin.role },
   };
+}
+
+/**
+ * Hàm kiểm tra quyền theo vai trò thống nhất (WP7.1)
+ */
+export async function requireRole(req: NextRequest, allowedRoles: AdminRole[]): Promise<AdminGuardResult> {
+  return requireAdmin(req, { roles: allowedRoles });
 }
 
 /** Dùng cho route dùng chung (khách và admin): true chỉ khi cookie hợp lệ VÀ tài khoản admin còn tồn tại trong database. */

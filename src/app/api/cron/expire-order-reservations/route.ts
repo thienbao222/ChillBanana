@@ -1,6 +1,6 @@
 import { timingSafeEqual } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { releaseExpiredOrderReservations } from "@/features/orders/reservations";
+import { releaseExpiredOrderReservations, remindOverdueWarehouseVnBalances } from "@/features/orders/reservations";
 
 export const dynamic = "force-dynamic";
 
@@ -20,5 +20,6 @@ export async function GET(req: NextRequest) {
   if (!hasValidCronSecret(req)) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
   const summary = await releaseExpiredOrderReservations(100, true);
-  return NextResponse.json(summary, { status: summary.success ? 200 : 500 });
+  const reminderSummary = await remindOverdueWarehouseVnBalances(100);
+  return NextResponse.json({ ...summary, warehouseVnReminders: reminderSummary }, { status: summary.success ? 200 : 500 });
 }

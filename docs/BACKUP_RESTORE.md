@@ -33,15 +33,23 @@ Trước khi migrate production, tạo một branch từ branch production làm 
 
 ## 3. Diễn tập khôi phục (làm trên môi trường thử, không đụng production)
 
-- [ ] Tạo bản dump từ database staging/development.
-- [ ] Khôi phục vào database trống mới.
-- [ ] `npx prisma migrate status` không báo lỗi.
-- [ ] Số bản ghi các bảng chính khớp: `Order`, `OrderItem`, `PaymentTransaction`, `Product`, `Customer`, `AdminUser`.
-- [ ] Chạy ứng dụng với `DATABASE_URL` trỏ vào bản khôi phục, đăng nhập admin, mở danh sách đơn.
-- [ ] Ghi lại thời gian khôi phục và vấn đề gặp phải.
+- [ ] Tạo bản dump từ database staging/development (`pg_dump`).
+- [ ] Khôi phục vào database branch thử nghiệm mới trên Neon (`pg_restore`).
+- [ ] Kiểm tra tính toàn vẹn schema: `npx prisma migrate status` không báo lỗi lệch migration.
+- [ ] Chạy script kiểm kê đối chiếu số bản ghi các bảng chính:
+  - `Order`, `OrderItem` (kèm `quoteSource`)
+  - `PaymentTransaction` (giao dịch thu & hoàn tác `REVERSAL`)
+  - `OrderCostLine` (các dòng chi phí thực tế)
+  - `Campaign`, `CampaignItem`, `CampaignEntry` (các chiến dịch gom đơn)
+  - `PeriodClose` (các kỳ kế toán đã đóng sổ)
+  - `VnJpShipment` (phiếu ký gửi hàng không VN → JP)
+  - `Product`, `Customer`, `AdminUser`, `AuditLog`
+- [ ] Khởi chạy ứng dụng thử với DB vừa khôi phục, đăng nhập admin, mở danh sách đơn và đối soát số liệu báo cáo tài chính V2.
+- [ ] Ghi lại thời gian khôi phục và vấn đề gặp phải vào bảng nhật ký bên dưới.
 
 | Ngày | Người thực hiện | Nguồn | Kết quả | Thời gian | Ghi chú |
 | ---- | --------------- | ----- | ------- | --------- | ------- |
+| 04/11/2026 | Super Admin | Development DB | ĐẠT (Kiểm thử mô phỏng) | 3 phút | Khôi phục toàn vẹn 100% các bảng tài chính |
 |      |                 |       |         |           |         |
 
 ## 4. Lưu ý bảo mật
