@@ -2,57 +2,70 @@
 
 - **Mã kế hoạch:** PLAN-CB-2026-FOUNDATION
 - **Chế độ:** Chế độ B (Chương trình tái cấu trúc nền tảng)
+- **Trạng thái:** MODE: B (approved)
 - **Phương án lựa chọn:** **Phương án 2 — Tái cấu trúc từng mô-đun theo lát mỏng (Modular Refactoring by Thin Slices)**
 
 ---
 
-## 1. So Sánh 3 Phương Án
+## 1. Các Quyết Định Nghiệp Vụ & Thiết Kế Đã Thống Nhất Qua Phỏng Vấn (/grill-me)
 
-| Tiêu chí | Phương án 1: Vá tại chỗ | Phương án 2: Tái cấu trúc theo lát mỏng (CHỌN) | Phương án 3: Viết lại có chọn lọc |
-| :--- | :--- | :--- | :--- |
-| **Mô tả** | Sửa nhanh từng dòng lỗi trên code hiện có | Tái cấu trúc chuẩn hóa từng miền nghiệp vụ theo lát mỏng có test đi kèm | Viết lại toàn bộ module thanh toán & admin APIs |
-| **Chi phí / Thời gian** | Thấp (1-2 ngày) | Vừa phải (3-5 ngày) | Rất cao (2-3 tuần) |
-| **Độ tin cậy lâu dài** | Kém, nợ kỹ thuật tích tụ | Rất cao, đạt chuẩn "cây đại thụ" | Cao nếu làm chuẩn, nhưng dễ sót edge cases |
-| **Rủi ro hồi quy (Regression)** | Trung bình (sửa chỗ này hỏng chỗ khác) | Rất thấp (mỗi lát có test bảo vệ, 399 unit tests giám sát) | Rất cao (phá vỡ giao diện & integration tests) |
-| **Bảo toàn dữ liệu** | Giữ nguyên 100% | Giữ nguyên 100%, migration chỉ thêm | Rủi ro migration phức tạp |
+1. **Chính sách đặt cọc trên giao diện:**
+   - Giao diện giỏ hàng (`CartDrawer.tsx`) thích ứng theo 3 bậc của máy chủ (`calculateDepositV2`):
+     - Đơn < 1.000.000 đ: Bắt buộc **100%** (chống bỏ cọc đơn nhỏ).
+     - Đơn 1.000.000 đ - 10.000.000 đ: Cho chọn **70%** (mặc định) hoặc **100%**.
+     - Đơn > 10.000.000 đ: Cho chọn **50%**, **70%** hoặc **100%**.
+2. **Kinh tế đơn vị & Phí dịch vụ mua hộ:**
+   - Nâng phí dịch vụ tối thiểu (`serviceFeeMinimumVnd`) từ **20.000 đ** lên **50.000 đ/đơn** (giữ nguyên tỷ lệ 4% cho đơn lớn). Đơn nhỏ tự động áp dụng 50.000 đ để bù đắp chi phí kho Tokyo (300 JPY ~ 51.000 đ) và ship nội địa VN, loại bỏ tình trạng lỗ ròng.
+3. **Kênh thanh toán, Sandbox & VietQR:**
+   - Cho phép mở VNPAY Sandbox cho người dùng trải nghiệm, nhưng đơn hàng thanh toán qua Sandbox phải được gắn cờ rõ ràng và **KHÔNG ĐƯỢC TỰ ĐỘNG ĐẨY SANG HÀNG ĐỢI MUA HÀNG BÊN NHẬT**.
+   - Cấm front-channel tự ý chốt đơn từ trình duyệt. Khóa chặt endpoint `mock-sandbox`.
+   - Loại bỏ hoàn toàn fallback STK giả `0901234567`. Nếu thiếu biến môi trường cấu hình ngân hàng trên production, hệ thống báo lỗi rõ ràng trên giao diện, fail-fast, tuyệt đối không dùng STK ảo.
+4. **Phân quyền Quản trị RBAC:**
+   - Mô hình 2 vai trò chuẩn: `SUPER_ADMIN` và `OPERATOR`.
+   - `SUPER_ADMIN`: Toàn quyền tài chính, duyệt cọc VietQR, nhập chi phí, xác nhận hoàn tiền, cấu hình giá, xuất báo cáo và xem AuditLog.
+   - `OPERATOR`: Thẩm định duyệt giá ngoài catalog, tạo và cập nhật tác vụ mua hàng Nhật Bản, cập nhật vận đơn và CSKH.
+   - 100% API routes quản trị phải có khai báo `roles`.
+5. **Chính sách Hủy đơn & Hoàn cọc:**
+   - Chỉ `SUPER_ADMIN` mới được xác nhận Hoàn tiền.
+   - Không bao giờ xóa cứng bản ghi; tạo bản ghi đảo `PaymentTransaction` loại `kind = "REVERSAL"`, tự động hoàn kho `stockSlots` catalog, gửi email thông báo và ghi `AuditLog`.
 
 ---
 
-## 2. Lộ Trình Thực Thi 5 Lát Mỏng (Pha 3)
+## 2. Lộ Trình 5 Lát Mỏng Triển Khai (Pha 3)
 
-### Lát 1: Khóa Chặt Bảo Mật Thanh Toán & Mô Phỏng (Security Foundation)
-- Khóa toàn bộ các route sandbox/mock (`/api/payment/mock-sandbox`, `mock-confirm`) bằng `isDemoMode()` hoặc `APP_ENV !== "production"`. Trả 404/403 khi chạy production.
-- Loại bỏ hoàn toàn việc tự động chốt đơn ở front-channel (`vnpay-return`). Việc cập nhật trạng thái tiền chỉ cho phép qua IPN webhook back-channel.
-- Viết test chứng minh `mock-sandbox` trả 404/403 trên production.
+### Lát 1: Khóa Bảo Mật Thanh Toán, Phân Tách Sandbox Khỏi Hàng Đợi Mua Hàng
+- Khóa chặt endpoint `src/app/api/payment/mock-sandbox/route.ts`: cấm khách hàng tự ý POST đổi trạng thái đơn hàng khi chạy production.
+- Đảm bảo các giao dịch qua VNPAY Sandbox gắn cờ mô phỏng và không tự động chuyển trạng thái đơn hàng sang hàng đợi mua hàng thật (`PURCHASING_JP`).
+- Loại bỏ hoàn toàn việc front-channel `vnpay-return` tự động chốt tiền từ request GET của browser.
+- Viết unit test bảo vệ cho các quy tắc trên.
 
-### Lát 2: Mở Thông Trạng Thái Cọc 70% (`DEPOSITED_70`)
-- Bổ sung `DEPOSITED_70` vào `PaymentStatus` trong `src/types/index.ts` và comment trong `prisma/schema.prisma`.
+### Lát 2: Mở Thông Hoàn Toàn Trạng Thái Cọc 70% (`DEPOSITED_70`)
+- Bổ sung `DEPOSITED_70` vào `PaymentStatus` trong `src/types/index.ts` và `prisma/schema.prisma`.
 - Xóa bỏ rào cản tại `src/app/api/orders/[id]/route.ts:504` và `src/features/purchasing/service.ts:39`, cho phép đơn `DEPOSITED_70` chuyển sang `PURCHASING_JP` và tạo PurchaseTask bình thường.
 - Cập nhật bộ lọc truy vấn tại `src/app/api/admin/purchase-tasks/orders/route.ts` và `src/app/api/admin/customers/route.ts`.
 - Sửa hàm hoàn tác (rollback) để bảo toàn mức cọc 70% thay vì ép về 50%.
-- Viết unit test cho toàn bộ vòng đời đơn cọc 70%.
+- Bổ sung test kiểm thử toàn diện cho vòng đời đơn cọc 70%.
 
-### Lát 3: Đồng Bộ Chính Sách Cọc & Ngân Hàng VietQR (Single Source of Truth)
-- Cập nhật giao diện giỏ hàng `src/components/CartDrawer.tsx` để đồng bộ hoàn toàn với logic tính cọc `calculateDepositV2` của máy chủ. Hiển thị rõ ràng mức cọc thực tế (100% cho đơn < 1M, 70% cho đơn 1M-10M, 50% cho đơn > 10M).
-- Xóa bỏ toàn bộ fallback VietQR hardcode `"0901234567"` tại `src/app/tracking/page.tsx` và `src/components/NeoDaylightCosmos.tsx`. Nếu thiếu cấu hình ngân hàng ở production, máy chủ và giao diện hiển thị cảnh báo cấu hình rõ ràng, fail-fast, không chuyển tiền ảo.
+### Lát 3: Đồng Bộ Luật Cọc UI-Server & Loại Bỏ VietQR Hardcode
+- Cập nhật `src/components/CartDrawer.tsx` để hiển thị động các tùy chọn cọc theo đúng 3 bậc của `calculateDepositV2` (< 1M: 100%; 1M-10M: 70%, 100%; > 10M: 50%, 70%, 100%).
+- Xóa bỏ toàn bộ fallback STK giả `"0901234567"` tại `src/app/tracking/page.tsx` và `src/components/NeoDaylightCosmos.tsx`. Nếu thiếu cấu hình, hiển thị cảnh báo cấu hình fail-fast.
 - Tự động chuyển `status` sang `PURCHASING_JP` khi admin xác nhận chuyển khoản ngân hàng thành công tại `api/admin/orders/[id]/payments`.
 
-### Lát 4: Thắt Chặt Phân Quyền RBAC 100% Route Admin
+### Lát 4: Chuẩn Hóa Phân Quyền RBAC 100% Route Admin (SUPER_ADMIN vs OPERATOR)
 - Khai báo rõ ràng mảng `roles` cho toàn bộ các route trong `src/app/api/admin/`:
-  + Các route tài chính nhạy cảm (`payments`, `costs`, `close-period`, `reports`): chỉ `SUPER_ADMIN`.
-  + Các route mua hàng & xử lý đơn (`purchase-tasks`, `verify-quote`, `orders/[id]`): `SUPER_ADMIN`, `OPERATOR`.
-- Đồng bộ định nghĩa vai trò giữa code và tài liệu.
-- Bổ sung test kiểm thử phân quyền cho các route vừa cập nhật.
+  - Route tài chính/cấu hình cao cấp (`payments`, `costs`, `close-period`, `reports`, `pricing-config`): chỉ `SUPER_ADMIN`.
+  - Route vận hành đơn hàng/mua hàng (`orders/[id]`, `purchase-tasks`, `verify-quote`, `quote-queue`): `SUPER_ADMIN`, `OPERATOR`.
+- Bổ sung test kiểm thử tự động quét 100% API admin phải có khai báo `roles`.
 
-### Lát 5: Rào Chắn Lỗ Cho Đơn Nhỏ (Unit Economics Protection)
-- Điều chỉnh phí dịch vụ mua hộ tối thiểu (`serviceFeeMinimumVnd`) trong `PricingConfig` từ 20.000 đ lên mức đảm bảo bù đắp chi phí xử lý kho (khuyến nghị tối thiểu 50.000 đ - 70.000 đ / đơn).
-- Đảm bảo rào chắn `belowMargin` cảnh báo chính xác cho đội ngũ quản trị.
+### Lát 5: Rào Chắn Lỗ Đơn Nhỏ & Sửa Lỗi Lint
+- Cập nhật `serviceFeeMinimumVnd` từ 20.000 đ lên **50.000 đ** trong `src/features/pricing/calculator.ts` và `config.ts`.
+- Sửa thẻ `<a>` thành `<Link>` tại `src/app/dat-hang/nhap/page.tsx:94` để đưa `next lint` về 0 errors.
 
 ---
 
-## 3. Tiêu Chí Nghiệm Thu (Pha 4)
+## 3. Nghiệm Thu (Pha 4)
 - Typecheck (`tsc --noEmit`): 0 errors.
-- Lint (`next lint`): 0 errors (đã sửa lỗi thẻ `<a>` tại `src/app/dat-hang/nhap/page.tsx`).
-- Unit tests: 100% tests pass (bao gồm các test mới cho cọc 70% và bảo mật sandbox).
+- Lint (`next lint`): 0 errors.
+- Unit tests: 100% pass (bao gồm các test mới).
 - Production build: `next build` hoàn tất thành công.
 - Báo cáo hoàn tất: `docs/audit/04-final.md`.
