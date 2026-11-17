@@ -12,7 +12,7 @@ import {
 import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { isVerifiedAdmin, requireAdmin } from "@/lib/admin-guard";
 import { isNextOrderStatus, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
-import { getDepositAmount, checkWeightTolerance } from "@/features/payments/policy";
+import { getDepositAmount, checkWeightTolerance, isDepositPaid } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
@@ -379,7 +379,7 @@ export async function PATCH(
           if (totalPaidVnd >= existingOrder.totalVnd && existingOrder.totalVnd > 0) {
             rollbackUpdateData.paymentStatus = "PAID_100";
           } else if (totalPaidVnd > 0) {
-            rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+            rollbackUpdateData.paymentStatus = existingOrder.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
           } else {
             rollbackUpdateData.paymentStatus = "UNPAID";
           }
@@ -501,7 +501,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Cần xác minh báo giá trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
     }
     if (existingOrder.status === "PENDING_DEPOSIT" && (requestedStatus === "PURCHASING_JP" || requestedStatus === "WAREHOUSE_VN")) {
-      if (existingOrder.paymentStatus !== "DEPOSITED_50" && existingOrder.paymentStatus !== "PAID_100") {
+      if (!isDepositPaid(existingOrder.paymentStatus)) {
         return NextResponse.json({ error: "Cần xác nhận đã nhận tiền cọc trước khi chuyển đơn sang bước mua hàng." }, { status: 409 });
       }
     }
@@ -580,8 +580,9 @@ export async function PATCH(
     if (logStatus === "LOCAL_DELIVERY") {
       const remainingBalanceVnd = Math.max(0, existingOrder.totalVnd - existingOrder.depositAmountVnd);
       if (!description && remainingBalanceVnd > 0) {
+        const remainingPercent = 100 - (existingOrder.depositPercent || 50);
         updateData.trackingLogs.create.description =
-          `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${existingOrder.depositPercent === 50 ? "50% giá trị đơn còn lại và " : ""}cước bay quốc tế ${existingOrder.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`;
+          `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${existingOrder.depositPercent < 100 ? `${remainingPercent}% giá trị đơn còn lại và ` : ""}cước bay quốc tế ${existingOrder.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`;
       }
     }
 
@@ -592,6 +593,7 @@ export async function PATCH(
         existingOrder.productPriceVnd + existingOrder.serviceFeeVnd - existingOrder.depositAmountVnd
       );
       const shippingVnd = existingOrder.shippingFeeVnd || 0;
+      const remainingPercent = 100 - (existingOrder.depositPercent || 50);
 
       // WP2.2: Tách giao hàng khỏi thanh toán; không tự đặt PAID_100 và không tự đặt depositAmountVnd = totalVnd
       if (remainingBalanceVnd > 0) {
@@ -602,7 +604,7 @@ export async function PATCH(
             amountVnd: remainingBalanceVnd,
             status: "PENDING_RECONCILE",
             kind: "BALANCE",
-            reference: `Chờ đối soát tất toán COD khi nhận hàng (${existingOrder.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${existingOrder.weightKg}kg)`,
+            reference: `Chờ đối soát tất toán COD khi nhận hàng (${existingOrder.depositPercent < 100 ? `${remainingPercent}% còn lại + ` : ""}Cước bay ${existingOrder.weightKg}kg)`,
             confirmedByAdmin: getAdminUsernameFromRequest(req) ?? "admin",
           },
         };
@@ -611,7 +613,7 @@ export async function PATCH(
       if (!description && remainingBalanceVnd > 0) {
         const breakdownParts: string[] = [];
         if (remainingBaseVnd > 0) {
-          breakdownParts.push(`50% tiền hàng & phí còn lại (${remainingBaseVnd.toLocaleString("vi-VN")} đ)`);
+          breakdownParts.push(`${remainingPercent}% tiền hàng & phí còn lại (${remainingBaseVnd.toLocaleString("vi-VN")} đ)`);
         }
         if (shippingVnd > 0) {
           breakdownParts.push(`cước bay quốc tế ${existingOrder.weightKg}kg (${shippingVnd.toLocaleString("vi-VN")} đ)`);
@@ -664,7 +666,7 @@ export async function PATCH(
         updateData.pricingConfigVersion = pricingConfig.version || null;
         updateData.depositAmountVnd = getDepositAmount(
           finalProductPriceVnd + finalServiceFeeVnd,
-          existingOrder.depositPercent === 100 ? 100 : 50
+          existingOrder.depositPercent === 100 ? 100 : existingOrder.depositPercent === 70 ? 70 : 50
         );
         if (existingOrder.orderItems.some((item) => item.itemType === "CATALOG" && item.productId)) {
           // Start the customer payment hold only once a mixed catalog/quote order is payable.

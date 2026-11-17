@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getRecentSentEmails, clearSentEmails } from "@/lib/mailer";
+import { enforceMockSandboxAllowed } from "@/features/payments/sandbox-guard";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,10 @@ export const dynamic = "force-dynamic";
  * Dùng cho Demo Email Viewer trong Sandbox Admin Portal.
  */
 export async function GET(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const sandboxGuard = enforceMockSandboxAllowed();
+  if (sandboxGuard) return sandboxGuard;
+
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   const emails = getRecentSentEmails();
@@ -24,7 +28,10 @@ export async function GET(req: NextRequest) {
  * DELETE: Xóa sạch bộ đệm email demo
  */
 export async function DELETE(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const sandboxGuard = enforceMockSandboxAllowed();
+  if (sandboxGuard) return sandboxGuard;
+
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   clearSentEmails();

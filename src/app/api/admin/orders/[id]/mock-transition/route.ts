@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
+import { enforceMockSandboxAllowed } from "@/features/payments/sandbox-guard";
 import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
-import { getDepositAmount } from "@/features/payments/policy";
+import { getDepositAmount, isDepositPaid } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { sendOrderStatusUpdateEmail, sendZaloTrackingNotification } from "@/lib/mailer";
 
@@ -46,7 +47,10 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdmin(req);
+  const sandboxGuard = enforceMockSandboxAllowed();
+  if (sandboxGuard) return sandboxGuard;
+
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   const adminUsername = guard.username;
@@ -97,11 +101,11 @@ export async function POST(
       },
     };
 
-    if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY" && order.depositPercent === 50) {
-      rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+    if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY" && (order.depositPercent === 50 || order.depositPercent === 70)) {
+      rollbackUpdateData.paymentStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
       rollbackUpdateData.depositAmountVnd = getDepositAmount(
         order.productPriceVnd + order.serviceFeeVnd,
-        50
+        order.depositPercent
       );
     }
 
@@ -138,7 +142,7 @@ export async function POST(
         if (totalPaid >= order.totalVnd && order.totalVnd > 0) {
           rollbackUpdateData.paymentStatus = "PAID_100";
         } else if (totalPaid > 0) {
-          rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+          rollbackUpdateData.paymentStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
         } else {
           rollbackUpdateData.paymentStatus = "UNPAID";
         }
@@ -200,9 +204,10 @@ export async function POST(
 
     const meta = STATUS_METADATA[targetStatus];
     const remainingBalanceVnd = Math.max(0, order.totalVnd - order.depositAmountVnd);
+    const remainingPercent = 100 - (order.depositPercent || 50);
     const finalDesc = description?.trim() || (
       targetStatus === "LOCAL_DELIVERY" && remainingBalanceVnd > 0
-        ? `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${order.depositPercent === 50 ? "50% giá trị đơn còn lại và " : ""}cước bay quốc tế ${order.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`
+        ? `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${order.depositPercent < 100 ? `${remainingPercent}% giá trị đơn còn lại và ` : ""}cước bay quốc tế ${order.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`
         : targetStatus === "COMPLETED" && remainingBalanceVnd > 0
         ? `Kiện hàng đã giao thành công và thu đủ khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ. Tổng thanh toán hoàn tất 100% (${order.totalVnd.toLocaleString("vi-VN")} đ).`
         : meta.defaultDesc
@@ -228,7 +233,7 @@ export async function POST(
           { status: 409 }
         );
       }
-      if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "PAID_100") {
+      if (!isDepositPaid(order.paymentStatus)) {
         return NextResponse.json(
           { error: "Đơn hàng chưa thanh toán tiền cọc. Bắt buộc phải có xác nhận thanh toán trước khi chuyển sang bước Mua Hàng Tại Tokyo." },
           { status: 409 }

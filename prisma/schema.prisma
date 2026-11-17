@@ -50,10 +50,11 @@ model Order {
   taxEstimateVnd   Int?          @default(0) // Thuế ước tính (WP3.2)
   totalVnd         Int           // Tổng giá trị đơn hàng
   depositAmountVnd Int           // Số tiền đã thanh toán/đặt cọc
-  depositPercent   Int           @default(50) // 50 hoặc 100; áp dụng cho tiền hàng + phí mua hộ
-  paymentStatus    String        @default("UNPAID") // UNPAID, DEPOSITED_50, PAID_100, REFUNDED
+  depositPercent   Int           @default(50) // 50, 70 hoặc 100; áp dụng cho tiền hàng + phí mua hộ
+  paymentStatus    String        @default("UNPAID") // UNPAID, DEPOSITED_50, DEPOSITED_70, PAID_100, REFUNDED
   paymentMethod    String        @default("VIETQR") // VIETQR, VNPAY, MOMO, COD
   fulfillmentOrigin String       @default("JP") // "JP" (Kho Tokyo/Mua hộ Nhật) | "VN" (Có sẵn tại kho Việt Nam)
+  isSandbox        Boolean       @default(false)
 
   // Tùy chọn gộp đơn
   isGroupBuy       Boolean       @default(false)

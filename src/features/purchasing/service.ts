@@ -16,6 +16,7 @@
  */
 
 import { prisma } from "@/lib/prisma";
+import { isDepositPaid } from "@/features/payments/policy";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,8 @@ export async function createPurchaseTask(
       originalUrl: true,
       priceJpy: true,
       paymentStatus: true,
+      paymentMethod: true,
+      isSandbox: true,
       status: true,
       isPriceVerified: true,
       purchaseTask: { select: { id: true, status: true } },
@@ -340,7 +343,18 @@ export async function createPurchaseTask(
   if (!order.originalUrl) {
     return { task: null, info: null, error: "Đơn hàng chưa có link sản phẩm (originalUrl)." };
   }
-  if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "PAID_100") {
+  if (
+    order.isSandbox ||
+    order.paymentMethod === "VNPAY_SANDBOX" ||
+    order.paymentMethod === "MOCK"
+  ) {
+    return {
+      task: null,
+      info: null,
+      error: "Đơn hàng Sandbox/Mô phỏng không được phép đưa vào hàng đợi mua hàng thật.",
+    };
+  }
+  if (!isDepositPaid(order.paymentStatus)) {
     return { task: null, info: null, error: "Đơn chưa được cọc — không thể tạo purchase task." };
   }
   if (order.status !== "PURCHASING_JP") {

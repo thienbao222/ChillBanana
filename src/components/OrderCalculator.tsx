@@ -25,6 +25,7 @@ import {
   getCategoryCustomsInfo,
 } from "@/features/pricing/customs-categories";
 import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
+import { calculateDepositV2 } from "@/features/payments/policy";
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
@@ -71,7 +72,7 @@ export default function OrderCalculator() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
+  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("50");
   const [customerNote, setCustomerNote] = useState("");
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -284,7 +285,30 @@ export default function OrderCalculator() {
   const customsFeeVnd = Math.round(calc.productPriceVnd * (currentCategoryInfo.surchargePercent / 100));
   const effectiveBaseOrderCostVnd = calc.baseOrderCostVnd;
   const effectiveDeposit50Vnd = Math.round(effectiveBaseOrderCostVnd * 0.5);
+  const effectiveDeposit70Vnd = Math.round(effectiveBaseOrderCostVnd * 0.7);
   const effectiveTotalVnd = effectiveBaseOrderCostVnd + calc.shippingFeeVnd;
+
+  const calculatorTieredPolicy = calculateDepositV2(effectiveTotalVnd);
+  const allowedDepositChoices: ("50" | "70" | "100")[] =
+    calculatorTieredPolicy.tier === "LOW"
+      ? ["100"]
+      : calculatorTieredPolicy.tier === "STANDARD"
+      ? ["70", "100"]
+      : ["50", "70", "100"];
+
+  useEffect(() => {
+    const minAllowed = allowedDepositChoices[0];
+    if (Number(depositChoice) < Number(minAllowed)) {
+      setDepositChoice(minAllowed);
+    }
+  }, [allowedDepositChoices, depositChoice]);
+
+  const effectiveDepositAmountVnd =
+    depositChoice === "100"
+      ? effectiveBaseOrderCostVnd
+      : depositChoice === "70"
+      ? effectiveDeposit70Vnd
+      : effectiveDeposit50Vnd;
 
   // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
   const handleVnpayPayment = async (order: any) => {
@@ -1336,41 +1360,65 @@ export default function OrderCalculator() {
                 </div>
               </div>
 
-              {/* Nút chuyển đổi Cọc 50% vs Thanh toán 100% */}
-              <div className="grid grid-cols-2 gap-2 mt-3 mb-1">
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("50")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    depositChoice === "50"
-                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
-                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
-                  }`}
-                >
-                  <span>Cọc 50%</span>
-                  {depositChoice === "50" && <span className="text-[10px]">✓</span>}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("100")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    depositChoice === "100"
-                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
-                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
-                  }`}
-                >
-                  <span>Thanh toán 100%</span>
-                  {depositChoice === "100" && <span className="text-[10px]">✓</span>}
-                </button>
+              {/* Nút chuyển đổi Cọc theo bậc quy định */}
+              <div className={`grid gap-2 mt-3 mb-1 ${
+                allowedDepositChoices.length === 1
+                  ? "grid-cols-1"
+                  : allowedDepositChoices.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}>
+                {allowedDepositChoices.includes("50") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("50")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "50"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Cọc 50%</span>
+                    {depositChoice === "50" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("70") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("70")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "70"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Cọc 70%</span>
+                    {depositChoice === "70" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("100") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("100")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "100"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Thanh toán 100%</span>
+                    {depositChoice === "100" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
               </div>
 
               <div className="mt-2.5 flex justify-between items-center text-xs bg-white/10 p-3 rounded-2xl">
                 <div>
-                  <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : "Đặt cọc 50%:"}</span>
+                  <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : `Đặt cọc ${depositChoice}%:`}</span>
                   <span className="text-[10px] text-emerald-400 font-medium">{depositChoice}% tiền hàng + phí mua hộ</span>
                 </div>
                 <strong className="text-banana-300 text-sm sm:text-base font-mono">
-                  {(depositChoice === "50" ? effectiveDeposit50Vnd : effectiveBaseOrderCostVnd).toLocaleString("vi-VN")} đ
+                  {effectiveDepositAmountVnd.toLocaleString("vi-VN")} đ
                 </strong>
               </div>
 
@@ -1554,44 +1602,75 @@ export default function OrderCalculator() {
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Lựa Chọn Mức Thanh Toán / Đặt Cọc
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
-                        depositChoice === "50" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="deposit"
-                          value="50"
-                          checked={depositChoice === "50"}
-                          onChange={() => setDepositChoice("50")}
-                          className="mr-2 text-banana-600"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Đặt cọc 50%</p>
-                          <p className="text-[11px] text-banana-800 font-bold">
-                            {effectiveDeposit50Vnd.toLocaleString("vi-VN")} đ
-                          </p>
-                        </div>
-                      </label>
+                    <div className={`grid gap-3 ${
+                      allowedDepositChoices.length === 1
+                        ? "grid-cols-1"
+                        : allowedDepositChoices.length === 2
+                        ? "grid-cols-2"
+                        : "grid-cols-3"
+                    }`}>
+                      {allowedDepositChoices.includes("50") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "50" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="50"
+                            checked={depositChoice === "50"}
+                            onChange={() => setDepositChoice("50")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Đặt cọc 50%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveDeposit50Vnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
 
-                      <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
-                        depositChoice === "100" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="deposit"
-                          value="100"
-                          checked={depositChoice === "100"}
-                          onChange={() => setDepositChoice("100")}
-                          className="mr-2 text-banana-600"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Thanh toán 100% tiền hàng + phí mua hộ</p>
-                          <p className="text-[11px] text-banana-800 font-bold">
-                            {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ
-                          </p>
-                        </div>
-                      </label>
+                      {allowedDepositChoices.includes("70") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "70" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="70"
+                            checked={depositChoice === "70"}
+                            onChange={() => setDepositChoice("70")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Đặt cọc 70%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveDeposit70Vnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
+
+                      {allowedDepositChoices.includes("100") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "100" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="100"
+                            checked={depositChoice === "100"}
+                            onChange={() => setDepositChoice("100")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Thanh toán 100%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
                     </div>
                   </div>
 

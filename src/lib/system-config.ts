@@ -26,7 +26,7 @@ export interface SystemConfigMap {
 /** Giá trị mặc định — dùng khi DB chưa có row tương ứng. */
 export const SYSTEM_CONFIG_DEFAULTS: SystemConfigMap = {
   service_fee_percent: 4,
-  min_service_fee_vnd: 20_000,
+  min_service_fee_vnd: 50_000,
   air_shipping_per_kg_vnd: 185_000,
   group_buy_discount_percent: 25,
   floor_exchange_rate_jpy: 172,

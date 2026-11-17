@@ -8,7 +8,7 @@ export type OrderStatus =
   | "COMPLETED"        // Giao hàng thành công
   | "CANCELLED";       // Đã hủy đơn hàng
 
-export type PaymentStatus = "UNPAID" | "DEPOSITED_50" | "PAID_100" | "REFUNDED";
+export type PaymentStatus = "UNPAID" | "DEPOSITED_50" | "DEPOSITED_70" | "PAID_100" | "REFUNDED";
 export type PaymentMethod = "VIETQR" | "VNPAY" | "MOMO" | "COD";
 export type AIPersonality = "omotenashi" | "vietnamese";
 
@@ -129,7 +129,7 @@ export interface StoredOrder {
   shippingFeeVnd: number;
   totalVnd: number;
   depositAmountVnd: number;
-  depositPercent: 50 | 100;
+  depositPercent: 50 | 70 | 100;
   paymentStatus: PaymentStatus;
   paymentMethod: string;
   fulfillmentOrigin?: "JP" | "VN";
@@ -168,3 +168,5 @@ export interface StoredOrder {
   }[];
   orderItems?: any[];
 }
+
+export type Order = StoredOrder;

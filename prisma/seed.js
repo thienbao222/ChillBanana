@@ -13,7 +13,7 @@ const systemConfigSeed = [
   },
   {
     key: "min_service_fee_vnd",
-    value: "20000",
+    value: "50000",
     description: "Phí mua hộ tối thiểu (VND) áp dụng khi % tính ra thấp hơn mức này.",
   },
   {
@@ -104,7 +104,7 @@ async function main() {
   if (pricingConfigCount === 0) {
     const defaultPricingConfig = {
       serviceFeePercent: 4,
-      serviceFeeMinimumVnd: 20000,
+      serviceFeeMinimumVnd: 50000,
       airShippingPerKgVnd: 185000,
       groupBuyShippingDiscountPercent: 25,
       groupBuyMaxWeightKg: 0.5,

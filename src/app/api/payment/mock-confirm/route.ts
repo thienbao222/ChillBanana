@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolvePaymentMode } from "@/features/payments/provider";
 import { verifyMockPaymentAttemptToken } from "@/features/payments/mock-provider";
 import { applyMockPaymentOutcome, type MockPaymentOutcome } from "@/lib/mock-payment";
+import { enforceMockSandboxAllowed } from "@/features/payments/sandbox-guard";
 
 export const dynamic = "force-dynamic";
 
 const OUTCOMES = new Set<MockPaymentOutcome>(["success", "failed", "pending", "timeout"]);
 
 export async function POST(req: NextRequest) {
+  const guardResponse = enforceMockSandboxAllowed();
+  if (guardResponse) return guardResponse;
+
   if (resolvePaymentMode() !== "mock") {
     return NextResponse.json({ error: "Nhà cung cấp mô phỏng không được bật." }, { status: 403 });
   }

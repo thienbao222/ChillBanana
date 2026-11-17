@@ -44,7 +44,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   const { id: taskId } = await params;

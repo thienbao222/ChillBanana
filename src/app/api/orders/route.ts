@@ -509,6 +509,7 @@ export async function POST(req: NextRequest) {
             paymentStatus: "UNPAID",
             paymentMethod: body.paymentMethod === "VNPAY" ? "VNPAY" : "VIETQR",
             fulfillmentOrigin: orderFulfillmentOrigin,
+            isSandbox: false,
             isGroupBuy: !!body.isGroupBuy,
             groupBuyCode: body.groupBuyCode || null,
             status: "PENDING_DEPOSIT",

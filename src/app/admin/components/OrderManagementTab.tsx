@@ -415,7 +415,7 @@ export default function OrderManagementTab({
       const data = await res.json();
       if (res.ok && data.success) {
         setPaymentRecordOrder(null);
-        adminToast.success(`Đã ghi nhận thanh toán đơn #${order.orderCode}. Tiếp theo, bấm “Bắt đầu mua hàng”.`);
+        adminToast.success(`Đã ghi nhận thanh toán đơn #${order.orderCode}. Đơn hàng đã tự động chuyển sang hàng đợi mua hàng (PURCHASING_JP).`);
         fetchOrders();
       } else {
         adminToast.error(data.error || "Không thể ghi nhận thanh toán.");
@@ -532,7 +532,7 @@ export default function OrderManagementTab({
             status === selectedOrder.status ||
             (status === nextStatus &&
               (status !== "PURCHASING_JP" ||
-                (selectedOrder.isPriceVerified && ["DEPOSITED_50", "PAID_100"].includes(selectedOrder.paymentStatus))))
+                (selectedOrder.isPriceVerified && ["DEPOSITED_50", "DEPOSITED_70", "PAID_100"].includes(selectedOrder.paymentStatus))))
           );
         })
     : [];
@@ -727,6 +727,8 @@ export default function OrderManagementTab({
                                   ? "bg-rose-100 text-rose-700"
                                   : ord.paymentStatus === "DEPOSITED_50"
                                   ? "bg-amber-100 text-amber-800"
+                                  : ord.paymentStatus === "DEPOSITED_70"
+                                  ? "bg-teal-100 text-teal-800"
                                   : "bg-emerald-100 text-emerald-800"
                               }`}
                             >
@@ -736,6 +738,8 @@ export default function OrderManagementTab({
                                 ? "Chưa cọc"
                                 : ord.paymentStatus === "DEPOSITED_50"
                                 ? "Cọc 50%"
+                                : ord.paymentStatus === "DEPOSITED_70"
+                                ? "Cọc 70%"
                                 : "Đã trả 100%"}
                             </span>
                           </td>
@@ -893,7 +897,7 @@ export default function OrderManagementTab({
                               )}
                             </div>
                             <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${ord.paymentStatus === "UNPAID" ? "bg-rose-50 text-rose-700 border-rose-200" : "bg-emerald-50 text-emerald-700 border-emerald-200"}`}>
-                              {ord.paymentStatus === "PAID_100" ? "Đã thanh toán 100%" : ord.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : ord.paymentStatus === "REFUNDED" ? "Đã hoàn tiền" : "Chưa thanh toán"}
+                              {ord.paymentStatus === "PAID_100" ? "Đã thanh toán 100%" : ord.paymentStatus === "DEPOSITED_70" ? "Đã cọc 70%" : ord.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : ord.paymentStatus === "REFUNDED" ? "Đã hoàn tiền" : "Chưa thanh toán"}
                             </span>
                           </div>
                         <div className="font-bold text-slate-900 line-clamp-1">{ord.customerName}</div>
@@ -937,7 +941,7 @@ export default function OrderManagementTab({
                                 );
                               }
                             }}
-                            disabled={!ord.isPriceVerified || (ord.paymentStatus !== "UNPAID" && !["DEPOSITED_50", "PAID_100"].includes(ord.paymentStatus))}
+                            disabled={!ord.isPriceVerified || (ord.paymentStatus !== "UNPAID" && !["DEPOSITED_50", "DEPOSITED_70", "PAID_100"].includes(ord.paymentStatus))}
                             className="w-full py-1.5 bg-banana-500 hover:bg-banana-600 text-navy-950 font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             <span>
@@ -1685,8 +1689,21 @@ export default function OrderManagementTab({
                     <div className="flex justify-between gap-3 font-bold text-slate-900"><span>Tổng tạm tính</span><span>{approvalTotalVnd.toLocaleString("vi-VN")} đ</span></div>
                   </div>
                   <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between gap-3">
-                    <span className="text-sm font-bold text-amber-800">{priceApprovalOrder.depositPercent === 100 ? "Thanh toán ngay (100% tiền hàng + phí dịch vụ)" : "Tiền cọc (50% tiền hàng + phí dịch vụ)"}</span>
-                    <strong className="text-lg text-amber-700">{(priceApprovalOrder.depositPercent === 100 ? approvalProductVnd + approvalServiceVnd : Math.round((approvalProductVnd + approvalServiceVnd) * 0.5)).toLocaleString("vi-VN")} đ</strong>
+                    <span className="text-sm font-bold text-amber-800">
+                      {priceApprovalOrder.depositPercent === 100
+                        ? "Thanh toán ngay (100% tiền hàng + phí dịch vụ)"
+                        : priceApprovalOrder.depositPercent === 70
+                        ? "Tiền cọc (70% tiền hàng + phí dịch vụ)"
+                        : "Tiền cọc (50% tiền hàng + phí dịch vụ)"}
+                    </span>
+                    <strong className="text-lg text-amber-700">
+                      {(priceApprovalOrder.depositPercent === 100
+                        ? approvalProductVnd + approvalServiceVnd
+                        : priceApprovalOrder.depositPercent === 70
+                        ? Math.round((approvalProductVnd + approvalServiceVnd) * 0.7)
+                        : Math.round((approvalProductVnd + approvalServiceVnd) * 0.5)
+                      ).toLocaleString("vi-VN")} đ
+                    </strong>
                   </div>
                 </div>
 
@@ -2179,7 +2196,7 @@ export default function OrderManagementTab({
               <div className="flex justify-between text-slate-600">
                 <span>Số tiền đã đặt cọc:</span>
                 <span className="font-mono font-bold text-emerald-700">
-                  - {packingSlipOrder.depositAmountVnd?.toLocaleString()} đ ({packingSlipOrder.paymentStatus === "PAID_100" ? "Đã trả 100%" : packingSlipOrder.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : "Chưa thanh toán"})
+                  - {packingSlipOrder.depositAmountVnd?.toLocaleString()} đ ({packingSlipOrder.paymentStatus === "PAID_100" ? "Đã trả 100%" : packingSlipOrder.paymentStatus === "DEPOSITED_70" ? "Đã cọc 70%" : packingSlipOrder.paymentStatus === "DEPOSITED_50" ? "Đã cọc 50%" : "Chưa thanh toán"})
                 </span>
               </div>
               <div className="flex justify-between text-navy-950 font-bold text-sm pt-1 border-t">

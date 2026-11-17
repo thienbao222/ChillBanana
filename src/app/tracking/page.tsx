@@ -76,7 +76,7 @@ function TrackingCosmosContent() {
 
   // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường, đồng bộ với NeoDaylightCosmos)
   const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
-  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "0901234567";
+  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "";
   const bankOwner = process.env.NEXT_PUBLIC_BANK_OWNER || "CHILLBANANA VIETNAM";
   const bankName = process.env.NEXT_PUBLIC_BANK_NAME || "MB Bank (Quân Đội)";
 
@@ -906,7 +906,7 @@ function TrackingCosmosContent() {
                               ? "track-badge-gray"
                               : item.paymentStatus === "UNPAID"
                               ? "track-badge-gray"
-                              : item.paymentStatus === "DEPOSITED_50"
+                              : item.paymentStatus === "DEPOSITED_50" || item.paymentStatus === "DEPOSITED_70"
                               ? "track-badge-gold"
                               : "track-badge-green"
                           }`}
@@ -915,6 +915,8 @@ function TrackingCosmosContent() {
                             ? t("Đã hoàn tiền")
                             : item.paymentStatus === "UNPAID"
                             ? t("Chờ cọc")
+                            : item.paymentStatus === "DEPOSITED_70"
+                            ? t("Đã cọc 70%")
                             : item.paymentStatus === "DEPOSITED_50"
                             ? t("Đã cọc 50%")
                             : t("Đã TT 100%")}
@@ -1240,6 +1242,8 @@ function TrackingCosmosContent() {
                             ? t("Đã hoàn tiền")
                             : order.paymentStatus === "PAID_100"
                             ? t("Đã thanh toán 100%")
+                            : order.paymentStatus === "DEPOSITED_70"
+                            ? t("Đã cọc 70%")
                             : order.paymentStatus === "DEPOSITED_50"
                             ? t("Đã cọc 50%")
                             : t("Chờ đặt cọc")}
@@ -1356,10 +1360,10 @@ function TrackingCosmosContent() {
                         <b style={{ fontSize: "1.15rem", color: "#8a5a00" }}>{order.depositAmountVnd?.toLocaleString("vi-VN")} đ</b>
                       </div>
                       {/* Trạng thái tất toán / COD */}
-                      {order.paymentStatus === "DEPOSITED_50" && order.status !== "COMPLETED" && (
+                      {(order.paymentStatus === "DEPOSITED_50" || order.paymentStatus === "DEPOSITED_70") && order.status !== "COMPLETED" && (
                         <div className="flex justify-between py-2 mt-1" style={{ background: "rgba(234,88,12,0.1)", padding: "10px 14px", borderRadius: "14px", border: "1px dashed rgba(234,88,12,0.4)" }}>
                           <span style={{ fontWeight: 700, color: "#c2410c", fontSize: "0.82rem" }}>
-                            {t("Cần tất toán khi nhận hàng (50% còn lại + Cước bay):")}
+                            {t(`Cần tất toán khi nhận hàng (${100 - (order.depositPercent || (order.paymentStatus === "DEPOSITED_70" ? 70 : 50))}% còn lại + Cước bay):`)}
                           </span>
                           <b style={{ fontSize: "1.05rem", color: "#c2410c" }}>
                             {Math.max(0, (order.totalVnd || 0) - (order.depositAmountVnd || 0)).toLocaleString("vi-VN")} đ
@@ -1393,8 +1397,17 @@ function TrackingCosmosContent() {
                               <CreditCard className="w-4 h-4" />{isRedirectingVnpay ? "Đang mở trang kiểm thử..." : "Thử luồng thanh toán"}
                             </button>
                             <div className="text-center text-xs text-slate-600">
-                              <p>Hoặc chuyển khoản VietQR, nội dung: <strong>{order.orderCode}</strong></p>
-                              <img src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${order.depositAmountVnd}&addInfo=${encodeURIComponent(order.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`} alt="Mã VietQR thanh toán đơn hàng" className="mx-auto mt-2 w-48 rounded-xl border border-white bg-white p-2" />
+                              {bankAccount ? (
+                                <>
+                                  <p>Hoặc chuyển khoản VietQR, nội dung: <strong>{order.orderCode}</strong></p>
+                                  <img src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${order.depositAmountVnd}&addInfo=${encodeURIComponent(order.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`} alt="Mã VietQR thanh toán đơn hàng" className="mx-auto mt-2 w-48 rounded-xl border border-white bg-white p-2" />
+                                </>
+                              ) : (
+                                <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-2 text-amber-800 text-xs">
+                                  <p className="font-semibold">Chưa cấu hình tài khoản VietQR</p>
+                                  <p>Vui lòng thử luồng thanh toán VNPAY hoặc liên hệ CSKH ChillBanana để nhận thông tin chuyển khoản.</p>
+                                </div>
+                              )}
                             </div>
                           </div>
                         )

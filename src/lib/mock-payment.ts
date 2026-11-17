@@ -54,6 +54,7 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
             paymentMethod: "MOCK",
             status: nextStatus,
             reservationExpiresAt: null,
+            isSandbox: true,
           },
         });
         if (claimedOrder.count === 1) {

@@ -8,7 +8,7 @@ import { getRecordedPaymentStatus } from "@/features/payments/policy";
 export const dynamic = "force-dynamic";
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   try {
@@ -22,7 +22,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
     const existingOrder = await prisma.order.findFirst({
       where: { OR: [{ orderCode: orderId }, { id: orderId }] },
-      select: { id: true, orderCode: true, status: true, paymentStatus: true, isPriceVerified: true, depositAmountVnd: true, depositPercent: true, reservationExpiresAt: true },
+      select: {
+        id: true,
+        orderCode: true,
+        status: true,
+        paymentStatus: true,
+        isPriceVerified: true,
+        depositAmountVnd: true,
+        depositPercent: true,
+        reservationExpiresAt: true,
+        fulfillmentOrigin: true,
+      },
     });
     if (!existingOrder) return NextResponse.json({ error: "Không tìm thấy đơn hàng." }, { status: 404 });
     if (existingOrder.status !== "PENDING_DEPOSIT" || existingOrder.paymentStatus !== "UNPAID" || !existingOrder.isPriceVerified) {
@@ -36,6 +46,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const paymentStatus = getRecordedPaymentStatus(existingOrder.depositPercent);
+    const nextStatus = existingOrder.fulfillmentOrigin === "VN" ? "WAREHOUSE_VN" : "PURCHASING_JP";
     const username = guard.username;
     const recordedAt = new Date();
     const order = await prisma.$transaction(async (tx) => {
@@ -51,7 +62,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
             { reservationExpiresAt: { gt: recordedAt } },
           ],
         },
-        data: { paymentStatus, paymentMethod: "VIETQR", reservationExpiresAt: null },
+        data: {
+          status: nextStatus,
+          paymentStatus,
+          paymentMethod: "VIETQR",
+          reservationExpiresAt: null,
+        },
       });
       if (claimed.count !== 1) throw new Error("PAYMENT_RECORD_CONFLICT");
 
@@ -67,9 +83,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       await tx.trackingLog.create({
         data: {
           orderId: existingOrder.id,
-          status: "PENDING_DEPOSIT",
-          title: paymentStatus === "PAID_100" ? "Đã ghi nhận thanh toán 100%" : "Đã ghi nhận tiền cọc 50%",
-          description: `Quản trị viên đã xác nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ. Đơn chờ nhân viên bắt đầu xử lý mua hàng.`,
+          status: nextStatus,
+          title:
+            paymentStatus === "PAID_100"
+              ? "Đã ghi nhận thanh toán 100%"
+              : paymentStatus === "DEPOSITED_70"
+              ? "Đã ghi nhận tiền cọc 70%"
+              : "Đã ghi nhận tiền cọc 50%",
+          description:
+            nextStatus === "WAREHOUSE_VN"
+              ? `Quản trị viên đã xác nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang trạng thái sẵn sàng tại kho Việt Nam.`
+              : `Quản trị viên đã xác nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng đã tự động chuyển sang hàng đợi mua hàng tại Tokyo (PURCHASING_JP).`,
           location: "Hệ thống Quản trị ChillBanana",
         },
       });
@@ -81,8 +105,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       action: "ORDER_PAYMENT_RECORDED",
       entityType: "Order",
       entityId: existingOrder.orderCode,
-      summary: `Ghi nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ (${paymentStatus}).`,
-      metadata: { amountVnd, paymentStatus, reference },
+      summary: `Ghi nhận chuyển khoản ${amountVnd.toLocaleString("vi-VN")} đ (${paymentStatus}). Trạng thái đơn tự động chuyển sang ${nextStatus}.`,
+      metadata: { amountVnd, paymentStatus, reference, nextStatus },
       req,
     });
     sendPaymentSuccessEmail(order).catch((error) => console.warn("[Manual Payment Email Error]", error));

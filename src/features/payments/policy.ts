@@ -2,6 +2,30 @@ export const DEPOSIT_PERCENT_OPTIONS = [50, 70, 100] as const;
 export type DepositPercent = (typeof DEPOSIT_PERCENT_OPTIONS)[number];
 export type RecordedPaymentStatus = "UNPAID" | "DEPOSITED_50" | "DEPOSITED_70" | "PAID_100";
 
+export const DEPOSITED_PAYMENT_STATUSES = ["DEPOSITED_50", "DEPOSITED_70", "PAID_100"] as const;
+export type DepositedPaymentStatus = (typeof DEPOSITED_PAYMENT_STATUSES)[number];
+
+export function isDepositPaid(status: string | null | undefined): boolean {
+  return status === "DEPOSITED_50" || status === "DEPOSITED_70" || status === "PAID_100";
+}
+
+export function getPaymentStatusLabelVi(status: string | null | undefined): string {
+  switch (status) {
+    case "PAID_100":
+      return "Đã thanh toán 100%";
+    case "DEPOSITED_70":
+      return "Đã cọc 70%";
+    case "DEPOSITED_50":
+      return "Đã cọc 50%";
+    case "REFUNDED":
+      return "Đã hoàn tiền";
+    case "UNPAID":
+      return "Chưa thanh toán";
+    default:
+      return status || "Chưa thanh toán";
+  }
+}
+
 export function isRecordedPaymentStatus(value: string): value is RecordedPaymentStatus {
   return (
     value === "UNPAID" ||

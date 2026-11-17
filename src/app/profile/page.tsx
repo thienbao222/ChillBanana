@@ -522,7 +522,7 @@ export default function ProfilePage() {
                                   ? 'Đã hoàn tiền'
                                   : order.paymentStatus === 'UNPAID'
                                   ? (!order.isPriceVerified ? 'Chờ duyệt giá' : `Chờ cọc (${order.depositPercent || 50}%)`)
-                                  : (order.depositPercent === 100 ? 'Đã thanh toán 100%' : 'Đã cọc 50%')}
+                                  : (order.depositPercent === 100 ? 'Đã thanh toán 100%' : order.depositPercent === 70 ? 'Đã cọc 70%' : 'Đã cọc 50%')}
                               </span>
                             </div>
                           </div>

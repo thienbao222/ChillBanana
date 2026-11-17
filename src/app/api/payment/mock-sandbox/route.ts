@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendPaymentSuccessEmail } from "@/lib/mailer";
 import { getRecordedPaymentStatus } from "@/features/payments/policy";
+import { enforceMockSandboxAllowed } from "@/features/payments/sandbox-guard";
 import { requireAdmin } from "@/lib/admin-guard";
 import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { ORDER_ACCESS_COOKIE_NAME, hasGuestOrderAccessForEmail } from "@/lib/auth-session";
@@ -17,6 +18,9 @@ export const dynamic = "force-dynamic";
  * ─────────────────────────────────────────────────────────────────────────────
  */
 export async function POST(req: NextRequest) {
+  const guardResponse = enforceMockSandboxAllowed();
+  if (guardResponse) return guardResponse;
+
   try {
     const body = await req.json().catch(() => null);
     const { orderCode, action } = body || {};
@@ -109,6 +113,7 @@ export async function POST(req: NextRequest) {
             status: "PURCHASING_JP",
             reservationExpiresAt: null,
             isPriceVerified: true,
+            isSandbox: true,
           },
         });
 

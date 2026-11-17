@@ -199,7 +199,7 @@ export async function sendOrderCreatedEmail(order: any, logId?: string): Promise
   const customerName = escapeHtml(String(order.customerName || "Quý khách"));
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const isPriceVerified = order.isPriceVerified === true;
-  const depositPercent = order.depositPercent === 100 ? 100 : 50;
+  const depositPercent = order.depositPercent === 100 ? 100 : order.depositPercent === 70 ? 70 : 50;
   const paymentMode = resolvePaymentMode();
   const paymentInstructions = !isPriceVerified
     ? `<div style="background-color:#FFF7ED;border:1px solid #FED7AA;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#7C2D12"><p style="margin:0 0 8px;font-weight:bold">Đơn hàng đang chờ ChillBanana kiểm tra và xác nhận báo giá.</p><p style="margin:4px 0">Vui lòng chưa thanh toán. Khi báo giá được duyệt, trang theo dõi sẽ hiển thị hướng dẫn phù hợp.</p></div>`
@@ -482,7 +482,7 @@ export async function sendPriceApprovedEmail(order: any, logId?: string): Promis
           <p><strong>Phí dịch vụ:</strong> ${money(order.serviceFeeVnd)} đ</p>
           <p><strong>Phí vận chuyển tạm tính:</strong> ${money(order.shippingFeeVnd)} đ${order.weightKg ? ` (${escapeHtml(String(order.weightKg))} kg)` : " (chưa cân)"}</p>
           <p><strong>Tổng tạm tính:</strong> ${money(order.totalVnd)} đ</p>
-          <p style="font-size:18px;color:#b45309"><strong>${order.depositPercent === 100 ? "Số tiền thanh toán (100%)" : "Tiền cọc cần thanh toán (50%)"}:</strong> ${money(order.depositAmountVnd)} đ</p>
+          <p style="font-size:18px;color:#b45309"><strong>${order.depositPercent === 100 ? "Số tiền thanh toán (100%)" : `Tiền cọc cần thanh toán (${order.depositPercent || 50}%)`}:</strong> ${money(order.depositAmountVnd)} đ</p>
         </div>
         <p>Vui lòng kiểm tra lại thông tin và tiến hành đặt cọc trên trang theo dõi đơn hàng.</p>
         <p style="text-align:center;margin:28px 0"><a href="${trackingUrl}" style="background:#0f172a;color:#fbbf24;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Xem báo giá và đơn hàng</a></p>
@@ -524,7 +524,12 @@ export async function sendPaymentSuccessEmail(order: any, logId?: string): Promi
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const orderCode = escapeHtml(String(order.orderCode || ""));
   const isFullPayment = order.paymentStatus === "PAID_100";
-  const paymentTitle = isFullPayment ? "Thanh Toán 100% Thành Công!" : "Đặt Cọc 50% Thành Công!";
+  const is70Payment = order.paymentStatus === "DEPOSITED_70" || order.depositPercent === 70;
+  const paymentTitle = isFullPayment
+    ? "Thanh Toán 100% Thành Công!"
+    : is70Payment
+    ? "Đặt Cọc 70% Thành Công!"
+    : "Đặt Cọc 50% Thành Công!";
   const paymentMethod = order.paymentMethod?.startsWith("VNPAY") ? "Cổng thanh toán VNPAY" : "Chuyển khoản ngân hàng đã được xác nhận";
   const isPurchasing = order.status === "PURCHASING_JP";
 

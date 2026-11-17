@@ -58,7 +58,7 @@ export default function NeoDaylightCosmos() {
 
   // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường)
   const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
-  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "0901234567";
+  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "";
   const bankOwner = process.env.NEXT_PUBLIC_BANK_OWNER || "CHILLBANANA VIETNAM";
   const bankName = process.env.NEXT_PUBLIC_BANK_NAME || "MB Bank (Quân Đội)";
 
@@ -1881,18 +1881,27 @@ export default function NeoDaylightCosmos() {
                   <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ink)", marginBottom: "8px" }}>
                     Hoặc chuyển khoản trực tiếp qua VietQR Napas 247:
                   </p>
-                  <div style={{ display: "inline-block", padding: "10px", background: "#fff", borderRadius: "16px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", marginBottom: "12px" }}>
-                    <img
-                      src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`}
-                      alt="Mã VietQR đặt cọc"
-                      style={{ width: "220px", height: "auto", display: "block" }}
-                    />
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                    Ngân hàng: <b>{bankName}</b> · STK: <b>{bankAccount}</b><br />
-                    Chủ TK: <b>{bankOwner}</b><br />
-                    Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
-                  </div>
+                  {bankAccount ? (
+                    <>
+                      <div style={{ display: "inline-block", padding: "10px", background: "#fff", borderRadius: "16px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", marginBottom: "12px" }}>
+                        <img
+                          src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`}
+                          alt="Mã VietQR đặt cọc"
+                          style={{ width: "220px", height: "auto", display: "block" }}
+                        />
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                        Ngân hàng: <b>{bankName}</b> · STK: <b>{bankAccount}</b><br />
+                        Chủ TK: <b>{bankOwner}</b><br />
+                        Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: "10px", background: "#fef3c7", borderRadius: "12px", border: "1px solid #fde68a", color: "#92400e", fontSize: "0.8rem" }}>
+                      <p style={{ fontWeight: 600 }}>Chưa cấu hình tài khoản VietQR</p>
+                      <p>Vui lòng thanh toán qua VNPAY hoặc liên hệ CSKH ChillBanana để nhận thông tin chuyển khoản.</p>
+                    </div>
+                  )}
                 </div>}
 
                 <div style={{ textAlign: "center", marginTop: "1.2rem" }}>

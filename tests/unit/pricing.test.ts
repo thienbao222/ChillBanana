@@ -19,9 +19,9 @@ describe("calculateOrderPrice", () => {
     expect(p.deposit50Vnd).toBe(884_000);
   });
 
-  it("phí dịch vụ tối thiểu 20.000đ", () => {
-    const p = calculateOrderPrice(1_000, 0, 170); // 4% của 170.000 = 6.800 < 20.000
-    expect(p.serviceFeeVnd).toBe(20_000);
+  it("phí dịch vụ tối thiểu 50.000đ", () => {
+    const p = calculateOrderPrice(1_000, 0, 170); // 4% của 170.000 = 6.800 < 50.000
+    expect(p.serviceFeeVnd).toBe(50_000);
   });
 
   it("không tính cước khi chưa biết cân nặng", () => {
@@ -47,19 +47,32 @@ describe("calculateOrderPrice", () => {
   });
 
   it("đánh dấu dưới mức tối thiểu và số tiền còn thiếu", () => {
-    const p = calculateOrderPrice(1_000, 0, 170); // 170.000 + 20.000 = 190.000
+    const p = calculateOrderPrice(1_000, 0, 170); // 170.000 + 50.000 = 220.000
     expect(p.isUnderMinOrder).toBe(true);
-    expect(p.minOrderDiffVnd).toBe(MIN_ORDER_THRESHOLD_VND - 190_000);
+    expect(p.minOrderDiffVnd).toBe(MIN_ORDER_THRESHOLD_VND - 220_000);
     const ok = calculateOrderPrice(10_000, 0, 170);
     expect(ok.isUnderMinOrder).toBe(false);
     expect(ok.minOrderDiffVnd).toBe(0);
   });
 
   it("đúng ngưỡng tối thiểu thì không bị coi là thiếu", () => {
-    // 300.000 = hàng + phí: tìm giá ¥ cho base = 300.000 với tỷ giá 100 và phí tối thiểu
-    const p = calculateOrderPrice(2_800, 0, 100); // 280.000 + 20.000
+    // 300.000 = hàng + phí: tìm giá ¥ cho base = 300.000 với tỷ giá 100 và phí tối thiểu 50.000
+    const p = calculateOrderPrice(2_500, 0, 100); // 250.000 + 50.000
     expect(p.baseOrderCostVnd).toBe(300_000);
     expect(p.isUnderMinOrder).toBe(false);
+  });
+
+  it("đảm bảo phí mua hộ tối thiểu 50.000đ áp dụng cho mọi đơn nhỏ và số tiền luôn là số nguyên VND", () => {
+    const p1 = calculateOrderPrice(500, 0, 170); // 85.000 * 4% = 3.400 -> 50.000
+    expect(p1.serviceFeeVnd).toBe(50_000);
+    expect(Number.isInteger(p1.serviceFeeVnd)).toBe(true);
+    expect(Number.isInteger(p1.totalVnd)).toBe(true);
+
+    const p2 = calculateOrderPrice(7_000, 0, 170); // 1.190.000 * 4% = 47.600 < 50.000 -> 50.000
+    expect(p2.serviceFeeVnd).toBe(50_000);
+
+    const p3 = calculateOrderPrice(8_000, 0, 170); // 1.360.000 * 4% = 54.400 > 50.000 -> 54.400
+    expect(p3.serviceFeeVnd).toBe(54_400);
   });
 
   it("dùng được một phiên bản cấu hình giá tùy chỉnh", () => {

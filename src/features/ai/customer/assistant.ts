@@ -439,7 +439,7 @@ export function buildOfflineEvidenceReply(
       lines.push(`• Cước bay quốc tế: ${Number(sp.airShippingRateVndPerKg).toLocaleString("vi-VN")} đ/kg`);
     }
     if (sp.serviceFeePercent) {
-      lines.push(`• Phí dịch vụ mua hộ: ${sp.serviceFeePercent}% (tối thiểu ${Number(sp.serviceFeeMinimumVnd || 20000).toLocaleString("vi-VN")} đ)`);
+      lines.push(`• Phí dịch vụ mua hộ: ${sp.serviceFeePercent}% (tối thiểu ${Number(sp.serviceFeeMinimumVnd || 50000).toLocaleString("vi-VN")} đ)`);
     }
     if (sp.groupBuyDiscountPercent) {
       lines.push(`• Ưu đãi Gộp đơn: Giảm ${sp.groupBuyDiscountPercent}% cước bay cho kiện hàng nhẹ (≤ 0.5kg)`);
