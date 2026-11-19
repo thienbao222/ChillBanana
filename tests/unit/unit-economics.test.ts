@@ -20,7 +20,7 @@ describe("WP3.1 — Mô phỏng đơn vị kinh tế và rào chắn lỗ", () =
   });
 
   describe("estimateMargin hàm thuần", () => {
-    it("Khớp ví dụ 1: đơn 3.850 yên, 0,5 kg với phí mua hộ tối thiểu 50.000đ giảm lỗ còn -21.638đ", () => {
+    it("Khớp ví dụ 1: đơn 3.850 yên, 0,5 kg với phí mua hộ tối thiểu 80.000đ cải thiện lãi gộp lên +8.137đ", () => {
       const orderSample = {
         priceJpy: 3850,
         weightKg: 0.5,
@@ -29,28 +29,29 @@ describe("WP3.1 — Mô phỏng đơn vị kinh tế và rào chắn lỗ", () =
 
       const result = estimateMargin(orderSample, DEFAULT_COST_ASSUMPTIONS, DEFAULT_PRICING_CONFIG);
 
-      // Chi tiết doanh thu (với sàn phí mua hộ 50.000đ):
+      // Chi tiết doanh thu (với sàn phí mua hộ 80.000đ):
       // productPriceVnd = 3850 * 170 = 654.500
-      // serviceFeeVnd = 50.000 (sàn phí 50k > 4% = 26.180)
+      // serviceFeeVnd = 80.000 (sàn phí 80k > 4% = 26.180)
       // shippingFeeVnd = 92.500
-      // companyRevenue = 142.500
-      expect(result.companyRevenueVnd).toBe(142500);
+      // companyRevenue = 172.500
+      expect(result.companyRevenueVnd).toBe(172500);
 
       // Chi phí ước tính:
       // fxCost = round(654500 * 1.2%) = 7.854
       // tokyoHandling = 300 * 170 = 51.000
       // actualFreight = 0.5 * 130000 = 65.000
       // vnDelivery = 35.000
-      // paymentFee = round(352250 * 1.5%) = 5.284
-      // totalOperationalCost = 7854 + 51000 + 65000 + 35000 + 5284 = 164.138
-      expect(result.estimatedCosts.totalCostVnd).toBe(164138);
+      // baseOrderCost = 654500 + 80000 = 734500 -> deposit50 = 367250
+      // paymentFee = round(367250 * 1.5%) = 5.509
+      // totalOperationalCost = 7854 + 51000 + 65000 + 35000 + 5509 = 164.363
+      expect(result.estimatedCosts.totalCostVnd).toBe(164363);
 
-      // Lãi gộp: 142500 - 164138 = -21.638đ (giảm lỗ so với mức cũ -45.279đ)
-      expect(result.grossProfitVnd).toBe(-21638);
+      // Lãi gộp: 172500 - 164363 = +8.137đ (cải thiện từ lỗ -21.638đ khi sàn phí là 50k)
+      expect(result.grossProfitVnd).toBe(8137);
       expect(result.isBelowMargin).toBe(true);
     });
 
-    it("Khớp ví dụ 2: đơn 2.000 yên, 0,3 kg với phí mua hộ tối thiểu 50.000đ giảm lỗ còn -26.505đ", () => {
+    it("Khớp ví dụ 2: đơn 2.000 yên, 0,3 kg với phí mua hộ tối thiểu 80.000đ cải thiện lãi gộp lên +3.270đ", () => {
       const orderSample = {
         priceJpy: 2000,
         weightKg: 0.3,
@@ -59,24 +60,25 @@ describe("WP3.1 — Mô phỏng đơn vị kinh tế và rào chắn lỗ", () =
 
       const result = estimateMargin(orderSample, DEFAULT_COST_ASSUMPTIONS, DEFAULT_PRICING_CONFIG);
 
-      // Doanh thu (với sàn phí mua hộ 50.000đ):
+      // Doanh thu (với sàn phí mua hộ 80.000đ):
       // productPriceVnd = 340.000
-      // serviceFeeVnd = 50.000
+      // serviceFeeVnd = 80.000
       // shippingFeeVnd = 55.500
-      // companyRevenue = 105.500
-      expect(result.companyRevenueVnd).toBe(105500);
+      // companyRevenue = 135.500
+      expect(result.companyRevenueVnd).toBe(135500);
 
       // Chi phí:
       // fxCost = round(340000 * 1.2%) = 4.080
       // tokyoHandling = 51.000
       // actualFreight = 0.3 * 130000 = 39.000
       // vnDelivery = 35.000
-      // paymentFee = round(195000 * 1.5%) = 2.925
-      // totalCost = 4080 + 51000 + 39000 + 35000 + 2925 = 132.005
-      expect(result.estimatedCosts.totalCostVnd).toBe(132005);
+      // baseOrderCost = 340000 + 80000 = 420000 -> deposit50 = 210000
+      // paymentFee = round(210000 * 1.5%) = 3.150
+      // totalCost = 4080 + 51000 + 39000 + 35000 + 3150 = 132.230
+      expect(result.estimatedCosts.totalCostVnd).toBe(132230);
 
-      // Lãi gộp: 105500 - 132005 = -26.505đ (giảm lỗ so với mức cũ -56.280đ)
-      expect(result.grossProfitVnd).toBe(-26505);
+      // Lãi gộp: 135500 - 132230 = +3.270đ (cải thiện từ lỗ -26.505đ khi sàn phí là 50k)
+      expect(result.grossProfitVnd).toBe(3270);
       expect(result.isBelowMargin).toBe(true);
     });
 
@@ -121,8 +123,8 @@ describe("WP3.1 — Mô phỏng đơn vị kinh tế và rào chắn lỗ", () =
       expect(res.status).toBe(200);
       expect(data.success).toBe(true);
       expect(data.configA.results).toHaveLength(2);
-      expect(data.configA.results[0].estimate.grossProfitVnd).toBe(-21638);
-      expect(data.configA.results[1].estimate.grossProfitVnd).toBe(-26505);
+      expect(data.configA.results[0].estimate.grossProfitVnd).toBe(8137);
+      expect(data.configA.results[1].estimate.grossProfitVnd).toBe(3270);
       expect(data.configB).toBeDefined();
     });
   });

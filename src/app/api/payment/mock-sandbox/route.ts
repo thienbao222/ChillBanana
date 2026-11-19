@@ -80,6 +80,100 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "success") {
+      const isBalanceSettlement =
+        body?.paymentType === "BALANCE" ||
+        (order.status === "WAREHOUSE_VN" && (order.paymentStatus === "DEPOSITED_50" || order.paymentStatus === "DEPOSITED_70"));
+
+      if (isBalanceSettlement) {
+        if (order.status !== "WAREHOUSE_VN") {
+          return NextResponse.json({ error: "Chỉ thu số dư đợt 2 khi đơn hàng đã về kho Việt Nam (WAREHOUSE_VN)." }, { status: 409 });
+        }
+        if (order.paymentStatus === "PAID_100") {
+          return NextResponse.json({
+            success: true,
+            message: "Đơn hàng này đã tất toán đủ 100% trước đó.",
+            redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=already_paid`,
+          });
+        }
+        if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "DEPOSITED_70") {
+          return NextResponse.json({ error: "Đơn hàng không ở trạng thái hợp lệ để tất toán số dư." }, { status: 409 });
+        }
+
+        const remainingBalanceVnd = Math.max(0, order.totalVnd - (order.depositAmountVnd || 0));
+        const mockTxnId = `SANDBOX_BAL_${Date.now()}_${Math.floor(1000 + Math.random() * 9000)}`;
+
+        const updated = await prisma.$transaction(async (tx) => {
+          const claimed = await tx.order.updateMany({
+            where: {
+              id: order.id,
+              status: "WAREHOUSE_VN",
+              paymentStatus: { in: ["DEPOSITED_50", "DEPOSITED_70"] },
+            },
+            data: {
+              paymentStatus: "PAID_100",
+              depositAmountVnd: order.totalVnd,
+              paymentMethod: "VNPAY_SANDBOX",
+              isSandbox: true,
+            },
+          });
+
+          if (claimed.count !== 1) return null;
+
+          await tx.paymentTransaction.create({
+            data: {
+              orderId: order.id,
+              kind: "BALANCE",
+              provider: "MOCK_SANDBOX",
+              amountVnd: remainingBalanceVnd,
+              providerTransactionId: mockTxnId,
+              reference: "Mô phỏng thanh toán số dư Sandbox (100%)",
+              status: "CONFIRMED",
+              confirmedByAdmin: adminGuard.ok ? adminGuard.username : "CUSTOMER_SANDBOX",
+            },
+          });
+
+          await tx.trackingLog.create({
+            data: {
+              orderId: order.id,
+              status: "WAREHOUSE_VN",
+              title: "Đã tất toán 100% thành công (Sandbox)",
+              description: adminGuard.ok
+                ? `Admin ${adminGuard.username} xác nhận thanh toán số dư Sandbox ${remainingBalanceVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng hoàn tất thanh toán 100%, sẵn sàng giao nội địa.`
+                : `Khách hàng hoàn tất thanh toán số dư Sandbox ${remainingBalanceVnd.toLocaleString("vi-VN")} đ (Mã GD: ${mockTxnId}). Đơn hàng hoàn tất thanh toán 100%, sẵn sàng giao nội địa.`,
+              location: "ChillBanana Payment Gateway",
+            },
+          });
+
+          return tx.order.findUnique({ where: { id: order.id } });
+        });
+
+        if (!updated) {
+          return NextResponse.json({
+            error: "Không thể cập nhật trạng thái đơn hàng (có thể đơn vừa được thanh toán ở luồng khác).",
+          }, { status: 409 });
+        }
+
+        await writeAuditLog({
+          actor: actorName || "customer",
+          action: "ORDER_BALANCE_SETTLED",
+          entityType: "Order",
+          entityId: order.orderCode,
+          summary: `Thanh toán số dư Sandbox cho đơn ${order.orderCode} (${remainingBalanceVnd.toLocaleString("vi-VN")} đ, PAID_100)`,
+          metadata: { amountVnd: remainingBalanceVnd, transactionId: mockTxnId, mode: adminGuard.ok ? "ADMIN_SANDBOX" : "CUSTOMER_SANDBOX" },
+        });
+
+        sendPaymentSuccessEmail(updated).catch((err) =>
+          console.warn("[Sandbox Email Error]", err)
+        );
+
+        return NextResponse.json({
+          success: true,
+          message: "Xác nhận thanh toán số dư Sandbox thành công!",
+          transactionId: mockTxnId,
+          redirectUrl: `/tracking?code=${encodeURIComponent(order.orderCode)}&payment=success`,
+        });
+      }
+
       if (order.paymentStatus !== "UNPAID") {
         return NextResponse.json({
           success: true,
@@ -122,6 +216,7 @@ export async function POST(req: NextRequest) {
         await tx.paymentTransaction.create({
           data: {
             orderId: order.id,
+            kind: "DEPOSIT",
             provider: "MOCK_SANDBOX",
             amountVnd,
             providerTransactionId: mockTxnId,

@@ -11,23 +11,23 @@ describe("WP3.2 — Bộ giá v2 cấu hình hóa", () => {
     const legacy = calculateOrderPrice(1000, 0.2, 172, false, DEFAULT_PRICING_CONFIG);
 
     expect(legacy.productPriceVnd).toBe(172000);
-    expect(legacy.serviceFeeVnd).toBe(50000); // Tối thiểu 50.000đ
+    expect(legacy.serviceFeeVnd).toBe(80000); // Tối thiểu 80.000đ
     expect(legacy.handlingFeeVnd).toBe(0);
     expect(legacy.fxFeeVnd).toBe(0);
     expect(legacy.taxEstimateVnd).toBe(0);
     expect(legacy.shippingFeeVnd).toBe(37000); // 0.2 * 185.000
-    expect(legacy.totalVnd).toBe(259000); // 172.000 + 50.000 + 37.000
+    expect(legacy.totalVnd).toBe(289000); // 172.000 + 80.000 + 37.000
     expect(legacy.billableWeightKg).toBe(0.2);
 
     expect(legacy.breakdown).toEqual({
       goods: 172000,
-      serviceFee: 50000,
+      serviceFee: 80000,
       handlingFee: 0,
       fxFee: 0,
       shipping: 37000,
       billableWeightKg: 0.2,
       taxEstimate: 0,
-      total: 259000,
+      total: 289000,
     });
   });
 

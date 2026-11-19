@@ -8,6 +8,7 @@ import {
   getCustomerFromRequest,
   hasGuestOrderAccessForEmail,
   ORDER_ACCESS_COOKIE_NAME,
+  verifySameOrigin,
 } from "@/lib/auth-session";
 import { isVerifiedAdmin } from "@/lib/admin-guard";
 
@@ -29,6 +30,14 @@ function buildQueryString(params: Record<string, string>) {
 
 // ========== POST: Tạo URL thanh toán VNPAY ==========
 export async function POST(req: NextRequest) {
+  // CSRF Protection: Chặn các request vi phạm cùng nguồn gốc
+  if (!verifySameOrigin(req)) {
+    return NextResponse.json(
+      { error: "Yêu cầu vi phạm kiểm soát nguồn gốc (CSRF protection)." },
+      { status: 403 }
+    );
+  }
+
   try {
     const body = await req.json();
     const { orderCode } = body;
@@ -61,19 +70,40 @@ export async function POST(req: NextRequest) {
         { status: 403 }
       );
     }
-    if (order.paymentStatus !== 'UNPAID' || order.status !== "PENDING_DEPOSIT") {
-      return NextResponse.json({ error: 'Đơn hàng này không còn ở trạng thái chờ thanh toán.' }, { status: 400 });
-    }
-    if (!order.isPriceVerified) {
-      return NextResponse.json({ error: 'Đơn hàng đang chờ quản trị viên xác minh giá và cước phí. Vui lòng quay lại thanh toán sau.' }, { status: 403 });
-    }
+
+    const paymentType = body.paymentType === "BALANCE" ? "BALANCE" : "DEPOSIT";
+    let amount = 0;
+
     const now = new Date();
-    if (order.reservationExpiresAt && order.reservationExpiresAt <= now) {
-      return NextResponse.json({ error: "Thời gian giữ hàng đã hết. Vui lòng liên hệ ChillBanana để kiểm tra lại tồn kho trước khi thanh toán." }, { status: 409 });
+    if (paymentType === "DEPOSIT") {
+      if (order.paymentStatus !== 'UNPAID' || order.status !== "PENDING_DEPOSIT") {
+        return NextResponse.json({ error: 'Đơn hàng này không còn ở trạng thái chờ thanh toán.' }, { status: 400 });
+      }
+      if (!order.isPriceVerified) {
+        return NextResponse.json({ error: 'Đơn hàng đang chờ quản trị viên xác minh giá và cước phí. Vui lòng quay lại thanh toán sau.' }, { status: 403 });
+      }
+      if (order.reservationExpiresAt && order.reservationExpiresAt <= now) {
+        return NextResponse.json({ error: "Thời gian giữ hàng đã hết. Vui lòng liên hệ ChillBanana để kiểm tra lại tồn kho trước khi thanh toán." }, { status: 409 });
+      }
+      if (order.depositAmountVnd <= 0) {
+        return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
+      }
+      amount = order.depositAmountVnd;
+    } else {
+      // paymentType === "BALANCE"
+      if (order.status !== "WAREHOUSE_VN") {
+        return NextResponse.json({ error: "Chỉ thu số dư đợt 2 khi đơn hàng đã về kho Việt Nam (WAREHOUSE_VN)." }, { status: 400 });
+      }
+      if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "DEPOSITED_70") {
+        return NextResponse.json({ error: "Đơn hàng không ở trạng thái chờ tất toán số dư (chỉ áp dụng cho đơn đã cọc 50% hoặc 70%)." }, { status: 400 });
+      }
+      const remainingGoodsBalanceVnd = Math.max(0, order.totalVnd - (order.depositAmountVnd || 0));
+      if (remainingGoodsBalanceVnd <= 0) {
+        return NextResponse.json({ error: "Đơn hàng đã không còn số dư cần thanh toán." }, { status: 400 });
+      }
+      amount = remainingGoodsBalanceVnd;
     }
-    if (order.depositAmountVnd <= 0) {
-      return NextResponse.json({ error: "Đơn hàng không có số tiền cần thanh toán." }, { status: 400 });
-    }
+
     const mode = resolvePaymentMode();
     if (mode === "blocked-live") {
       return NextResponse.json({ error: "Thanh toán live đang bị khóa trong giai đoạn demo; không thể tạo giao dịch thật." }, { status: 503 });
@@ -88,9 +118,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Cấu hình VNPAY sandbox chưa đầy đủ." }, { status: 503 });
     }
 
-    // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer.
-    // BẢO MẬT: Giới hạn trần tối đa 45 phút kể từ thời điểm tạo đơn để chống giam kho vô tận (Stock Squatting)
-    if (order.reservationExpiresAt) {
+    // Keep catalog stock reserved through the gateway's 15-minute payment window plus a buffer (DEPOSIT only)
+    if (paymentType === "DEPOSIT" && order.reservationExpiresAt) {
       const maxReservationCeiling = new Date(order.createdAt.getTime() + 45 * 60 * 1000);
       const requestedPaymentExpiry = new Date(now.getTime() + 17 * 60 * 1000);
       const paymentWindowExpiresAt = requestedPaymentExpiry > maxReservationCeiling
@@ -124,8 +153,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const amount = order.depositAmountVnd; // Server-side computed amount
-
     // Tự động phát hiện base URL: ưu tiên APP_URL, NEXT_PUBLIC_APP_URL, hoặc domain production công khai
     const baseUrl =
       process.env.APP_URL?.replace(/\/+$/, "") ||
@@ -140,11 +167,17 @@ export async function POST(req: NextRequest) {
       await tx.$queryRaw`SELECT "id" FROM "Order" WHERE "id" = ${order.id} FOR UPDATE`;
       const currentOrder = await tx.order.findUnique({
         where: { id: order.id },
-        select: { status: true, paymentStatus: true, isPriceVerified: true, depositAmountVnd: true, reservationExpiresAt: true },
+        select: { status: true, paymentStatus: true, isPriceVerified: true, depositAmountVnd: true, totalVnd: true, reservationExpiresAt: true },
       });
       const currentTime = new Date();
-      if (!currentOrder || currentOrder.status !== "PENDING_DEPOSIT" || currentOrder.paymentStatus !== "UNPAID" || !currentOrder.isPriceVerified || currentOrder.depositAmountVnd !== order.depositAmountVnd || (currentOrder.reservationExpiresAt && currentOrder.reservationExpiresAt <= currentTime)) {
-        return { error: "Đơn hàng vừa được thanh toán hoặc không còn đủ điều kiện tạo phiên thanh toán." } as const;
+      if (paymentType === "DEPOSIT") {
+        if (!currentOrder || currentOrder.status !== "PENDING_DEPOSIT" || currentOrder.paymentStatus !== "UNPAID" || !currentOrder.isPriceVerified || currentOrder.depositAmountVnd !== order.depositAmountVnd || (currentOrder.reservationExpiresAt && currentOrder.reservationExpiresAt <= currentTime)) {
+          return { error: "Đơn hàng vừa được thanh toán hoặc không còn đủ điều kiện tạo phiên thanh toán." } as const;
+        }
+      } else {
+        if (!currentOrder || currentOrder.status !== "WAREHOUSE_VN" || (currentOrder.paymentStatus !== "DEPOSITED_50" && currentOrder.paymentStatus !== "DEPOSITED_70")) {
+          return { error: "Đơn hàng không còn ở trạng thái chờ tất toán số dư tại kho Việt Nam." } as const;
+        }
       }
       await tx.paymentAttempt.updateMany({
         where: { orderId: order.id, status: { in: ["INITIATED", "PENDING"] }, expiresAt: { lte: currentTime } },
@@ -162,8 +195,8 @@ export async function POST(req: NextRequest) {
           orderId: order.id,
           provider: mode === "mock" ? "MOCK" : "VNPAY_SANDBOX",
           mode,
-          amountVnd: order.depositAmountVnd,
-          idempotencyKey: `${mode}:${order.id}:${randomUUID()}`,
+          amountVnd: amount,
+          idempotencyKey: `${mode}:${order.id}:${paymentType}:${randomUUID()}`,
           providerReference: mode === "mock" ? null : vnpTxnRef,
           expiresAt: attemptExpiresAt,
         },
@@ -179,6 +212,7 @@ export async function POST(req: NextRequest) {
         const paymentUrl = new URL("/payment/mock", baseUrl);
         paymentUrl.searchParams.set("token", token);
         paymentUrl.searchParams.set("orderCode", order.orderCode);
+        paymentUrl.searchParams.set("paymentType", paymentType);
         return NextResponse.json({ success: true, mode, paymentUrl: paymentUrl.toString(), demo: true });
       } catch (error) {
         await prisma.paymentAttempt.update({ where: { id: attempt.id }, data: { status: "FAILED", failureCode: "MOCK_PROVIDER_CONFIG", completedAt: new Date() } });
@@ -223,7 +257,7 @@ export async function POST(req: NextRequest) {
       vnp_CurrCode: "VND",
       vnp_IpAddr: clientIp,
       vnp_Locale: "vn",
-      vnp_OrderInfo: `Thanh toan don hang ${orderCode}`,
+      vnp_OrderInfo: paymentType === "BALANCE" ? `Tat toan so du don hang ${orderCode}` : `Thanh toan don hang ${orderCode}`,
       vnp_OrderType: "other",
       vnp_ReturnUrl: returnUrl,
       vnp_TxnRef: createdAttempt.vnpTxnRef || `${orderCode}_${attempt.id.slice(-6)}`,

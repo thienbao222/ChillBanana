@@ -1259,6 +1259,20 @@ export default function OrderManagementTab({
                         <div className="text-[11px] text-navy-900 line-clamp-2 bg-slate-50 p-2 rounded-lg border">
                           {ord.productName}
                         </div>
+                        {ord.status === "WAREHOUSE_VN" && ord.paymentStatus !== "PAID_100" && (
+                          <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
+                            <span>Chờ thu số dư:</span>
+                            <span className="font-mono font-bold text-amber-700">
+                              {Math.max(0, (ord.totalVnd || 0) - (ord.depositAmountVnd || 0)).toLocaleString("vi-VN")} đ
+                            </span>
+                          </div>
+                        )}
+                        {ord.status === "WAREHOUSE_VN" && ord.paymentStatus === "PAID_100" && (
+                          <div className="text-[11px] bg-emerald-50 text-emerald-900 font-semibold px-2 py-1 rounded-lg border border-emerald-200 flex justify-between items-center">
+                            <span>Thanh toán:</span>
+                            <span className="font-mono font-bold text-emerald-700">✓ Đã tất toán 100%</span>
+                          </div>
+                        )}
                         {ord.status === "LOCAL_DELIVERY" && ord.paymentStatus !== "PAID_100" && (
                           <div className="text-[11px] bg-amber-50 text-amber-900 font-semibold px-2 py-1.5 rounded-lg border border-amber-200 flex justify-between items-center">
                             <span>Thu COD lúc giao:</span>
@@ -1278,6 +1292,8 @@ export default function OrderManagementTab({
                         )}
                         <div className="pt-2 border-t flex flex-col gap-1.5">
                           <button
+                            disabled={ord.status === "WAREHOUSE_VN" && ord.paymentStatus !== "PAID_100"}
+                            title={ord.status === "WAREHOUSE_VN" && ord.paymentStatus !== "PAID_100" ? "Đơn hàng chưa tất toán đủ 100%. Vui lòng thu số dư hoặc dùng Chi Tiết để vượt quyền." : undefined}
                             onClick={() => {
                               if (ord.status === "IN_TRANSIT_AIR") {
                                 quickMoveStatus(
@@ -1299,9 +1315,21 @@ export default function OrderManagementTab({
                                 );
                               }
                             }}
-                            className="w-full py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            className={
+                              ord.status === "WAREHOUSE_VN" && ord.paymentStatus !== "PAID_100"
+                                ? "w-full py-1.5 bg-slate-200 text-slate-500 font-semibold rounded-lg text-[11px] cursor-not-allowed flex items-center justify-center space-x-1"
+                                : ord.status === "WAREHOUSE_VN" && ord.paymentStatus === "PAID_100"
+                                ? "w-full py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1 shadow-sm"
+                                : "w-full py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg text-[11px] transition-colors flex items-center justify-center space-x-1"
+                            }
                           >
-                            <span>{ord.status === "IN_TRANSIT_AIR" ? "Hạ Cánh → Nhập Kho VN" : "Bàn Giao Shipper"}</span>
+                            <span>
+                              {ord.status === "IN_TRANSIT_AIR"
+                                ? "Hạ Cánh → Nhập Kho VN"
+                                : ord.paymentStatus === "PAID_100"
+                                ? "Bàn Giao Shipper (Đã Đủ 100%)"
+                                : "Chờ Tất Toán 100% Để Bàn Giao"}
+                            </span>
                             <ChevronRight className="w-3 h-3" />
                           </button>
                           <div className="flex gap-1">

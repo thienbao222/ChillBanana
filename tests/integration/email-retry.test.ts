@@ -32,7 +32,7 @@ describe("retryDueEmails", () => {
 
   it("log kẹt PENDING quá lâu được đưa về FAILED rồi thử lại", async () => {
     const stuck = await log({ status: "PENDING", nextRetryAt: null });
-    await prisma.$executeRaw`UPDATE "EmailLog" SET "updatedAt" = ${minutes(-60)} WHERE "id" = ${stuck.id}`;
+    await prisma.$executeRaw`UPDATE "EmailLog" SET "updatedAt" = (${minutes(-60)} AT TIME ZONE 'UTC') WHERE "id" = ${stuck.id}`;
 
     const retry = vi.fn().mockResolvedValue(false);
     const summary = await retryDueEmails({ retry });

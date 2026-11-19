@@ -845,7 +845,7 @@ export async function searchCatalog(
     const budgetEstimate = translated.budget?.approxVndEquivalent
       ? {
           approxVnd: translated.budget.approxVndEquivalent,
-          serviceFeeVnd: Math.max(50000, Math.round(translated.budget.approxVndEquivalent * 0.04)),
+          serviceFeeVnd: Math.max(80000, Math.round(translated.budget.approxVndEquivalent * 0.04)),
           deposit50Vnd: Math.round(translated.budget.approxVndEquivalent * 0.5),
         }
       : null;
@@ -1056,7 +1056,7 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
       getCurrentPricingConfig().catch(() => null),
     ]);
     const cfg = pricingConfig?.values;
-    const minFee = cfg?.serviceFeeMinimumVnd ?? (cfg as any)?.minServiceFeeVnd ?? 50000;
+    const minFee = cfg?.serviceFeeMinimumVnd ?? (cfg as any)?.minServiceFeeVnd ?? 80000;
     const feePercent = cfg?.serviceFeePercent ?? (cfg as any)?.tier1ServiceFeePercent ?? 4;
     const airRate = cfg?.airShippingPerKgVnd ?? (cfg as any)?.perKgShippingRateVnd ?? 185000;
     const discount = cfg?.groupBuyShippingDiscountPercent ?? 25;

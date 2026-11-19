@@ -4,6 +4,25 @@ Tài liệu này theo dõi toàn bộ các thay đổi qua từng gói công vi�
 
 ---
 
+## [WP8.0] - 19/11/2026: Tái Cấu Trúc Toàn Diện, Nâng Cấp Agentic AI Workspace & Nghiệm Thu Victory
+
+- **Ngày thực hiện:** 19/11/2026
+- **Mã gói việc:** WP8.0 (Mode B Victory Release)
+- **Thay đổi chính:**
+  - **R1 (Thu số dư đợt 2 tại WAREHOUSE_VN):** Triển khai hàm `calculateWarehouseVnBalance`, mở rộng API `vnpay-create`, `mock-sandbox` và admin payments hỗ trợ `paymentType = "BALANCE"`, hiển thị mã VietQR động và nút VNPAY trên trang `/tracking`, tự động cập nhật `PAID_100`, ghi `PaymentTransaction(kind: "BALANCE")`, phát sinh `AuditLog(action: "ORDER_BALANCE_SETTLED")`, và mở khóa nút giao hàng `LOCAL_DELIVERY`.
+  - **R2 (Báo giá 3 bậc & Sàn phí kinh tế 80.000 đ):** Xóa bỏ hoàn toàn hardcode cọc 50% ở `NeoDaylightCosmos.tsx` và `OrderCalculator.tsx`, áp dụng `calculateDepositV2` theo 3 bậc (<1M: 100%, 1M-10M: 70%/100%, >10M: 50%/70%/100%), nâng sàn phí mua hộ `SERVICE_FEE_MINIMUM_VND = 80_000` (bảo đảm hòa vốn chi phí cố định: kho Tokyo 51k, ship VN 35k, thanh toán 12k) và giữ đơn tối thiểu 300.000 đ.
+  - **R3 (An ninh CSRF & Cảnh báo EMAIL_MODE):** Bổ sung `verifySameOrigin` vào `vnpay-create/route.ts` chặn CSRF (HTTP 403 Forbidden), bổ sung `checkEmailSystemReadiness` ghi log `[CRITICAL]` khi thiếu SMTP ở production, và hoàn thiện 5 mẫu email giao dịch HTML động.
+  - **R4 (RBAC Phương án B & AI Agent Workspace):** Chuẩn hóa `docs/RBAC.md` với 2 vai trò admin người thật (`SUPER_ADMIN` và `OPERATOR`). Xây dựng Core Engine `src/features/ai-workspace/` tích hợp 4 AI Agent chuyên trách (Purchasing, Quarantine, Financial Audit, Executive Assistant), API quản trị `/api/admin/ai-workspace/*`, giao diện Admin Mission Control Center (`AiAgentWorkspaceTab.tsx`) thay thế chatbox thông thường, và cẩm nang 6 bước bảo vệ đồ án tại `docs/demo-ai-workspace.md`.
+- **Kết quả kiểm định & Nghiệm thu:**
+  - Vitest Unit Tests: **64/64 files, 488/488 tests PASSED (100%)**.
+  - Vitest Integration Tests trên PostgreSQL Localhost: **17/17 files, 196/196 tests PASSED (100%)**.
+  - TypeScript Strict: **0 lỗi**.
+  - Next.js Lint: **0 lỗi**.
+  - Production Build: **Biên dịch tối ưu 100% (19/19 trang tĩnh)**.
+  - Phán quyết Victory Audit: **VICTORY CONFIRMED**.
+
+---
+
 ## [WP7.2] - 04/11/2026: SOP Vận Hành, Giám Sát Sức Khỏe, Dữ Liệu Mô Phỏng & Đóng Sổ Tháng
 
 - **Ngày thực hiện:** 04/11/2026

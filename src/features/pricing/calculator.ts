@@ -3,7 +3,7 @@ import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
 export const DEFAULT_EXCHANGE_RATE = 172;
 export const AIR_SHIPPING_PER_KG = 185000;
 export const SERVICE_FEE_RATE = 0.04;
-export const SERVICE_FEE_MINIMUM_VND = 50_000;
+export const SERVICE_FEE_MINIMUM_VND = 80_000;
 export const GROUP_BUY_SHIPPING_DISCOUNT_RATE = 0.25;
 export const GROUP_BUY_MAX_WEIGHT_KG = 0.5;
 export { MIN_ORDER_THRESHOLD_VND };

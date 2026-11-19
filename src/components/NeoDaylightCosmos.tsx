@@ -21,6 +21,7 @@ import {
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
 import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
+import { calculateDepositV2 } from "@/features/payments/policy";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
@@ -105,7 +106,7 @@ export default function NeoDaylightCosmos() {
   const [custAddress, setCustAddress] = useState("");
   const [custEmail, setCustEmail] = useState("");
   const [custNote, setCustNote] = useState("");
-  const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
+  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("100");
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingVnpay, setIsRedirectingVnpay] = useState(false);
@@ -303,7 +304,28 @@ export default function NeoDaylightCosmos() {
     ? Math.round(weightKg * pricingConfig.airShippingPerKgVnd * (pricingConfig.groupBuyShippingDiscountPercent / 100))
     : 0;
   const estimatedShippingVnd = standardShippingVnd - groupBuySavingsVnd;
-  const depositVnd = depositChoice === "100" ? baseOrderCost : Math.round(baseOrderCost * 0.5);
+  const totalEstimatedVnd = baseOrderCost + estimatedShippingVnd;
+
+  const tieredPolicy = calculateDepositV2(totalEstimatedVnd);
+  const allowedDepositChoices: ("50" | "70" | "100")[] =
+    tieredPolicy.tier === "LOW"
+      ? ["100"]
+      : tieredPolicy.tier === "STANDARD"
+      ? ["70", "100"]
+      : ["50", "70", "100"];
+
+  useEffect(() => {
+    if (!allowedDepositChoices.includes(depositChoice)) {
+      setDepositChoice(allowedDepositChoices[0]);
+    }
+  }, [allowedDepositChoices, depositChoice]);
+
+  const depositVnd =
+    depositChoice === "100"
+      ? baseOrderCost
+      : depositChoice === "70"
+      ? Math.round(baseOrderCost * 0.7)
+      : Math.round(baseOrderCost * 0.5);
 
   // Thêm vào giỏ hàng
   const handleAddToCart = () => {
@@ -421,7 +443,7 @@ export default function NeoDaylightCosmos() {
         body: JSON.stringify({
           orderCode: createdOrder.orderCode,
           amount: createdOrder.depositAmountVnd || depositVnd,
-          orderInfo: `Thanh toan ${createdOrder.depositPercent || 50}% don hang ${createdOrder.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${createdOrder.depositPercent || depositChoice}% don hang ${createdOrder.orderCode} - ChillBanana`,
           accessToken: createdOrder.accessToken,
           phone: custPhone.trim(),
         }),
@@ -1575,43 +1597,72 @@ export default function NeoDaylightCosmos() {
                 <span>{t("Tiền Hàng & Phí Mua Hộ:")}</span>
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", margin: "10px 0" }}>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("50")}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "10px",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    border: depositChoice === "50" ? "2px solid #eab308" : "1px solid #cbd5e1",
-                    background: depositChoice === "50" ? "#fef9c3" : "#ffffff",
-                    color: depositChoice === "50" ? "#713f12" : "#475569",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {preferences.language === "ja" ? "50% 予約金" : "Cọc 50%"}
-                  {depositChoice === "50" ? " ✓" : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("100")}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "10px",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    border: depositChoice === "100" ? "2px solid #eab308" : "1px solid #cbd5e1",
-                    background: depositChoice === "100" ? "#fef9c3" : "#ffffff",
-                    color: depositChoice === "100" ? "#713f12" : "#475569",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {preferences.language === "ja" ? "100% 全額" : "Thanh toán 100%"}
-                  {depositChoice === "100" ? " ✓" : ""}
-                </button>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${allowedDepositChoices.length}, 1fr)`,
+                gap: "8px",
+                margin: "10px 0",
+              }}>
+                {allowedDepositChoices.includes("50") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("50")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "50" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "50" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "50" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "50% 予約金" : "Cọc 50%"}
+                    {depositChoice === "50" ? " ✓" : ""}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("70") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("70")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "70" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "70" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "70" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "70% 予約金" : "Cọc 70%"}
+                    {depositChoice === "70" ? " ✓" : ""}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("100") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("100")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "100" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "100" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "100" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "100% 全額" : "Thanh toán 100%"}
+                    {depositChoice === "100" ? " ✓" : ""}
+                  </button>
+                )}
               </div>
               <div className="dep">
                 <span>{preferences.language === "ja" ? `お支払い予定額（${depositChoice}%）：` : `Ước tính thanh toán (${depositChoice}%):`}<small>{t("Chờ ChillBanana duyệt giá trước khi thanh toán")}</small></span>
@@ -1743,10 +1794,23 @@ export default function NeoDaylightCosmos() {
                     <label>Tùy chọn mức đặt cọc</label>
                     <select
                       value={depositChoice}
-                      onChange={(e) => setDepositChoice(e.target.value as "50" | "100")}
+                      onChange={(e) => setDepositChoice(e.target.value as "50" | "70" | "100")}
                     >
-                      <option value="50">Cọc trước 50% ({Math.round(baseOrderCost * 0.5).toLocaleString("vi-VN")} đ)</option>
-                      <option value="100">Thanh toán đủ 100% ({baseOrderCost.toLocaleString("vi-VN")} đ)</option>
+                      {allowedDepositChoices.includes("50") && (
+                        <option value="50">
+                          Cọc trước 50% ({Math.round(baseOrderCost * 0.5).toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
+                      {allowedDepositChoices.includes("70") && (
+                        <option value="70">
+                          Cọc trước 70% ({Math.round(baseOrderCost * 0.7).toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
+                      {allowedDepositChoices.includes("100") && (
+                        <option value="100">
+                          Thanh toán đủ 100% ({baseOrderCost.toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>

@@ -72,7 +72,7 @@ export default function OrderCalculator() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("50");
+  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("100");
   const [customerNote, setCustomerNote] = useState("");
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -297,9 +297,8 @@ export default function OrderCalculator() {
       : ["50", "70", "100"];
 
   useEffect(() => {
-    const minAllowed = allowedDepositChoices[0];
-    if (Number(depositChoice) < Number(minAllowed)) {
-      setDepositChoice(minAllowed);
+    if (!allowedDepositChoices.includes(depositChoice)) {
+      setDepositChoice(allowedDepositChoices[0]);
     }
   }, [allowedDepositChoices, depositChoice]);
 
@@ -320,7 +319,7 @@ export default function OrderCalculator() {
         body: JSON.stringify({
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
-          orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${order.depositPercent || depositChoice}% don hang ${order.orderCode} - ChillBanana`,
           accessToken: order.accessToken,
           phone: (customerPhone || "").replace(/\s+/g, ""),
         }),

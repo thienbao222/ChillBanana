@@ -31,7 +31,7 @@ export async function retryDueEmails(options: {
     WHERE "status" = 'FAILED'
       AND "attemptCount" < "maxAttempts"
       AND "emailType" NOT IN ('customer-email-verification', 'password-reset')
-      AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= ${now})
+      AND ("nextRetryAt" IS NULL OR "nextRetryAt" <= (${now} AT TIME ZONE 'UTC'))
     ORDER BY "nextRetryAt" ASC NULLS FIRST
     LIMIT ${limit}`;
 

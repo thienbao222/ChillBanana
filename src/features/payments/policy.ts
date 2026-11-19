@@ -171,8 +171,11 @@ export function checkWeightTolerance(
 
 export type WarehouseVnBalanceInput = {
   totalVnd: number;
-  totalPaidVnd: number;
+  totalPaidVnd?: number;
+  paidAmountVnd?: number;
+  depositAmountVnd?: number;
   domesticVnShippingEstimateVnd?: number;
+  domesticShippingVnd?: number;
 };
 
 /**
@@ -195,13 +198,23 @@ export function calculateWarehouseVnBalance(
   let domesticShippingVnd = 0;
 
   if (typeof arg1 === "object" && arg1 !== null) {
-    totalVnd = arg1.totalVnd;
-    totalPaidVnd = arg1.totalPaidVnd;
-    domesticShippingVnd = arg1.domesticVnShippingEstimateVnd || 0;
+    totalVnd = Math.round(arg1.totalVnd || 0);
+    totalPaidVnd = Math.round(
+      arg1.totalPaidVnd !== undefined
+        ? arg1.totalPaidVnd
+        : (arg1.paidAmountVnd !== undefined
+          ? arg1.paidAmountVnd
+          : (arg1.depositAmountVnd || 0))
+    );
+    domesticShippingVnd = Math.round(
+      arg1.domesticShippingVnd !== undefined
+        ? arg1.domesticShippingVnd
+        : (arg1.domesticVnShippingEstimateVnd || 0)
+    );
   } else {
-    totalVnd = arg1;
-    totalPaidVnd = typeof arg2 === "number" ? arg2 : 0;
-    domesticShippingVnd = typeof arg3 === "number" ? arg3 : 0;
+    totalVnd = Math.round(arg1 || 0);
+    totalPaidVnd = typeof arg2 === "number" ? Math.round(arg2) : 0;
+    domesticShippingVnd = typeof arg3 === "number" ? Math.round(arg3) : 0;
   }
 
   const remainingGoodsBalanceVnd = Math.max(0, totalVnd - totalPaidVnd);
