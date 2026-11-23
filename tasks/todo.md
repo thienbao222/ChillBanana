@@ -35,9 +35,10 @@
 - [x] Hoàn thiện cẩm nang thuyết trình bảo vệ đồ án 6 bước tại `docs/demo-ai-workspace.md`.
 
 ## 5. Nghiệm Thu & Kiểm Thử Toàn Diện (Milestone M5)
-- [x] 100% Vitest Unit Tests: 488/488 tests passed (64/64 files).
+- [x] 100% Vitest Unit Tests: 510/510 tests passed (65/65 files).
 - [x] 100% PostgreSQL Localhost Integration Tests: 196/196 tests passed (17/17 files).
 - [x] TypeScript Strict (`tsc --noEmit`): 0 lỗi.
 - [x] Next.js Lint (`next lint`): 0 lỗi.
 - [x] Next.js Production Build: Biên dịch tối ưu thành công 19/19 trang tĩnh.
+- [x] Rà soát toàn diện luồng nghiệp vụ & logic vận hành: 22 probe tests xác nhận 0 lỗi / 0 xung đột quy trình (`tests/unit/business-flow-audit.test.ts`).
 - [x] Kiểm toán độc lập Victory Audit: Phán quyết **VICTORY CONFIRMED**.
