@@ -20,6 +20,7 @@ import {
   Plane,
   Sparkles,
   Bot,
+  Shield,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
@@ -32,6 +33,7 @@ import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
 import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import AuditLogsTab from "@/app/admin/components/AuditLogsTab";
 import SandboxTab from "@/app/admin/components/SandboxTab";
+import SecurityMonitorTab from "@/app/admin/components/SecurityMonitorTab";
 import AiEcosystemModal from "@/app/admin/components/AiEcosystemModal";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 import { parseAdminLocation, AdminTab } from "@/features/ai/admin/tab-utils";
@@ -212,6 +214,7 @@ function AdminDashboardPageInner() {
                 { key: "orders", icon: <Package className="h-4 w-4" />, label: "Đơn hàng" },
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
                 { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Tác vụ mua hộ" },
+                { key: "security", icon: <Shield className="h-4 w-4" />, label: "An ninh & AppSec" },
                 ...(currentUser?.role === "SUPER_ADMIN" ? [
                   { key: "customers", icon: <Users className="h-4 w-4" />, label: "Khách hàng" },
                   { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
@@ -287,6 +290,7 @@ function AdminDashboardPageInner() {
             )}
             {activeTab === "products"  && <ProductsTab />}
             {activeTab === "purchase"  && <PurchaseTasksTab />}
+            {activeTab === "security"  && <SecurityMonitorTab />}
             {activeTab === "analytics" && (
               <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
             )}
