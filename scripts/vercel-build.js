@@ -39,7 +39,7 @@ function sleepSync(ms) {
   }
 }
 
-function runNpmWithRetry(args, maxRetries = 3, delayMs = 4000, extraEnv = {}) {
+function runNpmWithRetry(args, maxRetries = 2, delayMs = 2000, extraEnv = {}, fatal = false) {
   const command = npmCli ? process.execPath : process.platform === "win32" ? "npm.cmd" : "npm";
   const commandArgs = npmCli ? [npmCli, ...args] : args;
 
@@ -52,17 +52,24 @@ function runNpmWithRetry(args, maxRetries = 3, delayMs = 4000, extraEnv = {}) {
     });
 
     if (result.status === 0 && !result.error) {
-      return;
+      return true;
     }
 
     if (attempt < maxRetries) {
       console.warn(
-        `[vercel-build] Lần thử ${attempt} chưa thành công (có thể database Neon đang khởi động từ chế độ ngủ). Đang đợi ${delayMs / 1000}s để thử lại...`
+        `[vercel-build] Lần thử ${attempt} chưa thành công. Đang đợi ${delayMs / 1000}s để thử lại...`
       );
       sleepSync(delayMs);
     } else {
-      console.error(`[vercel-build] Thất bại sau ${maxRetries} lần thử:`, result.error || `Exit code ${result.status}`);
-      process.exit(result.status ?? 1);
+      if (fatal) {
+        console.error(`[vercel-build] Thất bại sau ${maxRetries} lần thử:`, result.error || `Exit code ${result.status}`);
+        process.exit(result.status ?? 1);
+      } else {
+        console.warn(
+          `[vercel-build] CẢNH BÁO: ${args.join(" ")} không thể kết nối tới cơ sở dữ liệu từ xa sau ${maxRetries} lần thử (P1001/Mạng). Bỏ qua bước này để tiếp tục build Next.js.`
+        );
+        return false;
+      }
     }
   }
 }
@@ -107,8 +114,8 @@ if (isProductionDeployment) {
   if (process.env.SKIP_BUILD_MIGRATIONS === "1") {
     console.log("[vercel-build] SKIP_BUILD_MIGRATIONS=1: Bỏ qua prisma:migrate:deploy trên Vercel build.");
   } else {
-    runNpmWithRetry(["run", "prisma:migrate:deploy"], 3, 4000, migrationEnv);
-    runNpmWithRetry(["run", "prisma:seed"], 2, 3000, migrationEnv);
+    runNpmWithRetry(["run", "prisma:migrate:deploy"], 2, 2000, migrationEnv, false);
+    runNpmWithRetry(["run", "prisma:seed"], 1, 1000, migrationEnv, false);
   }
 } else {
   console.log("Skipping database migration outside a Vercel production deployment.");
