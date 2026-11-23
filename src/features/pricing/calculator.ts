@@ -2,11 +2,67 @@ import { MIN_ORDER_THRESHOLD_VND } from "@/features/orders/policy";
 
 export const DEFAULT_EXCHANGE_RATE = 172;
 export const AIR_SHIPPING_PER_KG = 185000;
-export const SERVICE_FEE_RATE = 0.04;
+export const SERVICE_FEE_TIER1_RATE = 0.06; // 6% cho 5 triệu đầu
+export const SERVICE_FEE_TIER2_RATE = 0.05; // 5% cho phần vượt trên 5 triệu (Đặc quyền VIP)
+export const SERVICE_FEE_TIER1_THRESHOLD_VND = 5_000_000;
 export const SERVICE_FEE_MINIMUM_VND = 80_000;
+export const SERVICE_FEE_RATE = SERVICE_FEE_TIER1_RATE; // Giữ hằng số tương thích ngược
 export const GROUP_BUY_SHIPPING_DISCOUNT_RATE = 0.25;
 export const GROUP_BUY_MAX_WEIGHT_KG = 0.5;
 export { MIN_ORDER_THRESHOLD_VND };
+
+export interface ProgressiveServiceFeeBreakdown {
+  totalFeeVnd: number;
+  tier1BaseVnd: number;
+  tier1RatePercent: number;
+  tier1FeeVnd: number;
+  tier2BaseVnd: number;
+  tier2RatePercent: number;
+  tier2FeeVnd: number;
+  appliedMinimumFloor: boolean;
+  isVipEligible: boolean;
+  remainingToVipVnd: number;
+}
+
+/**
+ * Tính toán phí dịch vụ mua hộ theo mô hình lũy tiến 2 bậc (Progressive Service Fee):
+ * - Bậc 1 (<= 5.000.000 đ): 6% tiền hàng (sàn tối thiểu 80.000 đ).
+ * - Bậc 2 (> 5.000.000 đ): 5 triệu đầu tính 6% (300.000 đ), phần tiền hàng vượt trên 5 triệu tính ưu đãi VIP 5%.
+ */
+export function calculateProgressiveServiceFee(
+  productPriceVnd: number,
+  tier1Rate = SERVICE_FEE_TIER1_RATE,
+  tier2Rate = SERVICE_FEE_TIER2_RATE,
+  thresholdVnd = SERVICE_FEE_TIER1_THRESHOLD_VND,
+  minFloorVnd = SERVICE_FEE_MINIMUM_VND
+): ProgressiveServiceFeeBreakdown {
+  const safePrice = Math.max(0, Math.round(productPriceVnd));
+  const tier1BaseVnd = Math.min(safePrice, thresholdVnd);
+  const tier2BaseVnd = Math.max(0, safePrice - thresholdVnd);
+  const isVipEligible = tier2BaseVnd > 0;
+  const remainingToVipVnd = Math.max(0, thresholdVnd - safePrice);
+
+  const tier1RawFee = Math.round(tier1BaseVnd * tier1Rate);
+  const tier2FeeVnd = Math.round(tier2BaseVnd * tier2Rate);
+  const totalRawFee = tier1RawFee + tier2FeeVnd;
+
+  const appliedMinimumFloor = totalRawFee < minFloorVnd;
+  const totalFeeVnd = appliedMinimumFloor ? minFloorVnd : totalRawFee;
+  const tier1FeeVnd = appliedMinimumFloor ? minFloorVnd : tier1RawFee;
+
+  return {
+    totalFeeVnd,
+    tier1BaseVnd,
+    tier1RatePercent: Math.round(tier1Rate * 100),
+    tier1FeeVnd,
+    tier2BaseVnd,
+    tier2RatePercent: Math.round(tier2Rate * 100),
+    tier2FeeVnd,
+    appliedMinimumFloor,
+    isVipEligible,
+    remainingToVipVnd,
+  };
+}
 
 export type PricingConfigValues = {
   serviceFeePercent: number;
@@ -30,8 +86,8 @@ export type PricingConfigValues = {
 };
 
 export const DEFAULT_PRICING_CONFIG: PricingConfigValues = {
-  serviceFeePercent: SERVICE_FEE_RATE * 100,
-  serviceFeeMinimumVnd: SERVICE_FEE_MINIMUM_VND,
+  serviceFeePercent: SERVICE_FEE_TIER1_RATE * 100, // 6%
+  serviceFeeMinimumVnd: SERVICE_FEE_MINIMUM_VND,   // 80.000 đ
   airShippingPerKgVnd: AIR_SHIPPING_PER_KG,
   groupBuyShippingDiscountPercent: GROUP_BUY_SHIPPING_DISCOUNT_RATE * 100,
   groupBuyMaxWeightKg: GROUP_BUY_MAX_WEIGHT_KG,
@@ -68,10 +124,16 @@ export function calculateOrderPrice(
   fulfillmentOrigin: string = "JP"
 ) {
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(
-    config.serviceFeeMinimumVnd,
-    Math.round((productPriceVnd * config.serviceFeePercent) / 100)
+  
+  // Tính phí dịch vụ theo cơ chế phân bậc lũy tiến (6% cho 5M đầu, 5% cho phần vượt)
+  const serviceFeeBreakdown = calculateProgressiveServiceFee(
+    productPriceVnd,
+    (config.serviceFeePercent ?? 6) / 100,
+    SERVICE_FEE_TIER2_RATE,
+    SERVICE_FEE_TIER1_THRESHOLD_VND,
+    config.serviceFeeMinimumVnd ?? SERVICE_FEE_MINIMUM_VND
   );
+  const serviceFeeVnd = serviceFeeBreakdown.totalFeeVnd;
 
   // WP3.2 extensions:
   const handlingFeeVnd = Math.round(config.handlingFeeVnd ?? 0);
@@ -125,6 +187,7 @@ export function calculateOrderPrice(
     exchangeRate,
     productPriceVnd,
     serviceFeeVnd,
+    serviceFeeBreakdown,
     handlingFeeVnd,
     fxFeeVnd,
     taxEstimateVnd,
