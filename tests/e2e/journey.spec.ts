@@ -53,10 +53,11 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   // 4. Chưa nhận cọc thì admin không được chuyển sang mua hàng
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(409);
 
-  // 5. Admin ghi nhận chuyển khoản (cọc 50%: tiền hàng 1.020.000 + phí dịch vụ tối thiểu 80.000 = 1.100.000 * 50% = 550.000)
-  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: 550_000, reference: "FT26101500999" }, { cookie: adminCookie });
+  // 5. Admin ghi nhận chuyển khoản
+  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: order.depositAmountVnd, reference: "FT26101500999" }, { cookie: adminCookie });
   expect(paid.status).toBe(200);
-  expect((await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order.paymentStatus).toBe("DEPOSITED_50");
+  const expectedDepositStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
+  expect((await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order.paymentStatus).toBe(expectedDepositStatus);
 
   // 6. Đi qua từng bước quy trình đến hoàn tất
   const flow = ["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR", "WAREHOUSE_VN", "LOCAL_DELIVERY", "COMPLETED"];
@@ -68,7 +69,8 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   expect(done.status).toBe("COMPLETED");
   // Log: 1 khi tạo đơn + 1 khi admin ghi nhận chuyển khoản + 1 cho mỗi bước chuyển trạng thái.
   expect(done.trackingLogs.length).toBe(2 + flow.length);
-  expect(done.trackingLogs.map((l: { title: string }) => l.title)).toContain("Đã ghi nhận tiền cọc 50%");
+  const expectedDepositLog = `Đã ghi nhận tiền cọc ${order.depositPercent}%`;
+  expect(done.trackingLogs.map((l: { title: string }) => l.title)).toContain(expectedDepositLog);
 
   // 7. Đơn đã hoàn tất không sửa được nữa
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(400);
