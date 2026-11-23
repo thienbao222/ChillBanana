@@ -40,7 +40,7 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   const created = await api.post("/api/orders", orderPayload([{ id: productId, quantity: 2 }]));
   expect(created.status).toBe(200);
   const order = created.data.order;
-  expect(order.totalVnd).toBe(1_208_800);
+  expect(order.totalVnd).toBe(1_248_000);
   const guest = created.cookie;
   expect(guest).toContain("cb_order_access=");
 
@@ -53,8 +53,8 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   // 4. Chưa nhận cọc thì admin không được chuyển sang mua hàng
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(409);
 
-  // 5. Admin ghi nhận chuyển khoản
-  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: 530_400, reference: "FT26101500999" }, { cookie: adminCookie });
+  // 5. Admin ghi nhận chuyển khoản (cọc 50%: tiền hàng 1.020.000 + phí dịch vụ tối thiểu 80.000 = 1.100.000 * 50% = 550.000)
+  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: 550_000, reference: "FT26101500999" }, { cookie: adminCookie });
   expect(paid.status).toBe(200);
   expect((await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order.paymentStatus).toBe("DEPOSITED_50");
 
