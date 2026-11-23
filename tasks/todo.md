@@ -42,3 +42,15 @@
 - [x] Next.js Production Build: Biên dịch tối ưu thành công 19/19 trang tĩnh.
 - [x] Rà soát toàn diện luồng nghiệp vụ & logic vận hành: 22 probe tests xác nhận 0 lỗi / 0 xung đột quy trình (`tests/unit/business-flow-audit.test.ts`).
 - [x] Kiểm toán độc lập Victory Audit: Phán quyết **VICTORY CONFIRMED**.
+
+## 6. Gói Nâng Cấp Phí Dịch Vụ Lũy Tiến (6%/5%) & Security Dashboard (Milestone M6)
+- [x] Triển khai Core Pricing Engine lũy tiến 2 bậc tại `src/features/pricing/calculator.ts` (`calculateProgressiveServiceFee`): Bậc 1 (≤ 5M: 6%, sàn 80k), Bậc 2 (> 5M: ưu đãi VIP 5%).
+- [x] Đồng bộ UI giỏ hàng & máy tính giá: `CartDrawer.tsx`, `CartContext.tsx`, `OrderCalculator.tsx`, `NeoDaylightCosmos.tsx` bóc tách 2 dòng và thanh tiến trình VIP.
+- [x] Xây dựng module và API an ninh mạng: `src/features/security/monitor.ts` và `/api/admin/security/stats`.
+- [x] Xây dựng giao diện Security & AppSec Monitor Dashboard: `SecurityMonitorTab.tsx` với 6 động cơ phòng thủ chiều sâu và gắn vào `admin/page.tsx`.
+- [x] Bộ kiểm thử tự động toàn diện:
+  - 100% Vitest Unit Tests: 521/521 tests passed (67/67 files).
+  - 100% PostgreSQL Localhost Integration Tests: 197/197 tests passed (18/18 files).
+  - TypeScript Strict (`tsc --noEmit`): 0 lỗi.
+  - Next.js Lint (`next lint`): 0 lỗi.
+  - Next.js Production Build: Biên dịch tối ưu thành công 19/19 trang tĩnh.
