@@ -163,10 +163,10 @@ describe("PATCH /api/orders/[id]: phân quyền và quy trình", () => {
     const after = await prisma.order.findUniqueOrThrow({ where: { id: o.id } });
     expect(after.isPriceVerified).toBe(true);
     expect(after.productPriceVnd).toBe(1_700_000); // 10.000¥ × tỷ giá đã chốt trên đơn (170)
-    expect(after.serviceFeeVnd).toBe(80_000);
+    expect(after.serviceFeeVnd).toBe(102_000); // 6% của 1.700.000 = 102.000 đ (> 80.000 đ)
     expect(after.shippingFeeVnd).toBe(92_500);
-    expect(after.totalVnd).toBe(1_872_500);
-    expect(after.depositAmountVnd).toBe(890_000);
+    expect(after.totalVnd).toBe(1_894_500);
+    expect(after.depositAmountVnd).toBe(901_000);
 
     const audit = await prisma.auditLog.findFirst({ where: { action: "ORDER_PRICE_APPROVED", entityId: o.orderCode } });
     expect(audit?.actor).toBe("admin");
