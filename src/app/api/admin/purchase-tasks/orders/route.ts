@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Search only orders that satisfy the existing purchase-task prerequisites. */
 export async function GET(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   const rawQuery = new URL(req.url).searchParams.get("q")?.trim().slice(0, 80) ?? "";
@@ -20,10 +20,12 @@ export async function GET(req: NextRequest) {
     const orders = await prisma.order.findMany({
       where: {
         status: "PURCHASING_JP",
-        paymentStatus: { in: ["DEPOSITED_50", "PAID_100"] },
+        paymentStatus: { in: ["DEPOSITED_50", "DEPOSITED_70", "PAID_100"] },
         isPriceVerified: true,
         originalUrl: { not: null },
         purchaseTask: { is: null },
+        isSandbox: false,
+        paymentMethod: { notIn: ["VNPAY_SANDBOX", "MOCK"] },
         OR: [
           { orderCode: { contains: query, mode: "insensitive" } },
           { customerName: { contains: query, mode: "insensitive" } },

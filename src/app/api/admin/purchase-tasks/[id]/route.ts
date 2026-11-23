@@ -44,7 +44,7 @@ export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   const { id: taskId } = await params;
@@ -57,6 +57,9 @@ export async function PATCH(
     externalOrderId?: string;
     adminNote?: string;
     staffName?: string;
+    actualPriceJpy?: number;
+    fxRate?: number;
+    receiptUrl?: string;
   };
   try {
     body = await req.json();
@@ -64,7 +67,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Body JSON không hợp lệ." }, { status: 400 });
   }
 
-  const { action, externalOrderId, adminNote, staffName } = body;
+  const { action, externalOrderId, adminNote, staffName, actualPriceJpy, fxRate, receiptUrl } = body;
 
   if (!action || !ACTION_TO_STATUS[action]) {
     return NextResponse.json(
@@ -85,7 +88,7 @@ export async function PATCH(
 
   const task = await prisma.purchaseTask.findUnique({
     where: { id: taskId },
-    include: { order: { select: { orderCode: true, productName: true } } },
+    include: { order: { select: { id: true, orderCode: true, productName: true, priceJpy: true, exchangeRate: true } } },
   });
 
   if (!task) {
@@ -118,6 +121,7 @@ export async function PATCH(
     updateData.approvedAt = now;
   }
 
+  let warningMessage: string | null = null;
   if (action === "complete") {
     if (!externalOrderId) {
       return NextResponse.json(
@@ -128,6 +132,20 @@ export async function PATCH(
     updateData.externalOrderId = externalOrderId;
     updateData.purchasedByStaff = staffName ?? adminUsername;
     updateData.purchasedAt = now;
+
+    if (actualPriceJpy !== undefined && actualPriceJpy !== null) {
+      const numPriceJpy = Number(actualPriceJpy);
+      if (!Number.isFinite(numPriceJpy) || numPriceJpy <= 0) {
+        return NextResponse.json({ error: "Giá thực mua actualPriceJpy phải là số dương." }, { status: 400 });
+      }
+      const expectedPriceJpy = task.order.priceJpy;
+      if (expectedPriceJpy > 0) {
+        const diffPercent = ((numPriceJpy - expectedPriceJpy) / expectedPriceJpy) * 100;
+        if (Math.abs(diffPercent) > 5) {
+          warningMessage = `Cảnh báo: Giá thực mua (${numPriceJpy.toLocaleString()} ¥) lệch ${diffPercent > 0 ? "+" : ""}${diffPercent.toFixed(1)}% so với giá đã báo (${expectedPriceJpy.toLocaleString()} ¥).`;
+        }
+      }
+    }
   }
 
   if (action === "fail") {
@@ -153,10 +171,32 @@ export async function PATCH(
           orderId: updatedTask.order.id,
           status: updatedTask.order.status,
           title: "Đã đặt mua thành công trên sàn Nhật",
-          description: `Nhân viên tại Nhật (${staffName ?? adminUsername}) đã hoàn tất mua hàng. Mã đơn hàng sàn: ${externalOrderId}.`,
+          description: `Nhân viên tại Nhật (${staffName ?? adminUsername}) đã hoàn tất mua hàng. Mã đơn hàng sàn: ${externalOrderId}.${warningMessage ? ` (${warningMessage})` : ""}`,
           location: "Tokyo, Nhật Bản",
         },
       });
+
+      // WP2.4: Tự động ghi nhận OrderCostLine GOODS_JPY khi hoàn tất mua hàng
+      if (actualPriceJpy !== undefined && actualPriceJpy !== null) {
+        const numPriceJpy = Number(actualPriceJpy);
+        const numFxRate = Number(fxRate || task.order.exchangeRate || 172);
+        const amountVnd = Math.round(numPriceJpy * numFxRate);
+
+        await tx.orderCostLine.create({
+          data: {
+            orderId: task.order.id,
+            purchaseTaskId: task.id,
+            category: "GOODS_JPY",
+            amountOriginal: numPriceJpy,
+            currency: "JPY",
+            fxRate: numFxRate,
+            amountVnd,
+            receiptUrl: receiptUrl ? String(receiptUrl).trim() : null,
+            note: `Mua tại sàn ${task.platform}. Mã đơn sàn: ${externalOrderId}${warningMessage ? ` [${warningMessage}]` : ""}`,
+            createdBy: staffName ?? adminUsername,
+          },
+        });
+      }
     }
 
     return updatedTask;
@@ -180,5 +220,6 @@ export async function PATCH(
     success: true,
     task: updated,
     message: `Task đã cập nhật: ${task.status} → ${targetStatus}`,
+    warning: warningMessage || undefined,
   });
 }

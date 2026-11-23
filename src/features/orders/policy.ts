@@ -56,3 +56,15 @@ export function getPreviousOrderStatus(current: string, fulfillmentOrigin = "JP"
   const currentIndex = ORDER_STATUS_FLOW.indexOf(current as ActiveOrderStatus);
   return currentIndex > 0 ? ORDER_STATUS_FLOW[currentIndex - 1] : null;
 }
+
+/**
+ * Server tự quyết định nguồn kho fulfilmentOrigin:
+ * - Origin là 'VN' chỉ khi toàn bộ sản phẩm trong đơn là hàng catalog có fulfillmentOrigin = 'VN'
+ *   (nghĩa là không có bất kỳ mặt hàng non-VN nào) và số lượng sản phẩm > 0.
+ * - Mọi trường hợp còn lại (có sản phẩm ngoài catalog, có hàng từ Nhật, hoặc đơn rỗng) luôn là 'JP'.
+ * - Tuyệt đối không tin cậy giá trị do client gửi lên.
+ */
+export function resolveOrderFulfillmentOrigin(hasNonVnItem: boolean, itemsCount: number): "VN" | "JP" {
+  return !hasNonVnItem && itemsCount > 0 ? "VN" : "JP";
+}
+

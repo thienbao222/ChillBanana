@@ -13,7 +13,7 @@ export type EmailLogInput = {
 
 type MailTransport = { sendMail(message: { from: string; to: string; subject: string; html: string }): Promise<unknown> };
 
-function emailMode(): "mock" | "smtp" {
+export function emailMode(): "mock" | "smtp" {
   const rawMode = (process.env.EMAIL_MODE || "").trim().toLowerCase();
   if (rawMode === "mock") return "mock";
   if (rawMode === "smtp") return "smtp";
@@ -23,6 +23,32 @@ function emailMode(): "mock" | "smtp" {
     return "smtp";
   }
   return "mock";
+}
+
+export interface EmailReadinessResult {
+  ready: boolean;
+  mode: "mock" | "smtp";
+  criticalError?: string;
+}
+
+/**
+ * Kiểm tra tính sẵn sàng của hệ thống email.
+ * Khi chạy ở môi trường production (APP_ENV=production hoặc NODE_ENV=production),
+ * nếu thiếu thông tin SMTP_USER / SMTP_PASS hoặc EMAIL_MODE !== "smtp",
+ * sẽ ghi log cảnh báo [CRITICAL] ra console.error.
+ */
+export function checkEmailSystemReadiness(): EmailReadinessResult {
+  const rawMode = (process.env.EMAIL_MODE || "").trim().toLowerCase();
+  const isProd = process.env.APP_ENV === "production" || process.env.NODE_ENV === "production";
+  const hasSmtpCreds = Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+
+  if (isProd && (!hasSmtpCreds || rawMode !== "smtp")) {
+    const msg = `[CRITICAL] [EMAIL_SYSTEM] Hệ thống email ở môi trường PRODUCTION thiếu cấu hình SMTP (SMTP_USER/SMTP_PASS hoặc EMAIL_MODE !== "smtp", hiện tại: EMAIL_MODE=${rawMode || "undefined"}, SMTP_USER=${process.env.SMTP_USER ? "configured" : "MISSING"}). Các email giao dịch quan trọng sẽ không thể gửi tới khách hàng!`;
+    console.error(msg);
+    return { ready: false, mode: rawMode === "smtp" ? "smtp" : "mock", criticalError: msg };
+  }
+
+  return { ready: true, mode: emailMode() };
 }
 
 function errorCode(error: unknown): string {
@@ -80,6 +106,9 @@ export async function deliverLoggedEmail(input: EmailLogInput, transport: MailTr
   }
 
   if (mode === "mock") {
+    if (process.env.APP_ENV === "production" || process.env.NODE_ENV === "production") {
+      console.error(`[CRITICAL] [EMAIL_SYSTEM] Hệ thống email ở môi trường PRODUCTION đang chạy ở chế độ MOCK (EMAIL_MODE=${process.env.EMAIL_MODE || "undefined"}). Email ${input.emailType} tới ${input.to} không được gửi thật.`);
+    }
     if (input.logId) {
       await prisma.emailLog.update({
         where: { id: input.logId },
@@ -90,6 +119,9 @@ export async function deliverLoggedEmail(input: EmailLogInput, transport: MailTr
     return false;
   }
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    if (process.env.APP_ENV === "production" || process.env.NODE_ENV === "production") {
+      console.error(`[CRITICAL] [EMAIL_DELIVERY_FAILED] Hệ thống email ở môi trường PRODUCTION thiếu cấu hình SMTP (SMTP_USER/SMTP_PASS). Không thể gửi email ${input.emailType} tới ${input.to}.`);
+    }
     await prisma.emailLog.update({
       where: { id: logId },
       data: { status: "FAILED", lastErrorCode: "SMTP_NOT_CONFIGURED", nextRetryAt: new Date(Date.now() + 5 * 60_000) },

@@ -40,7 +40,7 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   const created = await api.post("/api/orders", orderPayload([{ id: productId, quantity: 2 }]));
   expect(created.status).toBe(200);
   const order = created.data.order;
-  expect(order.totalVnd).toBe(1_208_800);
+  expect(order.totalVnd).toBe(1_248_000);
   const guest = created.cookie;
   expect(guest).toContain("cb_order_access=");
 
@@ -54,21 +54,26 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(409);
 
   // 5. Admin ghi nhận chuyển khoản
-  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: 530_400, reference: "FT26101500999" }, { cookie: adminCookie });
+  const paid = await api.post(`/api/admin/orders/${order.orderCode}/payments`, { amountVnd: order.depositAmountVnd, reference: "FT26101500999" }, { cookie: adminCookie });
   expect(paid.status).toBe(200);
-  expect((await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order.paymentStatus).toBe("DEPOSITED_50");
+  const expectedDepositStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
+  expect((await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order.paymentStatus).toBe(expectedDepositStatus);
 
   // 6. Đi qua từng bước quy trình đến hoàn tất
   const flow = ["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR", "WAREHOUSE_VN", "LOCAL_DELIVERY", "COMPLETED"];
   for (const status of flow) {
-    const res = await api.patch(`/api/orders/${order.orderCode}`, { status }, { cookie: adminCookie });
+    const payload = status === "LOCAL_DELIVERY"
+      ? { status, adminOverrideDeliveryWithoutFullPayment: true, overrideReason: "Khách hàng COD giao hàng thu tiền tận nơi" }
+      : { status };
+    const res = await api.patch(`/api/orders/${order.orderCode}`, payload, { cookie: adminCookie });
     expect(res.status, `chuyển sang ${status}`).toBe(200);
   }
   const done = (await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order;
   expect(done.status).toBe("COMPLETED");
   // Log: 1 khi tạo đơn + 1 khi admin ghi nhận chuyển khoản + 1 cho mỗi bước chuyển trạng thái.
   expect(done.trackingLogs.length).toBe(2 + flow.length);
-  expect(done.trackingLogs.map((l: { title: string }) => l.title)).toContain("Đã ghi nhận tiền cọc 50%");
+  const expectedDepositLog = `Đã ghi nhận tiền cọc ${order.depositPercent}%`;
+  expect(done.trackingLogs.map((l: { title: string }) => l.title)).toContain(expectedDepositLog);
 
   // 7. Đơn đã hoàn tất không sửa được nữa
   expect((await api.patch(`/api/orders/${order.orderCode}`, { status: "PURCHASING_JP" }, { cookie: adminCookie })).status).toBe(400);

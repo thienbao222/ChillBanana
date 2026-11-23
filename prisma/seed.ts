@@ -11,7 +11,7 @@ const systemConfigSeed = [
   },
   {
     key: 'min_service_fee_vnd',
-    value: '20000',
+    value: '50000',
     description: 'Phí mua hộ tối thiểu (VND) áp dụng khi % tính ra thấp hơn mức này.',
   },
   {

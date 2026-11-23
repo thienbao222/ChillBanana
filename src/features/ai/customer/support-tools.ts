@@ -845,7 +845,7 @@ export async function searchCatalog(
     const budgetEstimate = translated.budget?.approxVndEquivalent
       ? {
           approxVnd: translated.budget.approxVndEquivalent,
-          serviceFeeVnd: Math.max(20000, Math.round(translated.budget.approxVndEquivalent * 0.04)),
+          serviceFeeVnd: Math.max(80000, Math.round(translated.budget.approxVndEquivalent * 0.04)),
           deposit50Vnd: Math.round(translated.budget.approxVndEquivalent * 0.5),
         }
       : null;
@@ -1056,14 +1056,14 @@ async function executeQuote(scrapedProduct: ScrapedProductInput | null): Promise
       getCurrentPricingConfig().catch(() => null),
     ]);
     const cfg = pricingConfig?.values;
-    const minFee = cfg?.serviceFeeMinimumVnd ?? (cfg as any)?.minServiceFeeVnd ?? 20000;
+    const minFee = cfg?.serviceFeeMinimumVnd ?? (cfg as any)?.minServiceFeeVnd ?? 80000;
     const feePercent = cfg?.serviceFeePercent ?? (cfg as any)?.tier1ServiceFeePercent ?? 4;
     const airRate = cfg?.airShippingPerKgVnd ?? (cfg as any)?.perKgShippingRateVnd ?? 185000;
     const discount = cfg?.groupBuyShippingDiscountPercent ?? 25;
     const maxWeight = cfg?.groupBuyMaxWeightKg ?? 2;
 
     const rateText = rate && !rate.isStale && rate.roundedRate > 0 ? `1 JPY = ${rate.roundedRate.toLocaleString("vi-VN")} đ` : "theo tỷ giá thực tế";
-    const feePct = cfg ? `${feePercent}% (tối thiểu ${minFee.toLocaleString("vi-VN")} đ)` : "4% (tối thiểu 20.000 đ)";
+    const feePct = cfg ? `${feePercent}% (tối thiểu ${minFee.toLocaleString("vi-VN")} đ)` : "4% (tối thiểu 50.000 đ)";
     const shipRate = cfg ? `${airRate.toLocaleString("vi-VN")} đ/kg` : "185.000 đ/kg";
     const discountPct = cfg ? `${discount}% (cho kiện ≤ ${maxWeight}kg)` : "25%";
     return {

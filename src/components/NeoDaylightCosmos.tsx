@@ -13,7 +13,12 @@ import WhyChooseUs from "@/components/WhyChooseUs";
 import NewsCorner from "@/components/NewsCorner";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
-import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+import {
+  DEFAULT_EXCHANGE_RATE,
+  calculateProgressiveServiceFee,
+  SERVICE_FEE_TIER2_RATE,
+  SERVICE_FEE_TIER1_THRESHOLD_VND,
+} from "@/features/pricing/calculator";
 import { getVnJpRatePerKg, VN_JP_CARGO_LABELS } from "@/features/pricing/vn-jp-rates";
 import {
   JP_VN_CATEGORIES,
@@ -21,6 +26,7 @@ import {
   JpVnProductCategory,
 } from "@/features/pricing/customs-categories";
 import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
+import { calculateDepositV2 } from "@/features/payments/policy";
 
 export default function NeoDaylightCosmos() {
   const { totalItems, openCart, addToCart, pricingConfig } = useCart();
@@ -58,7 +64,7 @@ export default function NeoDaylightCosmos() {
 
   // Cấu hình tài khoản nhận cọc VietQR (ưu tiên biến môi trường)
   const bankBin = process.env.NEXT_PUBLIC_BANK_BIN || "970422";
-  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "0901234567";
+  const bankAccount = process.env.NEXT_PUBLIC_BANK_ACCOUNT || "";
   const bankOwner = process.env.NEXT_PUBLIC_BANK_OWNER || "CHILLBANANA VIETNAM";
   const bankName = process.env.NEXT_PUBLIC_BANK_NAME || "MB Bank (Quân Đội)";
 
@@ -105,7 +111,7 @@ export default function NeoDaylightCosmos() {
   const [custAddress, setCustAddress] = useState("");
   const [custEmail, setCustEmail] = useState("");
   const [custNote, setCustNote] = useState("");
-  const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
+  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("100");
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isRedirectingVnpay, setIsRedirectingVnpay] = useState(false);
@@ -292,7 +298,14 @@ export default function NeoDaylightCosmos() {
   // Tính toán chi phí theo tỷ giá live và danh mục
   const currentCategory = getCategoryCustomsInfo(category);
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(productPriceVnd * pricingConfig.serviceFeePercent / 100));
+  const serviceFeeBreakdown = calculateProgressiveServiceFee(
+    productPriceVnd,
+    pricingConfig.serviceFeePercent / 100,
+    SERVICE_FEE_TIER2_RATE,
+    SERVICE_FEE_TIER1_THRESHOLD_VND,
+    pricingConfig.serviceFeeMinimumVnd
+  );
+  const serviceFeeVnd = serviceFeeBreakdown.totalFeeVnd;
   const customsFeeVnd = Math.round(productPriceVnd * (currentCategory.surchargePercent / 100));
   const baseOrderCost = productPriceVnd + serviceFeeVnd;
 
@@ -303,7 +316,28 @@ export default function NeoDaylightCosmos() {
     ? Math.round(weightKg * pricingConfig.airShippingPerKgVnd * (pricingConfig.groupBuyShippingDiscountPercent / 100))
     : 0;
   const estimatedShippingVnd = standardShippingVnd - groupBuySavingsVnd;
-  const depositVnd = depositChoice === "100" ? baseOrderCost : Math.round(baseOrderCost * 0.5);
+  const totalEstimatedVnd = baseOrderCost + estimatedShippingVnd;
+
+  const tieredPolicy = calculateDepositV2(totalEstimatedVnd);
+  const allowedDepositChoices: ("50" | "70" | "100")[] =
+    tieredPolicy.tier === "LOW"
+      ? ["100"]
+      : tieredPolicy.tier === "STANDARD"
+      ? ["70", "100"]
+      : ["50", "70", "100"];
+
+  useEffect(() => {
+    if (!allowedDepositChoices.includes(depositChoice)) {
+      setDepositChoice(allowedDepositChoices[0]);
+    }
+  }, [allowedDepositChoices, depositChoice]);
+
+  const depositVnd =
+    depositChoice === "100"
+      ? baseOrderCost
+      : depositChoice === "70"
+      ? Math.round(baseOrderCost * 0.7)
+      : Math.round(baseOrderCost * 0.5);
 
   // Thêm vào giỏ hàng
   const handleAddToCart = () => {
@@ -421,7 +455,7 @@ export default function NeoDaylightCosmos() {
         body: JSON.stringify({
           orderCode: createdOrder.orderCode,
           amount: createdOrder.depositAmountVnd || depositVnd,
-          orderInfo: `Thanh toan ${createdOrder.depositPercent || 50}% don hang ${createdOrder.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${createdOrder.depositPercent || depositChoice}% don hang ${createdOrder.orderCode} - ChillBanana`,
           accessToken: createdOrder.accessToken,
           phone: custPhone.trim(),
         }),
@@ -1544,7 +1578,11 @@ export default function NeoDaylightCosmos() {
                 <b>{productPriceVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>{`Phí mua hộ & bảo hiểm (${pricingConfig.serviceFeePercent}%):`}</span>
+                <span>
+                  {serviceFeeBreakdown.isVipEligible
+                    ? `⭐ Phí mua hộ (VIP 5% Lũy tiến):`
+                    : `Phí mua hộ & bảo hiểm (${pricingConfig.serviceFeePercent}% · Tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ):`}
+                </span>
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
@@ -1575,43 +1613,72 @@ export default function NeoDaylightCosmos() {
                 <span>{t("Tiền Hàng & Phí Mua Hộ:")}</span>
                 <b>{baseOrderCost.toLocaleString("vi-VN")} <small>đ</small></b>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", margin: "10px 0" }}>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("50")}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "10px",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    border: depositChoice === "50" ? "2px solid #eab308" : "1px solid #cbd5e1",
-                    background: depositChoice === "50" ? "#fef9c3" : "#ffffff",
-                    color: depositChoice === "50" ? "#713f12" : "#475569",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {preferences.language === "ja" ? "50% 予約金" : "Cọc 50%"}
-                  {depositChoice === "50" ? " ✓" : ""}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("100")}
-                  style={{
-                    padding: "8px 10px",
-                    borderRadius: "10px",
-                    fontSize: "0.8rem",
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    border: depositChoice === "100" ? "2px solid #eab308" : "1px solid #cbd5e1",
-                    background: depositChoice === "100" ? "#fef9c3" : "#ffffff",
-                    color: depositChoice === "100" ? "#713f12" : "#475569",
-                    transition: "all 0.2s ease",
-                  }}
-                >
-                  {preferences.language === "ja" ? "100% 全額" : "Thanh toán 100%"}
-                  {depositChoice === "100" ? " ✓" : ""}
-                </button>
+              <div style={{
+                display: "grid",
+                gridTemplateColumns: `repeat(${allowedDepositChoices.length}, 1fr)`,
+                gap: "8px",
+                margin: "10px 0",
+              }}>
+                {allowedDepositChoices.includes("50") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("50")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "50" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "50" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "50" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "50% 予約金" : "Cọc 50%"}
+                    {depositChoice === "50" ? " ✓" : ""}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("70") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("70")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "70" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "70" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "70" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "70% 予約金" : "Cọc 70%"}
+                    {depositChoice === "70" ? " ✓" : ""}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("100") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("100")}
+                    style={{
+                      padding: "8px 10px",
+                      borderRadius: "10px",
+                      fontSize: "0.8rem",
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      border: depositChoice === "100" ? "2px solid #eab308" : "1px solid #cbd5e1",
+                      background: depositChoice === "100" ? "#fef9c3" : "#ffffff",
+                      color: depositChoice === "100" ? "#713f12" : "#475569",
+                      transition: "all 0.2s ease",
+                    }}
+                  >
+                    {preferences.language === "ja" ? "100% 全額" : "Thanh toán 100%"}
+                    {depositChoice === "100" ? " ✓" : ""}
+                  </button>
+                )}
               </div>
               <div className="dep">
                 <span>{preferences.language === "ja" ? `お支払い予定額（${depositChoice}%）：` : `Ước tính thanh toán (${depositChoice}%):`}<small>{t("Chờ ChillBanana duyệt giá trước khi thanh toán")}</small></span>
@@ -1743,10 +1810,23 @@ export default function NeoDaylightCosmos() {
                     <label>Tùy chọn mức đặt cọc</label>
                     <select
                       value={depositChoice}
-                      onChange={(e) => setDepositChoice(e.target.value as "50" | "100")}
+                      onChange={(e) => setDepositChoice(e.target.value as "50" | "70" | "100")}
                     >
-                      <option value="50">Cọc trước 50% ({Math.round(baseOrderCost * 0.5).toLocaleString("vi-VN")} đ)</option>
-                      <option value="100">Thanh toán đủ 100% ({baseOrderCost.toLocaleString("vi-VN")} đ)</option>
+                      {allowedDepositChoices.includes("50") && (
+                        <option value="50">
+                          Cọc trước 50% ({Math.round(baseOrderCost * 0.5).toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
+                      {allowedDepositChoices.includes("70") && (
+                        <option value="70">
+                          Cọc trước 70% ({Math.round(baseOrderCost * 0.7).toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
+                      {allowedDepositChoices.includes("100") && (
+                        <option value="100">
+                          Thanh toán đủ 100% ({baseOrderCost.toLocaleString("vi-VN")} đ)
+                        </option>
+                      )}
                     </select>
                   </div>
                 </div>
@@ -1881,18 +1961,27 @@ export default function NeoDaylightCosmos() {
                   <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--ink)", marginBottom: "8px" }}>
                     Hoặc chuyển khoản trực tiếp qua VietQR Napas 247:
                   </p>
-                  <div style={{ display: "inline-block", padding: "10px", background: "#fff", borderRadius: "16px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", marginBottom: "12px" }}>
-                    <img
-                      src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`}
-                      alt="Mã VietQR đặt cọc"
-                      style={{ width: "220px", height: "auto", display: "block" }}
-                    />
-                  </div>
-                  <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.6 }}>
-                    Ngân hàng: <b>{bankName}</b> · STK: <b>{bankAccount}</b><br />
-                    Chủ TK: <b>{bankOwner}</b><br />
-                    Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
-                  </div>
+                  {bankAccount ? (
+                    <>
+                      <div style={{ display: "inline-block", padding: "10px", background: "#fff", borderRadius: "16px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", marginBottom: "12px" }}>
+                        <img
+                          src={`https://img.vietqr.io/image/${bankBin}-${bankAccount}-compact2.png?amount=${createdOrder.depositAmountVnd || depositVnd}&addInfo=${encodeURIComponent(createdOrder.orderCode)}&accountName=${encodeURIComponent(bankOwner)}`}
+                          alt="Mã VietQR đặt cọc"
+                          style={{ width: "220px", height: "auto", display: "block" }}
+                        />
+                      </div>
+                      <div style={{ fontSize: "0.8rem", color: "var(--muted)", lineHeight: 1.6 }}>
+                        Ngân hàng: <b>{bankName}</b> · STK: <b>{bankAccount}</b><br />
+                        Chủ TK: <b>{bankOwner}</b><br />
+                        Nội dung CK: <b style={{ color: "#d97706" }}>{createdOrder.orderCode}</b>
+                      </div>
+                    </>
+                  ) : (
+                    <div style={{ padding: "10px", background: "#fef3c7", borderRadius: "12px", border: "1px solid #fde68a", color: "#92400e", fontSize: "0.8rem" }}>
+                      <p style={{ fontWeight: 600 }}>Chưa cấu hình tài khoản VietQR</p>
+                      <p>Vui lòng thanh toán qua VNPAY hoặc liên hệ CSKH ChillBanana để nhận thông tin chuyển khoản.</p>
+                    </div>
+                  )}
                 </div>}
 
                 <div style={{ textAlign: "center", marginTop: "1.2rem" }}>

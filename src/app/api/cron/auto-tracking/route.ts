@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
         id: true,
         orderCode: true,
         status: true,
+        paymentStatus: true,
         customerEmail: true,
         customerName: true,
         customerId: true,
@@ -129,14 +130,13 @@ export async function GET(req: NextRequest) {
 
           await prisma.$transaction(async (tx) => {
             if (shouldComplete) {
-              // BẢO MẬT (P1-13): Tự động cập nhật thanh toán 100% và tạo giao dịch COD_SETTLEMENT khi cron chốt COMPLETED
+              // WP2.2: Tách giao hàng khỏi thanh toán; không tự đặt PAID_100 và không tự đặt depositAmountVnd = totalVnd
               const remainingBalanceVnd = Math.max(0, order.totalVnd - order.depositAmountVnd);
               const completion = await tx.order.updateMany({
                 where: { id: order.id, status: "LOCAL_DELIVERY" },
                 data: {
                   status: "COMPLETED",
-                  paymentStatus: "PAID_100",
-                  depositAmountVnd: order.totalVnd,
+                  paymentStatus: remainingBalanceVnd > 0 ? "PENDING_RECONCILE" : order.paymentStatus,
                 },
               });
               orderWasCompleted = completion.count === 1;
@@ -147,8 +147,9 @@ export async function GET(req: NextRequest) {
                     orderId: order.id,
                     provider: "COD_SETTLEMENT",
                     amountVnd: remainingBalanceVnd,
-                    status: "CONFIRMED",
-                    reference: `Tự động tất toán COD qua cron khi giao thành công (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
+                    status: "PENDING_RECONCILE",
+                    kind: "BALANCE",
+                    reference: `Tự động tất toán COD qua cron khi giao thành công (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg) — Chờ admin đối soát tiền thu hộ`,
                     confirmedByAdmin: "SYSTEM_CRON_AUTO_TRACKING",
                   },
                 });

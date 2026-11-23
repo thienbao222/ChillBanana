@@ -7,7 +7,9 @@ export const dynamic = "force-dynamic";
 function isPaymentRecorded(order: { paymentStatus: string; status: string }) {
   return (
     order.status !== "CANCELLED" &&
-    (order.paymentStatus === "DEPOSITED_50" || order.paymentStatus === "PAID_100")
+    (order.paymentStatus === "DEPOSITED_50" ||
+      order.paymentStatus === "DEPOSITED_70" ||
+      order.paymentStatus === "PAID_100")
   );
 }
 

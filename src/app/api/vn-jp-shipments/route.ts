@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { getVnJpRatePerKg } from "@/features/pricing/vn-jp-rates";
+import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
+import { inspectVnJpCargoDeterministic } from "@/features/ai/vn-jp/maff-inspector";
 
 export const dynamic = "force-dynamic";
 
@@ -93,6 +95,33 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // BẢO MẬT (WP6.1): Kiểm tra phiên đăng nhập của khách hàng nếu có
+    const verifiedCustomer = await getVerifiedCustomerFromRequest(req);
+
+    // BẢO MẬT (WP6.1): Thẩm định kiểm dịch MAFF tại Server (Không tin tưởng cờ client gửi)
+    const maffInspection = inspectVnJpCargoDeterministic({
+      cargoDetails: cargoDetails.trim(),
+      estimatedWeightKg: Number(estimatedWeightKg) || 1,
+      receiverPrefecture: typeof receiverPrefecture === "string" ? receiverPrefecture : "Tokyo",
+      receiverPostalCode: typeof receiverPostalCode === "string" ? receiverPostalCode : "100-0001",
+      receiverName: typeof receiverName === "string" ? receiverName : "RECEIVER",
+    });
+
+    if (maffInspection.overallRisk === "PROHIBITED") {
+      const prohibitedItems = maffInspection.items
+        .filter((it) => it.status === "PROHIBITED")
+        .map((it) => `"${it.rawText}" (${it.reasonVi})`)
+        .join(", ");
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Đơn hàng chứa hàng cấm kiểm dịch MAFF không thể vận chuyển sang Nhật Bản: ${prohibitedItems}. Vui lòng bỏ các mặt hàng này khỏi kiện hàng.`,
+          maffInspection,
+        },
+        { status: 400 }
+      );
+    }
+
     if (!maffAgreement) {
       return NextResponse.json(
         { success: false, error: "Bạn bắt buộc phải xác nhận cam kết không gửi thực phẩm cấm kiểm dịch MAFF (thịt, xúc xích, đồ cấm) sang Nhật Bản." },
@@ -110,8 +139,17 @@ export async function POST(req: NextRequest) {
     }
     const weight = Math.max(0.5, rawWeight);
     const selectedType = typeof cargoType === "string" ? cargoType : "gift";
+
+    // BẢO MẬT (WP6.1): Server tự quyết định cước tính IATA (Cân thực tế vs Cân thể tích D*R*C/5000)
+    const lengthCm = Math.max(0, Number(body.dimensionLengthCm) || 0);
+    const widthCm = Math.max(0, Number(body.dimensionWidthCm) || 0);
+    const heightCm = Math.max(0, Number(body.dimensionHeightCm) || 0);
+    const volumetricWeightKg = lengthCm > 0 && widthCm > 0 && heightCm > 0
+      ? (lengthCm * widthCm * heightCm) / 5000
+      : 0;
+    const chargeableWeightKg = Math.max(weight, volumetricWeightKg);
     const unitPrice = getVnJpRatePerKg(selectedType);
-    const totalEstFee = Math.round(unitPrice * weight);
+    const totalShippingFeeVnd = Math.round(unitPrice * chargeableWeightKg);
 
     // Bảo mật #15: Sinh mã vận đơn entropy cao và bọc try-catch retry chống P2002 collision
     const generateTrackingCode = () => {
@@ -130,6 +168,7 @@ export async function POST(req: NextRequest) {
         shipment = await prisma.vnJpShipment.create({
           data: {
             trackingCode,
+            customerId: verifiedCustomer?.id || null,
             senderName: senderName.trim(),
             senderPhone: senderPhone.trim(),
             senderAddress: senderAddress.trim(),
@@ -143,9 +182,16 @@ export async function POST(req: NextRequest) {
             cargoType: selectedType,
             cargoDetails: cargoDetails.trim(),
             estimatedWeightKg: weight,
+            dimensionLengthCm: lengthCm > 0 ? lengthCm : null,
+            dimensionWidthCm: widthCm > 0 ? widthCm : null,
+            dimensionHeightCm: heightCm > 0 ? heightCm : null,
+            chargeableWeightKg,
             unitPricePerKg: unitPrice,
-            totalShippingFeeVnd: totalEstFee,
+            totalShippingFeeVnd,
             maffAgreement: Boolean(maffAgreement),
+            maffAcknowledgedAt: new Date(),
+            consentAt: body.consentAt ? new Date(body.consentAt) : new Date(),
+            consentVersion: "v1.0",
             status: "PENDING_CONFIRMATION",
           },
         });

@@ -25,6 +25,7 @@ import {
   getCategoryCustomsInfo,
 } from "@/features/pricing/customs-categories";
 import { JAPAN_SUPPORTED_STORES } from "@/features/pricing/japan-stores";
+import { calculateDepositV2 } from "@/features/payments/policy";
 
 export default function OrderCalculator() {
   const { addToCart, items, clearCart, pricingConfig } = useCart();
@@ -71,7 +72,7 @@ export default function OrderCalculator() {
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
-  const [depositChoice, setDepositChoice] = useState<"50" | "100">("50");
+  const [depositChoice, setDepositChoice] = useState<"50" | "70" | "100">("100");
   const [customerNote, setCustomerNote] = useState("");
   const [policyAgreed, setPolicyAgreed] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -284,7 +285,29 @@ export default function OrderCalculator() {
   const customsFeeVnd = Math.round(calc.productPriceVnd * (currentCategoryInfo.surchargePercent / 100));
   const effectiveBaseOrderCostVnd = calc.baseOrderCostVnd;
   const effectiveDeposit50Vnd = Math.round(effectiveBaseOrderCostVnd * 0.5);
+  const effectiveDeposit70Vnd = Math.round(effectiveBaseOrderCostVnd * 0.7);
   const effectiveTotalVnd = effectiveBaseOrderCostVnd + calc.shippingFeeVnd;
+
+  const calculatorTieredPolicy = calculateDepositV2(effectiveTotalVnd);
+  const allowedDepositChoices: ("50" | "70" | "100")[] =
+    calculatorTieredPolicy.tier === "LOW"
+      ? ["100"]
+      : calculatorTieredPolicy.tier === "STANDARD"
+      ? ["70", "100"]
+      : ["50", "70", "100"];
+
+  useEffect(() => {
+    if (!allowedDepositChoices.includes(depositChoice)) {
+      setDepositChoice(allowedDepositChoices[0]);
+    }
+  }, [allowedDepositChoices, depositChoice]);
+
+  const effectiveDepositAmountVnd =
+    depositChoice === "100"
+      ? effectiveBaseOrderCostVnd
+      : depositChoice === "70"
+      ? effectiveDeposit70Vnd
+      : effectiveDeposit50Vnd;
 
   // ---- VNPAY: Chuyển hướng đến trang thanh toán ----
   const handleVnpayPayment = async (order: any) => {
@@ -296,7 +319,7 @@ export default function OrderCalculator() {
         body: JSON.stringify({
           orderCode: order.orderCode,
           amount: order.depositAmountVnd,
-          orderInfo: `Thanh toan ${order.depositPercent || 50}% don hang ${order.orderCode} - ChillBanana`,
+          orderInfo: `Thanh toan ${order.depositPercent || depositChoice}% don hang ${order.orderCode} - ChillBanana`,
           accessToken: order.accessToken,
           phone: (customerPhone || "").replace(/\s+/g, ""),
         }),
@@ -1297,13 +1320,48 @@ export default function OrderCalculator() {
                 <span>Tiền hàng gốc ({priceJpy.toLocaleString()} ¥):</span>
                 <span className="font-medium text-white">{calc.productPriceVnd.toLocaleString("vi-VN")} đ</span>
               </div>
-              <div className="flex justify-between text-slate-300">
-                <span className="flex items-center">
-                  Phí dịch vụ ({pricingConfig.serviceFeePercent}%):
-                  <Info className="w-3 h-3 ml-1 text-slate-400" />
-                </span>
-                <span className="font-medium text-white">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
-              </div>
+              {/* Phí dịch vụ mua hộ lũy tiến 2 bậc & Đặc quyền VIP */}
+              {calc.serviceFeeBreakdown?.isVipEligible ? (
+                <div className="bg-amber-500/10 border border-amber-400/40 rounded-xl p-3 my-2 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between text-amber-300 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <span>⭐</span>
+                      <span>Đặc Quyền VIP 5% (Lũy Tiến)</span>
+                    </span>
+                    <span className="text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded text-[10px] border border-emerald-500/40">
+                      TIẾT KIỆM PHÍ
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-300 text-[11px]">
+                    <span>• 5.000.000 đ đầu ({calc.serviceFeeBreakdown.tier1RatePercent}%):</span>
+                    <span>{calc.serviceFeeBreakdown.tier1FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-300 font-medium text-[11px]">
+                    <span>• Phần vượt {calc.serviceFeeBreakdown.tier2BaseVnd.toLocaleString("vi-VN")} đ (Ưu đãi {calc.serviceFeeBreakdown.tier2RatePercent}%):</span>
+                    <span>{calc.serviceFeeBreakdown.tier2FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-amber-400/20 flex justify-between font-bold text-white">
+                    <span>Tổng phí dịch vụ:</span>
+                    <span className="text-banana-400 text-sm">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-slate-300">
+                    <span className="flex items-center">
+                      Phí dịch vụ ({pricingConfig.serviceFeePercent}% · Tối thiểu {pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")}đ):
+                      <Info className="w-3 h-3 ml-1 text-slate-400" />
+                    </span>
+                    <span className="font-medium text-white">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  {calc.productPriceVnd > 0 && calc.serviceFeeBreakdown && calc.serviceFeeBreakdown.remainingToVipVnd > 0 && (
+                    <div className="bg-blue-950/40 border border-blue-500/30 rounded-lg px-2.5 py-1 text-[11px] text-blue-200 flex items-center justify-between">
+                      <span>🎯 Thêm {calc.serviceFeeBreakdown.remainingToVipVnd.toLocaleString("vi-VN")} đ mở khóa:</span>
+                      <span className="font-bold text-blue-300">VIP 5% PHẦN VƯỢT</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
                   Phụ phí hải quan (Đối chiếu: {currentCategoryInfo.shortLabel}):
@@ -1336,41 +1394,65 @@ export default function OrderCalculator() {
                 </div>
               </div>
 
-              {/* Nút chuyển đổi Cọc 50% vs Thanh toán 100% */}
-              <div className="grid grid-cols-2 gap-2 mt-3 mb-1">
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("50")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    depositChoice === "50"
-                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
-                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
-                  }`}
-                >
-                  <span>Cọc 50%</span>
-                  {depositChoice === "50" && <span className="text-[10px]">✓</span>}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDepositChoice("100")}
-                  className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
-                    depositChoice === "100"
-                      ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
-                      : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
-                  }`}
-                >
-                  <span>Thanh toán 100%</span>
-                  {depositChoice === "100" && <span className="text-[10px]">✓</span>}
-                </button>
+              {/* Nút chuyển đổi Cọc theo bậc quy định */}
+              <div className={`grid gap-2 mt-3 mb-1 ${
+                allowedDepositChoices.length === 1
+                  ? "grid-cols-1"
+                  : allowedDepositChoices.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}>
+                {allowedDepositChoices.includes("50") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("50")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "50"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Cọc 50%</span>
+                    {depositChoice === "50" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("70") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("70")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "70"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Cọc 70%</span>
+                    {depositChoice === "70" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
+                {allowedDepositChoices.includes("100") && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositChoice("100")}
+                    className={`py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 border ${
+                      depositChoice === "100"
+                        ? "bg-banana-400 text-navy-950 border-banana-300 shadow-sm font-extrabold"
+                        : "bg-white/10 text-slate-300 border-white/10 hover:bg-white/15"
+                    }`}
+                  >
+                    <span>Thanh toán 100%</span>
+                    {depositChoice === "100" && <span className="text-[10px]">✓</span>}
+                  </button>
+                )}
               </div>
 
               <div className="mt-2.5 flex justify-between items-center text-xs bg-white/10 p-3 rounded-2xl">
                 <div>
-                  <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : "Đặt cọc 50%:"}</span>
+                  <span className="text-slate-200 font-bold block">{depositChoice === "100" ? "Thanh toán 100%:" : `Đặt cọc ${depositChoice}%:`}</span>
                   <span className="text-[10px] text-emerald-400 font-medium">{depositChoice}% tiền hàng + phí mua hộ</span>
                 </div>
                 <strong className="text-banana-300 text-sm sm:text-base font-mono">
-                  {(depositChoice === "50" ? effectiveDeposit50Vnd : effectiveBaseOrderCostVnd).toLocaleString("vi-VN")} đ
+                  {effectiveDepositAmountVnd.toLocaleString("vi-VN")} đ
                 </strong>
               </div>
 
@@ -1554,44 +1636,75 @@ export default function OrderCalculator() {
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">
                       Lựa Chọn Mức Thanh Toán / Đặt Cọc
                     </label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
-                        depositChoice === "50" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="deposit"
-                          value="50"
-                          checked={depositChoice === "50"}
-                          onChange={() => setDepositChoice("50")}
-                          className="mr-2 text-banana-600"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Đặt cọc 50%</p>
-                          <p className="text-[11px] text-banana-800 font-bold">
-                            {effectiveDeposit50Vnd.toLocaleString("vi-VN")} đ
-                          </p>
-                        </div>
-                      </label>
+                    <div className={`grid gap-3 ${
+                      allowedDepositChoices.length === 1
+                        ? "grid-cols-1"
+                        : allowedDepositChoices.length === 2
+                        ? "grid-cols-2"
+                        : "grid-cols-3"
+                    }`}>
+                      {allowedDepositChoices.includes("50") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "50" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="50"
+                            checked={depositChoice === "50"}
+                            onChange={() => setDepositChoice("50")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Đặt cọc 50%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveDeposit50Vnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
 
-                      <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
-                        depositChoice === "100" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
-                      }`}>
-                        <input
-                          type="radio"
-                          name="deposit"
-                          value="100"
-                          checked={depositChoice === "100"}
-                          onChange={() => setDepositChoice("100")}
-                          className="mr-2 text-banana-600"
-                        />
-                        <div>
-                          <p className="text-xs font-bold text-slate-800">Thanh toán 100% tiền hàng + phí mua hộ</p>
-                          <p className="text-[11px] text-banana-800 font-bold">
-                            {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ
-                          </p>
-                        </div>
-                      </label>
+                      {allowedDepositChoices.includes("70") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "70" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="70"
+                            checked={depositChoice === "70"}
+                            onChange={() => setDepositChoice("70")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Đặt cọc 70%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveDeposit70Vnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
+
+                      {allowedDepositChoices.includes("100") && (
+                        <label className={`flex items-center p-3 rounded-2xl border cursor-pointer ${
+                          depositChoice === "100" ? "border-banana-500 bg-banana-50/70" : "border-slate-200"
+                        }`}>
+                          <input
+                            type="radio"
+                            name="deposit"
+                            value="100"
+                            checked={depositChoice === "100"}
+                            onChange={() => setDepositChoice("100")}
+                            className="mr-2 text-banana-600"
+                          />
+                          <div>
+                            <p className="text-xs font-bold text-slate-800">Thanh toán 100%</p>
+                            <p className="text-[11px] text-banana-800 font-bold">
+                              {effectiveBaseOrderCostVnd.toLocaleString("vi-VN")} đ
+                            </p>
+                          </div>
+                        </label>
+                      )}
                     </div>
                   </div>
 

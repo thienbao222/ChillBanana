@@ -16,14 +16,14 @@ describe("POST /api/orders: đơn catalog", () => {
     expect(res.status).toBe(200);
     expect(body.success).toBe(true);
     const order = body.order;
-    // 6000¥ × 170 = 1.020.000; phí 4% = 40.800; cước 0,8kg × 185.000 = 148.000
+    // 6000¥ × 170 = 1.020.000; phí 4% = 40.800 -> sàn 80.000 đ; cước 0,8kg × 185.000 = 148.000
     expect(order.priceJpy).toBe(6000);
     expect(order.exchangeRate).toBe(170);
     expect(order.productPriceVnd).toBe(1_020_000);
-    expect(order.serviceFeeVnd).toBe(40_800);
+    expect(order.serviceFeeVnd).toBe(80_000);
     expect(order.shippingFeeVnd).toBe(148_000);
-    expect(order.totalVnd).toBe(1_208_800);
-    expect(order.depositAmountVnd).toBe(530_400); // 50% của (hàng + phí)
+    expect(order.totalVnd).toBe(1_248_000);
+    expect(order.depositAmountVnd).toBe(770_000); // 70% của (1.020.000 + 80.000)
     expect(order.paymentStatus).toBe("UNPAID");
     expect(order.status).toBe("PENDING_DEPOSIT");
     expect(order.isPriceVerified).toBe(true);
@@ -44,7 +44,7 @@ describe("POST /api/orders: đơn catalog", () => {
     const res = await POST(post("/api/orders", orderPayload([{ id: product.id, quantity: 2 }], { depositPercent: 100 })));
     const { order } = await json(res);
     expect(res.status).toBe(200);
-    expect(order.depositAmountVnd).toBe(1_060_800);
+    expect(order.depositAmountVnd).toBe(1_100_000);
     expect(order.depositPercent).toBe(100);
   });
 
@@ -63,7 +63,7 @@ describe("POST /api/orders: đơn catalog", () => {
     expect(res.status).toBe(200);
     expect(order.priceJpy).toBe(6000);
     expect(order.exchangeRate).toBe(170);
-    expect(order.totalVnd).toBe(1_208_800);
+    expect(order.totalVnd).toBe(1_248_000);
   });
 
   it("từ chối khi hết tồn kho và không thay đổi dữ liệu", async () => {

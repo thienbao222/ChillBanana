@@ -126,6 +126,7 @@ function platformGuidance(platform: string) {
 
 function paymentStatusLabel(status: string) {
   if (status === "PAID_100") return "Đã thanh toán 100%";
+  if (status === "DEPOSITED_70") return "Đã cọc 70%";
   if (status === "DEPOSITED_50") return "Đã cọc 50%";
   return status;
 }

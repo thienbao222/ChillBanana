@@ -21,7 +21,7 @@ export const dynamic = "force-dynamic";
 // ─── GET: Lấy danh sách Purchase Tasks ───────────────────────────────────────
 
 export async function GET(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   const { searchParams } = new URL(req.url);
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
 // ─── POST: Tạo Purchase Task mới ─────────────────────────────────────────────
 
 export async function POST(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   let body: { orderId?: string };

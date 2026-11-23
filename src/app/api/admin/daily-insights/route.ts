@@ -408,7 +408,7 @@ YÊU CẦU OUTPUT gồm 4 phần theo thứ tự:
 export async function GET(req: NextRequest) {
   if (hasValidCronSecret(req)) return generateDailyInsight();
   {
-    const guard = await requireAdmin(req);
+    const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
     if (!guard.ok) return guard.response;
   }
 
@@ -430,7 +430,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   {
-    const guard = await requireAdmin(req);
+    const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
     if (!guard.ok) return guard.response;
   }
   return generateDailyInsight();

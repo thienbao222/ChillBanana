@@ -1,11 +1,26 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useRef } from "react";
+import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
-import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
+import {
+  DEFAULT_PRICING_CONFIG,
+  type PricingConfigValues,
+  calculateProgressiveServiceFee,
+  SERVICE_FEE_TIER2_RATE,
+  SERVICE_FEE_TIER1_THRESHOLD_VND,
+  type ProgressiveServiceFeeBreakdown,
+} from "@/features/pricing/calculator";
 import { useToast } from "@/context/ToastContext";
+import { calculateDepositV2 } from "@/features/payments/policy";
 
-export type DepositOption = 50 | 100;
+export type DepositOption = 50 | 70 | 100;
+
+export function getAllowedDepositOptions(orderTotalVnd: number): DepositOption[] {
+  const tieredPolicy = calculateDepositV2(orderTotalVnd);
+  if (tieredPolicy.tier === "LOW") return [100];
+  if (tieredPolicy.tier === "STANDARD") return [70, 100];
+  return [50, 70, 100];
+}
 
 export function isSingleItemStore(storeName?: string): boolean {
   if (!storeName) return false;
@@ -47,6 +62,7 @@ interface CartContextType {
   totalWeightKg: number;
   shippingFeeVnd: number;
   serviceFeeVnd: number;
+  serviceFeeBreakdown: ProgressiveServiceFeeBreakdown | null;
   isMinServiceFeeApplied: boolean;
   baseOrderCostVnd: number;
   totalVnd: number;
@@ -54,8 +70,10 @@ interface CartContextType {
   setDepositOption: (option: DepositOption) => void;
   depositPercent: DepositOption;
   setDepositPercent: (percent: DepositOption) => void;
+  allowedDepositOptions: DepositOption[];
   isShippingWeightPending: boolean;
   deposit50Vnd: number;
+  deposit70Vnd: number;
   depositAmountVnd: number;
   remainingAmountVnd: number;
   hasVnItems: boolean;
@@ -346,12 +364,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Cước bay: 0đ cho hàng sẵn tại kho VN, chỉ tính theo trọng lượng hàng bay từ Nhật
   const shippingFeeVnd = jpItemsWeightKg > 0 ? Math.round(jpItemsWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
 
-  // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 20.000đ)
-  const rawServiceFeeVnd = Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100);
-  const isMinServiceFeeApplied = totalItems > 0 && rawServiceFeeVnd < pricingConfig.serviceFeeMinimumVnd;
-  const serviceFeeVnd = totalItems > 0
-    ? Math.max(pricingConfig.serviceFeeMinimumVnd, rawServiceFeeVnd)
-    : 0;
+  // Phí dịch vụ mua hộ lũy tiến 2 bậc (6% cho 5M đầu, 5% cho phần vượt, sàn tối thiểu 80.000đ)
+  const serviceFeeBreakdown = useMemo(() => {
+    if (totalItems <= 0) return null;
+    return calculateProgressiveServiceFee(
+      totalProductPriceVnd,
+      pricingConfig.serviceFeePercent / 100,
+      SERVICE_FEE_TIER2_RATE,
+      SERVICE_FEE_TIER1_THRESHOLD_VND,
+      pricingConfig.serviceFeeMinimumVnd
+    );
+  }, [totalItems, totalProductPriceVnd, pricingConfig.serviceFeePercent, pricingConfig.serviceFeeMinimumVnd]);
+
+  const serviceFeeVnd = serviceFeeBreakdown?.totalFeeVnd ?? 0;
+  const isMinServiceFeeApplied = serviceFeeBreakdown?.appliedMinimumFloor ?? false;
 
   // Tổng tiền hàng + phí mua hộ (cơ sở cọc)
   const baseOrderCostVnd = totalProductPriceVnd + serviceFeeVnd;
@@ -359,12 +385,43 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Tổng tiền bao gồm cước bay (nếu đã có cân nặng)
   const totalVnd = totalProductPriceVnd + shippingFeeVnd + serviceFeeVnd;
 
-  // Đặt cọc 50% hoặc Thanh toán 100%
+  // Đặt cọc theo chính sách 3 bậc (WP3.3 & R3)
+  const targetTotalVnd = totalWeightKg > 0 ? totalVnd : baseOrderCostVnd;
+
+  // Xác định các mức cọc hợp lệ theo chính sách máy chủ 3 bậc
+  const allowedDepositOptions = useMemo<DepositOption[]>(() => {
+    return getAllowedDepositOptions(targetTotalVnd);
+  }, [targetTotalVnd]);
+
+  // Tự động căn chỉnh depositOption nếu giá trị hiện tại nhỏ hơn mức tối thiểu cho phép của bậc hiện tại
+  useEffect(() => {
+    const minAllowed = allowedDepositOptions[0];
+    if (depositOption < minAllowed) {
+      setDepositOption(minAllowed);
+    }
+  }, [allowedDepositOptions, depositOption]);
+
+  const handleSetDepositOption = (option: DepositOption) => {
+    const minAllowed = allowedDepositOptions[0];
+    if (option < minAllowed) {
+      setDepositOption(minAllowed);
+    } else {
+      setDepositOption(option);
+    }
+  };
+
+  // Đặt cọc 50%, 70% hoặc Thanh toán 100%
   const deposit50Vnd = Math.round(baseOrderCostVnd * 0.5);
-  const depositAmountVnd = depositOption === 100 ? baseOrderCostVnd : deposit50Vnd;
+  const deposit70Vnd = Math.round(baseOrderCostVnd * 0.7);
+  const effectiveDepositOption = depositOption < allowedDepositOptions[0] ? allowedDepositOptions[0] : depositOption;
+  const depositAmountVnd =
+    effectiveDepositOption === 100
+      ? baseOrderCostVnd
+      : effectiveDepositOption === 70
+      ? deposit70Vnd
+      : deposit50Vnd;
   // Số tiền còn lại khi nhận hàng = Tổng tiền đơn hàng - Số tiền thanh toán ngay
   // Đảm bảo nguyên tắc bảo toàn: Tổng = Cần thanh toán ngay + Còn lại khi nhận hàng (không bị hụt cước bay)
-  const targetTotalVnd = totalWeightKg > 0 ? totalVnd : baseOrderCostVnd;
   const remainingAmountVnd = Math.max(0, targetTotalVnd - depositAmountVnd);
   const isShippingWeightPending = totalWeightKg <= 0;
 
@@ -389,15 +446,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalWeightKg,
         shippingFeeVnd,
         serviceFeeVnd,
+        serviceFeeBreakdown,
         isMinServiceFeeApplied,
         baseOrderCostVnd,
         totalVnd,
-        depositOption,
-        setDepositOption,
-        depositPercent: depositOption,
-        setDepositPercent: setDepositOption,
+        depositOption: effectiveDepositOption,
+        setDepositOption: handleSetDepositOption,
+        depositPercent: effectiveDepositOption,
+        setDepositPercent: handleSetDepositOption,
+        allowedDepositOptions,
         isShippingWeightPending,
         deposit50Vnd,
+        deposit70Vnd,
         depositAmountVnd,
         remainingAmountVnd,
         hasVnItems,

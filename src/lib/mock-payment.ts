@@ -26,7 +26,24 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
     return update.count === 1 ? { result: outcome as "failed" | "pending" | "timeout" } : { result: "terminal" as const };
   }
 
-  if (attempt.order.paymentStatus !== "UNPAID" || attempt.order.status !== "PENDING_DEPOSIT" || !attempt.order.isPriceVerified || attempt.amountVnd !== attempt.order.depositAmountVnd) {
+  const isBalancePayment =
+    attempt.order.status === "WAREHOUSE_VN" &&
+    (attempt.order.paymentStatus === "DEPOSITED_50" || attempt.order.paymentStatus === "DEPOSITED_70");
+
+  const isDepositPayment =
+    attempt.order.status === "PENDING_DEPOSIT" &&
+    attempt.order.paymentStatus === "UNPAID" &&
+    attempt.order.isPriceVerified;
+
+  if (!isBalancePayment && !isDepositPayment) {
+    return { result: "not_payable" as const };
+  }
+
+  const expectedAmount = isBalancePayment
+    ? Math.max(0, attempt.order.totalVnd - (attempt.order.depositAmountVnd || 0))
+    : attempt.order.depositAmountVnd;
+
+  if (attempt.amountVnd !== expectedAmount) {
     return { result: "not_payable" as const };
   }
 
@@ -40,49 +57,92 @@ export async function applyMockPaymentOutcome(attemptId: string, outcome: MockPa
       if (claimedAttempt.count !== 1) return false;
 
       if (autoConfirmOrder) {
-        const isVnOrigin = (attempt.order as { fulfillmentOrigin?: string }).fulfillmentOrigin === "VN";
-        const nextStatus = isVnOrigin ? "WAREHOUSE_VN" : "PURCHASING_JP";
-        const recordedStatus = getRecordedPaymentStatus(attempt.order.depositPercent);
-        const claimedOrder = await tx.order.updateMany({
-          where: {
-            id: attempt.orderId,
-            status: "PENDING_DEPOSIT",
-            paymentStatus: "UNPAID",
-          },
-          data: {
-            paymentStatus: recordedStatus,
-            paymentMethod: "MOCK",
-            status: nextStatus,
-            reservationExpiresAt: null,
-          },
-        });
-        if (claimedOrder.count === 1) {
-          const mockTxnId = `MOCK_${attempt.order.orderCode}_${Date.now()}`;
-          await tx.paymentTransaction.create({
+        if (isBalancePayment) {
+          const claimedOrder = await tx.order.updateMany({
+            where: {
+              id: attempt.orderId,
+              status: "WAREHOUSE_VN",
+              paymentStatus: { in: ["DEPOSITED_50", "DEPOSITED_70"] },
+            },
             data: {
-              orderId: attempt.orderId,
-              provider: "MOCK",
-              amountVnd: attempt.amountVnd,
-              providerTransactionId: mockTxnId,
-              reference: `Live Demo Mock Auto-Confirm (${attempt.order.depositPercent}%)`,
-              status: "CONFIRMED",
-              confirmedByAdmin: "SYSTEM_DEMO",
+              paymentStatus: "PAID_100",
+              depositAmountVnd: attempt.order.totalVnd,
+              paymentMethod: "MOCK",
+              isSandbox: true,
             },
           });
-          await tx.trackingLog.create({
+          if (claimedOrder.count === 1) {
+            const mockTxnId = `MOCK_${attempt.order.orderCode}_BAL_${Date.now()}`;
+            await tx.paymentTransaction.create({
+              data: {
+                orderId: attempt.orderId,
+                kind: "BALANCE",
+                provider: "MOCK",
+                amountVnd: attempt.amountVnd,
+                providerTransactionId: mockTxnId,
+                reference: "Live Demo Mock Auto-Confirm Balance (100%)",
+                status: "CONFIRMED",
+                confirmedByAdmin: "SYSTEM_DEMO",
+              },
+            });
+            await tx.trackingLog.create({
+              data: {
+                orderId: attempt.orderId,
+                status: "WAREHOUSE_VN",
+                title: "Tất toán số dư 100% thành công (Live Demo)",
+                description: `Hệ thống ghi nhận thanh toán mô phỏng số dư ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng hoàn tất thanh toán 100%, sẵn sàng giao nội địa.`,
+                location: "Kho ChillBanana Việt Nam",
+              },
+            });
+            return true;
+          }
+        } else {
+          const isVnOrigin = (attempt.order as { fulfillmentOrigin?: string }).fulfillmentOrigin === "VN";
+          const nextStatus = isVnOrigin ? "WAREHOUSE_VN" : "PURCHASING_JP";
+          const recordedStatus = getRecordedPaymentStatus(attempt.order.depositPercent);
+          const claimedOrder = await tx.order.updateMany({
+            where: {
+              id: attempt.orderId,
+              status: "PENDING_DEPOSIT",
+              paymentStatus: "UNPAID",
+            },
             data: {
-              orderId: attempt.orderId,
+              paymentStatus: recordedStatus,
+              paymentMethod: "MOCK",
               status: nextStatus,
-              title: isVnOrigin
-                ? (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Sẵn kho VN)" : "Thanh toán cọc 50% thành công (Sẵn kho VN)")
-                : (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Live Demo)" : "Thanh toán cọc 50% thành công (Live Demo)"),
-              description: isVnOrigin
-                ? `Hệ thống ghi nhận thanh toán ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Hàng có sẵn tại kho VN, sẵn sàng đóng gói giao nội địa.`
-                : `Hệ thống ghi nhận thanh toán mô phỏng ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
-              location: isVnOrigin ? "Kho ChillBanana Việt Nam" : "ChillBanana Payment Gateway",
+              reservationExpiresAt: null,
+              isSandbox: true,
             },
           });
-          return true;
+          if (claimedOrder.count === 1) {
+            const mockTxnId = `MOCK_${attempt.order.orderCode}_${Date.now()}`;
+            await tx.paymentTransaction.create({
+              data: {
+                orderId: attempt.orderId,
+                kind: "DEPOSIT",
+                provider: "MOCK",
+                amountVnd: attempt.amountVnd,
+                providerTransactionId: mockTxnId,
+                reference: `Live Demo Mock Auto-Confirm (${attempt.order.depositPercent}%)`,
+                status: "CONFIRMED",
+                confirmedByAdmin: "SYSTEM_DEMO",
+              },
+            });
+            await tx.trackingLog.create({
+              data: {
+                orderId: attempt.orderId,
+                status: nextStatus,
+                title: isVnOrigin
+                  ? (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Sẵn kho VN)" : "Thanh toán cọc 50% thành công (Sẵn kho VN)")
+                  : (attempt.order.depositPercent === 100 ? "Thanh toán 100% thành công (Live Demo)" : "Thanh toán cọc 50% thành công (Live Demo)"),
+                description: isVnOrigin
+                  ? `Hệ thống ghi nhận thanh toán ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Hàng có sẵn tại kho VN, sẵn sàng đóng gói giao nội địa.`
+                  : `Hệ thống ghi nhận thanh toán mô phỏng ${attempt.amountVnd.toLocaleString("vi-VN")} đ. Đơn hàng chuyển sang bước mua hàng tại Nhật.`,
+                location: isVnOrigin ? "Kho ChillBanana Việt Nam" : "ChillBanana Payment Gateway",
+              },
+            });
+            return true;
+          }
         }
       }
 

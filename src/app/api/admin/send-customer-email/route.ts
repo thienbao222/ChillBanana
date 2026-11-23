@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 const ADMIN_SEND_EMAIL_LIMIT = { max: 20, windowMs: 10 * 60_000, blockMs: 10 * 60_000 };
 
 export async function POST(req: NextRequest) {
-  const guard = await requireAdmin(req);
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN", "OPERATOR"] });
   if (!guard.ok) return guard.response;
 
   try {

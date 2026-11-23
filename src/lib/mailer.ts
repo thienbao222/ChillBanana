@@ -199,7 +199,7 @@ export async function sendOrderCreatedEmail(order: any, logId?: string): Promise
   const customerName = escapeHtml(String(order.customerName || "Quý khách"));
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const isPriceVerified = order.isPriceVerified === true;
-  const depositPercent = order.depositPercent === 100 ? 100 : 50;
+  const depositPercent = order.depositPercent === 100 ? 100 : order.depositPercent === 70 ? 70 : 50;
   const paymentMode = resolvePaymentMode();
   const paymentInstructions = !isPriceVerified
     ? `<div style="background-color:#FFF7ED;border:1px solid #FED7AA;padding:16px;border-radius:12px;margin:20px 0;font-size:13px;color:#7C2D12"><p style="margin:0 0 8px;font-weight:bold">Đơn hàng đang chờ ChillBanana kiểm tra và xác nhận báo giá.</p><p style="margin:4px 0">Vui lòng chưa thanh toán. Khi báo giá được duyệt, trang theo dõi sẽ hiển thị hướng dẫn phù hợp.</p></div>`
@@ -482,7 +482,7 @@ export async function sendPriceApprovedEmail(order: any, logId?: string): Promis
           <p><strong>Phí dịch vụ:</strong> ${money(order.serviceFeeVnd)} đ</p>
           <p><strong>Phí vận chuyển tạm tính:</strong> ${money(order.shippingFeeVnd)} đ${order.weightKg ? ` (${escapeHtml(String(order.weightKg))} kg)` : " (chưa cân)"}</p>
           <p><strong>Tổng tạm tính:</strong> ${money(order.totalVnd)} đ</p>
-          <p style="font-size:18px;color:#b45309"><strong>${order.depositPercent === 100 ? "Số tiền thanh toán (100%)" : "Tiền cọc cần thanh toán (50%)"}:</strong> ${money(order.depositAmountVnd)} đ</p>
+          <p style="font-size:18px;color:#b45309"><strong>${order.depositPercent === 100 ? "Số tiền thanh toán (100%)" : `Tiền cọc cần thanh toán (${order.depositPercent || 50}%)`}:</strong> ${money(order.depositAmountVnd)} đ</p>
         </div>
         <p>Vui lòng kiểm tra lại thông tin và tiến hành đặt cọc trên trang theo dõi đơn hàng.</p>
         <p style="text-align:center;margin:28px 0"><a href="${trackingUrl}" style="background:#0f172a;color:#fbbf24;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:bold">Xem báo giá và đơn hàng</a></p>
@@ -524,7 +524,12 @@ export async function sendPaymentSuccessEmail(order: any, logId?: string): Promi
   const productName = escapeHtml(String(order.productName || "Sản phẩm"));
   const orderCode = escapeHtml(String(order.orderCode || ""));
   const isFullPayment = order.paymentStatus === "PAID_100";
-  const paymentTitle = isFullPayment ? "Thanh Toán 100% Thành Công!" : "Đặt Cọc 50% Thành Công!";
+  const is70Payment = order.paymentStatus === "DEPOSITED_70" || order.depositPercent === 70;
+  const paymentTitle = isFullPayment
+    ? "Thanh Toán 100% Thành Công!"
+    : is70Payment
+    ? "Đặt Cọc 70% Thành Công!"
+    : "Đặt Cọc 50% Thành Công!";
   const paymentMethod = order.paymentMethod?.startsWith("VNPAY") ? "Cổng thanh toán VNPAY" : "Chuyển khoản ngân hàng đã được xác nhận";
   const isPurchasing = order.status === "PURCHASING_JP";
 
@@ -600,6 +605,101 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
   const safeTitle = escapeHtml(String(newStatusTitle || ""));
   const safeDescription = escapeHtml(String(description || ""));
   const safeWeight = order.weightKg ? escapeHtml(String(order.weightKg)) : "";
+  const money = (value: number) => Number(value || 0).toLocaleString("vi-VN");
+  const orderStatus = String(order.status || "");
+
+  // Mốc 3: Hàng đã về kho Tokyo (WAREHOUSE_JP)
+  let tokyoWarehouseBlock = "";
+  if (orderStatus === "WAREHOUSE_JP") {
+    tokyoWarehouseBlock = `
+      <div style="background-color: #F8FAFC; border: 1px solid #CBD5E1; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0; font-size: 15px; font-weight: bold; color: #0F172A;">
+          📍 Thông tin kiện hàng tại Kho Tokyo:
+        </p>
+        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #334155; line-height: 1.8;">
+          <li><strong>Cân đo thực tế:</strong> ${order.weightKg ? `${escapeHtml(String(order.weightKg))} kg` : "Đã kiểm tra cân đo và thể tích kiện hàng"}</li>
+          <li><strong>Kiểm đếm ngoại quan:</strong> Đã kiểm tra bao bì nguyên vẹn, đối chiếu mã sản phẩm và bọc chống sốc chuyên dụng đạt chuẩn quốc tế.</li>
+          <li><strong>Lịch bay dự kiến (Tokyo ➔ VN):</strong> Kiện hàng được xếp lịch bay từ Tokyo (Sân bay Narita NRT) về Việt Nam trong vòng 24h - 48h tới.</li>
+        </ul>
+      </div>
+    `;
+  }
+
+  // Mốc 4: Hàng đã về kho Việt Nam (WAREHOUSE_VN) kèm số dư & link thanh toán
+  let vnWarehouseBlock = "";
+  if (orderStatus === "WAREHOUSE_VN") {
+    const totalAmount = Number(order.totalVnd || 0);
+    const paidOrDeposit = Number(order.depositAmountVnd || order.paidAmountVnd || 0);
+    const remainingGoodsBalanceVnd = Math.max(0, totalAmount - paidOrDeposit);
+
+    if (remainingGoodsBalanceVnd > 0) {
+      vnWarehouseBlock = `
+        <div style="background-color: #FFFBEB; border: 2px solid #F59E0B; border-radius: 14px; padding: 20px; margin: 20px 0; box-shadow: 0 2px 4px rgba(245, 158, 11, 0.1);">
+          <div style="margin-bottom: 12px;">
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #B45309;">
+              💳 Kiện hàng đã về đến Việt Nam — Vui lòng tất toán số dư đợt 2
+            </p>
+          </div>
+          <p style="margin: 0 0 12px 0; font-size: 13px; color: #78350F;">
+            Kiện hàng của Quý khách đã hoàn tất thủ tục thông quan và nhập kho tại Việt Nam. Vui lòng tất toán số dư đợt 2 để ChillBanana điều phối xuất kho giao tận tay:
+          </p>
+          <div style="background-color: #FEF3C7; border-radius: 8px; padding: 12px; margin-bottom: 16px; font-size: 13px; color: #92400E;">
+            <p style="margin: 4px 0;">• Tổng giá trị đơn hàng: <strong>${money(totalAmount)} đ</strong></p>
+            <p style="margin: 4px 0;">• Đã thanh toán / đặt cọc: <strong>${money(paidOrDeposit)} đ</strong></p>
+            <p style="margin: 6px 0 0 0; font-size: 15px; color: #B45309;">
+              • <strong>Số dư đợt 2 còn thiếu:</strong> <span style="font-size: 18px; font-weight: bold; color: #DC2626;">${money(remainingGoodsBalanceVnd)} đ</span>
+            </p>
+          </div>
+          <div style="text-align: center; margin: 16px 0 8px 0;">
+            <a href="${trackingUrl}#balance-payment" style="background-color: #D97706; color: #FFFFFF; padding: 12px 26px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block;">
+              💳 Thanh Toán Số Dư Đợt 2 Ngay (${money(remainingGoodsBalanceVnd)} đ)
+            </a>
+          </div>
+          <p style="font-size: 12px; color: #92400E; text-align: center; margin: 6px 0 0 0;">
+            Hỗ trợ thanh toán VietQR / VNPAY tự động kích hoạt giao hàng sau khi nhận tiền.
+          </p>
+        </div>
+      `;
+    } else {
+      vnWarehouseBlock = `
+        <div style="background-color: #ECFDF5; border: 1px solid #10B981; border-radius: 12px; padding: 16px; margin: 20px 0;">
+          <p style="margin: 0; font-size: 14px; font-weight: bold; color: #065F46;">
+            ✅ Đơn hàng đã hoàn tất thanh toán 100%
+          </p>
+          <p style="margin: 6px 0 0 0; font-size: 13px; color: #047857;">
+            Kiện hàng đang được phân loại và chuẩn bị bàn giao cho đối tác vận chuyển nội địa.
+          </p>
+        </div>
+      `;
+    }
+  }
+
+  // Mốc 5: Bàn giao giao hàng nội địa (LOCAL_DELIVERY) kèm mã vận đơn
+  let localDeliveryBlock = "";
+  if (orderStatus === "LOCAL_DELIVERY") {
+    const vnDomesticTrack = order.vnDomesticTrack ? escapeHtml(String(order.vnDomesticTrack)) : "Đang cập nhật mã bưu cục";
+    const customerAddress = order.customerAddress ? escapeHtml(String(order.customerAddress)) : "Địa chỉ nhận hàng đã đăng ký";
+    const customerPhone = order.customerPhone ? escapeHtml(String(order.customerPhone)) : "";
+
+    localDeliveryBlock = `
+      <div style="background-color: #F0FDF4; border: 2px solid #22C55E; border-radius: 14px; padding: 20px; margin: 20px 0;">
+        <div style="margin-bottom: 12px;">
+          <p style="margin: 0; font-size: 16px; font-weight: bold; color: #15803D;">
+            🚚 Kiện hàng đã được bàn giao cho đối tác giao hàng nội địa
+          </p>
+        </div>
+        <div style="background-color: #DCFCE7; border-radius: 8px; padding: 14px; margin-bottom: 12px; font-size: 13px; color: #166534; line-height: 1.8;">
+          <p style="margin: 4px 0;">• <strong>Mã vận đơn bưu điện:</strong> <span style="font-family: monospace; font-size: 15px; font-weight: bold; color: #15803D; background: #FFFFFF; padding: 2px 6px; border-radius: 4px;">${vnDomesticTrack}</span></p>
+          <p style="margin: 4px 0;">• <strong>Đơn vị giao hàng nội địa:</strong> Giao Hàng Nhanh / Viettel Post</p>
+          <p style="margin: 4px 0;">• <strong>Địa chỉ nhận hàng:</strong> ${customerAddress}</p>
+          ${customerPhone ? `<p style="margin: 4px 0;">• <strong>Số điện thoại nhận hàng:</strong> ${customerPhone}</p>` : ""}
+        </div>
+        <p style="margin: 0; font-size: 12px; color: #15803D;">
+          Bưu tá sẽ liên hệ với Quý khách trước khi phát hàng. Quý khách vui lòng chú ý điện thoại.
+        </p>
+      </div>
+    `;
+  }
 
   const isCancelled = order.status === "CANCELLED";
   const headerBg = isCancelled
@@ -623,6 +723,9 @@ export async function sendOrderStatusUpdateEmail(order: any, newStatusTitle: str
           <p style="margin: 8px 0 0 0; font-size: 13px; color: ${isCancelled ? "#BE123C" : "#0369A1"};">${safeDescription}</p>
           ${safeWeight ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #475569;"><strong>Trọng lượng thực tế:</strong> ${safeWeight} kg</p>` : ""}
         </div>
+        ${tokyoWarehouseBlock}
+        ${vnWarehouseBlock}
+        ${localDeliveryBlock}
         
         <div style="text-align: center; margin: 30px 0;">
           <a href="${trackingUrl}" style="background-color: #0F172A; color: ${accentColor}; padding: 14px 32px; text-decoration: none; border-radius: 14px; font-weight: bold; font-size: 14px; display: inline-block;">

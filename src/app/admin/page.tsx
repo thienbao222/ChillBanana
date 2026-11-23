@@ -19,6 +19,8 @@ import {
   Settings2,
   Plane,
   Sparkles,
+  Bot,
+  Shield,
 } from "lucide-react";
 import { AdminToastProvider, useAdminToast } from "@/context/AdminToastContext";
 import AnalyticsWorkspaceTab, { AnalyticsSection } from "@/app/admin/components/AnalyticsWorkspaceTab";
@@ -26,10 +28,12 @@ import CustomersTab from "@/app/admin/components/CustomersTab";
 import ProductsTab from "@/app/admin/components/ProductsTab";
 import OrderManagementTab from "@/app/admin/components/OrderManagementTab";
 import VnJpDispatchTab from "@/app/admin/components/VnJpDispatchTab";
+import { AiAgentWorkspaceTab } from "@/features/ai-workspace/ui/AiAgentWorkspaceTab";
 import PurchaseTasksTab from "@/features/purchasing/AdminPurchaseTasksTab";
 import BusinessSettingsTab from "@/app/admin/components/BusinessSettingsTab";
 import AuditLogsTab from "@/app/admin/components/AuditLogsTab";
 import SandboxTab from "@/app/admin/components/SandboxTab";
+import SecurityMonitorTab from "@/app/admin/components/SecurityMonitorTab";
 import AiEcosystemModal from "@/app/admin/components/AiEcosystemModal";
 import { AdminAiModuleId } from "@/features/ai/admin/definitions";
 import { parseAdminLocation, AdminTab } from "@/features/ai/admin/tab-utils";
@@ -40,8 +44,8 @@ function AdminDashboardPageInner() {
   const searchParams = useSearchParams();
   const { adminToast } = useAdminToast();
 
-  // Chế độ giao diện: "dashboard" | "operations" | "vn_jp_dispatch"
-  const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations" | "vn_jp_dispatch">("dashboard");
+  // Chế độ giao diện: "dashboard" | "operations" | "vn_jp_dispatch" | "ai_workspace"
+  const [adminViewMode, setAdminViewMode] = useState<"dashboard" | "operations" | "vn_jp_dispatch" | "ai_workspace">("dashboard");
 
   // Auth
   const [authChecking, setAuthChecking] = useState(true);
@@ -176,6 +180,19 @@ function AdminDashboardPageInner() {
               <span>✈️ Điều phối VN➔JP</span>
             </button>
             <button
+              onClick={() => setAdminViewMode("ai_workspace")}
+              className={`admin-neoday-mode ${adminViewMode === "ai_workspace" ? "is-active" : ""}`}
+              title="Trung tâm điều hành Agentic AI Workspace (4 AI Agents chuyên trách)"
+              style={{
+                borderColor: adminViewMode === "ai_workspace" ? "#8b5cf6" : undefined,
+                color: adminViewMode === "ai_workspace" ? "#6d28d9" : undefined,
+                fontWeight: 700,
+              }}
+            >
+              <Bot className="h-4 w-4 text-violet-600" />
+              <span>🤖 AI Workspace</span>
+            </button>
+            <button
               onClick={() => setShowAiEcosystemModal(true)}
               className="admin-neoday-mode"
               title="Khám phá toàn bộ 6 nhóm tính năng vận dụng AI trong hệ thống ChillBanana"
@@ -197,6 +214,7 @@ function AdminDashboardPageInner() {
                 { key: "orders", icon: <Package className="h-4 w-4" />, label: "Đơn hàng" },
                 { key: "products", icon: <ShoppingBag className="h-4 w-4" />, label: "Sản phẩm" },
                 { key: "purchase", icon: <ShoppingCart className="h-4 w-4" />, label: "Tác vụ mua hộ" },
+                { key: "security", icon: <Shield className="h-4 w-4" />, label: "An ninh & AppSec" },
                 ...(currentUser?.role === "SUPER_ADMIN" ? [
                   { key: "customers", icon: <Users className="h-4 w-4" />, label: "Khách hàng" },
                   { key: "analytics", icon: <BarChart3 className="h-4 w-4" />, label: "Phân tích & AI" },
@@ -220,6 +238,12 @@ function AdminDashboardPageInner() {
               <span>Bàn tác nghiệp đơn hàng (Mua Hộ JP ➔ VN)</span>
               <span className="admin-neoday-kanban-pill">Kanban 7 bước</span>
             </div>
+          ) : adminViewMode === "ai_workspace" ? (
+            <div className="admin-neoday-workspace-label" style={{ background: "#f5f3ff", border: "1px solid #ddd6fe" }}>
+              <Bot className="h-4 w-4 text-violet-700" />
+              <span style={{ color: "#5b21b6", fontWeight: 800 }}>Agentic AI Workspace (Trung Tâm Chỉ Huy Đa Agent)</span>
+              <span className="admin-neoday-kanban-pill" style={{ background: "#7c3aed", color: "#ffffff" }}>4 Agents Live</span>
+            </div>
           ) : (
             <div className="admin-neoday-workspace-label" style={{ background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
               <Plane className="h-4 w-4 text-emerald-700" />
@@ -233,13 +257,18 @@ function AdminDashboardPageInner() {
       {/* Main Admin Workspace */}
       <main className="admin-neoday-main">
 
+        {/* Phân hệ AI Workspace độc lập */}
+        {adminViewMode === "ai_workspace" && (
+          <AiAgentWorkspaceTab />
+        )}
+
         {/* Phân hệ Điều Phối VN ➔ JP chạy song song độc lập */}
         {adminViewMode === "vn_jp_dispatch" && (
           <VnJpDispatchTab />
         )}
 
         {/* OrderManagementTab handles both Dashboard Orders tab and Kanban Operations view */}
-        {adminViewMode !== "vn_jp_dispatch" && (
+        {adminViewMode !== "vn_jp_dispatch" && adminViewMode !== "ai_workspace" && (
           <OrderManagementTab
             adminViewMode={adminViewMode}
             activeTab={activeTab}
@@ -261,6 +290,7 @@ function AdminDashboardPageInner() {
             )}
             {activeTab === "products"  && <ProductsTab />}
             {activeTab === "purchase"  && <PurchaseTasksTab />}
+            {activeTab === "security"  && <SecurityMonitorTab />}
             {activeTab === "analytics" && (
               <AnalyticsWorkspaceTab initialSection={analyticsInitialSection} initialAgentModule={analyticsInitialModule} />
             )}

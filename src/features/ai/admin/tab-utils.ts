@@ -7,6 +7,7 @@ export const VALID_ADMIN_TABS = [
   "sandbox",
   "settings",
   "audit",
+  "security",
 ] as const;
 
 export type AdminTab = (typeof VALID_ADMIN_TABS)[number];

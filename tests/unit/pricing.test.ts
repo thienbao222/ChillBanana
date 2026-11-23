@@ -4,24 +4,25 @@ import {
   DEFAULT_PRICING_CONFIG,
   GROUP_BUY_MAX_WEIGHT_KG,
   MIN_ORDER_THRESHOLD_VND,
+  SERVICE_FEE_MINIMUM_VND,
   calculateOrderPrice,
 } from "@/features/pricing/calculator";
 import { validatePricingConfig } from "@/features/pricing/config";
 
 describe("calculateOrderPrice", () => {
-  it("tính giá cơ bản: hàng + phí 4% + cước theo cân nặng", () => {
+  it("tính giá cơ bản: hàng + phí 6% lũy tiến + cước theo cân nặng", () => {
     const p = calculateOrderPrice(10_000, 0.5, 170);
     expect(p.productPriceVnd).toBe(1_700_000);
-    expect(p.serviceFeeVnd).toBe(68_000);
-    expect(p.baseOrderCostVnd).toBe(1_768_000);
+    expect(p.serviceFeeVnd).toBe(102_000); // 6% của 1.700.000 = 102.000 đ (> 80.000 đ)
+    expect(p.baseOrderCostVnd).toBe(1_802_000);
     expect(p.shippingFeeVnd).toBe(92_500);
-    expect(p.totalVnd).toBe(1_860_500);
-    expect(p.deposit50Vnd).toBe(884_000);
+    expect(p.totalVnd).toBe(1_894_500);
+    expect(p.deposit50Vnd).toBe(901_000);
   });
 
-  it("phí dịch vụ tối thiểu 20.000đ", () => {
-    const p = calculateOrderPrice(1_000, 0, 170); // 4% của 170.000 = 6.800 < 20.000
-    expect(p.serviceFeeVnd).toBe(20_000);
+  it("phí dịch vụ tối thiểu 80.000đ", () => {
+    const p = calculateOrderPrice(1_000, 0, 170); // 4% của 170.000 = 6.800 < 80.000
+    expect(p.serviceFeeVnd).toBe(80_000);
   });
 
   it("không tính cước khi chưa biết cân nặng", () => {
@@ -47,19 +48,32 @@ describe("calculateOrderPrice", () => {
   });
 
   it("đánh dấu dưới mức tối thiểu và số tiền còn thiếu", () => {
-    const p = calculateOrderPrice(1_000, 0, 170); // 170.000 + 20.000 = 190.000
+    const p = calculateOrderPrice(1_000, 0, 170); // 170.000 + 80.000 = 250.000
     expect(p.isUnderMinOrder).toBe(true);
-    expect(p.minOrderDiffVnd).toBe(MIN_ORDER_THRESHOLD_VND - 190_000);
+    expect(p.minOrderDiffVnd).toBe(MIN_ORDER_THRESHOLD_VND - 250_000);
     const ok = calculateOrderPrice(10_000, 0, 170);
     expect(ok.isUnderMinOrder).toBe(false);
     expect(ok.minOrderDiffVnd).toBe(0);
   });
 
   it("đúng ngưỡng tối thiểu thì không bị coi là thiếu", () => {
-    // 300.000 = hàng + phí: tìm giá ¥ cho base = 300.000 với tỷ giá 100 và phí tối thiểu
-    const p = calculateOrderPrice(2_800, 0, 100); // 280.000 + 20.000
+    // 300.000 = hàng + phí: tìm giá ¥ cho base = 300.000 với tỷ giá 100 và phí tối thiểu 80.000
+    const p = calculateOrderPrice(2_200, 0, 100); // 220.000 + 80.000
     expect(p.baseOrderCostVnd).toBe(300_000);
     expect(p.isUnderMinOrder).toBe(false);
+  });
+
+  it("đảm bảo phí mua hộ tối thiểu 80.000đ áp dụng cho mọi đơn nhỏ và số tiền luôn là số nguyên VND", () => {
+    const p1 = calculateOrderPrice(500, 0, 170); // 85.000 * 4% = 3.400 -> 80.000
+    expect(p1.serviceFeeVnd).toBe(80_000);
+    expect(Number.isInteger(p1.serviceFeeVnd)).toBe(true);
+    expect(Number.isInteger(p1.totalVnd)).toBe(true);
+
+    const p2 = calculateOrderPrice(7_000, 0, 170); // 1.190.000 * 4% = 47.600 < 80.000 -> 80.000
+    expect(p2.serviceFeeVnd).toBe(80_000);
+
+    const p3 = calculateOrderPrice(12_000, 0, 170); // 2.040.000 * 6% = 122.400 > 80.000 -> 122.400
+    expect(p3.serviceFeeVnd).toBe(122_400);
   });
 
   it("dùng được một phiên bản cấu hình giá tùy chỉnh", () => {
@@ -132,5 +146,10 @@ describe("calculateOrderPrice", () => {
     const vnRemaining100 = Math.max(0, vnResult.totalVnd - vnDeposit100);
     expect(vnRemaining100).toBe(0);
     expect(vnDeposit100 + vnRemaining100).toBe(vnResult.totalVnd);
+  });
+
+  it("hằng số SERVICE_FEE_MINIMUM_VND chuẩn 80.000đ và khớp với DEFAULT_PRICING_CONFIG", () => {
+    expect(SERVICE_FEE_MINIMUM_VND).toBe(80_000);
+    expect(DEFAULT_PRICING_CONFIG.serviceFeeMinimumVnd).toBe(80_000);
   });
 });

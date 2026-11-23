@@ -543,7 +543,7 @@ async function buildPaymentsSnapshot() {
       where: {
         status: "PENDING_DEPOSIT",
         OR: [
-          { paymentStatus: { in: ["DEPOSITED_50", "PAID_100"] } },
+          { paymentStatus: { in: ["DEPOSITED_50", "DEPOSITED_70", "PAID_100"] } },
           { depositAmountVnd: { gt: 0 } },
         ],
       },

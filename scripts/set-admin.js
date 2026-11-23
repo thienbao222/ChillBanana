@@ -2,7 +2,8 @@
 // Tiện ích tạo mới hoặc đặt lại mật khẩu tài khoản Admin cho ChillBanana.
 // Cách dùng:
 //   node scripts/set-admin.js [username] [password]
-//   Ví dụ: node scripts/set-admin.js admin ChillBanana@2026
+//   Ví dụ: node scripts/set-admin.js admin MatKhauBaoMat123
+//   Hoặc truyền qua biến môi trường: ADMIN_INITIAL_PASSWORD
 
 const { PrismaClient } = require("@prisma/client");
 const { hashPassword } = require("../prisma/hash-password");
@@ -12,12 +13,19 @@ const prisma = new PrismaClient();
 async function main() {
   const args = process.argv.slice(2);
   const username = (args[0] || "admin").trim().toLowerCase();
-  const password = args[1] || "Admin@2026";
+  const password = args[1] || process.env.ADMIN_INITIAL_PASSWORD;
   const role = "SUPER_ADMIN";
   const name = "Quản Trị Viên ChillBanana";
 
-  if (password.length < 6) {
-    console.error("❌ Mật khẩu phải có độ dài tối thiểu 6 ký tự.");
+  if (!password || password.length < 6) {
+    console.error(
+      "\n❌ [ERROR] Thiếu mật khẩu quản trị hoặc mật khẩu dưới 6 ký tự.\n" +
+        "Để bảo mật, hệ thống không còn dùng mật khẩu mặc định.\n" +
+        "Cách dùng:\n" +
+        "  node scripts/set-admin.js <username> <password>\n" +
+        "Hoặc đặt biến môi trường ADMIN_INITIAL_PASSWORD:\n" +
+        "  $env:ADMIN_INITIAL_PASSWORD='MatKhau'; node scripts/set-admin.js <username>\n"
+    );
     process.exit(1);
   }
 

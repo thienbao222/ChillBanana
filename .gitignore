@@ -37,3 +37,6 @@ codebase-for-ai.txt
 codebase-part-*.txt
 codebase-chunks/
 
+# Agent workspace metadata
+.agents/
+

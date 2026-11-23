@@ -30,13 +30,16 @@ export default function CartDrawer() {
     totalWeightKg,
     shippingFeeVnd,
     serviceFeeVnd,
+    serviceFeeBreakdown,
     isMinServiceFeeApplied,
     baseOrderCostVnd,
     pricingConfig,
     totalVnd,
     depositOption,
     setDepositOption,
+    allowedDepositOptions,
     deposit50Vnd,
+    deposit70Vnd,
     depositAmountVnd,
     remainingAmountVnd,
     hasVnItems,
@@ -430,56 +433,93 @@ export default function CartDrawer() {
                 <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
                   Phương thức đặt cọc / Thanh toán
                 </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setDepositOption(50)}
-                    className={`p-2.5 rounded-xl border text-left transition-all relative ${
-                      depositOption === 50
-                        ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
-                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
-                        depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
-                      }`}>
-                        {depositOption === 50 ? "✓" : ""}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                      Mua hàng ngay, trả 50% còn lại khi hàng về VN
-                    </p>
-                    <div className="mt-1 text-xs font-bold text-banana-700">
-                      {Math.round(baseOrderCostVnd * 0.5).toLocaleString()} đ
-                    </div>
-                  </button>
+                <div className={`grid gap-2 ${
+                  allowedDepositOptions.length === 1
+                    ? "grid-cols-1"
+                    : allowedDepositOptions.length === 2
+                    ? "grid-cols-2"
+                    : "grid-cols-3"
+                }`}>
+                  {allowedDepositOptions.includes(50) && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositOption(50)}
+                      className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                        depositOption === 50
+                          ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                          depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                        }`}>
+                          {depositOption === 50 ? "✓" : ""}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                        Mua hàng ngay, trả 50% còn lại khi hàng về VN
+                      </p>
+                      <div className="mt-1 text-xs font-bold text-banana-700">
+                        {deposit50Vnd.toLocaleString()} đ
+                      </div>
+                    </button>
+                  )}
 
-                  <button
-                    type="button"
-                    onClick={() => setDepositOption(100)}
-                    className={`p-2.5 rounded-xl border text-left transition-all relative ${
-                      depositOption === 100
-                        ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
-                        : "border-slate-200 bg-white hover:border-slate-300"
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
-                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
-                        depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
-                      }`}>
-                        {depositOption === 100 ? "✓" : ""}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                      Tất toán trước, ưu tiên chốt đơn sàn Nhật
-                    </p>
-                    <div className="mt-1 text-xs font-bold text-emerald-700">
-                      {baseOrderCostVnd.toLocaleString()} đ
-                    </div>
-                  </button>
+                  {allowedDepositOptions.includes(70) && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositOption(70)}
+                      className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                        depositOption === 70
+                          ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-navy-950">Đặt cọc 70%</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                          depositOption === 70 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                        }`}>
+                          {depositOption === 70 ? "✓" : ""}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                        Mức cọc tiêu chuẩn cho đơn 1tr - 10tr
+                      </p>
+                      <div className="mt-1 text-xs font-bold text-banana-700">
+                        {deposit70Vnd.toLocaleString()} đ
+                      </div>
+                    </button>
+                  )}
+
+                  {allowedDepositOptions.includes(100) && (
+                    <button
+                      type="button"
+                      onClick={() => setDepositOption(100)}
+                      className={`p-2.5 rounded-xl border text-left transition-all relative ${
+                        depositOption === 100
+                          ? "border-banana-500 bg-banana-50/80 ring-2 ring-banana-200"
+                          : "border-slate-200 bg-white hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
+                        <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                          depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                        }`}>
+                          {depositOption === 100 ? "✓" : ""}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                        Tất toán trước, ưu tiên chốt đơn sàn Nhật
+                      </p>
+                      <div className="mt-1 text-xs font-bold text-emerald-700">
+                        {baseOrderCostVnd.toLocaleString()} đ
+                      </div>
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -521,7 +561,7 @@ export default function CartDrawer() {
                     ? "Đang tạo đơn hàng..."
                     : depositOption === 100
                       ? `Chốt Đơn Thanh Toán 100% (${depositAmountVnd.toLocaleString()} đ) Ngay`
-                      : `Chốt Đơn Đặt Cọc 50% (${depositAmountVnd.toLocaleString()} đ) Ngay`}
+                      : `Chốt Đơn Đặt Cọc ${depositOption}% (${depositAmountVnd.toLocaleString()} đ) Ngay`}
                 </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
@@ -646,56 +686,93 @@ export default function CartDrawer() {
               <label className="text-[11px] font-bold text-slate-700 uppercase tracking-wider block">
                 Phương thức thanh toán / Đặt cọc
               </label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDepositOption(50)}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
-                    depositOption === 50
-                      ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
-                      : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
-                      depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
-                    }`}>
-                      {depositOption === 50 ? "✓" : ""}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                    Mua hàng ngay, trả 50% còn lại khi hàng về VN
-                  </p>
-                  <div className="mt-1 text-xs font-bold text-banana-700">
-                    {Math.round(baseOrderCostVnd * 0.5).toLocaleString()} đ
-                  </div>
-                </button>
+              <div className={`grid gap-2 ${
+                allowedDepositOptions.length === 1
+                  ? "grid-cols-1"
+                  : allowedDepositOptions.length === 2
+                  ? "grid-cols-2"
+                  : "grid-cols-3"
+              }`}>
+                {allowedDepositOptions.includes(50) && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositOption(50)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      depositOption === 50
+                        ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-navy-950">Đặt cọc 50%</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                        depositOption === 50 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                      }`}>
+                        {depositOption === 50 ? "✓" : ""}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      Mua hàng ngay, trả 50% còn lại khi hàng về VN
+                    </p>
+                    <div className="mt-1 text-xs font-bold text-banana-700">
+                      {deposit50Vnd.toLocaleString()} đ
+                    </div>
+                  </button>
+                )}
 
-                <button
-                  type="button"
-                  onClick={() => setDepositOption(100)}
-                  className={`p-2.5 rounded-xl border text-left transition-all ${
-                    depositOption === 100
-                      ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
-                      : "border-slate-200 bg-white hover:border-slate-300"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
-                    <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
-                      depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
-                    }`}>
-                      {depositOption === 100 ? "✓" : ""}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
-                    Tất toán trước, ưu tiên chốt đơn sàn Nhật
-                  </p>
-                  <div className="mt-1 text-xs font-bold text-emerald-700">
-                    {baseOrderCostVnd.toLocaleString()} đ
-                  </div>
-                </button>
+                {allowedDepositOptions.includes(70) && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositOption(70)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      depositOption === 70
+                        ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-navy-950">Đặt cọc 70%</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                        depositOption === 70 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                      }`}>
+                        {depositOption === 70 ? "✓" : ""}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      Mức cọc tiêu chuẩn cho đơn 1tr - 10tr
+                    </p>
+                    <div className="mt-1 text-xs font-bold text-banana-700">
+                      {deposit70Vnd.toLocaleString()} đ
+                    </div>
+                  </button>
+                )}
+
+                {allowedDepositOptions.includes(100) && (
+                  <button
+                    type="button"
+                    onClick={() => setDepositOption(100)}
+                    className={`p-2.5 rounded-xl border text-left transition-all ${
+                      depositOption === 100
+                        ? "border-banana-500 bg-banana-50/90 ring-2 ring-banana-200 shadow-xs"
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-navy-950">Thanh toán 100%</span>
+                      <span className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center text-[8px] ${
+                        depositOption === 100 ? "border-banana-600 bg-banana-500 text-navy-950 font-bold" : "border-slate-300"
+                      }`}>
+                        {depositOption === 100 ? "✓" : ""}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-500 mt-0.5 leading-tight">
+                      Tất toán trước, ưu tiên chốt đơn sàn Nhật
+                    </p>
+                    <div className="mt-1 text-xs font-bold text-emerald-700">
+                      {baseOrderCostVnd.toLocaleString()} đ
+                    </div>
+                  </button>
+                )}
               </div>
             </div>
 
@@ -710,14 +787,52 @@ export default function CartDrawer() {
                 <span>Tiền hàng gốc ({totalPriceJpy.toLocaleString()} ¥):</span>
                 <span className="font-semibold text-navy-900">{totalProductPriceVnd.toLocaleString()} đ</span>
               </div>
-              <div className="flex justify-between">
-                <span>
-                  {isMinServiceFeeApplied
-                    ? `Phí dịch vụ (${pricingConfig.serviceFeePercent}% • Tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString()}đ):`
-                    : `Phí dịch vụ (${pricingConfig.serviceFeePercent}%):`}
-                </span>
-                <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString()} đ</span>
-              </div>
+              {/* Phí dịch vụ mua hộ lũy tiến 2 bậc & Đặc quyền VIP */}
+              {serviceFeeBreakdown?.isVipEligible ? (
+                <div className="bg-gradient-to-r from-amber-50 to-emerald-50 border border-amber-300/80 rounded-xl p-2.5 my-1 text-xs text-amber-950 space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between font-bold text-amber-900">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-sm">⭐</span>
+                      <span>Đặc Quyền VIP 5% (Lũy Tiến)</span>
+                    </span>
+                    <span className="text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full text-[10px] border border-emerald-300">
+                      TIẾT KIỆM PHÍ
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-700">
+                    <span>• 5.000.000 đ đầu ({serviceFeeBreakdown.tier1RatePercent}%):</span>
+                    <span className="font-medium text-slate-900">{serviceFeeBreakdown.tier1FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>• Phần vượt {serviceFeeBreakdown.tier2BaseVnd.toLocaleString("vi-VN")} đ (Ưu đãi {serviceFeeBreakdown.tier2RatePercent}%):</span>
+                    <span className="font-bold text-emerald-700">{serviceFeeBreakdown.tier2FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="pt-1 border-t border-amber-200 flex justify-between font-bold text-navy-950">
+                    <span>Tổng phí dịch vụ:</span>
+                    <span className="text-sm text-banana-700">{serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span>
+                      {isMinServiceFeeApplied
+                        ? `Phí dịch vụ (${pricingConfig.serviceFeePercent}% • Sàn tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")}đ):`
+                        : `Phí dịch vụ (${pricingConfig.serviceFeePercent}%):`}
+                    </span>
+                    <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  {totalProductPriceVnd > 0 && serviceFeeBreakdown && serviceFeeBreakdown.remainingToVipVnd > 0 && (
+                    <div className="bg-blue-50/90 border border-blue-200/80 rounded-lg px-2.5 py-1 text-[11px] text-blue-900 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span>🎯</span>
+                        <span>Thêm <strong>{serviceFeeBreakdown.remainingToVipVnd.toLocaleString("vi-VN")} đ</strong> để mở khóa:</span>
+                      </span>
+                      <span className="font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded text-[10px]">VIP 5% PHẦN VƯỢT</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span>
                   {hasOnlyVnItems
@@ -768,7 +883,7 @@ export default function CartDrawer() {
                 <span>
                   {depositOption === 100
                     ? `Tiến Hành Thanh Toán 100% (${depositAmountVnd.toLocaleString()} đ) →`
-                    : `Tiến Hành Đặt Cọc 50% (${depositAmountVnd.toLocaleString()} đ) →`}
+                    : `Tiến Hành Đặt Cọc ${depositOption}% (${depositAmountVnd.toLocaleString()} đ) →`}
                 </span>
               </button>
               <button

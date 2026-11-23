@@ -9,8 +9,11 @@ import {
 } from "@/lib/auth-session";
 import { getVerifiedCustomerFromRequest } from "@/lib/customer-guard";
 import { isVerifiedAdmin } from "@/lib/admin-guard";
-import { getDepositAmount, parseDepositPercent } from "@/features/payments/policy";
+import { getDepositAmount, parseDepositPercent, calculateDepositV2 } from "@/features/payments/policy";
+import { resolveOrderFulfillmentOrigin } from "@/features/orders/policy";
+import { lazyReleaseExpiredReservations } from "@/features/orders/reservations";
 import { calculateOrderPrice } from "@/features/pricing/calculator";
+import { estimateMargin } from "@/features/pricing/unit-economics";
 import { getCurrentPricingConfig } from "@/features/pricing/config";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { isPrivateHost } from "@/lib/ssrf";
@@ -115,9 +118,9 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const depositPercent = body.depositPercent === undefined ? 50 : parseDepositPercent(body.depositPercent);
-    if (depositPercent === null) {
-      return NextResponse.json({ error: "Mức đặt cọc chỉ được chọn 50% hoặc 100%." }, { status: 400 });
+    const userSelectedDepositPercent = body.depositPercent === undefined ? undefined : parseDepositPercent(body.depositPercent);
+    if (body.depositPercent !== undefined && userSelectedDepositPercent === null) {
+      return NextResponse.json({ error: "Mức đặt cọc không hợp lệ (hỗ trợ 50%, 70% hoặc 100%)." }, { status: 400 });
     }
     if (typeof body.customerName !== "string" || !body.customerName.trim() || typeof body.customerPhone !== "string" || !body.customerPhone.trim() || typeof body.customerAddress !== "string" || !body.customerAddress.trim()) {
       return NextResponse.json(
@@ -289,7 +292,7 @@ export async function POST(req: NextRequest) {
         let verifiedPriceJpy = 0;
         let verifiedWeightKg = 0;
 
-        // Snapshot từng dòng hàng để lưu vào OrderItem
+        // Snapshot từng dòng hàng để lưu vào OrderItem (WP4.1: gắn quoteSource & quoteVerified)
         const orderItemsData: {
           productId: string | null;
           itemType: string;
@@ -297,12 +300,20 @@ export async function POST(req: NextRequest) {
           quantity: number;
           priceJpy: number;
           weightKg: number;
+          quoteSource: string;
+          quoteVerifiedAt: Date | null;
+          quoteVerifiedBy: string | null;
         }[] = [];
 
         if (items.length === 0) {
           // Fallback: Nếu frontend cũ (chưa update items array)
           verifiedPriceJpy = Math.max(0, Math.round(Number(body.priceJpy) || 0));
           verifiedWeightKg = Number(body.weightKg);
+          const rawSource = typeof body.quoteSource === "string" ? body.quoteSource.toUpperCase() : "";
+          const quoteSource = ["API_RAKUTEN", "API_YAHOO", "EXTENSION", "MANUAL", "SCRAPE"].includes(rawSource)
+            ? rawSource
+            : (body.originalUrl ? "SCRAPE" : "MANUAL");
+
           // Ghi lại 1 dòng EXTERNAL duy nhất
           orderItemsData.push({
             productId: null,
@@ -311,6 +322,9 @@ export async function POST(req: NextRequest) {
             quantity: 1,
             priceJpy: verifiedPriceJpy,
             weightKg: verifiedWeightKg,
+            quoteSource,
+            quoteVerifiedAt: null,
+            quoteVerifiedBy: null,
           });
         }
 
@@ -375,6 +389,9 @@ export async function POST(req: NextRequest) {
               quantity: qty,
               priceJpy: product.priceJpy,
               weightKg: product.weightKg,
+              quoteSource: "CATALOG",
+              quoteVerifiedAt: new Date(),
+              quoteVerifiedBy: "SYSTEM_CATALOG",
             });
           } else {
             // Hàng ngoài catalog tự dán link: Tin cậy giá người dùng cào
@@ -390,6 +407,11 @@ export async function POST(req: NextRequest) {
               ? `${(item.name || body.productName || "Sản phẩm Nhật Bản").slice(0, 150)} [${itemOriginalUrl.slice(0, 300)}]`
               : (item.name || body.productName || "Sản phẩm Nhật Bản");
 
+            const itemSource = typeof item.quoteSource === "string" ? item.quoteSource.toUpperCase() : "";
+            const quoteSource = ["API_RAKUTEN", "API_YAHOO", "EXTENSION", "MANUAL", "SCRAPE"].includes(itemSource)
+              ? itemSource
+              : (itemOriginalUrl || body.originalUrl ? "SCRAPE" : "MANUAL");
+
             orderItemsData.push({
               productId: null,
               itemType: "EXTERNAL",
@@ -397,6 +419,9 @@ export async function POST(req: NextRequest) {
               quantity: qty,
               priceJpy: itemPrice,
               weightKg: itemWeight,
+              quoteSource,
+              quoteVerifiedAt: null,
+              quoteVerifiedBy: null,
             });
           }
         }
@@ -414,7 +439,8 @@ export async function POST(req: NextRequest) {
           throw new Error("ORDER_PRICE_TOO_LOW");
         }
 
-        const orderFulfillmentOrigin = (!hasNonVnItem && items.length > 0) || body.fulfillmentOrigin === "VN" ? "VN" : "JP";
+        // BẢO MẬT (WP1.1): Server tự quyết định origin, bỏ qua hoàn toàn body.fulfillmentOrigin từ client
+        const orderFulfillmentOrigin = resolveOrderFulfillmentOrigin(hasNonVnItem, items.length);
 
         // Tính toán toàn bộ chi phí phía Server, tránh tin tưởng client gửi lên
         const price = calculateOrderPrice(verifiedPriceJpy, verifiedWeightKg, liveRate, !!body.isGroupBuy, pricingConfig.values, orderFulfillmentOrigin);
@@ -422,10 +448,35 @@ export async function POST(req: NextRequest) {
         if (baseOrderCostVnd < minimumBaseOrderVnd) {
           throw new Error(`ORDER_BELOW_MINIMUM:${minimumBaseOrderVnd}`);
         }
-        const depositAmountVnd = getDepositAmount(baseOrderCostVnd, depositPercent);
+
+        // WP3.1: Ước lượng biên đóng góp (Unit Economics) và gắn cờ rào chắn lỗ (không chặn khách)
+        const marginInfo = estimateMargin(
+          {
+            priceJpy: verifiedPriceJpy,
+            weightKg: verifiedWeightKg,
+            exchangeRate: liveRate,
+            isGroupBuy: !!body.isGroupBuy,
+            fulfillmentOrigin: orderFulfillmentOrigin,
+          },
+          undefined,
+          pricingConfig.values
+        );
+        const belowMargin = marginInfo.isBelowMargin;
+
+        // WP3.3: Chính sách cọc phân tầng (Tiered Deposit Policy)
+        const tieredPolicy = calculateDepositV2(totalVnd);
+        let depositPercent = tieredPolicy.depositPercent;
+        if (userSelectedDepositPercent !== undefined && userSelectedDepositPercent !== null) {
+          depositPercent = Math.max(userSelectedDepositPercent, tieredPolicy.depositPercent);
+        }
+        const depositAmountVnd = Math.round(baseOrderCostVnd * (depositPercent / 100));
         const hasCatalogReservation = orderItemsData.some((item) => item.itemType === "CATALOG");
         const reservationExpiresAt = hasCatalogReservation && isOnlyCatalogItems
           ? new Date(Date.now() + 30 * 60 * 1000)
+          : null;
+        // BẢO MẬT (WP1.2): Giỏ hàng hỗn hợp (catalog + link ngoài) đặt quoteHoldExpiresAt 24h để giải phóng kho đúng hạn
+        const quoteHoldExpiresAt = hasCatalogReservation && !isOnlyCatalogItems
+          ? new Date(Date.now() + 24 * 60 * 60 * 1000)
           : null;
 
         // Tạo đơn hàng + OrderItems trong cùng một transaction
@@ -445,15 +496,20 @@ export async function POST(req: NextRequest) {
             weightKg: verifiedWeightKg,
             exchangeRate: liveRate,
             pricingConfigVersion: pricingConfig.version || null,
+            belowMargin,
             productPriceVnd,
             serviceFeeVnd,
+            handlingFeeVnd: price.handlingFeeVnd,
+            fxFeeVnd: price.fxFeeVnd,
             shippingFeeVnd,
+            taxEstimateVnd: price.taxEstimateVnd,
             totalVnd,
             depositAmountVnd,
             depositPercent,
             paymentStatus: "UNPAID",
             paymentMethod: body.paymentMethod === "VNPAY" ? "VNPAY" : "VIETQR",
             fulfillmentOrigin: orderFulfillmentOrigin,
+            isSandbox: false,
             isGroupBuy: !!body.isGroupBuy,
             groupBuyCode: body.groupBuyCode || null,
             status: "PENDING_DEPOSIT",
@@ -462,6 +518,7 @@ export async function POST(req: NextRequest) {
             isPriceVerified: isOnlyCatalogItems,
             priceVerifiedAt: isOnlyCatalogItems ? new Date() : null,
             reservationExpiresAt,
+            quoteHoldExpiresAt,
             orderItems: {
               create: orderItemsData,
             },

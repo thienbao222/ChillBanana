@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/lib/admin-guard";
+import { enforceMockSandboxAllowed } from "@/features/payments/sandbox-guard";
 import { isNextOrderStatus, getPreviousOrderStatus } from "@/features/orders/policy";
-import { getDepositAmount } from "@/features/payments/policy";
+import { getDepositAmount, isDepositPaid } from "@/features/payments/policy";
 import { writeAuditLog } from "@/lib/audit";
 import { sendOrderStatusUpdateEmail, sendZaloTrackingNotification } from "@/lib/mailer";
 
@@ -46,13 +47,23 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdmin(req);
+  const sandboxGuard = enforceMockSandboxAllowed();
+  if (sandboxGuard) return sandboxGuard;
+
+  const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
   if (!guard.ok) return guard.response;
 
   const adminUsername = guard.username;
   const { id } = await params;
 
-  let body: { targetStatus?: string; description?: string; location?: string; action?: string };
+  let body: {
+    targetStatus?: string;
+    description?: string;
+    location?: string;
+    action?: string;
+    adminOverrideDeliveryWithoutFullPayment?: boolean;
+    overrideReason?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -90,19 +101,51 @@ export async function POST(
       },
     };
 
-    if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY" && order.depositPercent === 50) {
-      rollbackUpdateData.paymentStatus = "DEPOSITED_50";
+    if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY" && (order.depositPercent === 50 || order.depositPercent === 70)) {
+      rollbackUpdateData.paymentStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
       rollbackUpdateData.depositAmountVnd = getDepositAmount(
         order.productPriceVnd + order.serviceFeeVnd,
-        50
+        order.depositPercent
       );
     }
 
     const rolledBackOrder = await prisma.$transaction(async (tx) => {
       if (order.status === "COMPLETED" && prevStatus === "LOCAL_DELIVERY") {
-        await tx.paymentTransaction.deleteMany({
-          where: { orderId: order.id, provider: "COD_SETTLEMENT" },
+        const codTxs = await tx.paymentTransaction.findMany({
+          where: { orderId: order.id, provider: "COD_SETTLEMENT", status: { not: "VOIDED" } },
         });
+        for (const codTx of codTxs) {
+          await tx.paymentTransaction.update({
+            where: { id: codTx.id },
+            data: { status: "VOIDED", voidedAt: new Date(), note: `[Hoàn tác Sandbox bởi ${adminUsername}]` },
+          });
+          await tx.paymentTransaction.create({
+            data: {
+              orderId: order.id,
+              provider: codTx.provider,
+              amountVnd: -codTx.amountVnd,
+              status: "CONFIRMED",
+              kind: "REVERSAL",
+              reversalOfId: codTx.id,
+              confirmedByAdmin: adminUsername,
+              note: `[Sandbox] Hoàn tác tất toán COD đơn #${order.orderCode}`,
+              providerTransactionId: `rev_${Date.now()}_${codTx.id.slice(-8)}`,
+            },
+          });
+        }
+
+        const activeTxs = await tx.paymentTransaction.findMany({
+          where: { orderId: order.id, status: "CONFIRMED" },
+        });
+        const totalPaid = activeTxs.reduce((sum, t) => sum + t.amountVnd, 0);
+        rollbackUpdateData.depositAmountVnd = Math.max(0, totalPaid);
+        if (totalPaid >= order.totalVnd && order.totalVnd > 0) {
+          rollbackUpdateData.paymentStatus = "PAID_100";
+        } else if (totalPaid > 0) {
+          rollbackUpdateData.paymentStatus = order.depositPercent === 70 ? "DEPOSITED_70" : "DEPOSITED_50";
+        } else {
+          rollbackUpdateData.paymentStatus = "UNPAID";
+        }
       }
       return tx.order.update({
         where: { id: order.id },
@@ -161,9 +204,10 @@ export async function POST(
 
     const meta = STATUS_METADATA[targetStatus];
     const remainingBalanceVnd = Math.max(0, order.totalVnd - order.depositAmountVnd);
+    const remainingPercent = 100 - (order.depositPercent || 50);
     const finalDesc = description?.trim() || (
       targetStatus === "LOCAL_DELIVERY" && remainingBalanceVnd > 0
-        ? `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${order.depositPercent === 50 ? "50% giá trị đơn còn lại và " : ""}cước bay quốc tế ${order.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`
+        ? `Đơn hàng đang được giao tới Quý khách. Số tiền cần thanh toán khi nhận hàng (gồm ${order.depositPercent < 100 ? `${remainingPercent}% giá trị đơn còn lại và ` : ""}cước bay quốc tế ${order.weightKg}kg): ${remainingBalanceVnd.toLocaleString("vi-VN")} đ.`
         : targetStatus === "COMPLETED" && remainingBalanceVnd > 0
         ? `Kiện hàng đã giao thành công và thu đủ khoản tất toán cuối ${remainingBalanceVnd.toLocaleString("vi-VN")} đ. Tổng thanh toán hoàn tất 100% (${order.totalVnd.toLocaleString("vi-VN")} đ).`
         : meta.defaultDesc
@@ -189,7 +233,7 @@ export async function POST(
           { status: 409 }
         );
       }
-      if (order.paymentStatus !== "DEPOSITED_50" && order.paymentStatus !== "PAID_100") {
+      if (!isDepositPaid(order.paymentStatus)) {
         return NextResponse.json(
           { error: "Đơn hàng chưa thanh toán tiền cọc. Bắt buộc phải có xác nhận thanh toán trước khi chuyển sang bước Mua Hàng Tại Tokyo." },
           { status: 409 }
@@ -197,12 +241,39 @@ export async function POST(
       }
     }
 
-    // Điều kiện xuất kho Tokyo bay về VN (IN_TRANSIT_AIR): Phải có trọng lượng thực tế
-    if (targetStatus === "IN_TRANSIT_AIR" && (!order.weightKg || order.weightKg <= 0)) {
+    // Điều kiện xuất kho Tokyo bay về VN (IN_TRANSIT_AIR) hoặc giao hàng / hoàn tất: Phải có trọng lượng thực tế (trừ origin VN)
+    if (origin !== "VN" && (targetStatus === "IN_TRANSIT_AIR" || targetStatus === "LOCAL_DELIVERY" || targetStatus === "COMPLETED") && (!order.weightKg || order.weightKg <= 0)) {
       return NextResponse.json(
-        { error: "Đơn hàng chưa có trọng lượng thực tế tại kho Tokyo. Cần cập nhật cân nặng kiện hàng trước khi xuất kho bay về Việt Nam." },
+        { error: "Đơn hàng chưa có trọng lượng thực tế (> 0 kg). Cần cập nhật cân nặng kiện hàng trước khi chuyển trạng thái." },
         { status: 409 }
       );
+    }
+
+    // WP3.3: Chặn chuyển sang LOCAL_DELIVERY khi chưa thanh toán đủ 100% (PAID_100)
+    if (targetStatus === "LOCAL_DELIVERY" && order.paymentStatus !== "PAID_100") {
+      const isOverride = body.adminOverrideDeliveryWithoutFullPayment === true;
+      if (isOverride) {
+        if (!body.overrideReason || typeof body.overrideReason !== "string" || !body.overrideReason.trim()) {
+          return NextResponse.json(
+            { error: "Bắt buộc nhập lý do (overrideReason) khi vượt quyền giao hàng cho đơn chưa thanh toán 100%." },
+            { status: 400 }
+          );
+        }
+        await writeAuditLog({
+          actor: adminUsername || "admin",
+          action: "OVERRIDE_DELIVERY_WITHOUT_FULL_PAYMENT",
+          entityType: "Order",
+          entityId: order.orderCode,
+          summary: `[Sandbox] Admin vượt quyền chuyển LOCAL_DELIVERY cho đơn ${order.orderCode} khi chưa PAID_100. Lý do: ${body.overrideReason.trim()}`,
+          metadata: { orderCode: order.orderCode, paymentStatus: order.paymentStatus, overrideReason: body.overrideReason.trim() },
+          req,
+        });
+      } else {
+        return NextResponse.json(
+          { error: "Chính sách Dòng tiền v2: Đơn hàng chỉ được chuyển sang giao hàng nội địa (LOCAL_DELIVERY) sau khi đã thu đủ 100% (PAID_100)." },
+          { status: 409 }
+        );
+      }
     }
 
     const mockJpTrack = targetStatus === "WAREHOUSE_JP" && !order.jpDomesticTrack
@@ -219,8 +290,7 @@ export async function POST(
         where: { id: order.id, status: order.status },
         data: {
           status: targetStatus,
-          paymentStatus: targetStatus === "COMPLETED" ? "PAID_100" : undefined,
-          depositAmountVnd: targetStatus === "COMPLETED" ? order.totalVnd : undefined,
+          paymentStatus: targetStatus === "COMPLETED" && remainingBalanceVnd > 0 ? "PENDING_RECONCILE" : undefined,
           jpDomesticTrack: mockJpTrack || undefined,
           vnDomesticTrack: mockVnTrack || undefined,
           adminNote: `[${new Date().toLocaleTimeString("vi-VN")}] Admin ${adminUsername} chuyển trạng thái sang ${targetStatus}.`,
@@ -235,8 +305,9 @@ export async function POST(
             orderId: order.id,
             provider: "COD_SETTLEMENT",
             amountVnd: remainingBalanceVnd,
-            status: "CONFIRMED",
-            reference: `Tất toán khi nhận hàng (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
+            status: "PENDING_RECONCILE",
+            kind: "BALANCE",
+            reference: `Chờ đối soát tất toán COD khi nhận hàng (${order.depositPercent === 50 ? "50% còn lại + " : ""}Cước bay ${order.weightKg}kg)`,
             confirmedByAdmin: adminUsername,
           },
         });

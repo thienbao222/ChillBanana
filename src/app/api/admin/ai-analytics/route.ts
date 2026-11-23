@@ -12,7 +12,7 @@ export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
   try {
-    const guard = await requireAdmin(req);
+    const guard = await requireAdmin(req, { roles: ["SUPER_ADMIN"] });
     if (!guard.ok) return guard.response;
 
     const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000);
@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
       prisma.order.count(),
       prisma.order.groupBy({ by: ["status"], _count: { _all: true } }),
       prisma.order.aggregate({
-        where: { paymentStatus: { in: ["DEPOSITED_50", "PAID_100"] } },
+        where: { paymentStatus: { in: ["DEPOSITED_50", "DEPOSITED_70", "PAID_100"] } },
         _sum: { depositAmountVnd: true, totalVnd: true },
       }),
       prisma.vnJpShipment.count(),

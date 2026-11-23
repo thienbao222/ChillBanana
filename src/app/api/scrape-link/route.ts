@@ -6,6 +6,8 @@ import { scrapeKeyPool, chatKeyPool, visionKeyPool } from "@/lib/api-key-manager
 import { GEMINI_MODELS, getFeatureModels } from "@/lib/gemini-models";
 import { checkAndRecordHit, getClientIp } from "@/lib/rate-limit";
 import { isPrivateHost } from "@/lib/ssrf";
+import { incrementBlockedSsrf } from "@/features/security/monitor";
+import { writeAuditLog } from "@/lib/audit";
 import {
   classifyProductCategory,
   getCategoryCustomsInfo,
@@ -109,6 +111,9 @@ async function safeFetchHtmlWithRedirects(
   for (let hop = 0; hop <= maxRedirects; hop++) {
     const parsed = new URL(currentUrl);
     if (parsed.protocol !== "https:" || parsed.port !== "" || !isAllowedHost(parsed.hostname)) {
+      if (isPrivateHost(parsed.hostname)) {
+        incrementBlockedSsrf();
+      }
       throw new Error("REDIRECT_TO_DISALLOWED_HOST");
     }
 
@@ -1046,6 +1051,16 @@ export async function POST(req: NextRequest) {
 
     const hostname = parsedUrl.hostname.toLowerCase();
     if (isPrivateHost(hostname)) {
+      incrementBlockedSsrf();
+      await writeAuditLog({
+        actor: "ANONYMOUS_SCRAPER",
+        actorType: "SYSTEM",
+        action: "SECURITY_SSRF_BLOCKED",
+        entityType: "NETWORK_REQUEST",
+        entityId: hostname,
+        summary: `Chặn yêu cầu crawl link vào máy chủ riêng tư/nội bộ: ${hostname}`,
+        req,
+      });
       return NextResponse.json({ error: "URL không hợp lệ." }, { status: 400 });
     }
 

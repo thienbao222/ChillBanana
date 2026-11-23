@@ -1,10 +1,36 @@
 # Trạng thái dự án và tiến độ nâng cấp
 
-Cập nhật: 17/10/2026 · Giai đoạn 0–2 chạy trên production (PR #4); Giai đoạn 3 (PR #7) và phần lớn Giai đoạn 4 (PR #8) đã merge vào `main`, CI đầy đủ xanh · Kế hoạch gốc: `NangCapFinal.docx`
+Cập nhật: 04/11/2026 · **ĐÃ HOÀN TẤT TOÀN DIỆN 8 GIAI ĐOẠN / 21 WORK PACKAGES (WP0.1 ➔ WP7.2) THEO LỘ TRÌNH PHÁT TRIỂN BẢN 3**. Toàn bộ 58 test files, 399 unit tests đạt 100%, typecheck clean 0 errors, build production `next build` hoàn tất sạch sẽ.
+
+Báo cáo nghiệm thu chi tiết: Xem tại [docs/FINAL_REPORT.md](file:///d:/BAITAP/ChillBanana-main/docs/FINAL_REPORT.md).
 
 Chú thích: ✅ xong và đã kiểm chứng · 🟡 đã làm nhưng chưa kiểm chứng đầy đủ · ⏳ cần bạn thực hiện · ⬜ chưa làm
 
-## 1. Tiến độ theo giai đoạn
+## 1. Tiến độ theo giai đoạn (Bản 3)
+
+| Giai đoạn | Mã gói việc | Hạng mục cốt lõi | Trạng thái | Ghi chú nghiệm thu |
+| :--- | :---: | :--- | :---: | :--- |
+| **GĐ 0** | **WP0.1** | Baseline, Luật Agent, CHANGELOG | ✅ | Ban hành `AGENTS.md`, `CHANGELOG.md`, `docs/BASELINE.md`. |
+|  | **WP0.2** | Tách Demo/Production, Khóa Master | ✅ | Xóa bỏ `Admin@2026`, bảo vệ bằng scrypt và `src/lib/demo-mode.ts`. |
+| **GĐ 1** | **WP1.1** | Server tự quyết `fulfillmentOrigin` | ✅ | Server tự phân loại nguồn kho VN/JP, loại bỏ can thiệp client. |
+|  | **WP1.2** | Khóa tick gộp đơn, hạn giữ kho giỏ hỗn hợp | ✅ | Quét lazy và cron giải phóng `quoteHoldExpiresAt` sau 24h. |
+|  | **WP1.3** | Hợp nhất `SystemConfig` vào `PricingConfig` | ✅ | Toàn bộ đọc giá quy về một nguồn `getCurrentPricingConfig`. |
+| **GĐ 2** | **WP2.1** | Schema thanh toán đảo & `OrderCostLine` | ✅ | Bổ sung `kind = REVERSAL`, model `OrderCostLine`, migration chỉ thêm. |
+|  | **WP2.2** | Hoàn tác bằng bản ghi đảo, tách giao khỏi cọc | ✅ | Cấm `deleteMany` tài chính, chặn `LOCAL_DELIVERY` khi cân `<= 0`. |
+|  | **WP2.3** | Báo cáo tài chính V2 & Xuất CSV | ✅ | Định nghĩa chuẩn GMV, Doanh thu, Lãi gộp; xuất CSV UTF-8 BOM. |
+|  | **WP2.4** | Nhập chi phí thực từng khâu & xem lãi gộp | ✅ | Tự động tạo `GOODS_JPY` khi mua hàng, cảnh báo lệch giá > 5%. |
+| **GĐ 3** | **WP3.1** | Mô phỏng kinh tế đơn vị & Rào chắn lỗ | ✅ | Tái lập chính xác 2 ca đối chuẩn (`-45.279 đ` và `-56.280 đ`), cờ `belowMargin`. |
+|  | **WP3.2** | Bộ giá V2 cấu hình hóa & Bóc tách chi phí | ✅ | Bổ sung phí xử lý, phí ngoại tệ; phân rã `breakdown` minh bạch. |
+|  | **WP3.3** | Dòng tiền V2: Cọc phân tầng & Chốt công nợ | ✅ | Cọc 100% (< 1M), 70% (1-10M), 50% (> 10M); dung sai kho Tokyo 5%/50g. |
+| **GĐ 4** | **WP4.1** | Nguồn báo giá & Hàng đợi duyệt giá 4h | ✅ | Bổ sung `quoteSource`, hàng đợi cảnh báo quá hạn 4h, cấm tự duyệt ngoài catalog. |
+|  | **WP4.2** | Client API Rakuten & Yahoo! Shopping | ✅ | Kết nối API chính thức, rate limit, fallback dán link và credit Yahoo. |
+|  | **WP4.3** | Bookmarklet 1-Click & Trang nhập đơn | ✅ | Script Bookmarklet < 3KB, trang `/dat-hang/nhap` lọc SSRF và XSS. |
+| **GĐ 5** | **WP5.1** | Chiến dịch mua theo đợt (Group Buy) | ✅ | Model `Campaign`, `CampaignItem`, `CampaignEntry`, State Machine nghiêm ngặt. |
+|  | **WP5.2** | Ưu đãi gom đơn & Phân bổ cước lô | ✅ | Thuật toán phân bổ cước lô theo tỷ lệ cân nặng với sai số tuyệt đối 0 đồng. |
+| **GĐ 6** | **WP6.1** | Phân hệ VN → JP: Thẩm định MAFF ở server | ✅ | Chặn hàng cấm MAFF, tính cước thể tích IATA `(DxRxC)/5000`. |
+|  | **WP6.2** | Tờ khai CN23 & Tuân thủ bảo vệ PII | ✅ | API xuất dữ liệu CN23 UPU, bộ lọc `pii-masker.ts`, ẩn danh hóa không xóa tài chính. |
+| **GĐ 7** | **WP7.1** | Phân quyền vai trò RBAC & Kiểm kê | ✅ | Phân 5 vai trò quản trị, test kiểm kê 100% route admin có bảo vệ. |
+|  | **WP7.2** | SOP vận hành, Giám sát, Đóng sổ tháng | ✅ | Ban hành 8 SOPs, endpoint `/api/health`, đóng sổ tài chính `PeriodClose`. |
 
 ### Giai đoạn 0: Rà soát và nền tảng
 
@@ -112,3 +138,29 @@ Lưu ý khi đọc kết quả:
 | Màn hình nhật ký kiểm toán | ✅ code, ⏳ production | Tab “Nhật ký kiểm toán” và API chỉ cho `SUPER_ADMIN`; phân trang 50 dòng, lọc theo tên thao tác. Không trả IP hoặc metadata nội bộ cho giao diện. Integration test quyền và lọc dữ liệu đã qua CI. |
 | Audit tác vụ mua hộ | ✅ code, ⏳ production | Ghi sự kiện sau khi tạo task và sau khi cập nhật trạng thái thành công; không đưa link sản phẩm, mã đơn, mã ngoài hoặc thông tin khách vào metadata. Integration test đã qua CI. |
 | Kiểm tra cục bộ | ✅ code, ⏳ production | `npm run typecheck`, `npm run build`, `npm run lint`, `npm test` đạt (52 unit test); AI eval và Prisma validate đạt; lint còn cảnh báo có sẵn. Integration test cần PostgreSQL test riêng/CI; không chạy trên Neon production. |
+
+## 8. Hiện trạng thực tế cập nhật (04/11/2026 — Khởi động Kế hoạch Bản 3)
+
+### 8.1 Đánh dấu thông tin đã lỗi thời trong các mục trước:
+- **Số lượng unit test (Mục 3, 5, 7):** Thông tin ghi nhận 52 unit test là **đã lỗi thời**. Kiểm thử đường cơ sở ngày 04/11/2026 đạt **290 unit tests trên 38 test files (100% pass)** (chi tiết tại `docs/BASELINE.md`).
+- **Cơ chế mật khẩu master:** Cơ chế fallback `Admin@2026` và tự ghi đè không an toàn đã được đánh dấu loại bỏ, chuyển sang cơ chế chỉ cho phép tự phục hồi trên môi trường demo (`ENABLE_DEMO_SELF_HEAL=true` và `APP_ENV=demo`) tại WP0.2.
+- **Dòng tiền và cọc:** Mô hình cọc 50/100 và thu COD giao nội địa được đánh giá có rủi ro dòng tiền và phát sinh phí ẩn; lộ trình Bản 3 đã chốt chuyển sang Dòng tiền v2 (thu 100% dưới 1 triệu, 70% từ 1 triệu; thu đủ trước khi giao nội địa; không thu cước qua COD).
+- **Trạng thái Amazon API:** Đã loại bỏ khỏi lộ trình do điều kiện duy trì 10 đơn hợp lệ / 30 ngày của Amazon Creators API không khả thi ở giai đoạn đầu.
+
+### 8.2 Danh mục các module nghiệp vụ thực tế hiện có trong repo:
+1. **Module Tuyến gửi hàng VN → JP:**
+   - Mã nguồn: `src/features/pricing/vn-jp-rates.ts`, `src/features/ai/vn-jp/maff-inspector.ts`, `src/app/api/vn-jp-shipments/`, giao diện `/gui-hang-di-nhat`.
+   - Trạng thái: Đã có bảng tính cước cơ bản và công cụ AI kiểm tra quy định kiểm dịch thực vật MAFF Nhật Bản. Sẽ được chuẩn hóa gắn với tài khoản khách và luồng thanh toán tại WP6.1.
+2. **Module Thu mua hộ (Purchasing):**
+   - Mã nguồn: `src/features/purchasing/service.ts`, `src/features/purchasing/AdminPurchaseTasksTab.tsx`.
+   - Trạng thái: Đã có mô hình `PurchaseTask` để nhân viên quản lý đơn mua từ các sàn Nhật. Sẽ được tích hợp ghi nhận chi phí thực `OrderCostLine` tại WP2.4.
+3. **Module Cấu hình định giá (PricingConfig):**
+   - Mã nguồn: `src/features/pricing/config.ts`, `calculator.ts`, `customs-categories.ts`, `japan-stores.ts`.
+   - Trạng thái: Đã có bảng `PricingConfig` lưu phiên bản giá. Tuy nhiên tham số giá còn phân tán giữa `SystemConfig` và `PricingConfig` (sẽ được hợp nhất duy nhất tại WP1.3).
+4. **Module Đơn hàng & Giữ kho (Orders & Reservations):**
+   - Mã nguồn: `src/features/orders/reservations.ts`, `policy.ts`, `item-source.ts`.
+   - Trạng thái: Trừ tồn kho nguyên tử khi tạo đơn; đã phát hiện vấn đề kho giỏ hàng hỗn hợp giữ không hạn chờ duyệt giá (sẽ được giải quyết tại WP1.2).
+5. **Module Hệ thống Hạn mức Quota & AI Routing:**
+   - Mã nguồn: `src/features/ai/customer/assistant.ts`, `support-tools.ts`, `intent-router.ts`, `ApiKeyPool`.
+   - Trạng thái: Đã có bộ định tuyến intent, tìm kiếm catalog fallback và xử lý chuyển đổi model khi gặp HTTP 429/503.
+
