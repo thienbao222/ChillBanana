@@ -65,9 +65,9 @@ assert.equal(policy.isValidQuotePrice(1_000_000_001), false);
 
 const quote = pricing.calculateOrderPrice(2680, 0, 172, false);
 assert.equal(quote.productPriceVnd, 460_960);
-assert.equal(quote.serviceFeeVnd, 20_000);
-assert.equal(quote.baseOrderCostVnd, 480_960);
-assert.equal(quote.deposit50Vnd, 240_480);
+assert.equal(quote.serviceFeeVnd, 80_000);
+assert.equal(quote.baseOrderCostVnd, 540_960);
+assert.equal(quote.deposit50Vnd, 270_480);
 assert.equal(quote.shippingFeeVnd, 0, "the canonical calculator does not invent shipping without weight");
 const groupBuyAtLimit = pricing.calculateOrderPrice(10_000, 0.5, 172, true);
 const groupBuyOverLimit = pricing.calculateOrderPrice(10_000, 0.5001, 172, true);
@@ -237,7 +237,7 @@ async function evaluateReadOnlyTools() {
   });
   assert.equal(quoteRun.evidence.find((item) => item.toolId === "quote_estimate").status, "ok");
   assert.match(quoteRun.guardedReply, /ước tính/i);
-  assert.match(quoteRun.quoteFooter, /480\.960/);
+  assert.match(quoteRun.quoteFooter, /540\.960/);
   assert.match(quoteRun.quoteFooter, /chưa có cân nặng thực tế/i);
   assert.equal(quoteRun.sources.some((source) => source.href.startsWith("/?url=")), true);
 
