@@ -62,7 +62,10 @@ test("khách vãng lai đi hết vòng đời đơn hàng", async () => {
   // 6. Đi qua từng bước quy trình đến hoàn tất
   const flow = ["PURCHASING_JP", "WAREHOUSE_JP", "IN_TRANSIT_AIR", "WAREHOUSE_VN", "LOCAL_DELIVERY", "COMPLETED"];
   for (const status of flow) {
-    const res = await api.patch(`/api/orders/${order.orderCode}`, { status }, { cookie: adminCookie });
+    const payload = status === "LOCAL_DELIVERY"
+      ? { status, adminOverrideDeliveryWithoutFullPayment: true, overrideReason: "Khách hàng COD giao hàng thu tiền tận nơi" }
+      : { status };
+    const res = await api.patch(`/api/orders/${order.orderCode}`, payload, { cookie: adminCookie });
     expect(res.status, `chuyển sang ${status}`).toBe(200);
   }
   const done = (await api.get(`/api/orders/${order.orderCode}`, { cookie: guest })).data.order;
