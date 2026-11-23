@@ -32,17 +32,21 @@ export interface SecurityTelemetry {
   }[];
 }
 
-// Bộ nhớ đệm tạm thời cho bộ đếm telemetry
-let blockedSsrfCounter = 14;
-let blockedCsrfCounter = 3;
-let blockedBruteForceCounter = 27;
+// Bộ nhớ đệm tạm thời cho bộ đếm telemetry thời gian thực
+let inMemoryBlockedSsrf = 0;
+let inMemoryBlockedCsrf = 0;
 
 export function incrementBlockedSsrf(): void {
-  blockedSsrfCounter += 1;
+  inMemoryBlockedSsrf += 1;
 }
 
 export function incrementBlockedCsrf(): void {
-  blockedCsrfCounter += 1;
+  inMemoryBlockedCsrf += 1;
+}
+
+export function resetSecurityMetricsForTesting(): void {
+  inMemoryBlockedSsrf = 0;
+  inMemoryBlockedCsrf = 0;
 }
 
 /**
@@ -52,8 +56,14 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
   const now = new Date();
   const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-  // Đọc số lượng audit log 24h
-  const [totalAuditedEvents, auditLogs, activeAdminUsers] = await Promise.all([
+  // Đọc số lượng audit log 24h và đếm các hành vi vi phạm an ninh thực tế
+  const [
+    totalAuditedEvents,
+    auditLogs,
+    activeAdminUsers,
+    ssrfAuditCount,
+    csrfAuditCount,
+  ] = await Promise.all([
     prisma.auditLog.count({
       where: { createdAt: { gte: twentyFourHoursAgo } },
     }),
@@ -62,7 +72,22 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
       orderBy: { createdAt: "desc" },
     }),
     prisma.adminUser.count(),
+    prisma.auditLog.count({
+      where: {
+        action: { contains: "SSRF" },
+        createdAt: { gte: twentyFourHoursAgo },
+      },
+    }),
+    prisma.auditLog.count({
+      where: {
+        action: { contains: "CSRF" },
+        createdAt: { gte: twentyFourHoursAgo },
+      },
+    }),
   ]);
+
+  let criticalCount = 0;
+  let highCount = 0;
 
   const recentSecurityEvents = auditLogs.map((log) => {
     let severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" = "INFO";
@@ -70,8 +95,10 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
       severity = "MEDIUM";
     } else if (log.action.includes("REJECT") || log.action.includes("TAMPER")) {
       severity = "HIGH";
+      highCount += 1;
     } else if (log.action.includes("FAILED") || log.action.includes("UNAUTHORIZED")) {
       severity = "CRITICAL";
+      criticalCount += 1;
     }
 
     return {
@@ -86,10 +113,16 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
     };
   });
 
+  // Tính điểm bảo mật động dựa trên các lớp phòng thủ và nhật ký rủi ro
+  const dynamicScore = Math.max(85, Math.min(100, 100 - criticalCount * 2 - highCount));
+
+  const totalSsrfBlocked = ssrfAuditCount + inMemoryBlockedSsrf;
+  const totalCsrfBlocked = csrfAuditCount + inMemoryBlockedCsrf;
+
   return {
     timestamp: now.toISOString(),
-    systemStatus: "SECURE",
-    securityScore: 98,
+    systemStatus: criticalCount > 5 ? "WARNING" : "SECURE",
+    securityScore: dynamicScore,
     defenseEngines: [
       {
         id: "ssrf_guard",
@@ -144,8 +177,8 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
       totalAuditedEvents,
       securityEventsCount: recentSecurityEvents.length,
       privilegeEscalationAttemptsBlocked: 0,
-      ssrfAttacksBlocked: blockedSsrfCounter,
-      csrfAttemptsBlocked: blockedCsrfCounter,
+      ssrfAttacksBlocked: totalSsrfBlocked,
+      csrfAttemptsBlocked: totalCsrfBlocked,
       activeAdminSessions: activeAdminUsers,
     },
     recentSecurityEvents,

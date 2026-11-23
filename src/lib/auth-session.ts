@@ -1,5 +1,6 @@
 import type { NextRequest } from "next/server";
 import crypto from "crypto";
+import { incrementBlockedCsrf } from "@/features/security/monitor";
 import {
   hashPassword,
   verifyAdminPassword as verifyAdminPasswordCore,
@@ -366,6 +367,48 @@ export function hasGuestOrderAccessForEmail(token: string | null | undefined, or
 // CSRF PROTECTION — Kiểm tra Origin / Referer (P1-06)
 // ---------------------------------------------------------------------------
 
+function isAllowedOrigin(targetOrigin: string, nextUrlOrigin: string): boolean {
+  if (targetOrigin === nextUrlOrigin) return true;
+  if (
+    targetOrigin === "http://localhost:3000" ||
+    targetOrigin === "http://127.0.0.1:3000" ||
+    targetOrigin === "http://localhost:3001"
+  ) {
+    return true;
+  }
+  try {
+    const url = new URL(targetOrigin);
+    const host = url.hostname.toLowerCase();
+    // Neo chặt tên miền để chống bypass (ví dụ attacker-chill-banana.vercel.app):
+    if (
+      host === "chill-banana.vercel.app" ||
+      host === "chillbanana.com" ||
+      host === "www.chillbanana.com" ||
+      host === "localhost" ||
+      host === "127.0.0.1" ||
+      /^chill-banana(-[a-z0-9-]+)?\.vercel\.app$/i.test(host) ||
+      /^chillbanana(-[a-z0-9-]+)?\.vercel\.app$/i.test(host)
+    ) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  if (process.env.APP_URL) {
+    try {
+      if (targetOrigin === new URL(process.env.APP_URL).origin) return true;
+    } catch {}
+  }
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    try {
+      if (targetOrigin === new URL(process.env.NEXT_PUBLIC_APP_URL).origin) return true;
+    } catch {}
+  }
+
+  return false;
+}
+
 export function verifySameOrigin(req: NextRequest): boolean {
   const origin = req.headers.get("origin");
   if (!origin) {
@@ -373,14 +416,13 @@ export function verifySameOrigin(req: NextRequest): boolean {
     if (referer) {
       try {
         const refOrigin = new URL(referer).origin;
-        return (
-          refOrigin === req.nextUrl.origin ||
-          refOrigin.includes("chill-banana") ||
-          refOrigin.includes("chillbanana") ||
-          refOrigin.endsWith(".vercel.app") ||
-          refOrigin.includes("localhost")
-        );
+        const valid = isAllowedOrigin(refOrigin, req.nextUrl.origin);
+        if (!valid) {
+          incrementBlockedCsrf();
+        }
+        return valid;
       } catch {
+        incrementBlockedCsrf();
         return false;
       }
     }
@@ -388,27 +430,13 @@ export function verifySameOrigin(req: NextRequest): boolean {
     return true;
   }
   try {
-    if (
-      origin === req.nextUrl.origin ||
-      origin === "http://localhost:3000" ||
-      origin === "https://chill-banana.vercel.app" ||
-      origin.endsWith(".vercel.app")
-    ) {
-      return true;
+    const valid = isAllowedOrigin(origin, req.nextUrl.origin);
+    if (!valid) {
+      incrementBlockedCsrf();
     }
-    const allowed = [
-      req.nextUrl.origin,
-      "http://localhost:3000",
-      "https://chill-banana.vercel.app",
-    ];
-    if (process.env.APP_URL) {
-      try { allowed.push(new URL(process.env.APP_URL).origin); } catch {}
-    }
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      try { allowed.push(new URL(process.env.NEXT_PUBLIC_APP_URL).origin); } catch {}
-    }
-    return allowed.includes(origin);
+    return valid;
   } catch {
+    incrementBlockedCsrf();
     return false;
   }
 }

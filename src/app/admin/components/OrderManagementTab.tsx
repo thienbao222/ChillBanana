@@ -24,7 +24,7 @@ import Link from "next/link";
 import { OrderStatus, StoredOrder } from "@/types";
 import { useAdminToast } from "@/context/AdminToastContext";
 import { ORDER_STATUS_FLOW, ORDER_STATUS_FLOW_VN_ORIGIN, getPreviousOrderStatus, ORDER_STATUS_LABELS_VI } from "@/features/orders/policy";
-import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
+import { DEFAULT_PRICING_CONFIG, calculateProgressiveServiceFee, type PricingConfigValues } from "@/features/pricing/calculator";
 import { parseOrderItemSource } from "@/features/orders/item-source";
 import ControlledEmailModal from "./ControlledEmailModal";
 
@@ -548,7 +548,11 @@ export default function OrderManagementTab({
   const approvalProductVnd = priceApprovalOrder && Number.isSafeInteger(approvalJpy) && approvalJpy >= 100
     ? Math.round(approvalJpy * priceApprovalOrder.exchangeRate)
     : 0;
-  const approvalServiceVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(approvalProductVnd * pricingConfig.serviceFeePercent / 100));
+  const approvalServiceVnd = calculateProgressiveServiceFee(
+    approvalProductVnd,
+    pricingConfig.serviceFeePercent,
+    pricingConfig.serviceFeeMinimumVnd
+  ).totalFeeVnd;
   const approvalShippingRate = priceApprovalOrder?.isGroupBuy && approvalWeight <= pricingConfig.groupBuyMaxWeightKg
     ? Math.round(pricingConfig.airShippingPerKgVnd * (1 - pricingConfig.groupBuyShippingDiscountPercent / 100))
     : pricingConfig.airShippingPerKgVnd;
