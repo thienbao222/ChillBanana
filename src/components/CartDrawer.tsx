@@ -30,6 +30,7 @@ export default function CartDrawer() {
     totalWeightKg,
     shippingFeeVnd,
     serviceFeeVnd,
+    serviceFeeBreakdown,
     isMinServiceFeeApplied,
     baseOrderCostVnd,
     pricingConfig,
@@ -786,14 +787,52 @@ export default function CartDrawer() {
                 <span>Tiền hàng gốc ({totalPriceJpy.toLocaleString()} ¥):</span>
                 <span className="font-semibold text-navy-900">{totalProductPriceVnd.toLocaleString()} đ</span>
               </div>
-              <div className="flex justify-between">
-                <span>
-                  {isMinServiceFeeApplied
-                    ? `Phí dịch vụ (${pricingConfig.serviceFeePercent}% • Tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString()}đ):`
-                    : `Phí dịch vụ (${pricingConfig.serviceFeePercent}%):`}
-                </span>
-                <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString()} đ</span>
-              </div>
+              {/* Phí dịch vụ mua hộ lũy tiến 2 bậc & Đặc quyền VIP */}
+              {serviceFeeBreakdown?.isVipEligible ? (
+                <div className="bg-gradient-to-r from-amber-50 to-emerald-50 border border-amber-300/80 rounded-xl p-2.5 my-1 text-xs text-amber-950 space-y-1.5 shadow-sm">
+                  <div className="flex items-center justify-between font-bold text-amber-900">
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-sm">⭐</span>
+                      <span>Đặc Quyền VIP 5% (Lũy Tiến)</span>
+                    </span>
+                    <span className="text-emerald-700 bg-emerald-100 font-bold px-2 py-0.5 rounded-full text-[10px] border border-emerald-300">
+                      TIẾT KIỆM PHÍ
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-slate-700">
+                    <span>• 5.000.000 đ đầu ({serviceFeeBreakdown.tier1RatePercent}%):</span>
+                    <span className="font-medium text-slate-900">{serviceFeeBreakdown.tier1FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="flex justify-between text-[11px] text-emerald-800 font-medium">
+                    <span>• Phần vượt {serviceFeeBreakdown.tier2BaseVnd.toLocaleString("vi-VN")} đ (Ưu đãi {serviceFeeBreakdown.tier2RatePercent}%):</span>
+                    <span className="font-bold text-emerald-700">{serviceFeeBreakdown.tier2FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="pt-1 border-t border-amber-200 flex justify-between font-bold text-navy-950">
+                    <span>Tổng phí dịch vụ:</span>
+                    <span className="text-sm text-banana-700">{serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span>
+                      {isMinServiceFeeApplied
+                        ? `Phí dịch vụ (${pricingConfig.serviceFeePercent}% • Sàn tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")}đ):`
+                        : `Phí dịch vụ (${pricingConfig.serviceFeePercent}%):`}
+                    </span>
+                    <span className="font-semibold text-navy-900">{serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  {totalProductPriceVnd > 0 && serviceFeeBreakdown && serviceFeeBreakdown.remainingToVipVnd > 0 && (
+                    <div className="bg-blue-50/90 border border-blue-200/80 rounded-lg px-2.5 py-1 text-[11px] text-blue-900 flex items-center justify-between">
+                      <span className="flex items-center gap-1">
+                        <span>🎯</span>
+                        <span>Thêm <strong>{serviceFeeBreakdown.remainingToVipVnd.toLocaleString("vi-VN")} đ</strong> để mở khóa:</span>
+                      </span>
+                      <span className="font-bold text-blue-700 bg-blue-100 px-1.5 py-0.2 rounded text-[10px]">VIP 5% PHẦN VƯỢT</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span>
                   {hasOnlyVnItems

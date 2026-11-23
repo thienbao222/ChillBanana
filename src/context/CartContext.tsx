@@ -2,7 +2,14 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from "react";
 import { DEFAULT_EXCHANGE_RATE } from "@/lib/data";
-import { DEFAULT_PRICING_CONFIG, type PricingConfigValues } from "@/features/pricing/calculator";
+import {
+  DEFAULT_PRICING_CONFIG,
+  type PricingConfigValues,
+  calculateProgressiveServiceFee,
+  SERVICE_FEE_TIER2_RATE,
+  SERVICE_FEE_TIER1_THRESHOLD_VND,
+  type ProgressiveServiceFeeBreakdown,
+} from "@/features/pricing/calculator";
 import { useToast } from "@/context/ToastContext";
 import { calculateDepositV2 } from "@/features/payments/policy";
 
@@ -55,6 +62,7 @@ interface CartContextType {
   totalWeightKg: number;
   shippingFeeVnd: number;
   serviceFeeVnd: number;
+  serviceFeeBreakdown: ProgressiveServiceFeeBreakdown | null;
   isMinServiceFeeApplied: boolean;
   baseOrderCostVnd: number;
   totalVnd: number;
@@ -356,12 +364,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   // Cước bay: 0đ cho hàng sẵn tại kho VN, chỉ tính theo trọng lượng hàng bay từ Nhật
   const shippingFeeVnd = jpItemsWeightKg > 0 ? Math.round(jpItemsWeightKg * pricingConfig.airShippingPerKgVnd) : 0;
 
-  // Phí dịch vụ mua hộ (4% giá trị hàng, tối thiểu 50.000đ)
-  const rawServiceFeeVnd = Math.round(totalProductPriceVnd * pricingConfig.serviceFeePercent / 100);
-  const isMinServiceFeeApplied = totalItems > 0 && rawServiceFeeVnd < pricingConfig.serviceFeeMinimumVnd;
-  const serviceFeeVnd = totalItems > 0
-    ? Math.max(pricingConfig.serviceFeeMinimumVnd, rawServiceFeeVnd)
-    : 0;
+  // Phí dịch vụ mua hộ lũy tiến 2 bậc (6% cho 5M đầu, 5% cho phần vượt, sàn tối thiểu 80.000đ)
+  const serviceFeeBreakdown = useMemo(() => {
+    if (totalItems <= 0) return null;
+    return calculateProgressiveServiceFee(
+      totalProductPriceVnd,
+      pricingConfig.serviceFeePercent / 100,
+      SERVICE_FEE_TIER2_RATE,
+      SERVICE_FEE_TIER1_THRESHOLD_VND,
+      pricingConfig.serviceFeeMinimumVnd
+    );
+  }, [totalItems, totalProductPriceVnd, pricingConfig.serviceFeePercent, pricingConfig.serviceFeeMinimumVnd]);
+
+  const serviceFeeVnd = serviceFeeBreakdown?.totalFeeVnd ?? 0;
+  const isMinServiceFeeApplied = serviceFeeBreakdown?.appliedMinimumFloor ?? false;
 
   // Tổng tiền hàng + phí mua hộ (cơ sở cọc)
   const baseOrderCostVnd = totalProductPriceVnd + serviceFeeVnd;
@@ -430,6 +446,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         totalWeightKg,
         shippingFeeVnd,
         serviceFeeVnd,
+        serviceFeeBreakdown,
         isMinServiceFeeApplied,
         baseOrderCostVnd,
         totalVnd,

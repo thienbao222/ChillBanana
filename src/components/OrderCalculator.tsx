@@ -1320,13 +1320,48 @@ export default function OrderCalculator() {
                 <span>Tiền hàng gốc ({priceJpy.toLocaleString()} ¥):</span>
                 <span className="font-medium text-white">{calc.productPriceVnd.toLocaleString("vi-VN")} đ</span>
               </div>
-              <div className="flex justify-between text-slate-300">
-                <span className="flex items-center">
-                  Phí dịch vụ ({pricingConfig.serviceFeePercent}%):
-                  <Info className="w-3 h-3 ml-1 text-slate-400" />
-                </span>
-                <span className="font-medium text-white">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
-              </div>
+              {/* Phí dịch vụ mua hộ lũy tiến 2 bậc & Đặc quyền VIP */}
+              {calc.serviceFeeBreakdown?.isVipEligible ? (
+                <div className="bg-amber-500/10 border border-amber-400/40 rounded-xl p-3 my-2 text-xs space-y-1.5">
+                  <div className="flex items-center justify-between text-amber-300 font-bold">
+                    <span className="flex items-center gap-1.5">
+                      <span>⭐</span>
+                      <span>Đặc Quyền VIP 5% (Lũy Tiến)</span>
+                    </span>
+                    <span className="text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded text-[10px] border border-emerald-500/40">
+                      TIẾT KIỆM PHÍ
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-slate-300 text-[11px]">
+                    <span>• 5.000.000 đ đầu ({calc.serviceFeeBreakdown.tier1RatePercent}%):</span>
+                    <span>{calc.serviceFeeBreakdown.tier1FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="flex justify-between text-emerald-300 font-medium text-[11px]">
+                    <span>• Phần vượt {calc.serviceFeeBreakdown.tier2BaseVnd.toLocaleString("vi-VN")} đ (Ưu đãi {calc.serviceFeeBreakdown.tier2RatePercent}%):</span>
+                    <span>{calc.serviceFeeBreakdown.tier2FeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  <div className="pt-1.5 border-t border-amber-400/20 flex justify-between font-bold text-white">
+                    <span>Tổng phí dịch vụ:</span>
+                    <span className="text-banana-400 text-sm">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-slate-300">
+                    <span className="flex items-center">
+                      Phí dịch vụ ({pricingConfig.serviceFeePercent}% · Tối thiểu {pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")}đ):
+                      <Info className="w-3 h-3 ml-1 text-slate-400" />
+                    </span>
+                    <span className="font-medium text-white">{calc.serviceFeeVnd.toLocaleString("vi-VN")} đ</span>
+                  </div>
+                  {calc.productPriceVnd > 0 && calc.serviceFeeBreakdown && calc.serviceFeeBreakdown.remainingToVipVnd > 0 && (
+                    <div className="bg-blue-950/40 border border-blue-500/30 rounded-lg px-2.5 py-1 text-[11px] text-blue-200 flex items-center justify-between">
+                      <span>🎯 Thêm {calc.serviceFeeBreakdown.remainingToVipVnd.toLocaleString("vi-VN")} đ mở khóa:</span>
+                      <span className="font-bold text-blue-300">VIP 5% PHẦN VƯỢT</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="flex justify-between text-slate-300">
                 <span className="flex items-center">
                   Phụ phí hải quan (Đối chiếu: {currentCategoryInfo.shortLabel}):

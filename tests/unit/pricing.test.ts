@@ -10,14 +10,14 @@ import {
 import { validatePricingConfig } from "@/features/pricing/config";
 
 describe("calculateOrderPrice", () => {
-  it("tính giá cơ bản: hàng + phí 4% + cước theo cân nặng", () => {
+  it("tính giá cơ bản: hàng + phí 6% lũy tiến + cước theo cân nặng", () => {
     const p = calculateOrderPrice(10_000, 0.5, 170);
     expect(p.productPriceVnd).toBe(1_700_000);
-    expect(p.serviceFeeVnd).toBe(80_000);
-    expect(p.baseOrderCostVnd).toBe(1_780_000);
+    expect(p.serviceFeeVnd).toBe(102_000); // 6% của 1.700.000 = 102.000 đ (> 80.000 đ)
+    expect(p.baseOrderCostVnd).toBe(1_802_000);
     expect(p.shippingFeeVnd).toBe(92_500);
-    expect(p.totalVnd).toBe(1_872_500);
-    expect(p.deposit50Vnd).toBe(890_000);
+    expect(p.totalVnd).toBe(1_894_500);
+    expect(p.deposit50Vnd).toBe(901_000);
   });
 
   it("phí dịch vụ tối thiểu 80.000đ", () => {
@@ -72,8 +72,8 @@ describe("calculateOrderPrice", () => {
     const p2 = calculateOrderPrice(7_000, 0, 170); // 1.190.000 * 4% = 47.600 < 80.000 -> 80.000
     expect(p2.serviceFeeVnd).toBe(80_000);
 
-    const p3 = calculateOrderPrice(12_000, 0, 170); // 2.040.000 * 4% = 81.600 > 80.000 -> 81.600
-    expect(p3.serviceFeeVnd).toBe(81_600);
+    const p3 = calculateOrderPrice(12_000, 0, 170); // 2.040.000 * 6% = 122.400 > 80.000 -> 122.400
+    expect(p3.serviceFeeVnd).toBe(122_400);
   });
 
   it("dùng được một phiên bản cấu hình giá tùy chỉnh", () => {

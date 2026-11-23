@@ -13,7 +13,12 @@ import WhyChooseUs from "@/components/WhyChooseUs";
 import NewsCorner from "@/components/NewsCorner";
 import { WebsitePreferencesTrigger } from "@/components/WebsitePreferencesPanel";
 import { useWebsitePreferences, useWebsiteText } from "@/context/WebsitePreferencesContext";
-import { DEFAULT_EXCHANGE_RATE } from "@/features/pricing/calculator";
+import {
+  DEFAULT_EXCHANGE_RATE,
+  calculateProgressiveServiceFee,
+  SERVICE_FEE_TIER2_RATE,
+  SERVICE_FEE_TIER1_THRESHOLD_VND,
+} from "@/features/pricing/calculator";
 import { getVnJpRatePerKg, VN_JP_CARGO_LABELS } from "@/features/pricing/vn-jp-rates";
 import {
   JP_VN_CATEGORIES,
@@ -293,7 +298,14 @@ export default function NeoDaylightCosmos() {
   // Tính toán chi phí theo tỷ giá live và danh mục
   const currentCategory = getCategoryCustomsInfo(category);
   const productPriceVnd = Math.round(priceJpy * exchangeRate);
-  const serviceFeeVnd = Math.max(pricingConfig.serviceFeeMinimumVnd, Math.round(productPriceVnd * pricingConfig.serviceFeePercent / 100));
+  const serviceFeeBreakdown = calculateProgressiveServiceFee(
+    productPriceVnd,
+    pricingConfig.serviceFeePercent / 100,
+    SERVICE_FEE_TIER2_RATE,
+    SERVICE_FEE_TIER1_THRESHOLD_VND,
+    pricingConfig.serviceFeeMinimumVnd
+  );
+  const serviceFeeVnd = serviceFeeBreakdown.totalFeeVnd;
   const customsFeeVnd = Math.round(productPriceVnd * (currentCategory.surchargePercent / 100));
   const baseOrderCost = productPriceVnd + serviceFeeVnd;
 
@@ -1566,7 +1578,11 @@ export default function NeoDaylightCosmos() {
                 <b>{productPriceVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
-                <span>{`Phí mua hộ & bảo hiểm (${pricingConfig.serviceFeePercent}%):`}</span>
+                <span>
+                  {serviceFeeBreakdown.isVipEligible
+                    ? `⭐ Phí mua hộ (VIP 5% Lũy tiến):`
+                    : `Phí mua hộ & bảo hiểm (${pricingConfig.serviceFeePercent}% · Tối thiểu ${pricingConfig.serviceFeeMinimumVnd.toLocaleString("vi-VN")} đ):`}
+                </span>
                 <b>{serviceFeeVnd.toLocaleString("vi-VN")} đ</b>
               </div>
               <div className="row">
