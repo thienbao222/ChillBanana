@@ -79,8 +79,8 @@ export async function getSecurityTelemetry(): Promise<SecurityTelemetry> {
       timestamp: log.createdAt.toISOString(),
       action: log.action,
       actor: log.actor,
-      entityType: log.entityType,
-      entityId: log.entityId,
+      entityType: log.entityType || "SYSTEM",
+      entityId: log.entityId || "N/A",
       severity,
       note: log.metadata ? JSON.stringify(log.metadata) : null,
     };
